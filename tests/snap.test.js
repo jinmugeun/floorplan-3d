@@ -19,3 +19,9 @@ test('ortho projects onto axis from anchor', () => {
 test('snap=false returns input', () => {
   expect(snapPoint([7, 7], { points: [[0, 0]], snap: false }).point).toEqual([7, 7]);
 });
+test('alignment never overrides the axis locked by ortho', () => {
+  const r = snapPoint([3000, 10], { anchor: [0, 0], ortho: true, points: [[9999, 50]], tol: 150 });
+  expect(r.point).toEqual([3000, 0]); expect(r.hit).toBe('ortho'); expect(r.guides).toEqual([]);
+  const r2 = snapPoint([3000, 10], { anchor: [0, 0], ortho: true, points: [[2990, 5000]], tol: 150 });
+  expect(r2.point).toEqual([2990, 0]); expect(r2.hit).toBe('align'); expect(r2.guides).toEqual([{ type: 'v', x: 2990 }]);
+});
