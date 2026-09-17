@@ -36,10 +36,37 @@ describe('normalizeProject / migrate', () => {
     expect(bg.opacity).toBe(1); expect(bg.width).toBe(10); expect(bg.scale).toBe(1); expect(bg.offset).toEqual([1, 2]);
     expect(bg.visible).toBe(true); expect(bg.locked).toBe(true);
   });
-  test('view flags are coerced to numbers/booleans and clamped', () => {
-    const p = migrate({ version: 1, view: { wallOpacity: 'abc', grid: 0 } });
+  test('view flags are coerced and nested defaults are filled', () => {
+    const p = migrate({ version: 1, view: { wallOpacity: 'abc', display: 'nope', v3: { outerWalls: 0 } } });
     expect(p.view.wallOpacity).toBe(1);
-    expect(p.view.grid).toBe(false);
+    expect(p.view.display).toBe('normal');
+    expect(p.view.v3.outerWalls).toBe(false);
+    expect(p.view.v3.innerWalls).toBe(true);
+    expect(p.view.v2.grid).toBe(true);
+    expect(p.view.perfMode).toBe('display');
+    expect(p.view.projection).toBe('perspective');
+    expect(p.view.cameraPreset).toEqual({ elevation: 35, azimuth: 47, fov: 60 });
+    expect(p.view.sun).toEqual({ month: 6, hour: 12, intensity: 0.8, azimuth: 180, ambient: 0.6 });
+  });
+  test('old flat view flags migrate into v2', () => {
+    const p = migrate({ version: 1, view: { grid: false, labels: false, dimensions: false, background: false, collision: false, cutaway: false } });
+    expect(p.view.v2.grid).toBe(false);
+    expect(p.view.v2.roomName).toBe(false);
+    expect(p.view.v2.roomArea).toBe(false);
+    expect(p.view.v2.dims).toBe(false);
+    expect(p.view.v2.background).toBe(false);
+    expect(p.view.v2.collision).toBe(false);
+    expect(p.view.cutaway).toBe(false);
+    expect(p.view.grid).toBeUndefined(); // 옛 필드는 남기지 않는다
+  });
+  test('camera preset and sun values are clamped and wrapped', () => {
+    const p = migrate({ version: 1, view: { cameraPreset: { elevation: 200, azimuth: 407, fov: 5 }, sun: { month: 0, hour: 99, intensity: -3, azimuth: -10, ambient: 'x' } } });
+    expect(p.view.cameraPreset).toEqual({ elevation: 89, azimuth: 47, fov: 15 });
+    expect(p.view.sun).toEqual({ month: 1, hour: 23, intensity: 0, azimuth: 350, ambient: 0.6 });
+  });
+  test('measures survive normalize with numeric coordinates', () => {
+    const p = migrate({ version: 1, floors: [{ measures: [{ id: 'm1', a: ['10.5', 0], b: [4000.25, '0'] }, { a: 'x' }] }] });
+    expect(activeFloor(p).measures).toEqual([{ id: 'm1', a: [10.5, 0], b: [4000.25, 0] }]);
   });
   test('a valid project round-trips unchanged in substance', () => {
     const p = createEmptyProject('그대로');

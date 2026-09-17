@@ -34,16 +34,31 @@ test('option bar hides when both opts and hint are empty', () => {
   expect(root.querySelector('#optionBar').hidden).toBe(true);
 });
 
-test('project name is not interpreted as HTML and view checkboxes follow the loaded project', () => {
+test('project name is not interpreted as HTML', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
   const store = createStore(createEmptyProject('<img src=x onerror="window.__pwned=1">'));
   createShell(root, { store, ui: createUiState() });
   expect(root.querySelector('#projectName').value).toBe('<img src=x onerror="window.__pwned=1">');
   expect(root.querySelector('#topbar img')).toBeNull();
-  const grid = root.querySelector('input[data-view="grid"]'), labels = root.querySelector('input[data-view="labels"]');
+});
+
+test('the 보기 popover writes v2 flags in 2D and v3 flags in 3D without adding undo steps', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  createShell(root, { store, ui });
+  root.querySelector('#btnView').click();
+  const grid = document.querySelector('.popover input[data-v2="grid"]');
   expect(grid.checked).toBe(true);
-  store.replace({ ...store.get(), view: { ...store.get().view, grid: false, labels: false } }, { record: false }); // 불러온 프로젝트의 보기 설정
-  expect(grid.checked).toBe(false); expect(labels.checked).toBe(false);
+  grid.checked = false; grid.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().view.v2.grid).toBe(false);
+  expect(store.canUndo()).toBe(false);
+  ui.set({ mode: 'iso' });
+  const outer = document.querySelector('.popover input[data-v3="outerWalls"]'); // 모드 변경이 팝오버를 다시 그린다
+  outer.checked = false; outer.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().view.v3.outerWalls).toBe(false);
+  const display = document.querySelector('.popover select[data-view="display"]');
+  display.value = 'white'; display.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().view.display).toBe('white');
 });
 
 test('the bottom bar unit toggle writes project.units and follows the loaded project', () => {

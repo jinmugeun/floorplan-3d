@@ -1,4 +1,6 @@
 import { toast } from './toast.js';
+import { createPopover } from './popover.js';
+import { viewPopoverHtml } from './viewOptions.js';
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -48,7 +50,7 @@ export function createShell(root, { store, ui }) {
     <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
     <footer id="bottombar">
       <div class="seg"><button data-mode="2d" class="on">2D</button><button data-mode="plan">평면 <kbd>2</kbd></button><button data-mode="iso">3D <kbd>3</kbd></button><button data-mode="fp">1인칭 <kbd>4</kbd></button></div>
-      <div class="seg"><label><input type="checkbox" data-view="grid" checked> 격자</label><label><input type="checkbox" data-view="labels" checked> 라벨</label><label><input type="checkbox" data-view="background" checked> 배경</label><label><input type="checkbox" data-view="cutaway" checked> 벽 컷어웨이</label></div>
+      <div class="seg"><button id="btnView" data-popover="view">보기</button></div>
       <div class="seg"><button id="btnFit">화면 맞추기</button></div>
       <div class="seg" id="unitSeg"><button data-units="mm" class="on">mm</button><button data-units="ftin">ft·in</button></div>
     </footer>
@@ -60,8 +62,32 @@ export function createShell(root, { store, ui }) {
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x === b));
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== b.dataset.panel);
   }));
-  root.querySelectorAll('[data-view]').forEach(cb => cb.addEventListener('change', () => store.dispatch(d => { d.view[cb.dataset.view] = cb.checked; }, { record: false })));
   root.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => store.dispatch(d => { d.units = b.dataset.units; }, { record: false })));
+
+  const pop = createPopover(root);
+  let popKind = null;
+  const popHtml = kind => (kind === 'view' ? viewPopoverHtml(store.get().view, ui.get().mode === '2d' ? '2d' : '3d') : '');
+  function openPopover(kind, anchor) {
+    if (pop.isOpen() && popKind === kind) { pop.close(); popKind = null; return; }
+    popKind = kind;
+    pop.open(anchor, popHtml(kind), { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; } });
+  }
+  function refreshPopover() { if (pop.isOpen() && popKind) { const anchor = root.querySelector(`[data-popover="${popKind}"]`); pop.open(anchor, popHtml(popKind), { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; } }); } }
+  const setPath = (o, path, v) => { const ks = path.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = t[k]; t[ks.at(-1)] = v; };
+  // 보기 옵션은 되돌릴 단계가 아니다(record: false).
+  function applyViewChange(ev) {
+    const el = ev.target;
+    if (!el || (!el.dataset.v2 && !el.dataset.v3 && !el.dataset.view)) return;
+    const value = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value;
+    store.dispatch(d => {
+      if (el.dataset.v2) d.view.v2[el.dataset.v2] = value;
+      else if (el.dataset.v3) d.view.v3[el.dataset.v3] = value;
+      else setPath(d.view, el.dataset.view, value);
+    }, { record: false });
+    const out = el.parentElement?.querySelector('output'); if (out) out.textContent = `${el.value}${out.dataset.suffix ?? ''}`;
+  }
+  function onPopoverClick() {} // 태스크 3에서 최소/기본/최대 버튼을 붙인다
+  root.querySelectorAll('[data-popover]').forEach(b => b.addEventListener('click', () => openPopover(b.dataset.popover, b)));
 
   let currentTool = null;
   function setOptionBar(tool) {
@@ -90,13 +116,13 @@ export function createShell(root, { store, ui }) {
     root.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === s.mode));
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
     els.banner.hidden = !s.fpPick; if (s.fpPick) els.banner.textContent = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소';
+    if (pop.isOpen() && popKind === 'view') refreshPopover();
   });
   const syncTop = s => {
     q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo();
     if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
-    root.querySelectorAll('[data-view]').forEach(cb => { cb.checked = !!s.view[cb.dataset.view]; }); // 불러온 프로젝트의 보기 설정을 반영한다
     root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, toast };
+  return { els, setOptionBar, toast, popover: pop, refreshPopover };
 }

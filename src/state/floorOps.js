@@ -1,4 +1,4 @@
-import { activeFloor } from './schema.js';
+import { activeFloor, uid } from './schema.js';
 import { detectRooms } from '../geom/rooms.js';
 import { transformWalls } from '../geom/walls.js';
 import { normalizeWalls } from '../geom/normalize.js';
@@ -49,6 +49,12 @@ export function transformFloor(store, fn) {
     f.rooms = f.rooms.map(r => ({ ...r, points: r.points.map(fn) })); // 중심점 대체 매칭도 계속 맞도록 방 좌표도 같이 옮긴다
     reroom(f);
   });
+}
+export function addMeasure(store, measure) {
+  return store.dispatch(d => { activeFloor(d).measures.push({ id: measure.id ?? uid('m'), a: [...measure.a], b: [...measure.b] }); });
+}
+export function deleteMeasure(store, id) {
+  return store.dispatch(d => { const f = activeFloor(d); f.measures = f.measures.filter(m => m.id !== id); });
 }
 // ui.selection이 가리키는 객체가 아직 활성 층에 있는지(undo/redo/방 재검출로 사라졌을 수 있다).
 export function selectionStillValid(state, selection) {

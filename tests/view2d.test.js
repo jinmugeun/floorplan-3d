@@ -2,7 +2,7 @@
 import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject } from '../src/state/schema.js';
+import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createView2D } from '../src/view2d/view2d.js';
@@ -95,4 +95,24 @@ test('pointercancel ends the drag like pointerup', () => {
   v.destroy();
   canvas.dispatchEvent(new MouseEvent('pointercancel', { clientX: 400, clientY: 300, bubbles: true }));
   expect(tool.onPointerUp).toHaveBeenCalledTimes(1); // destroy 후에는 듣지 않는다
+});
+
+test('v2 flags decide what the 2D canvas draws', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  store.dispatch(d => { activeFloor(d).rooms[0].name = '가열조리실'; activeFloor(d).measures.push({ id: 'm1', a: [0, 0], b: [4000.5, 0] }); }, { record: false });
+  const texts = [];
+  const c = makeCanvas();
+  c.getContext = () => new Proxy({}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 10 }) : k === 'fillText' ? (s => texts.push(s)) : (k in t ? t[k] : () => {})), set: (t, k, v) => { t[k] = v; return true; } });
+  const v = createView2D(c, store, createUiState());
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  await frame(); await frame();
+  expect(texts).toContain('가열조리실');
+  expect(texts.some(s => s.includes('m²'))).toBe(true);
+  expect(texts).toContain('4001'); // 측정선 라벨(소수 길이 반올림)
+  texts.length = 0;
+  store.dispatch(d => { d.view.v2.roomName = false; d.view.v2.roomArea = false; d.view.v2.measures = false; d.view.v2.dims = false; }, { record: false });
+  await frame(); await frame();
+  expect(texts).toEqual([]);
+  v.destroy();
 });

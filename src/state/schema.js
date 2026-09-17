@@ -5,13 +5,22 @@ let counter = 0;
 export const SCHEMA_VERSION = 1;
 export const DEFAULT_SETTINGS = { pyeong: false, showUnit: false, background: '#f3f4f6' };
 
+export const DEFAULT_VIEW = {
+  cutaway: true, wallOpacity: 1, floorOpacity: 1, lockPlan: false,
+  v2: { grid: true, guides: true, floorItems: true, wallItems: true, ceilingItems: true, structures: true, productCode: false, roomName: true, roomArea: true, dims: true, gapDims: true, measures: true, collision: true, background: true },
+  v3: { floorItems: true, wallItems: true, ceilingItems: true, structures: true, outerWalls: true, innerWalls: true, wallTransparent: false, dims: false, gapDims: false, measures: false, collision: true },
+  display: 'normal', hiddenLine: false, perfMode: 'display',
+  projection: 'perspective', cameraPreset: { elevation: 35, azimuth: 47, fov: 60 },
+  sun: { month: 6, hour: 12, intensity: 0.8, azimuth: 180, ambient: 0.6 },
+};
+
 export function uid(prefix = 'id') {
   counter += 1;
   return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}`;
 }
 
 export function createFloor(name = 'Floor 1') {
-  return { id: uid('f'), name, height: 2300, walls: [], rooms: [], items: [], ducts: [], guides: [], groups: [] };
+  return { id: uid('f'), name, height: 2300, slab: 0, walls: [], rooms: [], items: [], ducts: [], guides: [], measures: [], groups: [] };
 }
 
 export function createEmptyProject(name = '새 프로젝트') {
@@ -25,7 +34,7 @@ export function createEmptyProject(name = '새 프로젝트') {
     floors: [createFloor()],
     activeFloor: 0,
     camera: { mode: '2d', target: [0, 0], azimuth: 47, elevation: 35, zoom: 1 },
-    view: { grid: true, labels: true, dimensions: true, cutaway: true, wallOpacity: 1, background: true, collision: true },
+    view: structuredClone(DEFAULT_VIEW),
   };
 }
 
@@ -56,8 +65,10 @@ function normalizeFloor(f, index) {
   return {
     ...base, ...src,
     id: str(src.id, base.id), name: str(src.name, base.name), height: num(src.height, base.height, 2000, 8000),
+    slab: num(src.slab, base.slab, 0, 1000),
     walls, rooms: detectRooms(walls, rooms), // 면적 등 파생값을 항상 숫자로 다시 계산한다
     items: arr(src.items), ducts: arr(src.ducts), guides: arr(src.guides), groups: arr(src.groups),
+    measures: arr(src.measures).filter(m => m && typeof m === 'object' && Array.isArray(m.a) && Array.isArray(m.b)).map(m => ({ id: str(m.id, uid('m')), a: pair(m.a), b: pair(m.b) })),
   };
 }
 function normalizeBackground(bg) {
@@ -98,18 +109,45 @@ function normalizeSettings(s) {
   return { pyeong: !!src.pyeong, showUnit: !!src.showUnit, background: bg };
 }
 
-function normalizeView(v, defView) {
+const wrap360 = v => ((v % 360) + 360) % 360;
+// 불리언 그룹(v2/v3): 정의된 키만 남기고, 없는 키는 기본값을 쓴다.
+const boolGroup = (src, def) => Object.fromEntries(Object.keys(def).map(k => [k, src[k] === undefined ? def[k] : !!src[k]]));
+
+function normalizeView(v, defView = DEFAULT_VIEW) {
   const src = obj(v);
-  const merged = { ...defView, ...src };
+  // 옛 평면 필드 이전: grid/labels/dimensions/background/collision → v2. (새 v2가 이미 있으면 v2 값이 우선이다.)
+  const legacy = {};
+  if (src.grid !== undefined) legacy.grid = !!src.grid;
+  if (src.labels !== undefined) { legacy.roomName = !!src.labels; legacy.roomArea = !!src.labels; }
+  if (src.dimensions !== undefined) legacy.dims = !!src.dimensions;
+  if (src.background !== undefined) legacy.background = !!src.background;
+  if (src.collision !== undefined) legacy.collision = !!src.collision;
+  const v2src = obj(src.v2);
+  const pick = (k, list) => (list.includes(src[k]) ? src[k] : defView[k]);
+  const cp = obj(src.cameraPreset), sun = obj(src.sun);
   return {
-    ...merged,
-    wallOpacity: num(src.wallOpacity, defView.wallOpacity, 0, 1),
-    grid: src.grid === undefined ? defView.grid : !!src.grid,
-    labels: src.labels === undefined ? defView.labels : !!src.labels,
-    dimensions: src.dimensions === undefined ? defView.dimensions : !!src.dimensions,
     cutaway: src.cutaway === undefined ? defView.cutaway : !!src.cutaway,
-    background: src.background === undefined ? defView.background : !!src.background,
-    collision: src.collision === undefined ? defView.collision : !!src.collision,
+    wallOpacity: num(src.wallOpacity, defView.wallOpacity, 0, 1),
+    floorOpacity: num(src.floorOpacity, defView.floorOpacity, 0, 1),
+    lockPlan: !!src.lockPlan,
+    v2: boolGroup({ ...legacy, ...v2src }, defView.v2),
+    v3: boolGroup(obj(src.v3), defView.v3),
+    display: pick('display', ['normal', 'white', 'transparent']),
+    hiddenLine: !!src.hiddenLine,
+    perfMode: pick('perfMode', ['display', 'performance']),
+    projection: pick('projection', ['perspective', 'ortho']),
+    cameraPreset: {
+      elevation: num(cp.elevation, defView.cameraPreset.elevation, 0, 89),
+      azimuth: wrap360(num(cp.azimuth, defView.cameraPreset.azimuth)),
+      fov: num(cp.fov, defView.cameraPreset.fov, 15, 120),
+    },
+    sun: {
+      month: Math.round(num(sun.month, defView.sun.month, 1, 12)),
+      hour: Math.round(num(sun.hour, defView.sun.hour, 0, 23)),
+      intensity: num(sun.intensity, defView.sun.intensity, 0, 2),
+      azimuth: wrap360(num(sun.azimuth, defView.sun.azimuth)),
+      ambient: num(sun.ambient, defView.sun.ambient, 0, 2),
+    },
   };
 }
 

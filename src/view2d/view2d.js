@@ -1,7 +1,8 @@
 import { activeFloor } from '../state/schema.js';
-import { wallPolygon, endpoints } from '../geom/walls.js';
+import { wallPolygon, endpoints, wallLength } from '../geom/walls.js';
 import { roomInnerPolygon, centroid } from '../geom/rooms.js';
 import { fmtLen, fmtArea } from '../util/units.js';
+import { dist } from '../geom/vec.js';
 
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
@@ -60,7 +61,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     ctx.fillStyle = color; ctx.fillText(text, s[0], s[1]);
   }
   function drawBackground(state) {
-    const bg = state.background; if (!bg || !bg.visible || !state.view.background) return;
+    const bg = state.background; if (!bg || !bg.visible || !state.view.v2.background) return;
     if (bgCache.src !== bg.src) { bgCache.src = bg.src; bgCache.img = new Image(); bgCache.img.onload = requestRender; bgCache.img.src = bg.src; }
     if (!bgCache.img?.complete) return;
     const s = toScreen(bg.offset); ctx.globalAlpha = bg.opacity;
@@ -74,19 +75,35 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
     const units = state.units ?? 'mm', pyeong = !!state.settings?.pyeong, showUnit = !!state.settings?.showUnit;
+    const v2 = state.view.v2;
     drawBackground(state);
-    if (state.view.grid && !readonly) drawGrid();
+    if (v2.grid && !readonly) drawGrid();
     // 배경 도면이 보일 때는 바닥을 반투명하게 그려서 도면을 따라 그릴 수 있게 한다.
-    const tracing = !!(state.background && state.background.visible && state.view.background);
+    const tracing = !!(state.background && state.background.visible && v2.background);
     for (const r of f.rooms) {
       ctx.globalAlpha = tracing ? 0.35 : 1;
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
       ctx.globalAlpha = 1;
-      if (state.view.labels && labels) { const c = centroid(r.points); if (r.name) label(r.name, [c[0], c[1] - 250], { size: 13, color: COLORS.dim }); label(fmtArea(r.area, { pyeong }), c); }
+      if (labels) {
+        const c = centroid(r.points);
+        if (v2.roomArea) label(fmtArea(r.area, { pyeong }), c);
+        if (v2.roomName && r.name) label(r.name, [c[0], c[1] + 250], { size: 13, color: COLORS.dim }); // 면적 라벨 아래
+      }
     }
-    if (!readonly) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
+    if (!readonly && v2.guides) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
     for (const wl of f.walls) poly(wallPolygon(wl, f.walls), sel?.type === 'wall' && sel.id === wl.id ? COLORS.wallSel : COLORS.wall, null);
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
+    // 벽마다 치수 라벨을 그리되, 화면에서 40px보다 짧은 벽은 건너뛴다(LOD: 라벨이 겹쳐 뭉치는 것을 막는다).
+    if (v2.dims && labels) for (const wl of f.walls) {
+      const len = wallLength(wl);
+      if (len * camera.scale < 40) continue;
+      label(fmtLen(len, units, { unit: showUnit }), [(wl.a[0] + wl.b[0]) / 2, (wl.a[1] + wl.b[1]) / 2], { size: 11 });
+    }
+    if (v2.measures) for (const m of f.measures) {
+      const s0 = toScreen(m.a), s1 = toScreen(m.b);
+      ctx.strokeStyle = COLORS.guide; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.stroke(); ctx.lineWidth = 1;
+      if (labels) label(fmtLen(dist(m.a, m.b), units, { unit: showUnit }), [(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2], { bg: '#fff', color: COLORS.dim });
+    }
     if (tool && !readonly) tool.draw(ctx, api);
   }
 
