@@ -44,6 +44,7 @@ window.__app = { store, ui, view, view3d };
 const tools = { room: () => createRoomTool({ store, onDone: () => setTool('select') }), wall: () => createWallTool({ store, onDone: () => setTool('select') }), select: () => createSelectTool({ store, ui, view }) };
 function setTool(name) { ui.set({ tool: name }); view.setTool(tools[name] ? tools[name]() : null); }
 setTool('select');
+const exitFp = () => { if (view3d.getMode() === 'fp') view3d.setMode('iso'); };
 window.addEventListener('keydown', ev => {
   if (ev.target.tagName === 'INPUT') return;
   if (view.tool?.onKey?.(ev)) { view.requestRender(); return; }
@@ -51,10 +52,10 @@ window.addEventListener('keydown', ev => {
   if (ev.key === 'l' || ev.key === 'L') setTool('wall');
   if (ev.key === 'Escape') { setTool('select'); if (ui.get().fpPick) ui.set({ fpPick: false }); }
   if (ev.key === 'b' || ev.key === 'B') openBackgroundDialog({ store });
-  if (ev.key === '1') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ mode: '2d' }); }
-  if (ev.key === '2') { ui.set({ mode: 'plan' }); view3d.setMode('plan'); }
-  if (ev.key === '3') { ui.set({ mode: 'iso' }); view3d.setMode('iso'); }
-  if (ev.key === '4') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ fpPick: true, mode: '2d' }); console.log('1인칭으로 확인할 위치를 클릭해주세요'); }
+  if (ev.key === '1') { exitFp(); ui.set({ mode: '2d', fpPick: false }); }
+  if (ev.key === '2') { ui.set({ mode: 'plan', fpPick: false }); view3d.setMode('plan'); }
+  if (ev.key === '3') { ui.set({ mode: 'iso', fpPick: false }); view3d.setMode('iso'); }
+  if (ev.key === '4') { exitFp(); ui.set({ fpPick: true, mode: '2d' }); console.log('1인칭으로 확인할 위치를 클릭해주세요'); }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
     const sel = ui.get().selection;
     if (sel?.type === 'wall') { deleteWall(store, sel.id); ui.set({ selection: null }); }
