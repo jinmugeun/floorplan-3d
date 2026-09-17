@@ -6,11 +6,13 @@ import { dist } from '../geom/vec.js';
 
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
-export function createView2D(canvas, store, ui, { readonly = false, labels = true } = {}) {
+export function createView2D(canvas, store, ui, { readonly = false, labels = true, overlay = null, onPick = null, menu = null, onCameraChange = null } = {}) {
   const ctx = canvas.getContext('2d');
   const camera = { cx: 4000, cy: 3000, scale: 0.08 };
-  let tool = null, dirty = true, raf = 0, panning = null, dpr = 1;
+  let tool = null, dirty = true, raf = 0, panning = null, dpr = 1, picking = false;
   const bgCache = { src: null, img: null };
+  // 카메라가 움직였음을 알리는 훅(2D 패닝·줌은 스토어를 건드리지 않으므로 미니맵이 알 방법이 이것뿐이다).
+  const cameraMoved = () => { onCameraChange?.(); };
 
   const size = () => [canvas.clientWidth || canvas.width, canvas.clientHeight || canvas.height];
   const toScreen = p => { const [w, h] = size(); return [(p[0] - camera.cx) * camera.scale + w / 2, (p[1] - camera.cy) * camera.scale + h / 2]; };
@@ -29,15 +31,18 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     const [[x0, y0], [x1, y1]] = bounds(); const [w, h] = size();
     camera.cx = (x0 + x1) / 2; camera.cy = (y0 + y1) / 2;
     camera.scale = Math.min(w / (x1 - x0 + padding * 2), h / (y1 - y0 + padding * 2));
-    requestRender();
+    requestRender(); cameraMoved();
   }
   function zoomAt(s, factor) {
     const before = toWorld(s);
     camera.scale = Math.max(0.005, Math.min(2, camera.scale * factor));
     const after = toWorld(s);
     camera.cx += before[0] - after[0]; camera.cy += before[1] - after[1];
-    requestRender();
+    requestRender(); cameraMoved();
   }
+  const centerOn = p => { camera.cx = p[0]; camera.cy = p[1]; requestRender(); cameraMoved(); };
+  const zoomBy = factor => { const [w, h] = size(); zoomAt([w / 2, h / 2], factor); }; // zoomAt이 이미 알린다
+  const viewportRect = () => { const [w, h] = size(); return [toWorld([0, 0]), toWorld([w, h])]; };
   function requestRender() { dirty = true; if (!raf) raf = requestAnimationFrame(render); }
 
   function drawGrid() {
@@ -105,13 +110,14 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       if (labels) label(fmtLen(dist(m.a, m.b), units, { unit: showUnit }), [(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2], { bg: '#fff', color: COLORS.dim });
     }
     if (tool && !readonly) tool.draw(ctx, api);
+    if (overlay) overlay(ctx, api);
   }
 
   // 입력
   const pos = ev => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
   let pressed = false; // pointerdown 이후 onUp이 한 번만 실행되도록(pointerup 뒤에 lostpointercapture가 또 온다)
   const onDown = ev => {
-    if (readonly) return;
+    if (readonly) { if (onPick && ev.button === 0) { picking = true; canvas.setPointerCapture?.(ev.pointerId); onPick(toWorld(pos(ev))); } return; }
     pressed = true;
     canvas.setPointerCapture?.(ev.pointerId); // 캔버스 밖에서 놓아도 pointerup/pointercancel을 받는다
     if (ev.button === 1 || ev.button === 2 || (ev.button === 0 && !tool)) { panning = { s: pos(ev), cx: camera.cx, cy: camera.cy }; return; }
@@ -119,27 +125,34 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     requestRender();
   };
   const onMove = ev => {
-    if (readonly) return;
+    if (readonly) { if (picking && onPick) onPick(toWorld(pos(ev))); return; }
     const s = pos(ev);
-    if (panning) { camera.cx = panning.cx - (s[0] - panning.s[0]) / camera.scale; camera.cy = panning.cy - (s[1] - panning.s[1]) / camera.scale; requestRender(); return; }
+    if (panning) { camera.cx = panning.cx - (s[0] - panning.s[0]) / camera.scale; camera.cy = panning.cy - (s[1] - panning.s[1]) / camera.scale; requestRender(); cameraMoved(); return; }
     if (tool) { tool.onPointerMove(toWorld(s), ev); requestRender(); }
   };
   const onUp = ev => {
-    if (readonly || !pressed) return;
+    if (readonly) { if (picking) { picking = false; if (canvas.hasPointerCapture?.(ev.pointerId)) canvas.releasePointerCapture?.(ev.pointerId); } return; }
+    if (!pressed) return;
     pressed = false;
     if (canvas.hasPointerCapture?.(ev.pointerId)) canvas.releasePointerCapture?.(ev.pointerId);
     if (panning) { panning = null; return; }
     if (tool) { tool.onPointerUp(toWorld(pos(ev)), ev); requestRender(); }
   };
   const onWheel = ev => { ev.preventDefault(); if (readonly) return; zoomAt(pos(ev), ev.deltaY < 0 ? 1.15 : 1 / 1.15); };
-  const onMenu = ev => ev.preventDefault();
+  const onMenu = ev => {
+    ev.preventDefault();
+    if (readonly || !tool?.onContextMenu) return;
+    const items = tool.onContextMenu(toWorld(pos(ev)), ev);
+    if (menu && Array.isArray(items) && items.length) menu.open(ev.clientX, ev.clientY, items);
+    requestRender();
+  };
   canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointermove', onMove);
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, onUp);
   canvas.addEventListener('wheel', onWheel, { passive: false }); canvas.addEventListener('contextmenu', onMenu);
   const unsubs = [store.subscribe(() => { if (readonly) fit(500); else requestRender(); }), ui.subscribe(requestRender)];
   const onResize = () => requestRender(); window.addEventListener('resize', onResize);
 
-  const api = { camera, toScreen, toWorld, fit, zoomAt, requestRender, label, poly, COLORS, fmtLen, fmtArea,
+  const api = { camera, toScreen, toWorld, fit, zoomAt, zoomBy, centerOn, viewportRect, requestRender, label, poly, COLORS, fmtLen, fmtArea,
     get units() { return store.get().units ?? 'mm'; },
     get showUnit() { return !!store.get().settings?.showUnit; },
     get tool() { return tool; },

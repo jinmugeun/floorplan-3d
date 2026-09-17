@@ -116,3 +116,57 @@ test('v2 flags decide what the 2D canvas draws', async () => {
   expect(texts).toEqual([]);
   v.destroy();
 });
+
+test('zoomBy, centerOn and viewportRect work on the camera', () => {
+  const store = createStore(createEmptyProject());
+  const v = createView2D(makeCanvas(), store, createUiState());
+  const before = v.camera.scale;
+  v.zoomBy(2);
+  expect(v.camera.scale).toBeCloseTo(before * 2, 9);
+  v.centerOn([1234.5, -678.25]); // 소수 좌표
+  expect(v.camera.cx).toBeCloseTo(1234.5, 9); expect(v.camera.cy).toBeCloseTo(-678.25, 9);
+  const [[x0, y0], [x1, y1]] = v.viewportRect();
+  expect(x1 - x0).toBeCloseTo(800 / v.camera.scale, 6);
+  expect(y1 - y0).toBeCloseTo(600 / v.camera.scale, 6);
+  expect((x0 + x1) / 2).toBeCloseTo(1234.5, 6);
+});
+
+test('a readonly view draws the overlay and reports picks in world coords', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const canvas = makeCanvas();
+  const picks = []; let overlayCalls = 0;
+  const v = createView2D(canvas, store, createUiState(), { readonly: true, overlay: () => { overlayCalls++; }, onPick: p => picks.push(p) });
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  await frame(); await frame();
+  expect(overlayCalls).toBeGreaterThan(0);
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { clientX: 400, clientY: 300, button: 0, bubbles: true }));
+  canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 500, clientY: 300, bubbles: true }));
+  canvas.dispatchEvent(new MouseEvent('pointerup', { clientX: 500, clientY: 300, bubbles: true }));
+  expect(picks).toHaveLength(2);
+  expect(picks[0][0]).toBeCloseTo(v.camera.cx, 6);
+  canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 600, clientY: 300, bubbles: true }));
+  expect(picks).toHaveLength(2); // 버튼을 놓은 뒤에는 따라오지 않는다
+  v.destroy();
+});
+
+test('onCameraChange fires for zoom, centerOn, fit and panning', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200)); // 소수 좌표
+  const canvas = makeCanvas();
+  let moves = 0;
+  const v = createView2D(canvas, store, createUiState(), { onCameraChange: () => { moves++; } });
+  v.zoomBy(2);
+  expect(moves).toBe(1);
+  v.centerOn([1234.5, -678.25]);
+  expect(moves).toBe(2);
+  v.fit();
+  expect(moves).toBe(3);
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { clientX: 400, clientY: 300, button: 1, bubbles: true })); // 가운데 버튼 = 패닝
+  canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 460, clientY: 320, bubbles: true }));
+  expect(moves).toBe(4);
+  canvas.dispatchEvent(new MouseEvent('pointerup', { clientX: 460, clientY: 320, bubbles: true }));
+  v.destroy();
+});

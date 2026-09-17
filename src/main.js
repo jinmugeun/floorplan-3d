@@ -5,6 +5,7 @@ import { deleteWall, deleteRoom, transformFloor, selectionStillValid } from './s
 import { hitWall } from './geom/walls.js';
 import { pointInPolygon } from './geom/rooms.js';
 import { createView2D } from './view2d/view2d.js';
+import { createMinimap } from './view2d/minimap.js';
 import { createRoomTool, ROOM_TOOL_DEFAULTS } from './view2d/tools/roomTool.js';
 import { createWallTool, WALL_TOOL_DEFAULTS } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
@@ -20,9 +21,11 @@ import { serializeProject, parseProject, downloadText, readTextFile, startAutosa
 const store = createStore(createEmptyProject());
 const ui = createUiState();
 const shell = createShell(document.getElementById('app'), { store, ui });
-const view = createView2D(shell.els.canvas2d, store, ui);
-const minimap = createView2D(shell.els.minimap, store, ui, { readonly: true, labels: false });
+let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
+const view = createView2D(shell.els.canvas2d, store, ui, { onCameraChange: () => minimap?.requestRender() });
 const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
+minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
+view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 createPropsPanel(shell.els.props, store, ui, { deleteSelection });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다
 store.subscribe(s => { if (!selectionStillValid(s, ui.get().selection)) ui.set({ selection: null }); });
@@ -46,7 +49,7 @@ function createDeleteTool() {
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS } };
 const tools = {
-  select: () => createSelectTool({ store, ui, view }),
+  select: () => createSelectTool({ store, ui, view, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
   room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
   wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
   delete: createDeleteTool,
@@ -73,6 +76,9 @@ document.querySelector('[data-action="rotR"]').addEventListener('click', () => t
 document.getElementById('btnUndo').addEventListener('click', () => store.undo());
 document.getElementById('btnRedo').addEventListener('click', () => store.redo());
 document.getElementById('btnFit').addEventListener('click', () => view.fit());
+const zoom = factor => (ui.get().mode === '2d' ? view.zoomBy(factor) : view3d.zoomBy(factor));
+document.getElementById('btnZoomIn').addEventListener('click', () => zoom(1.25));
+document.getElementById('btnZoomOut').addEventListener('click', () => zoom(1 / 1.25));
 document.getElementById('projectName').addEventListener('change', ev => store.dispatch(d => { d.name = ev.target.value; }));
 
 function deleteSelection() {
@@ -97,10 +103,11 @@ document.getElementById('btnLoad').addEventListener('click', () => {
   i.onchange = () => loadFile(i.files[0]);
   i.click();
 });
-document.getElementById('btnCapture').addEventListener('click', async () => {
+const captureNow = async () => {
   try { const url = ui.get().mode === '2d' ? await capture2D(store, ui) : view3d.capture(); const a = document.createElement('a'); a.href = url; a.download = filenameFor(store.get()).replace('.json', '.png'); a.click(); }
   catch (e) { shell.toast(e.message); }
-});
+};
+document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventListener('click', captureNow));
 
 const canvasWrap = document.getElementById('canvasWrap');
 canvasWrap.addEventListener('dragover', ev => ev.preventDefault());

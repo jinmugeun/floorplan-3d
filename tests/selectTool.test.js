@@ -139,3 +139,24 @@ test('a plain click after undo keeps the redo stack', () => {
   store.redo();
   expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(-600);
 });
+
+test('with the plan locked, clicks still select but drags and vertex edits do nothing', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200)); // 소수 좌표
+  let locked = 0;
+  const t = createSelectTool({ store, ui, view: fakeView, onLocked: () => { locked++; } });
+  store.dispatch(d => { d.view.lockPlan = true; }, { record: false });
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  t.onPointerDown([2000, 0]); t.onPointerMove([2000, -600]); t.onPointerUp([2000, -600]);
+  expect(ui.get().selection).toEqual({ type: 'wall', id: top.id }); // 선택은 된다
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(0);
+  expect(locked).toBe(1);
+  t.onPointerDown([0, 0]); t.onPointerMove([-500, -500]); t.onPointerUp([-500, -500]); // 꼭짓점
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[0]).toBe(0);
+  expect(locked).toBe(2);
+  t.onPointerDown([1000, 1500]); t.onPointerMove([1300, 1500]); t.onPointerUp([1300, 1500]); // 방
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+  expect(store.canUndo()).toBe(true);
+  store.undo();
+  expect(activeFloor(store.get()).walls).toHaveLength(0); // 남은 기록은 벽 생성 하나뿐
+});

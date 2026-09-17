@@ -94,3 +94,16 @@ test('camera and sun buttons appear only in 3D and their sliders and preset butt
   expect(store.get().view.sun.hour).toBe(17);
   expect(store.canUndo()).toBe(false);
 });
+
+test('the bottom bar has zoom, lock and capture controls and the lock button follows the project', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  createShell(root, { store, ui: createUiState() });
+  expect(root.querySelector('#btnZoomIn')).not.toBeNull();
+  expect(root.querySelector('#btnZoomOut')).not.toBeNull();
+  expect(root.querySelectorAll('[data-action="capture"]')).toHaveLength(2); // 상단 바 + 하단 바
+  root.querySelector('#btnLock').click();
+  expect(store.get().view.lockPlan).toBe(true);
+  expect(root.querySelector('#btnLock').classList.contains('on')).toBe(true);
+  expect(store.canUndo()).toBe(false);
+});

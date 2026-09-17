@@ -13,7 +13,7 @@ export function createShell(root, { store, ui }) {
     <header id="topbar">
       <div class="group"><button id="btnUndo" aria-label="실행 취소">↶</button><button id="btnRedo" aria-label="다시 실행">↷</button></div>
       <div class="group"><input id="projectName" aria-label="프로젝트 이름" value="${esc(store.get().name)}"><span id="savedAt" class="muted">저장 이력 없음</span></div>
-      <div class="group"><button id="btnCapture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
+      <div class="group"><button id="btnCapture" data-action="capture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
     </header>
     <nav id="rail" aria-label="작업 영역">
       <button data-panel="draw" class="on"><span>도면 그리기</span></button>
@@ -51,7 +51,8 @@ export function createShell(root, { store, ui }) {
     <footer id="bottombar">
       <div class="seg"><button data-mode="2d" class="on">2D</button><button data-mode="plan">평면 <kbd>2</kbd></button><button data-mode="iso">3D <kbd>3</kbd></button><button data-mode="fp">1인칭 <kbd>4</kbd></button></div>
       <div class="seg"><button id="btnView" data-popover="view">보기</button><button id="btnCam" data-popover="cam" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" hidden>햇빛</button></div>
-      <div class="seg"><button id="btnFit">화면 맞추기</button></div>
+      <div class="seg"><button id="btnLock">도면 잠금</button><button data-action="capture">스크린 캡쳐</button></div>
+      <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit">화면 맞추기</button></div>
       <div class="seg" id="unitSeg"><button data-units="mm" class="on">mm</button><button data-units="ftin">ft·in</button></div>
     </footer>
   </div>`;
@@ -63,6 +64,7 @@ export function createShell(root, { store, ui }) {
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== b.dataset.panel);
   }));
   root.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => store.dispatch(d => { d.units = b.dataset.units; }, { record: false })));
+  q('#btnLock').addEventListener('click', () => store.dispatch(d => { d.view.lockPlan = !d.view.lockPlan; }, { record: false }));
 
   const pop = createPopover(root);
   let popKind = null;
@@ -137,6 +139,7 @@ export function createShell(root, { store, ui }) {
     q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo();
     if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
     root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
+    q('#btnLock').classList.toggle('on', !!s.view.lockPlan);
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, toast, popover: pop, refreshPopover };

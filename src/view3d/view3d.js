@@ -7,6 +7,7 @@ import { hiddenWallIds } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
 import { cameraDistance } from './fit.js';
 import { sunPosition } from './sun.js';
+import { headingDeg, toWorldXY } from './camera.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -69,6 +70,24 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     const el = THREE.MathUtils.degToRad(elevation), az = THREE.MathUtils.degToRad(azimuth);
     camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), t.y + r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az));
     if (camera.isPerspectiveCamera) { camera.fov = fov; camera.updateProjectionMatrix(); } else frustum();
+    controls.update(); requestRender();
+  }
+  function zoomBy(factor) {
+    const dir = camera.position.clone().sub(controls.target);
+    camera.position.copy(controls.target.clone().add(dir.multiplyScalar(1 / factor)));
+    if (camera === ortho) frustum();
+    controls.update(); requestRender();
+  }
+  // 미니맵용: 월드 mm 좌표와 방위(0 = 북, 시계방향). 계산은 camera.js가 한다.
+  function getCameraInfo() {
+    const p = camera.position, t = controls.target;
+    return { pos: toWorldXY(p), target: toWorldXY(t), heading: headingDeg(p, t) };
+  }
+  function setTarget([x, y]) {
+    const t = toThree([x, y, 0]);
+    const d = camera.position.clone().sub(controls.target);
+    controls.target.copy(t);
+    camera.position.copy(t.clone().add(d));
     controls.update(); requestRender();
   }
   // three r155+ 는 물리 광량 단위다. 기존 값(방향광 2.4, 환경광 2.6)이 기본 강도 0.8 / 환경광 0.6에
@@ -152,5 +171,5 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
   const unsub = store.subscribe(() => { rebuild(); applyViewSettings(); requestRender(); });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, getCameraInfo, setTarget, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

@@ -5,10 +5,11 @@ import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
 
-export function createSelectTool({ store, ui, view }) {
+export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
   let drag = null; // { kind, id|point, startP, base, moved }
   const px = n => n / view.camera.scale;
   const floor = () => activeFloor(store.get());
+  const locked = () => !!store.get().view?.lockPlan;
   return {
     name: 'select', opts: {},
     onPointerDown(p) {
@@ -21,13 +22,14 @@ export function createSelectTool({ store, ui, view }) {
       if (sel?.type === 'wall') {
         const w = f.walls.find(x => x.id === sel.id);
         const v = w && [w.a, w.b].find(q => dist(q, p) <= px(8));
-        if (v) { drag = { kind: 'vertex', point: [...v], startP: p, base: f.walls }; store.beginTransaction(); return; }
+        if (v) { if (locked()) { onLocked(); return; } drag = { kind: 'vertex', point: [...v], startP: p, base: f.walls }; store.beginTransaction(); return; }
       }
       const w = hitWall(f.walls, p, px(6));
-      if (w) { ui.set({ selection: { type: 'wall', id: w.id } }); drag = { kind: 'wall', id: w.id, startP: p, base: f.walls }; store.beginTransaction(); return; }
+      if (w) { ui.set({ selection: { type: 'wall', id: w.id } }); if (locked()) { onLocked(); return; } drag = { kind: 'wall', id: w.id, startP: p, base: f.walls }; store.beginTransaction(); return; }
       const r = f.rooms.find(x => pointInPolygon(p, x.points));
       if (r) {
         ui.set({ selection: { type: 'room', id: r.id } });
+        if (locked()) { onLocked(); return; }
         const pts = new Set();
         for (const w of f.walls) if (r.wallIds.includes(w.id)) { pts.add(w.a.join(',')); pts.add(w.b.join(',')); }
         const attached = f.walls.some(w => !r.wallIds.includes(w.id) && (pts.has(w.a.join(',')) || pts.has(w.b.join(','))));
