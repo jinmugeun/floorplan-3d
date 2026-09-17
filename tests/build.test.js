@@ -65,3 +65,12 @@ test('a floor with fractional coordinates still builds one mesh per wall', () =>
   expect(g.children.filter(c => c.name === 'wall')).toHaveLength(4);
   expect(g.children.filter(c => c.name === 'wallFoot')).toHaveLength(4);
 });
+
+test('only the active floor is built', () => {
+  const walls1 = rectWalls([0, 0], [4000, 3000], 200);
+  const walls2 = rectWalls([0, 0], [2000, 2000], 200);
+  const project = { floors: [{ walls: walls1, rooms: detectRooms(walls1), height: 2300 }, { walls: walls2, rooms: detectRooms(walls2), height: 2300 }], activeFloor: 1 };
+  const g = buildFloorGroup(project.floors[project.activeFloor], { wallOpacity: 1 });
+  expect(g.children.filter(c => c.name === 'wall')).toHaveLength(4);
+  expect(g.children.filter(c => c.name === 'floor')).toHaveLength(1);
+});

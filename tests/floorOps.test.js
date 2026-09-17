@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid } from '../src/state/floorOps.js';
+import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -102,4 +102,73 @@ test('moving a wall onto another wall joins them', () => {
   setWalls(s, moveWallParallel(f.walls, lone.id, [-2000, 0]));
   const g = activeFloor(s.get());
   expect(g.walls.filter(w => w.a[0] === 4000 && w.b[0] === 4000)).toHaveLength(3); // 오른쪽 벽이 3조각
+});
+
+test('addFloor with copy "none" starts empty and becomes the active floor', () => {
+  const s = setup();
+  addFloor(s, { name: '2층', copy: 'none' });
+  const p = s.get();
+  expect(p.floors).toHaveLength(2);
+  expect(p.activeFloor).toBe(1);
+  expect(p.floors[1].name).toBe('2층');
+  expect(p.floors[1].height).toBe(p.floors[0].height);
+  expect(activeFloor(p).walls).toHaveLength(0);
+  expect(p.floors[0].walls).toHaveLength(4); // 원본은 그대로
+});
+
+test('addFloor with copy "plan" duplicates walls with new ids and keeps room names', () => {
+  const s = setup();
+  const r = activeFloor(s.get()).rooms[0];
+  updateRoom(s, r.id, { name: '가열조리실', type: 'cook', height: 2800 });
+  addFloor(s, { copy: 'plan' });
+  const p = s.get();
+  const f = activeFloor(p);
+  expect(f.name).toBe('Floor 2');
+  expect(f.walls).toHaveLength(4);
+  expect(f.walls.every(w => !p.floors[0].walls.some(o => o.id === w.id))).toBe(true); // 새 id
+  expect(f.rooms).toHaveLength(1);
+  expect(f.rooms[0].name).toBe('가열조리실');
+  expect(f.rooms[0].type).toBe('cook');
+  expect(f.rooms[0].height).toBe(2800);
+  expect(f.rooms[0].id).not.toBe(r.id);
+});
+
+test('addFloor with copy "all" also copies measures, and fractional walls survive', () => {
+  const s = createStore(createEmptyProject());
+  addWalls(s, rectWalls([0.5, 0.25], [4000.5, 3000.75], 200)); // 소수 좌표
+  addMeasure(s, { id: 'm1', a: [0.5, 0.25], b: [4000.5, 0.25] });
+  addFloor(s, { copy: 'all' });
+  const f = activeFloor(s.get());
+  expect(f.measures).toEqual([{ id: 'm1', a: [0.5, 0.25], b: [4000.5, 0.25] }]);
+  expect(f.rooms).toHaveLength(1);
+  expect(f.rooms[0].area).toBeCloseTo(3.8 * 2.8005, 2);
+});
+
+test('setActiveFloor switches without an undo step; rename, updateFloor and delete work', () => {
+  const s = setup();
+  addFloor(s, { copy: 'none' });
+  const undoable = s.canUndo();
+  setActiveFloor(s, 0);
+  expect(s.get().activeFloor).toBe(0);
+  expect(s.canUndo()).toBe(undoable); // 층 전환은 되돌릴 단계가 아니다
+  renameFloor(s, 1, '옥상');
+  expect(s.get().floors[1].name).toBe('옥상');
+  updateFloor(s, 1, { slab: 250, height: 3000 });
+  expect(s.get().floors[1].slab).toBe(250);
+  deleteFloor(s, 1);
+  expect(s.get().floors).toHaveLength(1);
+  expect(s.get().activeFloor).toBe(0);
+  deleteFloor(s, 0);
+  expect(s.get().floors).toHaveLength(1); // 마지막 층은 지우지 않는다
+});
+
+test('totalArea sums room areas, and gross adds the wall footprints', () => {
+  const s = setup(); // 4000 x 3000, 두께 200 → 내부 3800 x 2800 = 10.64 m²
+  const f = activeFloor(s.get());
+  expect(totalArea(f, 'net')).toBeCloseTo(10.64, 2);
+  const wallFootprint = (4000 + 3000) * 2 * 200 / 1e6; // 2.8 m²
+  expect(totalArea(f, 'gross')).toBeCloseTo(10.64 + wallFootprint, 2);
+  expect(totalArea({ rooms: [], walls: [] }, 'gross')).toBe(0);
+  // 소수 좌표: 길이 4000 x 두께 200 = 0.8 m²
+  expect(totalArea({ rooms: [{ area: 1.5 }], walls: [{ a: [0.5, 0.25], b: [4000.5, 0.25], thickness: 200 }] }, 'gross')).toBeCloseTo(1.5 + 0.8, 3);
 });

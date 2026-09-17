@@ -1,7 +1,9 @@
 import { activeFloor } from '../state/schema.js';
-import { updateWall, updateRoom, setRoomWallThickness } from '../state/floorOps.js';
+import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFloor, deleteFloor, totalArea } from '../state/floorOps.js';
 import { wallLength } from '../geom/walls.js';
 import { fmtLen, parseLen, fmtArea } from '../util/units.js';
+import { openFloorDialog } from './floorDialog.js';
+import { toast } from './toast.js';
 
 export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
 
@@ -36,7 +38,20 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     const sel = ui.get().selection, f = activeFloor(store.get());
     const st = store.get(), units = st.units ?? 'mm', pyeong = !!st.settings?.pyeong, showUnit = !!st.settings?.showUnit;
     if (!sel) {
-      container.innerHTML = `<h2>층 관리</h2>${lenField(withUnit('층 높이', units, showUnit), 'floorHeight', f.height, 2000, 8000, false, units, 10)}<p class="hint">객체를 클릭하면 상세 정보가 표시됩니다.</p>`;
+      const p = store.get(), idx = p.activeFloor ?? 0;
+      container.innerHTML = `<h2>층 관리</h2>
+        ${field('현재 층', `<select name="floorSelect">${p.floors.map((fl, i) => `<option value="${i}" ${i === idx ? 'selected' : ''}>${esc(fl.name)}</option>`).join('')}</select>`)}
+        <div class="row"><button type="button" name="floorAdd">층 추가하기</button><button type="button" name="floorRename">이름 변경</button></div>
+        <button type="button" name="floorDelete" class="danger">층 삭제</button>
+        ${lenField(withUnit('층 높이', units, showUnit), 'floorHeight', f.height, 2000, 8000, false, units, 10)}
+        <details open><summary>상세 설정</summary>
+          ${field('실면적 기준', `<select name="areaMode"><option value="net" ${p.areaMode !== 'gross' ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option></select>`)}
+          ${field('총면적', `<output name="totalArea">${fmtArea(totalArea(f, p.areaMode), { pyeong })}</output>`)}
+          ${lenField(withUnit('슬래브 두께', units, showUnit), 'slab', f.slab ?? 0, 0, 1000, false, units)}
+          ${field('벽 투명도', `<input type="range" name="wallOpacity" min="0" max="1" step="0.05" value="${p.view.wallOpacity}">`)}
+          ${field('바닥 투명도', `<input type="range" name="floorOpacity" min="0" max="1" step="0.05" value="${p.view.floorOpacity}">`)}
+        </details>
+        <p class="hint">객체를 클릭하면 상세 정보가 표시됩니다.</p>`;
       const bg = store.get().background;
       if (bg) container.insertAdjacentHTML('beforeend', `<h2>배경 이미지</h2>${field('투명도', `<input type="range" name="bgOpacity" min="0" max="1" step="0.05" value="${bg.opacity}">`)}<label class="check"><input type="checkbox" name="bgVisible" ${bg.visible ? 'checked' : ''}> 표시</label><button type="button" name="bgRemove">배경 제거</button>`);
       return;
@@ -66,7 +81,11 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
   }
   function applyNumber(sel, name, v) {
-    if (!sel) { if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = v; }); return; }
+    if (!sel) {
+      if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = v; });
+      if (name === 'slab') updateFloor(store, store.get().activeFloor ?? 0, { slab: v });
+      return;
+    }
     if (sel.type === 'wall') updateWall(store, sel.id, { [name]: v });
     if (sel.type === 'room') { if (name === 'wallThickness') setRoomWallThickness(store, sel.id, v); else updateRoom(store, sel.id, { [name]: v }); }
   }
@@ -74,6 +93,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }); return; }
     if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }); return; }
+    if (name === 'floorSelect') { setActiveFloor(store, Number(el.value)); return; }
+    if (name === 'areaMode') { store.dispatch(d => { d.areaMode = el.value; }, { record: false }); return; }
+    if (name === 'wallOpacity' || name === 'floorOpacity') { store.dispatch(d => { d.view[name] = Number(el.value); }, { record: false }); return; }
     if (el.dataset.len) {
       const v = readLen(el, store.get().units ?? 'mm');
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
@@ -92,6 +114,14 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   const onClick = ev => {
     if (ev.target.name === 'split') { ui.set({ splitWall: true }); return; }
     if (ev.target.name === 'bgRemove') { store.dispatch(d => { d.background = null; }); return; }
+    if (ev.target.name === 'floorAdd') { openFloorDialog({ store, mode: 'add' }); return; }
+    if (ev.target.name === 'floorRename') { openFloorDialog({ store, mode: 'rename', index: store.get().activeFloor ?? 0 }); return; }
+    if (ev.target.name === 'floorDelete') {
+      const p = store.get();
+      if (p.floors.length <= 1) { toast('마지막 층은 삭제할 수 없습니다'); return; }
+      if (window.confirm(`"${p.floors[p.activeFloor].name}" 층을 삭제할까요?`)) deleteFloor(store, p.activeFloor);
+      return;
+    }
     if (ev.target.name === 'delete' && ui.get().selection) deleteSelection();
   };
   container.addEventListener('change', onChange); container.addEventListener('click', onClick);
