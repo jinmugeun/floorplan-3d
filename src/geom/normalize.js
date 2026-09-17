@@ -25,16 +25,26 @@ function resolvePair(A, B) {
     const t1 = paramOn(A.a, uA, B.a), t2 = paramOn(A.a, uA, B.b);
     const bMin = Math.min(t1, t2), bMax = Math.max(t1, t2);
     if (Math.min(lA, bMax) - Math.max(0, bMin) <= JOIN_TOL) return null; // 겹치지 않음(끝만 닿는 경우 포함)
-    const ts = [...new Set([0, lA, bMin, bMax].map(v => Math.round(v)))].sort((x, y) => x - y);
+    // 매개변수를 반올림해서 다시 투영하면 실제 끝점에서 최대 0.5mm 벗어날 수 있고, 이는
+    // detectRooms의 정수 반올림 키와 어긋나 방이 닫히지 않게 만든다. 대신 각 breakpoint에
+    // 원본 끝점 좌표를 그대로 실어 조각의 a/b가 이웃과 정확히 같은 배열 값을 공유하게 한다.
+    const marks = [
+      { t: 0, p: A.a }, { t: lA, p: A.b },
+      { t: bMin, p: t1 <= t2 ? B.a : B.b },
+      { t: bMax, p: t1 <= t2 ? B.b : B.a },
+    ].sort((x, y) => x.t - y.t);
+    const ts = [];
+    for (const m of marks) if (!ts.length || m.t - ts[ts.length - 1].t > JOIN_TOL) ts.push(m);
     const pieces = [];
     let usedA = false, usedB = false;
-    // B가 A 안에 완전히 담기면(끝점 공유 포함) 첫 조각이 A/B 양쪽 범위에 동시에 속해 A가 먼저
-    // 그 조각을 가져가 버리면 B.id가 사라진다. B의 겹침 구간이 A 전체보다 좁을 때는 B를 먼저
-    // 확인해 B.id가 반드시 어떤 조각에든 붙도록 한다. 그렇지 않은 경우(B가 A만큼 넓거나 더 넓음)는
-    // 기존 순서(A 먼저)를 유지한다.
+    // bNarrower는 "B가 A 안에 완전히 담긴다"는 뜻이 아니라 B와 A가 겹치는 구간의 길이가 A 전체
+    // 길이보다 짧다는 길이 비교다(끝점 공유는 물론, B가 A의 한쪽 끝을 넘어서 벗어나는 경우도
+    // 포함된다). 이때는 첫 조각이 A/B 양쪽 범위에 동시에 속해 A가 먼저 그 조각을 가져가 버리면
+    // B.id가 사라질 수 있으므로 B를 먼저 확인해 B.id가 반드시 어떤 조각에든 붙도록 한다.
+    // 그렇지 않은 경우(겹침 구간이 A 전체 길이와 같거나 더 넓음)는 기존 순서(A 먼저)를 유지한다.
     const bNarrower = (bMax - bMin) < lA - JOIN_TOL;
     for (let i = 0; i + 1 < ts.length; i++) {
-      const s = ts[i], e = ts[i + 1]; if (e - s <= JOIN_TOL) continue;
+      const s = ts[i].t, e = ts[i + 1].t; if (e - s <= JOIN_TOL) continue;
       const inA = s >= -JOIN_TOL && e <= lA + JOIN_TOL, inB = s >= bMin - JOIN_TOL && e <= bMax + JOIN_TOL;
       const src = inA ? A : B;
       let id;
@@ -43,7 +53,7 @@ function resolvePair(A, B) {
       } else {
         if (inA && !usedA) { id = A.id; usedA = true; } else if (inB && !usedB) { id = B.id; usedB = true; } else id = uid('w');
       }
-      pieces.push({ ...src, id, a: add(A.a, mul(uA, s)), b: add(A.a, mul(uA, e)) });
+      pieces.push({ ...src, id, a: [...ts[i].p], b: [...ts[i + 1].p] });
     }
     return pieces;
   }

@@ -1,8 +1,8 @@
 import { dist, add, sub, mul, dot } from './vec.js';
 
 // 벽 선분 위의 수선의 발(perpendicular foot), 선분 밖으로는 벗어나지 않도록 클램프한다.
-// walls.js의 distToSegment와 같은 계산이지만, snap.js가 walls.js를 import하면
-// 순환 의존(walls.js가 schema.js를 import)이 생기므로 여기 별도로 둔다.
+// walls.js의 distToSegment와 같은 계산이지만, distToSegment는 거리만 돌려줄 뿐 발점 자체를
+// 반환하지 않으므로 snap에는 쓸 수 없어 여기 별도로 둔다.
 function footOnSegment(p, a, b) {
   const ab = sub(b, a), l2 = dot(ab, ab);
   const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, dot(sub(p, a), ab) / l2));

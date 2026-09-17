@@ -109,6 +109,31 @@ describe('normalizeWalls', () => {
     expect(detectRooms(out)).toHaveLength(3);
   });
 
+  test('collinear re-slicing keeps exact fractional endpoints so rooms stay closed', () => {
+    const A = seg([0.6, 0], [4000.4, 0]);
+    const right = seg([4000.4, 0], [4000.4, 3000]);
+    const bottom = seg([4000.4, 3000], [0.6, 3000]);
+    const left = seg([0.6, 3000], [0.6, 0]);
+    expect(detectRooms(normalizeWalls([A, right, bottom, left]))).toHaveLength(1);
+
+    const B = seg([2000, 0], [5000, 0]);
+    const out = normalizeWalls([A, right, bottom, left, B]);
+    expect(detectRooms(out)).toHaveLength(1);
+
+    const originals = [A, right, bottom, left, B].flatMap(w => [w.a, w.b]);
+    for (const w of out) {
+      expect(originals.some(p => eq(p, w.a, 0))).toBe(true);
+      expect(originals.some(p => eq(p, w.b, 0))).toBe(true);
+    }
+  });
+
+  test('adjacent rooms with fractional corners both stay closed', () => {
+    const a = rectWalls([0.6, 0], [4000.4, 3000.3], 200);
+    const b = rectWalls([4000.4, 0], [6000.7, 2000.2], 200);
+    const out = normalizeWalls([...a, ...b]);
+    expect(detectRooms(out)).toHaveLength(2);
+  });
+
   test('does not mutate its input and is idempotent', () => {
     const base = seg([0, 0], [4000, 0]), t = seg([2000, 3000], [2000, 0]);
     const input = [base, t]; const snapshot = JSON.stringify(input);

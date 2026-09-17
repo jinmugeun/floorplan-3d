@@ -29,7 +29,7 @@ store.subscribe(s => { if (!selectionStillValid(s, ui.get().selection)) ui.set({
 
 function createDeleteTool() {
   return {
-    name: 'delete', opts: {}, hint: '삭제할 벽을 클릭하세요. 방을 지우려면 바닥을 클릭해 선택한 뒤 Delete 키를 누르세요.',
+    name: 'delete', opts: {}, hint: '삭제할 벽을 클릭하세요. 방을 지우려면 방 안쪽 바닥을 클릭하세요.',
     onPointerDown(p) {
       const f = activeFloor(store.get());
       const w = hitWall(f.walls, p, 6 / view.camera.scale);
