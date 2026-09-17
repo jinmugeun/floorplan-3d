@@ -5,7 +5,7 @@ import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addFloor, setActiveFloor } from '../src/state/floorOps.js';
 import { rectWalls, makeWall } from '../src/geom/walls.js';
-import { createPropsPanel } from '../src/ui/propsPanel.js';
+import { createPropsPanel, applyNumber, lenField, withUnit, readLen } from '../src/ui/propsPanel.js';
 
 test('wall panel edits thickness; room panel edits name', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
@@ -264,4 +264,27 @@ test('the 상세 설정 details keeps its open state across re-renders', () => {
   again.open = true; again.dispatchEvent(new Event('toggle'));
   store.dispatch(d => { d.name = 'y'; }, { record: false });
   expect(el.querySelector('details').open).toBe(true);
+});
+
+// 2B의 아이템 패널이 같은 도우미를 쓰도록 export되어 있는지.
+test('applyNumber, lenField, withUnit and readLen work standalone', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const wall = activeFloor(store.get()).walls[0];
+  applyNumber(store, { type: 'wall', id: wall.id }, 'thickness', 150);
+  expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).thickness).toBe(150);
+  applyNumber(store, null, 'floorHeight', 2600);
+  expect(activeFloor(store.get()).height).toBe(2600);
+  expect(withUnit('두께', 'mm', false)).toBe('두께');
+  expect(withUnit('두께', 'mm', true)).toBe('두께 (mm)');
+  expect(withUnit('두께', 'ftin', true)).toBe('두께 (ft·in)');
+  const host = document.createElement('div');
+  host.innerHTML = lenField('두께', 'thickness', 305, 2, 1000, false, 'ftin');
+  const input = host.querySelector('input[name="thickness"]');
+  expect(input.type).toBe('text');
+  expect(input.value).toBe(`1' 0"`);
+  input.value = `2' 0"`;
+  expect(readLen(input, 'ftin')).toBe(610);
+  input.value = 'nope';
+  expect(readLen(input, 'ftin')).toBeNull();
 });

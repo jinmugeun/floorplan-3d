@@ -1,11 +1,10 @@
 import { activeFloor } from '../../state/schema.js';
 import { setWalls, deleteWall, deleteRoom, duplicateRoom } from '../../state/floorOps.js';
-import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall, wallPolygon } from '../../geom/walls.js';
+import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall, wallPolygon, nodeKey } from '../../geom/walls.js';
 import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
 
-const key = p => `${Math.round(p[0] * 100)},${Math.round(p[1] * 100)}`; // 소수 좌표도 구분하는 노드 키
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
 
@@ -40,8 +39,8 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
         if (hit && multi.includes(hit.id)) {
           if (locked()) { onLocked(); return; }
           const pts = new Set();
-          for (const w of f.walls) if (multi.includes(w.id)) { pts.add(key(w.a)); pts.add(key(w.b)); }
-          const attached = f.walls.some(w => !multi.includes(w.id) && (pts.has(key(w.a)) || pts.has(key(w.b))));
+          for (const w of f.walls) if (multi.includes(w.id)) { pts.add(nodeKey(w.a)); pts.add(nodeKey(w.b)); }
+          const attached = f.walls.some(w => !multi.includes(w.id) && (pts.has(nodeKey(w.a)) || pts.has(nodeKey(w.b))));
           drag = { kind: 'multi', ids: multi, startP: p, base: f.walls, pts, attached };
           store.beginTransaction();
           return;
@@ -59,8 +58,8 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
         ui.set({ selection: { type: 'room', id: r.id } });
         if (locked()) { onLocked(); return; }
         const pts = new Set();
-        for (const w of f.walls) if (r.wallIds.includes(w.id)) { pts.add(key(w.a)); pts.add(key(w.b)); }
-        const attached = f.walls.some(w => !r.wallIds.includes(w.id) && (pts.has(key(w.a)) || pts.has(key(w.b))));
+        for (const w of f.walls) if (r.wallIds.includes(w.id)) { pts.add(nodeKey(w.a)); pts.add(nodeKey(w.b)); }
+        const attached = f.walls.some(w => !r.wallIds.includes(w.id) && (pts.has(nodeKey(w.a)) || pts.has(nodeKey(w.b))));
         drag = { kind: 'room', id: r.id, wallIds: r.wallIds, startP: p, base: f.walls, pts, attached };
         store.beginTransaction(); return;
       }
@@ -91,7 +90,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
       else if (drag.kind === 'room' || drag.kind === 'multi') {
         const dd = drag.attached ? (Math.abs(d[0]) >= Math.abs(d[1]) ? [d[0], 0] : [0, d[1]]) : d;
         if (Math.abs(dd[0]) < 1 && Math.abs(dd[1]) < 1) return;
-        walls = translateNodes(walls, q => drag.pts.has(key(q)), dd);
+        walls = translateNodes(walls, q => drag.pts.has(nodeKey(q)), dd);
       }
       drag.moved = true;
       setWalls(store, walls, { record: false });

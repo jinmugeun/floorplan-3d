@@ -28,13 +28,13 @@ export const KEYMAP = [
 ];
 
 const norm = k => k.trim().toLowerCase().replace(/\s+/g, '');
-const TABLE = new Map();
+export const TABLE = new Map();
 for (const e of KEYMAP) if (e.action) for (const k of e.keys) TABLE.set(norm(k), e.action);
 // 1인칭에서 허용하는 동작(WASD로 걷는 동안 도구·삭제가 끼어들지 않게)
-const FP_ALLOWED = new Set(['escape', 'mode:2d', 'mode:plan', 'mode:iso', 'mode:fp']);
-const PREVENT = new Set(['undo', 'redo', 'save', 'selectAll', 'settings']);
+export const FP_ALLOWED = new Set(['escape', 'mode:2d', 'mode:plan', 'mode:iso', 'mode:fp']);
+export const PREVENT = new Set(['undo', 'redo', 'save', 'selectAll', 'settings']);
 
-function tokenOf(ev) {
+export function tokenOf(ev) {
   const raw = ev.key.toLowerCase();
   const k = raw === 'escape' ? 'esc' : raw === ' ' ? 'space' : raw;
   const ctrl = ev.ctrlKey || ev.metaKey;

@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { add, sub, len, perp, eq } from '../src/geom/vec.js';
-import { makeWall, rectWalls, wallPolygon, splitWall, moveWallParallel, moveVertex, hitWall, transformWalls, endpoints } from '../src/geom/walls.js';
+import { makeWall, rectWalls, wallPolygon, splitWall, moveWallParallel, moveVertex, hitWall, transformWalls, endpoints, nodeKey } from '../src/geom/walls.js';
 import { detectRooms, polygonArea, pointInPolygon, offsetPolygon, centroid } from '../src/geom/rooms.js';
 
 describe('vec', () => {
@@ -126,4 +126,11 @@ describe('rooms', () => {
     expect(again[0].name).toBe('식당');
     expect(again[0].id).toBe(first[0].id);
   });
+});
+
+test('nodeKey distinguishes endpoints down to 0.01 mm', () => {
+  expect(nodeKey([0, 0])).toBe('0,0');
+  expect(nodeKey([1500.25, -30.5])).toBe('150025,-3050');
+  expect(nodeKey([10.004, 0])).toBe(nodeKey([10, 0]));   // 0.01 mm 미만은 같은 노드
+  expect(nodeKey([10.02, 0])).not.toBe(nodeKey([10, 0]));
 });

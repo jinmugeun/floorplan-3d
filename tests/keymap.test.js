@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { test, expect, vi } from 'vitest';
-import { createKeyHandler, KEYMAP } from '../src/ui/keymap.js';
+import { createKeyHandler, KEYMAP, TABLE, FP_ALLOWED, PREVENT, tokenOf } from '../src/ui/keymap.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
@@ -167,4 +167,18 @@ test('keys composed by the IME are ignored', () => {
   a.key('ㄷ', { keyCode: 229 });
   expect(a.calls.setTool).toEqual([]);
   expect(a.view.tool.onKey).not.toHaveBeenCalled();
+});
+
+// 2B가 쓰는 내부 표들이 export되어 있는지(핸들러를 다시 구현하지 않고 재사용하기 위해).
+test('the key table, fp allow-list, prevent-list and tokenOf are exported', () => {
+  expect(TABLE.get('esc')).toBe('escape');
+  expect(TABLE.get('ctrl+shift+z')).toBe('redo');
+  expect(TABLE.get('l')).toBe('tool:wall');
+  expect(FP_ALLOWED.has('mode:iso')).toBe(true);
+  expect(FP_ALLOWED.has('tool:wall')).toBe(false);
+  expect(PREVENT.has('save')).toBe(true);
+  expect(tokenOf({ key: 'Escape' })).toBe('esc');
+  expect(tokenOf({ key: ' ' })).toBe('space');
+  expect(tokenOf({ key: 'z', ctrlKey: true, shiftKey: true })).toBe('ctrl+shift+z');
+  expect(tokenOf({ key: 'S', metaKey: true })).toBe('ctrl+s');
 });

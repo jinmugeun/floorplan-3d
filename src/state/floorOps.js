@@ -20,9 +20,9 @@ export function addWalls(store, walls) {
 export function deleteWall(store, id) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => w.id !== id); reroom(f); });
 }
-export function deleteWalls(store, ids) {
+export function deleteWalls(store, ids, opts) {
   const kill = new Set(ids);
-  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => !kill.has(w.id)); reroom(f); });
+  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => !kill.has(w.id)); reroom(f); }, opts);
 }
 export function deleteRoom(store, id) {
   return store.dispatch(d => {
@@ -49,7 +49,7 @@ export function setRoomWallThickness(store, roomId, thickness) {
     reroom(f);
   });
 }
-export function setWallLength(store, id, mm) {
+export function setWallLength(store, id, mm, opts) {
   return store.dispatch(d => {
     const f = activeFloor(d);
     const w = f.walls.find(x => x.id === id);
@@ -57,7 +57,7 @@ export function setWallLength(store, id, mm) {
     const dir = wallDir(w); // b를 방향 그대로 옮긴다: a와 각도는 그대로 두고 길이만 바꾼다
     w.b = [w.a[0] + dir[0] * mm, w.a[1] + dir[1] * mm];
     reroom(f);
-  });
+  }, opts);
 }
 // 높이는 기하(방 폴리곤·면적)를 바꾸지 않으므로 reroom을 부르지 않는다.
 // opts는 updateRoom과 마찬가지로 store.dispatch에 전달된다(트랜잭션 안에서는 { record: false }).
@@ -82,11 +82,11 @@ export function transformFloor(store, fn) {
     reroom(f);
   });
 }
-export function addMeasure(store, measure) {
-  return store.dispatch(d => { activeFloor(d).measures.push({ id: measure.id ?? uid('m'), a: [...measure.a], b: [...measure.b] }); });
+export function addMeasure(store, measure, opts) {
+  return store.dispatch(d => { activeFloor(d).measures.push({ id: measure.id ?? uid('m'), a: [...measure.a], b: [...measure.b] }); }, opts);
 }
-export function deleteMeasure(store, id) {
-  return store.dispatch(d => { const f = activeFloor(d); f.measures = f.measures.filter(m => m.id !== id); });
+export function deleteMeasure(store, id, opts) {
+  return store.dispatch(d => { const f = activeFloor(d); f.measures = f.measures.filter(m => m.id !== id); }, opts);
 }
 
 const ROOM_PROPS = ['name', 'type', 'height', 'floorOffset', 'hideCeiling', 'seats', 'floorColor', 'ceilingColor', 'matchWallHeight'];
@@ -99,7 +99,7 @@ function copyRoomProps(fromRooms, toRooms) {
 }
 
 // 방 복사: 그 방의 벽을 방 너비만큼 동쪽(+x)으로 복사한다. 정규화 후 새로 생긴 방에 속성을 옮긴다.
-export function duplicateRoom(store, roomId) {
+export function duplicateRoom(store, roomId, opts) {
   return store.dispatch(d => {
     const f = activeFloor(d);
     const r = f.rooms.find(x => x.id === roomId);
@@ -114,7 +114,7 @@ export function duplicateRoom(store, roomId) {
     const c = centroid(r.points.map(p => [p[0] + dx, p[1]]));
     const copy = f.rooms.find(x => x.id !== roomId && pointInPolygon(c, x.points));
     if (copy) for (const k of ROOM_PROPS) if (src[k] !== undefined) copy[k] = src[k];
-  });
+  }, opts);
 }
 
 // 기본 층 이름은 아직 쓰이지 않는 가장 작은 Floor N이다("Floor 2"가 이미 있으면 Floor 3).
@@ -124,7 +124,7 @@ function defaultFloorName(floors) {
   while (used.has(`Floor ${n}`)) n += 1;
   return `Floor ${n}`;
 }
-export function addFloor(store, { name = null, copy = 'none' } = {}) {
+export function addFloor(store, { name = null, copy = 'none' } = {}, opts) {
   return store.dispatch(d => {
     const base = activeFloor(d);
     const f = createFloor(name && name.trim() ? name.trim() : defaultFloorName(d.floors));
@@ -144,24 +144,24 @@ export function addFloor(store, { name = null, copy = 'none' } = {}) {
     if (copy !== 'none' && base) copyRoomProps(base.rooms, f.rooms);
     d.floors.push(f);
     d.activeFloor = d.floors.length - 1;
-  });
+  }, opts);
 }
 export function setActiveFloor(store, index) {
   return store.dispatch(d => { if (Number.isInteger(index) && index >= 0 && index < d.floors.length) d.activeFloor = index; }, { record: false });
 }
-export function renameFloor(store, index, name) {
-  return store.dispatch(d => { const f = d.floors[index]; if (f && String(name).trim()) f.name = String(name).trim(); });
+export function renameFloor(store, index, name, opts) {
+  return store.dispatch(d => { const f = d.floors[index]; if (f && String(name).trim()) f.name = String(name).trim(); }, opts);
 }
-export function updateFloor(store, index, patch) {
-  return store.dispatch(d => { const f = d.floors[index]; if (f) Object.assign(f, patch); });
+export function updateFloor(store, index, patch, opts) {
+  return store.dispatch(d => { const f = d.floors[index]; if (f) Object.assign(f, patch); }, opts);
 }
-export function deleteFloor(store, index) {
+export function deleteFloor(store, index, opts) {
   return store.dispatch(d => {
     if (d.floors.length <= 1 || !d.floors[index]) return; // 마지막 층은 남긴다
     d.floors.splice(index, 1);
     // 활성 층보다 앞의 층을 지우면 활성 층은 한 칸 앞으로 당겨진다. 활성 층 자체를 지우면 범위 안으로 잘라 준다.
     d.activeFloor = index < d.activeFloor ? d.activeFloor - 1 : Math.min(d.activeFloor, d.floors.length - 1);
-  });
+  }, opts);
 }
 // 실면적(net) = 방 폴리곤 면적 합. 실면적+내외벽(gross) = 거기에 벽 바닥면적을 더한 값. 단위 m².
 export function totalArea(floor, areaMode = 'net') {
@@ -186,6 +186,7 @@ export function selectionStillValid(state, selection) {
   if (!f) return true; // 활성 층을 찾지 못해도 구독이 절대 예외를 던지면 안 된다
   if (selection.type === 'wall') return f.walls.some(w => w.id === selection.id);
   if (selection.type === 'room') return f.rooms.some(r => r.id === selection.id);
+  if (selection.type === 'item') return (f.items ?? []).some(i => i.id === selection.id); // 2B의 배치 아이템
   if (selection.type === 'multi') {
     const pool = selection.kind === 'wall' ? f.walls : f.items;
     return selection.ids.some(id => pool.some(x => x.id === id));

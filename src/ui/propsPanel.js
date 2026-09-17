@@ -9,7 +9,7 @@ import { toast } from './toast.js';
 // 상세 설정 <details>의 열림 상태는 패널을 다시 그려도 유지된다.
 let detailsOpen = true;
 
-export const ROOM_TYPES =[['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
+export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
 
 const field = (label, inner) => `<label class="field"><span>${label}</span>${inner}</label>`;
 const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${Number(value) || 0}" min="${min}" max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
@@ -22,19 +22,53 @@ function numValue(el) {
 }
 // 길이 입력은 단위에 따라 모양이 달라진다: mm는 숫자 입력, ft·in은 텍스트 입력(12' 6").
 // 저장 값은 언제나 mm 정수다. step은 mm 숫자 입력의 화살표 간격이다(기존 층 높이·바닥 기준 높이·방 높이는 10을 썼다).
-function lenField(label, name, mm, min, max, ro = false, units = 'mm', step = 1) {
+export function lenField(label, name, mm, min, max, ro = false, units = 'mm', step = 1) {
   if (units !== 'ftin') return field(label, num(name, mm, min, max, step, ro));
   return field(label, `<input type="text" name="${name}" data-len="1" data-min="${min}" data-max="${max}" value="${esc(fmtLen(mm, 'ftin'))}" ${ro ? 'readonly' : ''}>`);
 }
-function readLen(el, units) {
+export function readLen(el, units) {
   const v = parseLen(el.value, units);
   if (v === null) return null;
   const min = Number(el.dataset.min ?? -Infinity), max = Number(el.dataset.max ?? Infinity);
   return Math.min(max, Math.max(min, Math.round(v)));
 }
 // 치수 단위 표시가 꺼져 있으면 라벨에 단위를 쓰지 않는다: "벽 높이" / "벽 높이 (mm)"
-const withUnit = (label, units, showUnit) => (showUnit ? `${label} (${units === 'ftin' ? 'ft·in' : 'mm'})` : label);
+export const withUnit = (label, units, showUnit) => (showUnit ? `${label} (${units === 'ftin' ? 'ft·in' : 'mm'})` : label);
 const colorField = (label, name, value) => field(label, `<input type="color" name="${name}" value="${esc(value)}">`);
+
+// 숫자·길이 입력 한 칸을 상태에 반영한다. 2B의 아이템 패널도 이 함수를 쓴다.
+export function applyNumber(store, sel, name, v) {
+  if (!sel) {
+    if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = v; });
+    if (name === 'slab') updateFloor(store, store.get().activeFloor ?? 0, { slab: v });
+    return;
+  }
+  if (sel.type === 'wall') {
+    if (name === 'wallLength') setWallLength(store, sel.id, v);
+    else if (name === 'height') updateWallProps(store, sel.id, { height: v }); // 기하 불변 → reroom 없음
+    else updateWall(store, sel.id, { [name]: v });                            // 두께는 방 면적을 바꾼다
+    return;
+  }
+  // 여러 dispatch를 한 undo 단계로 묶는다: 안쪽 updateWall은 { record: false }를 넘겨야 한다
+  // (기본 record로 두면 첫 updateWall이 트랜잭션을 조기에 닫아 벽마다 되돌릴 단계가 생긴다).
+  if (sel.type === 'multi') {
+    store.beginTransaction();
+    for (const id of sel.ids) updateWall(store, id, { [name]: v }, { record: false });
+    store.endTransaction();
+    return;
+  }
+  if (sel.type === 'room') {
+    if (name === 'wallThickness') { setRoomWallThickness(store, sel.id, v); return; }
+    // 방 높이 변경이 "공간 높이 맞추기"로 벽 높이까지 바꿀 수 있으므로, 두 dispatch를
+    // 트랜잭션으로 묶는다. 안쪽 dispatch는 { record: false }로 넘겨야 endTransaction이
+    // 되돌림 한 단계로 묶어 준다(첫 dispatch가 기본 record로 트랜잭션을 미리 닫으면 두 단계가 된다).
+    store.beginTransaction();
+    updateRoom(store, sel.id, { [name]: v }, { record: false });
+    const room = activeFloor(store.get()).rooms.find(x => x.id === sel.id);
+    if (name === 'height' && room?.matchWallHeight) setRoomWallHeight(store, sel.id, v, { record: false }); // "공간 높이 맞추기"
+    store.endTransaction();
+  }
+}
 
 // deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
 export function createPropsPanel(container, store, ui, { deleteSelection = () => {} } = {}) {
@@ -115,38 +149,6 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <button type="button" name="delete" class="danger">방 삭제</button>`;
     }
   }
-  function applyNumber(sel, name, v) {
-    if (!sel) {
-      if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = v; });
-      if (name === 'slab') updateFloor(store, store.get().activeFloor ?? 0, { slab: v });
-      return;
-    }
-    if (sel.type === 'wall') {
-      if (name === 'wallLength') setWallLength(store, sel.id, v);
-      else if (name === 'height') updateWallProps(store, sel.id, { height: v }); // 기하 불변 → reroom 없음
-      else updateWall(store, sel.id, { [name]: v });                            // 두께는 방 면적을 바꾼다
-      return;
-    }
-    // 여러 dispatch를 한 undo 단계로 묶는다: 안쪽 updateWall은 { record: false }를 넘겨야 한다
-    // (기본 record로 두면 첫 updateWall이 트랜잭션을 조기에 닫아 벽마다 되돌릴 단계가 생긴다).
-    if (sel.type === 'multi') {
-      store.beginTransaction();
-      for (const id of sel.ids) updateWall(store, id, { [name]: v }, { record: false });
-      store.endTransaction();
-      return;
-    }
-    if (sel.type === 'room') {
-      if (name === 'wallThickness') { setRoomWallThickness(store, sel.id, v); return; }
-      // 방 높이 변경이 "공간 높이 맞추기"로 벽 높이까지 바꿀 수 있으므로, 두 dispatch를
-      // 트랜잭션으로 묶는다. 안쪽 dispatch는 { record: false }로 넘겨야 endTransaction이
-      // 되돌림 한 단계로 묶어 준다(첫 dispatch가 기본 record로 트랜잭션을 미리 닫으면 두 단계가 된다).
-      store.beginTransaction();
-      updateRoom(store, sel.id, { [name]: v }, { record: false });
-      const room = activeFloor(store.get()).rooms.find(x => x.id === sel.id);
-      if (name === 'height' && room?.matchWallHeight) setRoomWallHeight(store, sel.id, v, { record: false }); // "공간 높이 맞추기"
-      store.endTransaction();
-    }
-  }
   // 색: 기하 불변 → reroom 없음. opts는 트랜잭션 안에서 { record: false }로 넘어온다.
   const applyColor = (sel, name, value, opts) => {
     if (sel?.type === 'wall') updateWallProps(store, sel.id, { [name]: value }, opts);
@@ -170,12 +172,12 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (el.dataset.len) {
       const v = readLen(el, store.get().units ?? 'mm');
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
-      applyNumber(sel, name, v); return;
+      applyNumber(store, sel, name, v); return;
     }
     if (el.type === 'number') {
       const v = numValue(el);
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
-      applyNumber(sel, name, v); return;
+      applyNumber(store, sel, name, v); return;
     }
     if (el.type === 'color') {
       // 선택기 드래그(input) 중에는 { record: false }로 미리 보여 주고, change에서 트랜잭션을 한 단계로 닫는다.

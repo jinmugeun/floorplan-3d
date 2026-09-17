@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo } from '../src/state/floorOps.js';
+import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo, updateWallProps, deleteMeasure } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -274,4 +274,37 @@ test('addFloor picks the smallest unused default name', () => {
   deleteFloor(s, 0);
   addFloor(s, { copy: 'none' });                 // 앞의 Floor 1 이 비었으므로 다시 Floor 1
   expect(s.get().floors.map(f => f.name)).toEqual(['Floor 3', 'Floor 2', 'Floor 4', 'Floor 1']);
+});
+
+test('an item selection survives pruning while a stale item id does not', () => {
+  const s = createStore(createEmptyProject());
+  s.dispatch(d => { activeFloor(d).items.push({ id: 'i1', type: 'sink' }); }, { record: false });
+  const sel = { type: 'item', id: 'i1' };
+  expect(selectionStillValid(s.get(), sel)).toBe(true);
+  expect(pruneSelection(s.get(), sel)).toBe(sel);
+  const gone = { type: 'item', id: 'i9' };
+  expect(selectionStillValid(s.get(), gone)).toBe(false);
+  expect(pruneSelection(s.get(), gone)).toBeNull();
+});
+
+test('every floor op forwards opts to the dispatch, so a transaction stays one undo step', () => {
+  const s = createStore(createEmptyProject());
+  addWalls(s, rectWalls([0, 0], [4000, 3000], 200));
+  const wall = activeFloor(s.get()).walls[0], room = activeFloor(s.get()).rooms[0];
+  const steps = () => { let n = 0; while (s.canUndo()) { s.undo(); n++; } return n; };
+  s.beginTransaction();
+  setWallLength(s, wall.id, 3000, { record: false });
+  updateWallProps(s, wall.id, { colorOut: '#123456' }, { record: false });
+  addMeasure(s, { a: [0, 0], b: [1000, 0] }, { record: false });
+  deleteMeasure(s, activeFloor(s.get()).measures[0].id, { record: false });
+  duplicateRoom(s, room.id, { record: false });
+  addFloor(s, { copy: 'none' }, { record: false });
+  renameFloor(s, 1, '2층', { record: false });
+  updateFloor(s, 1, { slab: 120 }, { record: false });
+  deleteFloor(s, 1, { record: false });
+  deleteWalls(s, [wall.id], { record: false });
+  s.endTransaction();
+  expect(s.get().floors).toHaveLength(1);
+  expect(steps()).toBe(2); // 트랜잭션 한 단계 + setup의 addWalls 한 단계
+  expect(activeFloor(s.get()).walls).toHaveLength(0);
 });
