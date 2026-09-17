@@ -3,8 +3,10 @@ export function createStore(initial, { limit = 100 } = {}) {
   const past = [];
   const future = [];
   const subs = new Set();
+  let tx = null; // 열린 트랜잭션: { snapshot, pastLength }
   const notify = () => subs.forEach(fn => fn(state));
-  const record = () => { past.push(state); if (past.length > limit) past.shift(); future.length = 0; };
+  // 트랜잭션이 열려 있으면 beginTransaction이 이미 시작 상태를 기록했으므로 한 단계로 접는다.
+  const record = () => { if (tx) { tx = null; return; } past.push(state); if (past.length > limit) past.shift(); future.length = 0; };
   return {
     get: () => state,
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
@@ -16,11 +18,16 @@ export function createStore(initial, { limit = 100 } = {}) {
       notify();
       return state;
     },
-    beginTransaction() { record(); },
-    cancelTransaction() { if (!past.length) return; state = past.pop(); notify(); },
+    beginTransaction() { if (tx) return; const pastLength = past.length; record(); tx = { snapshot: state, pastLength }; },
+    cancelTransaction() {
+      if (!tx) return;
+      past.length = tx.pastLength;
+      if (past[past.length - 1] === tx.snapshot) past.pop(); // limit 초과로 shift된 경우
+      state = tx.snapshot; tx = null; notify();
+    },
     replace(next) { record(); state = next; notify(); },
-    undo() { if (!past.length) return false; future.push(state); state = past.pop(); notify(); return true; },
-    redo() { if (!future.length) return false; past.push(state); state = future.pop(); notify(); return true; },
+    undo() { if (!past.length) return false; tx = null; future.push(state); state = past.pop(); notify(); return true; },
+    redo() { if (!future.length) return false; tx = null; past.push(state); state = future.pop(); notify(); return true; },
     canUndo: () => past.length > 0,
     canRedo: () => future.length > 0,
   };

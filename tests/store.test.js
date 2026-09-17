@@ -65,6 +65,27 @@ describe('store', () => {
     s.cancelTransaction(); // 트랜잭션이 없으면 아무 일도 하지 않는다
     expect(s.get().n).toBe(0);
   });
+  test('cancelTransaction without an open transaction leaves committed history alone', () => {
+    const s = createStore({ n: 0 });
+    s.dispatch(d => { d.n = 1; });
+    s.cancelTransaction();
+    expect(s.get().n).toBe(1);
+    expect(s.canUndo()).toBe(true);
+  });
+  test('beginTransaction is idempotent while open; a recorded dispatch closes it as one undo step', () => {
+    const s = createStore({ n: 0 });
+    s.beginTransaction(); s.beginTransaction();
+    s.dispatch(d => { d.n = 3; }, { record: false });
+    s.cancelTransaction();
+    expect(s.get().n).toBe(0); expect(s.canUndo()).toBe(false);
+    s.beginTransaction();
+    s.dispatch(d => { d.n = 4; }, { record: false });
+    s.dispatch(d => { d.n = 5; });
+    s.cancelTransaction(); // 이미 닫힌 트랜잭션: 아무 일도 하지 않는다
+    expect(s.get().n).toBe(5); expect(s.canUndo()).toBe(true);
+    s.undo();
+    expect(s.get().n).toBe(0); expect(s.canUndo()).toBe(false);
+  });
   test('subscribe is called on every change', () => {
     const s = createStore({ n: 0 });
     let calls = 0; s.subscribe(() => calls++);
