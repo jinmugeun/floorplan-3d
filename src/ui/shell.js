@@ -20,6 +20,7 @@ export function createShell(root, { store, ui }) {
     </header>
     <nav id="rail" aria-label="작업 영역">
       <button data-panel="draw" class="on"><span>도면 그리기</span></button>
+      <button data-panel="products"><span>제품</span></button>
       <button data-panel="background"><span>배경 도면</span></button>
       <button data-panel="layers"><span>레이어</span></button>
     </nav>
@@ -37,6 +38,7 @@ export function createShell(root, { store, ui }) {
         <h3>일반</h3>
         <button data-tool="select">선택 <kbd>Esc</kbd></button>
       </section>
+      <section data-panel="products" hidden><h3>제품</h3><div id="library"></div></section>
       <section data-panel="background" hidden>
         <h3>배경 도면</h3>
         <button data-action="background">도면 이미지 업로드 <kbd>B</kbd></button>
@@ -66,7 +68,7 @@ export function createShell(root, { store, ui }) {
     </footer>
   </div>`;
   const q = s => root.querySelector(s);
-  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layerList: q('#layerList') };
+  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layerList: q('#layerList'), library: q('#library') };
   const strip = q('#imageStrip');
   strip.addEventListener('change', ev => {
     const el = ev.target;

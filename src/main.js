@@ -14,6 +14,7 @@ import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measure
 import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
+import { createLibraryPanel } from './ui/libraryPanel.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
@@ -33,6 +34,7 @@ const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.se
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 createPropsPanel(shell.els.props, store, ui, { deleteSelection });
+const library = createLibraryPanel(shell.els.library, { store, ui, onPick: p => { console.info('pick', p.id); } }); // 배치 연결은 Task 5에서
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
 store.subscribe(s => {
   const u = ui.get();
