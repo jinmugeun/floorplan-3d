@@ -53,11 +53,17 @@ describe('store', () => {
     s.undo();
     expect(s.get().n).toBe(0);
   });
-  test('cancelTransaction drops the recorded snapshot without changing state', () => {
+  test('cancelTransaction restores the snapshot taken at beginTransaction', () => {
     const s = createStore({ n: 0 });
-    s.beginTransaction(); s.cancelTransaction();
+    let calls = 0; s.subscribe(() => calls++);
+    s.beginTransaction();
+    s.dispatch(d => { d.n = 7; }, { record: false });
+    s.cancelTransaction();
     expect(s.get().n).toBe(0);
     expect(s.canUndo()).toBe(false);
+    expect(calls).toBe(2);
+    s.cancelTransaction(); // 트랜잭션이 없으면 아무 일도 하지 않는다
+    expect(s.get().n).toBe(0);
   });
   test('subscribe is called on every change', () => {
     const s = createStore({ n: 0 });

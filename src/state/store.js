@@ -17,7 +17,7 @@ export function createStore(initial, { limit = 100 } = {}) {
       return state;
     },
     beginTransaction() { record(); },
-    cancelTransaction() { past.pop(); },
+    cancelTransaction() { if (!past.length) return; state = past.pop(); notify(); },
     replace(next) { record(); state = next; notify(); },
     undo() { if (!past.length) return false; future.push(state); state = past.pop(); notify(); return true; },
     redo() { if (!future.length) return false; past.push(state); state = future.pop(); notify(); return true; },
