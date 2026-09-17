@@ -47,3 +47,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 8px 0 12px; } .tabs button { padding: 6px 12px; border: 0; background: none; font: inherit; cursor: pointer; color: var(--muted); } .tabs button.on { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
 #keymapTable { width: 100%; border-collapse: collapse; } #keymapTable th, #keymapTable td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); font-weight: 400; } #keymapTable thead th { color: var(--muted); font-size: 11px; }
 #props input[type=color] { width: 100%; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+#startScreen { position: fixed; inset: 0; z-index: 70; background: rgba(23,32,44,.55); display: grid; place-items: center; }
+.start-card-row { background: var(--panel); border-radius: 12px; padding: 24px 28px; width: min(760px, 94vw); }
+.start-card-row h1 { font-size: 18px; margin: 0 0 16px; }
+.start-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.start-card { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; font: inherit; }
+.start-card:hover { border-color: var(--accent); background: #f5f8ff; } .start-card b { font-size: 14px; } .start-card span { color: var(--muted); font-size: 12px; }
+@media (max-width: 720px) { .start-cards { grid-template-columns: 1fr; } }

@@ -18,6 +18,8 @@ import { createPropsPanel } from './ui/propsPanel.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
+import { openStartScreen } from './ui/startScreen.js';
+import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
 
 const store = createStore(createEmptyProject());
@@ -95,7 +97,17 @@ function deleteSelection() {
 }
 function deleteOrTool() { if (ui.get().selection) deleteSelection(); else setTool('delete'); }
 const restored = loadAutosave();
-if (restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?')) store.replace(restored, { record: false }); // 복원은 되돌릴 단계가 아니다
+const restoredOk = !!(restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?'));
+if (restoredOk) store.replace(restored, { record: false }); // 복원은 되돌릴 단계가 아니다
+const isEmpty = s => s.floors.every(f => !f.walls.length) && !s.background;
+if (!restoredOk && isEmpty(store.get())) {
+  openStartScreen({
+    store,
+    onEmpty: () => {},
+    onUpload: () => openBackgroundDialog({ store }),
+    onSample: () => { loadSample(store); view.fit(); },
+  });
+}
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
 
