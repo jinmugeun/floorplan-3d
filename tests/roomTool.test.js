@@ -29,12 +29,14 @@ test('typed dimensions override cursor', () => {
   expect(Math.max(...xs)).toBe(6000); expect(Math.max(...ys)).toBe(3500);
 });
 
-test('escape cancels', () => {
+test('escape cancels an active draw and is consumed only then', () => {
   const store = createStore(createEmptyProject());
   const t = createRoomTool({ store, onDone() {} });
-  t.onPointerDown([0, 0]); t.onKey(key('Escape'));
+  t.onPointerDown([0, 0]);
+  expect(t.onKey(key('Escape'))).toBe(true);
   expect(t.getPreview()).toBeNull();
   expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(t.onKey(key('Escape'))).toBe(false); // 그리던 것이 없으면 앱이 선택 도구로 전환할 수 있어야 한다
 });
 
 test('second click snaps to existing endpoints', () => {

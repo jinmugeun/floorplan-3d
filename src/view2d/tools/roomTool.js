@@ -25,7 +25,8 @@ export function createRoomTool({ store, onDone = () => {} }) {
     onPointerMove(p) { if (start) cur = snap(p); },
     onPointerUp() {},
     onKey(ev) {
-      if (ev.key === 'Escape') { reset(); return true; }
+      // 그리던 사각형이 있을 때만 Esc를 소비한다. 없으면 앱이 선택 도구로 돌아가게 둔다.
+      if (ev.key === 'Escape') { const had = !!start; reset(); return had; }
       if (!start) return false;
       if (/^[0-9]$/.test(ev.key)) { typed[typed.field] += ev.key; return true; }
       if (ev.key === 'Backspace') { typed[typed.field] = typed[typed.field].slice(0, -1); return true; }
