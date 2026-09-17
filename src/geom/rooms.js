@@ -117,11 +117,11 @@ export function detectRooms(walls, prevRooms = []) {
   });
 }
 
-export function roomInnerPolygon(room, walls) {
+export function roomInnerPolygon(room, walls, extra = 0) {
   const insets = room.points.map((_, i) => {
     const a = room.points[i], b = room.points[(i + 1) % room.points.length];
     const w = walls.find(x => (eq(x.a, a) && eq(x.b, b)) || (eq(x.a, b) && eq(x.b, a)));
-    return (w ? w.thickness : 200) / 2;
+    return (w ? w.thickness : 200) / 2 + extra;
   });
   return offsetPolygon(room.points, insets);
 }

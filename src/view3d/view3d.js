@@ -89,7 +89,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
       controls.enabled = false; const at = opts.at ?? center();
       camera.position.copy(toThree([at[0], at[1], 1500])); camera.lookAt(toThree([at[0], at[1] - 1000, 1500]));
       window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); fp.lock();
-      group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; });
+      group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; if (mm.userData.wallId) mm.visible = mm.name !== 'wallFoot'; });
       requestRender(); return;
     }
     controls.enabled = true; window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); keys.clear();
@@ -109,15 +109,31 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
   }
   function applyCutaway() {
     if (!group) return;
+    const view = store.get().view;
     const p = camera.position, camMm = [p.x * 1000, p.z * 1000, p.y * 1000];
-    const d = new THREE.Vector3().subVectors(p, controls.target), elev = THREE.MathUtils.radToDeg(Math.asin(d.y / d.length()));
-    const hidden = hiddenWallIds(activeFloor(store.get()), camMm, elev, store.get().view);
-    group.children.forEach(m => { if (m.userData.wallId) m.visible = !hidden.has(m.userData.wallId); });
+    const d = new THREE.Vector3().subVectors(p, controls.target);
+    const elev = THREE.MathUtils.radToDeg(Math.asin(d.y / (d.length() || 1)));
+    const hidden = hiddenWallIds(activeFloor(store.get()), camMm, elev, view);
+    const seeThrough = !!view.v3?.wallTransparent;
+    const baseOpacity = view.display === 'transparent' ? Math.min(view.wallOpacity ?? 1, 0.3) : (view.wallOpacity ?? 1);
+    for (const m of group.children) {
+      const id = m.userData.wallId;
+      if (!id) continue;
+      const isHidden = hidden.has(id);
+      if (m.name === 'wallFoot') { m.visible = isHidden && !seeThrough; continue; } // 감춘 벽은 밑동 윤곽만 남긴다
+      if (m.name === 'wall') {
+        m.visible = !isHidden || seeThrough;
+        const o = isHidden && seeThrough ? 0.25 : baseOpacity; // "벽 투명화": 지우지 않고 25%로
+        m.material.opacity = o; m.material.transparent = o < 1;
+        continue;
+      }
+      m.visible = !isHidden; // wallTop, edges
+    }
   }
   function frame(t) {
     raf = 0; if (!alive) return;
     if (mode === 'fp') {
-      fpStep(t); group?.children.forEach(m => { if (m.userData.wallId) m.visible = true; }); renderer.render(scene, camera);
+      fpStep(t); group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; }); renderer.render(scene, camera);
       raf = requestAnimationFrame(frame); return;
     }
     controls.update(); applyCutaway(); renderer.render(scene, camera);
