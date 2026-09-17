@@ -11,10 +11,11 @@ export function createWallTool({ store, onDone = () => {} }) {
   const last = () => points[points.length - 1] ?? null;
   const snap = p => snapPoint(p, { points: endpoints(activeFloor(store.get()).walls).concat(points), anchor: last(), ortho: opts.ortho, snap: opts.snap });
   const addSegment = (a, b) => {
-    if (dist(a, b) < 10) return;
+    if (dist(a, b) < 10) return false;
     let s = a, e = b;
     if (opts.reference !== 'center') { const n = mul(perp(norm(sub(b, a))), (opts.reference === 'inner' ? 1 : -1) * opts.thickness / 2); s = add(a, n); e = add(b, n); }
     addWalls(store, [makeWall({ a: s, b: e, thickness: opts.thickness })]);
+    return true;
   };
   const finish = () => { const had = points.length > 0; reset(); if (had) onDone(); return had; };
   return {
@@ -34,7 +35,7 @@ export function createWallTool({ store, onDone = () => {} }) {
       if (/^[0-9]$/.test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
       if (ev.key === 'Enter') {
-        if (typed && cursor) { const d = norm(sub(cursor, last())); const e = add(last(), mul(d, Number(typed))); addSegment(last(), e); points.push(e); typed = ''; }
+        if (typed && cursor) { const d = norm(sub(cursor, last())); const e = add(last(), mul(d, Number(typed))); if (addSegment(last(), e)) points.push(e); typed = ''; }
         else finish();
         return true;
       }

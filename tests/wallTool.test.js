@@ -51,3 +51,26 @@ test('escape finishes an active chain and is consumed only then', () => {
   expect(done).toBe(1);
   expect(t.getPreview().points).toEqual([]);
 });
+
+test('reference inner/outer offsets the centerline by half the thickness', () => {
+  const store = createStore(createEmptyProject());
+  const t = createWallTool({ store, onDone() {} });
+  t.opts.reference = 'inner';
+  t.onPointerDown([0, 0]); t.onPointerDown([4000, 0]);
+  let w = activeFloor(store.get()).walls[0];
+  expect(w.a).toEqual([0, 100]); expect(w.b).toEqual([4000, 100]);
+  t.onKey(key('Escape'));
+  t.opts.reference = 'outer';
+  t.onPointerDown([0, 2000]); t.onPointerDown([4000, 2000]);
+  w = activeFloor(store.get()).walls[1];
+  expect(w.a).toEqual([0, 1900]); expect(w.b).toEqual([4000, 1900]);
+});
+
+test('a typed length under 10mm adds neither a wall nor a chain point', () => {
+  const store = createStore(createEmptyProject());
+  const t = createWallTool({ store, onDone() {} });
+  t.onPointerDown([0, 0]); t.onPointerMove([1000, 0]);
+  t.onKey(key('0')); t.onKey(key('Enter'));
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(t.getPreview().points).toEqual([[0, 0]]);
+});
