@@ -182,3 +182,13 @@ test('the key table, fp allow-list, prevent-list and tokenOf are exported', () =
   expect(tokenOf({ key: 'z', ctrlKey: true, shiftKey: true })).toBe('ctrl+shift+z');
   expect(tokenOf({ key: 'S', metaKey: true })).toBe('ctrl+s');
 });
+
+test('a key consumed by the tool also has its browser default prevented', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  let prevented = 0;
+  const view = { tool: { onKey: ev => ev.key === 'ArrowRight' }, requestRender: () => {} };
+  const h = createKeyHandler({ store, ui, view, setTool: () => {}, setMode: () => {}, openBackground: () => {}, deleteSelection: () => {}, deleteOrTool: () => {} });
+  h({ key: 'ArrowRight', preventDefault: () => { prevented++; }, target: { tagName: 'BODY' } });
+  h({ key: 'ArrowLeft', preventDefault: () => { prevented++; }, target: { tagName: 'BODY' } }); // 도구가 안 먹는 키는 표에도 없어 그대로 둔다
+  expect(prevented).toBe(1);
+});
