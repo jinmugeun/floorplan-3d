@@ -36,3 +36,18 @@ test('changes inside the popover reach the handler, and it is clamped to the vie
   expect(parseFloat(pop.el.style.top)).toBeGreaterThanOrEqual(8);
   pop.destroy();
 });
+
+test('the outside click that closes the popover does not reach the canvas underneath', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const canvas = document.createElement('canvas'); document.body.appendChild(canvas);
+  const hits = vi.fn(); canvas.addEventListener('pointerdown', hits);
+  const pop = createPopover(root);
+  pop.open(anchorAt(), '<b>x</b>');
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 700.5, clientY: 400.25 }));
+  expect(pop.isOpen()).toBe(false);
+  expect(hits).not.toHaveBeenCalled();
+  // 닫힌 뒤의 클릭은 그대로 캔버스에 닿는다
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+  expect(hits).toHaveBeenCalledTimes(1);
+  pop.destroy();
+});
