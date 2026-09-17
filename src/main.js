@@ -51,10 +51,10 @@ window.addEventListener('keydown', ev => {
   if (ev.key === 'l' || ev.key === 'L') setTool('wall');
   if (ev.key === 'Escape') { setTool('select'); if (ui.get().fpPick) ui.set({ fpPick: false }); }
   if (ev.key === 'b' || ev.key === 'B') openBackgroundDialog({ store });
-  if (ev.key === '1') ui.set({ mode: '2d' });
+  if (ev.key === '1') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ mode: '2d' }); }
   if (ev.key === '2') { ui.set({ mode: 'plan' }); view3d.setMode('plan'); }
   if (ev.key === '3') { ui.set({ mode: 'iso' }); view3d.setMode('iso'); }
-  if (ev.key === '4') { ui.set({ fpPick: true, mode: '2d' }); console.log('1인칭으로 확인할 위치를 클릭해주세요'); }
+  if (ev.key === '4') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ fpPick: true, mode: '2d' }); console.log('1인칭으로 확인할 위치를 클릭해주세요'); }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
     const sel = ui.get().selection;
     if (sel?.type === 'wall') { deleteWall(store, sel.id); ui.set({ selection: null }); }

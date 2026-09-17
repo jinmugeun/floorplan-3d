@@ -22,8 +22,10 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
   let group = null, mode = 'iso', raf = 0, alive = true;
   const fp = new PointerLockControls(camera, renderer.domElement);
   const keys = new Set(); let lastT = 0;
-  const onKeyDown = e => keys.add(e.code), onKeyUp = e => keys.delete(e.code);
-  fp.addEventListener('unlock', () => { if (mode === 'fp') { setMode('iso'); onExitFp(); } });
+  const typing = e => ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target?.tagName); // 입력란에 타이핑 중이면 걷지 않는다
+  const onKeyDown = e => { if (!typing(e)) keys.add(e.code); }, onKeyUp = e => keys.delete(e.code);
+  // 브라우저가 Esc로 포인터 락을 풀면 ISO로 돌아간다. setMode가 먼저 mode를 바꾼 경우(1/2/3 키)는 여기서 아무것도 하지 않는다.
+  fp.addEventListener('unlock', () => { if (!alive || mode !== 'fp') return; setMode('iso'); onExitFp(); });
   function fpStep(t) {
     const dt = Math.min(0.05, (t - lastT) / 1000 || 0); lastT = t; const v = 2 * dt;
     if (keys.has('KeyW')) fp.moveForward(v); if (keys.has('KeyS')) fp.moveForward(-v);
@@ -43,7 +45,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
       group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; });
       requestRender(); return;
     }
-    controls.enabled = true; window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp);
+    controls.enabled = true; window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); keys.clear();
+    if (fp.isLocked) fp.unlock(); // 1/2/3 키로 fp를 떠날 때도 포인터 락을 반드시 해제한다
     group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = false; });
     const c = center(), t = toThree([c[0], c[1], 0]); controls.target.copy(t);
     if (m === 'plan') { camera.position.set(t.x, 40, t.z + 0.01); controls.minPolarAngle = 0; controls.maxPolarAngle = 0.05; }
