@@ -19,6 +19,21 @@ test('shell renders regions and option bar reflects tool opts', () => {
   expect(tool.opts.reference).toBe('inner');
 });
 
+test('option bar shows a hint when opts is empty but hint is set', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  shell.setOptionBar({ name: 'delete', opts: {}, hint: '안내' });
+  expect(root.querySelector('#optionBar').hidden).toBe(false);
+  expect(root.querySelector('#optionBar').textContent).toContain('안내');
+});
+
+test('option bar hides when both opts and hint are empty', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  shell.setOptionBar({ name: 'x', opts: {} });
+  expect(root.querySelector('#optionBar').hidden).toBe(true);
+});
+
 test('project name is not interpreted as HTML and view checkboxes follow the loaded project', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
   const store = createStore(createEmptyProject('<img src=x onerror="window.__pwned=1">'));

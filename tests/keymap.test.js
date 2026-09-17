@@ -59,3 +59,24 @@ test('in first-person mode tool letters and Delete are ignored but Escape and 1-
   a.key('2'); expect(a.calls.setMode).toEqual(['plan']);
   a.key('Escape'); expect(a.calls.setTool).toEqual(['select']);
 });
+
+test('d calls deleteOrTool instead of setTool', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn() };
+  const setTool = vi.fn(); const deleteSelection = vi.fn(); const deleteOrTool = vi.fn();
+  const h = createKeyHandler({ store, ui, view, setTool, setMode: vi.fn(), openBackground: vi.fn(), deleteSelection, deleteOrTool });
+  const key = (key, extra = {}) => h({ key, target: document.body, preventDefault() {}, ...extra });
+  key('d');
+  expect(deleteOrTool).toHaveBeenCalledTimes(1);
+  expect(setTool).not.toHaveBeenCalled();
+});
+
+test('Delete calls deleteSelection', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn() };
+  const deleteSelection = vi.fn();
+  const h = createKeyHandler({ store, ui, view, setTool: vi.fn(), setMode: vi.fn(), openBackground: vi.fn(), deleteSelection });
+  const key = (key, extra = {}) => h({ key, target: document.body, preventDefault() {}, ...extra });
+  key('Delete');
+  expect(deleteSelection).toHaveBeenCalledTimes(1);
+});

@@ -1,4 +1,4 @@
-export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, save = null }) {
+export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null }) {
   return ev => {
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target?.tagName)) return;
     const k = ev.key.toLowerCase();
@@ -11,7 +11,7 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
     if (k === 'escape') { if (ui.get().fpPick) ui.set({ fpPick: false }); setTool('select'); return; }
     if (['1', '2', '3', '4'].includes(k)) { setMode({ 1: '2d', 2: 'plan', 3: 'iso', 4: 'fp' }[k]); return; }
     if (ui.get().mode === 'fp') return; // 1인칭에서 WASD/QE로 걷는 동안 도구·삭제 단축키가 끼어들지 않게 한다
-    if (k === 'f') setTool('room'); else if (k === 'l') setTool('wall'); else if (k === 'd') setTool('delete'); else if (k === 'b') openBackground();
+    if (k === 'f') setTool('room'); else if (k === 'l') setTool('wall'); else if (k === 'd') deleteOrTool(); else if (k === 'b') openBackground();
     else if (k === 'e') setTool('guide'); else if (k === 'm') setTool('measure');
     else if (k === 'delete' || k === 'backspace') deleteSelection();
   };

@@ -64,16 +64,19 @@ export function createShell(root, { store, ui }) {
   let currentTool = null;
   function setOptionBar(tool) {
     currentTool = tool;
-    if (!tool || !tool.opts || !Object.keys(tool.opts).length) { els.optionBar.hidden = true; els.optionBar.innerHTML = ''; return; }
+    const hasOpts = tool && tool.opts && Object.keys(tool.opts).length;
+    const hint = tool?.hint;
+    if (!hasOpts && !hint) { els.optionBar.hidden = true; els.optionBar.innerHTML = ''; return; }
     els.optionBar.hidden = false;
-    els.optionBar.innerHTML = Object.entries(tool.opts).map(([k, v]) => {
+    els.optionBar.innerHTML = hasOpts ? Object.entries(tool.opts).map(([k, v]) => {
       const label = LABELS[k] ?? k;
       if (typeof v === 'boolean') return `<label><input type="checkbox" name="${k}" ${v ? 'checked' : ''}> ${label}</label>`;
       if (typeof v === 'number') return `<label>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
       if (k === 'reference') return `<label>${label} <select name="${k}">${REF.map(([val, l]) => `<option value="${val}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
       if (k === 'direction') return `<label>${label} <select name="${k}"><option value="v" ${v === 'v' ? 'selected' : ''}>세로</option><option value="h" ${v === 'h' ? 'selected' : ''}>가로</option></select></label>`;
       return `<label>${label} <input type="text" name="${k}" value="${v}"></label>`;
-    }).join('');
+    }).join('') : '';
+    if (hint) { const span = document.createElement('span'); span.className = 'hint'; span.textContent = hint; els.optionBar.appendChild(span); }
   }
   els.optionBar.addEventListener('change', ev => {
     const el = ev.target, k = el.name; if (!currentTool || !k) return;
