@@ -63,3 +63,21 @@ test('readonly view ignores wheel and pointer input, and destroy stops store upd
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200)); // readonly 뷰가 살아 있었다면 fit()으로 카메라가 바뀐다
   expect(v.camera).toEqual(before);
 });
+
+test('room fills become translucent while a background image is showing', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const alphas = [];
+  const c = makeCanvas();
+  c.getContext = () => new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { if (k === 'globalAlpha') alphas.push(v); t[k] = v; return true; } });
+  const v = createView2D(c, store, createUiState());
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  await frame(); await frame();
+  expect(alphas.length).toBeGreaterThan(0);
+  expect(alphas.every(a => a === 1)).toBe(true); // 배경이 없으면 바닥은 불투명
+  alphas.length = 0;
+  store.dispatch(d => { d.background = { src: 'data:,', width: 10, height: 10, scale: 1, offset: [0, 0], opacity: 0.5, visible: true, locked: true }; });
+  await frame(); await frame();
+  expect(alphas).toContain(0.35); // 배경이 보이면 바닥은 35%
+  v.destroy();
+});
