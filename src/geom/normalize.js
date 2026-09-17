@@ -28,12 +28,21 @@ function resolvePair(A, B) {
     const ts = [...new Set([0, lA, bMin, bMax].map(v => Math.round(v)))].sort((x, y) => x - y);
     const pieces = [];
     let usedA = false, usedB = false;
+    // B가 A 안에 완전히 담기면(끝점 공유 포함) 첫 조각이 A/B 양쪽 범위에 동시에 속해 A가 먼저
+    // 그 조각을 가져가 버리면 B.id가 사라진다. B의 겹침 구간이 A 전체보다 좁을 때는 B를 먼저
+    // 확인해 B.id가 반드시 어떤 조각에든 붙도록 한다. 그렇지 않은 경우(B가 A만큼 넓거나 더 넓음)는
+    // 기존 순서(A 먼저)를 유지한다.
+    const bNarrower = (bMax - bMin) < lA - JOIN_TOL;
     for (let i = 0; i + 1 < ts.length; i++) {
       const s = ts[i], e = ts[i + 1]; if (e - s <= JOIN_TOL) continue;
       const inA = s >= -JOIN_TOL && e <= lA + JOIN_TOL, inB = s >= bMin - JOIN_TOL && e <= bMax + JOIN_TOL;
       const src = inA ? A : B;
       let id;
-      if (inA && !usedA) { id = A.id; usedA = true; } else if (inB && !usedB) { id = B.id; usedB = true; } else id = uid('w');
+      if (bNarrower) {
+        if (inB && !usedB) { id = B.id; usedB = true; } else if (inA && !usedA) { id = A.id; usedA = true; } else id = uid('w');
+      } else {
+        if (inA && !usedA) { id = A.id; usedA = true; } else if (inB && !usedB) { id = B.id; usedB = true; } else id = uid('w');
+      }
       pieces.push({ ...src, id, a: add(A.a, mul(uA, s)), b: add(A.a, mul(uA, e)) });
     }
     return pieces;

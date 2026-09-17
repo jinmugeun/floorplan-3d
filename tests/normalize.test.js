@@ -36,6 +36,46 @@ describe('normalizeWalls', () => {
     expect(has(out, [0, 2000], [0, 4000])).toBe(true);
   });
 
+  test('a contained collinear wall sharing an endpoint keeps both ids', () => {
+    const a = seg([0, 0], [0, 5000]);
+    const b = seg([0, 0], [0, 2000]);
+    const out = normalizeWalls([a, b]);
+    expect(out).toHaveLength(2);
+    expect(has(out, [0, 0], [0, 2000])).toBe(true);
+    expect(has(out, [0, 2000], [0, 5000])).toBe(true);
+    expect(out.map(w => w.id).sort()).toEqual([a.id, b.id].sort());
+  });
+
+  test('a contained collinear wall strictly inside keeps both ids', () => {
+    const a = seg([0, 0], [0, 5000]);
+    const b = seg([0, 1000], [0, 2000]);
+    const out = normalizeWalls([a, b]);
+    expect(out).toHaveLength(3);
+    expect(has(out, [0, 0], [0, 1000])).toBe(true);
+    expect(has(out, [0, 1000], [0, 2000])).toBe(true);
+    expect(has(out, [0, 2000], [0, 5000])).toBe(true);
+    const ids = out.map(w => w.id);
+    expect(ids).toContain(a.id);
+    expect(ids).toContain(b.id);
+  });
+
+  test('three walls meeting at interior points of a fourth wall split it into three pieces', () => {
+    const base = seg([0, 0], [6000, 0]);
+    const v1 = seg([2000, -1000], [2000, 0]); // T from below at x=2000
+    const v2 = seg([4000, -1000], [4000, 0]); // T from below at x=4000
+    const v3 = seg([2000, 0], [2000, 1000]); // T from above at x=2000
+    const out = normalizeWalls([base, v1, v2, v3]);
+    expect(out).toHaveLength(6);
+    expect(has(out, [0, 0], [2000, 0])).toBe(true);
+    expect(has(out, [2000, 0], [4000, 0])).toBe(true);
+    expect(has(out, [4000, 0], [6000, 0])).toBe(true);
+    expect(has(out, [2000, -1000], [2000, 0])).toBe(true);
+    expect(has(out, [4000, -1000], [4000, 0])).toBe(true);
+    expect(has(out, [2000, 0], [2000, 1000])).toBe(true);
+    const twice = normalizeWalls(out);
+    expect(twice.map(w => w.id).sort()).toEqual(out.map(w => w.id).sort());
+  });
+
   test('walls that only touch at endpoints or do not meet are left alone', () => {
     const ws = rectWalls([0, 0], [4000, 3000], 200);
     const far = seg([9000, 9000], [9000, 12000]);
