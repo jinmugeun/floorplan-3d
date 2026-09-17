@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { itemCorners, itemAABB, toLocal, pointInItem, wallAxis, placeOnWall, nearestWallPlacement, normDeg, snapItemPos } from '../src/geom/items.js';
+import { itemCorners, itemAABB, toLocal, pointInItem, wallAxis, placeOnWall, nearestWallPlacement, normDeg, snapItemPos, wallGaps, isEmbed } from '../src/geom/items.js';
 import { pointInPolygon } from '../src/geom/rooms.js';
 import { makeWall, rectWalls } from '../src/geom/walls.js';
 
@@ -104,5 +104,30 @@ describe('아이템 스냅', () => {
     const r = snapItemPos(it, { walls, items: [] });
     expect(r.pos).toEqual([2000, 1500.25]);
     expect(r.guides).toEqual([]);
+  });
+});
+
+describe('벽까지 거리', () => {
+  test('네 방향에서 가장 가까운 벽면까지 거리를 준다(소수 좌표)', () => {
+    const walls = rectWalls([0, 0], [4000, 3000], 200);
+    const gaps = wallGaps(itemAABB(item({ pos: [2000.5, 1500.25], size: [1000, 600, 700] })), walls);
+    expect(gaps.left).toBeCloseTo(1400.5);
+    expect(gaps.right).toBeCloseTo(1399.5);
+    expect(gaps.up).toBeCloseTo(1100.25);
+    expect(gaps.down).toBeCloseTo(1099.75);
+  });
+
+  test('겹치는 구간이 없는 벽은 세지 않는다', () => {
+    const walls = [{ id: 'w', a: [0, 0], b: [0, 500], thickness: 200 }];
+    const gaps = wallGaps(itemAABB(item({ pos: [2000, 2000], size: [1000, 600, 700] })), walls);
+    expect(gaps.left).toBeNull();
+    expect(gaps.right).toBeNull();
+  });
+
+  test('isEmbed는 문·창·개구부만 참이다', () => {
+    expect(isEmbed({ kind: 'door' })).toBe(true);
+    expect(isEmbed({ kind: 'window' })).toBe(true);
+    expect(isEmbed({ kind: 'opening' })).toBe(true);
+    expect(isEmbed({ kind: 'product' })).toBe(false);
   });
 });

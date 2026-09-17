@@ -2,12 +2,25 @@ import { activeFloor, uid, createFloor, normalizeItem } from './schema.js';
 import { detectRooms, centroid, pointInPolygon } from '../geom/rooms.js';
 import { transformWalls, wallLength, wallDir } from '../geom/walls.js';
 import { normalizeWalls } from '../geom/normalize.js';
-import { dist, eq } from '../geom/vec.js';
+import { dist, eq, dot } from '../geom/vec.js';
+import { wallAxis, placeOnWall, isEmbed } from '../geom/items.js';
 
 const reroom = f => { f.walls = normalizeWalls(f.walls); f.rooms = detectRooms(f.walls, f.rooms); };
+// 벽이 움직이거나 사라졌을 때 그 벽에 붙은 아이템을 다시 앉힌다. reroom이 도는 곳마다 함께 돈다.
+// 벽을 지우면 wallId만 비우고 아이템은 남긴다(사용자가 만든 물건을 소리 없이 없애지 않는다).
+function reattach(f) {
+  for (let i = 0; i < f.items.length; i++) {
+    const it = f.items[i];
+    if (it.attach !== 'wall' || !it.wallId) continue;
+    const w = f.walls.find(x => x.id === it.wallId);
+    if (!w) { f.items[i] = { ...it, wallId: null }; continue; }
+    const r = placeOnWall(w, it.t, it.side, it.size, { embed: isEmbed(it) });
+    f.items[i] = { ...it, pos: [Math.round(r.pos[0]), Math.round(r.pos[1])], rot: r.rot };
+  }
+}
 
 export function setWalls(store, walls, opts = {}) {
-  return store.dispatch(d => { const f = activeFloor(d); f.walls = walls; reroom(f); }, opts);
+  return store.dispatch(d => { const f = activeFloor(d); f.walls = walls; reroom(f); reattach(f); }, opts);
 }
 export function addWalls(store, walls) {
   return store.dispatch(d => {
@@ -18,7 +31,7 @@ export function addWalls(store, walls) {
   });
 }
 export function deleteWall(store, id) {
-  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => w.id !== id); reroom(f); });
+  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => w.id !== id); reroom(f); reattach(f); });
 }
 export function deleteWalls(store, ids, opts) {
   const kill = new Set(ids);
@@ -31,11 +44,12 @@ export function deleteRoom(store, id) {
     const shared = new Set(f.rooms.filter(r => r.id !== id).flatMap(r => r.wallIds));
     f.walls = f.walls.filter(w => !room.wallIds.includes(w.id) || shared.has(w.id));
     reroom(f);
+    reattach(f);
   });
 }
 // opts는 store.dispatch로 그대로 전달된다(트랜잭션 안에서 여러 벽을 한 번에 고칠 때 { record: false }가 필요하다).
 export function updateWall(store, id, patch, opts) {
-  return store.dispatch(d => { const f = activeFloor(d); const w = f.walls.find(x => x.id === id); if (w) Object.assign(w, patch); reroom(f); }, opts);
+  return store.dispatch(d => { const f = activeFloor(d); const w = f.walls.find(x => x.id === id); if (w) Object.assign(w, patch); reroom(f); reattach(f); }, opts);
 }
 // opts는 store.dispatch로 그대로 전달된다: 여러 dispatch를 store.beginTransaction()/endTransaction()로
 // 한 단계로 묶을 때, 안의 dispatch들은 { record: false }를 넘겨야 첫 dispatch가 트랜잭션을 조기에 닫지 않는다.
@@ -47,6 +61,7 @@ export function setRoomWallThickness(store, roomId, thickness) {
     const f = activeFloor(d); const r = f.rooms.find(x => x.id === roomId); if (!r) return;
     for (const w of f.walls) if (r.wallIds.includes(w.id)) w.thickness = thickness;
     reroom(f);
+    reattach(f);
   });
 }
 export function setWallLength(store, id, mm, opts) {
@@ -80,6 +95,7 @@ export function transformFloor(store, fn) {
     f.walls = transformWalls(f.walls, fn);
     f.rooms = f.rooms.map(r => ({ ...r, points: r.points.map(fn) })); // 중심점 대체 매칭도 계속 맞도록 방 좌표도 같이 옮긴다
     reroom(f);
+    reattach(f);
   });
 }
 export function addMeasure(store, measure, opts) {
@@ -219,6 +235,22 @@ export function addItem(store, item, opts = {}) {
   const it = normalizeItem(item);
   store.dispatch(d => { activeFloor(d).items.push(structuredClone(it)); }, opts);
   return it.id;
+}
+// 방향키 이동. 벽 부착 아이템은 벽을 따라 t로 미끄러지고, 나머지는 pos를 그대로 옮긴다.
+// 잠긴 아이템은 움직이지 않는다(방향키·기즈모·핸들 모두 같은 규칙).
+export function nudgeItems(store, ids, delta, opts = {}) {
+  const state = store.get(), f = activeFloor(state);
+  const patches = itemsOf(state, ids).filter(it => !it.locked).map(it => {
+    const w = it.attach === 'wall' && it.wallId ? f.walls.find(x => x.id === it.wallId) : null;
+    if (w) {
+      const { dir, len } = wallAxis(w);
+      const t = Math.max(0, Math.min(1, it.t + dot(delta, dir) / (len || 1)));
+      const { pos, rot } = placeOnWall(w, t, it.side, it.size, { embed: isEmbed(it) });
+      return { id: it.id, patch: { t, pos: [Math.round(pos[0]), Math.round(pos[1])], rot } };
+    }
+    return { id: it.id, patch: { pos: [it.pos[0] + delta[0], it.pos[1] + delta[1]] } };
+  });
+  return patches.length ? updateItems(store, patches, opts) : store.get();
 }
 export function updateItem(store, id, patch, opts = {}) { return updateItems(store, [{ id, patch }], opts); }
 export function updateItems(store, patches, opts = {}) {

@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { deleteWall, deleteWalls, deleteRoom, transformFloor, pruneSelection, pruneSolo } from './state/floorOps.js';
+import { deleteWall, deleteWalls, deleteRoom, deleteItems, transformFloor, pruneSelection, pruneSolo } from './state/floorOps.js';
 import { hitWall } from './geom/walls.js';
 import { pointInPolygon } from './geom/rooms.js';
 import { createView2D } from './view2d/view2d.js';
@@ -109,6 +109,8 @@ document.getElementById('btnSettings').addEventListener('click', openSettings);
 
 function deleteSelection() {
   const s = ui.get().selection;
+  if (s?.type === 'item') { deleteItems(store, [s.id]); ui.set({ selection: null }); return; }
+  if (s?.type === 'multi' && s.kind === 'item') { deleteItems(store, s.ids); ui.set({ selection: null }); return; }
   if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); }
   if (s?.type === 'multi' && s.kind === 'wall') { deleteWalls(store, s.ids); ui.set({ selection: null }); }
   if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); }

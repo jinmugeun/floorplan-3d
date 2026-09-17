@@ -97,3 +97,28 @@ export function snapItemPos(item, { walls = [], items = [], tol = ITEM_SNAP_TOL 
   if (by) guides.push({ type: 'h', y: by.line });
   return { pos: [item.pos[0] + (bx ? bx.d : 0), item.pos[1] + (by ? by.d : 0)], guides };
 }
+
+export const isEmbed = item => ['door', 'window', 'opening'].includes(item?.kind);
+
+// 이동 중 표시할 벽까지 거리(mm). 축에 평행한 벽만 보고, 아이템 AABB와 겹치는 구간이 있는 벽만 센다.
+// up은 -y(화면 위), down은 +y 방향이다. 해당 방향에 벽이 없으면 null.
+export function wallGaps(box, walls) {
+  const out = { left: null, right: null, up: null, down: null };
+  const put = (k, v) => { if (v >= 0 && (out[k] === null || v < out[k])) out[k] = v; };
+  const overlap = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0) > 0;
+  for (const w of walls) {
+    const h = w.thickness / 2;
+    if (Math.abs(w.a[0] - w.b[0]) < 1) {          // 남북 벽
+      const y0 = Math.min(w.a[1], w.b[1]), y1 = Math.max(w.a[1], w.b[1]);
+      if (!overlap(box.min[1], box.max[1], y0, y1)) continue;
+      put('right', (w.a[0] - h) - box.max[0]);
+      put('left', box.min[0] - (w.a[0] + h));
+    } else if (Math.abs(w.a[1] - w.b[1]) < 1) {   // 동서 벽
+      const x0 = Math.min(w.a[0], w.b[0]), x1 = Math.max(w.a[0], w.b[0]);
+      if (!overlap(box.min[0], box.max[0], x0, x1)) continue;
+      put('down', (w.a[1] - h) - box.max[1]);
+      put('up', box.min[1] - (w.a[1] + h));
+    }
+  }
+  return out;
+}

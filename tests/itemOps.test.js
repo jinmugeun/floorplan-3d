@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeItem, createItem, normalizeProject } from '../src/state/schema.js';
-import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection } from '../src/state/floorOps.js';
-import { rectWalls } from '../src/geom/walls.js';
+import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall } from '../src/state/floorOps.js';
+import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 
 function setup() {
@@ -125,4 +125,27 @@ test('duplicateItems forwards opts so it can sit inside a transaction', () => {
   expect(activeFloor(s.get()).items).toHaveLength(2);
   s.undo();
   expect(activeFloor(s.get()).items).toHaveLength(1); // 트랜잭션 하나 = undo 한 단계
+});
+
+describe('벽 부착 아이템 재부착', () => {
+  test('벽을 옮기면 문이 따라가고 t는 그대로다', () => {
+    const s = setup();
+    const top = activeFloor(s.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+    const id = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }));
+    setWalls(s, moveWallParallel(activeFloor(s.get()).walls, top.id, [0, -500]));
+    const it = activeFloor(s.get()).items.find(x => x.id === id);
+    expect(it.t).toBeCloseTo(0.5);
+    expect(it.pos[1]).toBe(-500);
+    expect(it.wallId).toBe(top.id);
+  });
+
+  test('벽을 지우면 wallId만 비우고 아이템은 남는다', () => {
+    const s = setup();
+    const top = activeFloor(s.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+    const id = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }));
+    deleteWall(s, top.id);
+    const it = activeFloor(s.get()).items.find(x => x.id === id);
+    expect(it).toBeTruthy();
+    expect(it.wallId).toBeNull();
+  });
 });

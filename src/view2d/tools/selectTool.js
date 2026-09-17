@@ -1,15 +1,22 @@
 import { activeFloor } from '../../state/schema.js';
-import { setWalls, deleteWall, deleteRoom, duplicateRoom } from '../../state/floorOps.js';
+import { setWalls, deleteWall, deleteRoom, duplicateRoom, expandGroups, nudgeItems } from '../../state/floorOps.js';
 import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall, wallPolygon, nodeKey } from '../../geom/walls.js';
 import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
+import { createItemDragger } from './itemDrag.js';
+import { drawItemSelection, ITEM_COLORS } from '../items2d.js';
 
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
+export const ARROW_STEP = 10, ARROW_STEP_SHIFT = 100;
+const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
-export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
-  let drag = null; // { kind, id|point, startP, base, moved }
+export function createSelectTool({ store, ui, view, onLocked = () => {}, itemActions = {}, toast = () => {} }) {
+  const items = createItemDragger({ store, ui, view, toast });
+  const selIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
+  const setItemSelection = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids: [...ids] } });
+  let drag = null; // { kind, id|point, startP, base, moved } — 벽·방·배경 드래그(아이템 드래그는 items가 따로 들고 있다)
   const px = n => n / view.camera.scale;
   const floor = () => activeFloor(store.get());
   const locked = () => !!store.get().view?.lockPlan;
@@ -23,7 +30,15 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
         ui.set({ splitWall: false }); return;
       }
       const multi = sel?.type === 'multi' && sel.kind === 'wall' ? sel.ids : null;
+      // Shift는 토글·영역선택 전용: 아이템 토글 → 벽 토글 → 빈 캔버스면 영역선택(아이템/벽 모두 이 box로 확정한다).
       if (ev?.shiftKey) {
+        const hitItem = items.pick(p);
+        if (hitItem) {
+          const base = selIds();
+          const ids = expandGroups(f, base.includes(hitItem.id) ? base.filter(x => x !== hitItem.id) : [...base, hitItem.id]);
+          setItemSelection(ids);
+          return;
+        }
         const hit = hitWall(f.walls, p, px(6));
         if (hit) { // Shift+클릭: 토글
           const base = multi ?? (sel?.type === 'wall' ? [sel.id] : []);
@@ -32,6 +47,16 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
           return;
         }
         drag = { kind: 'box', startP: p, cur: p }; // Shift+드래그: 영역 선택
+        return;
+      }
+      // 아이템이 벽·방보다 먼저 잡힌다. 도면 잠금은 아이템 편집을 막지 않는다(locked() 가드보다 앞).
+      const it = items.pick(p);
+      if (it) {
+        let ids = selIds();
+        if (!ids.includes(it.id)) ids = [it.id];
+        ids = expandGroups(f, ids);
+        setItemSelection(ids);
+        if (ids.length) items.start('items', ids, p);
         return;
       }
       if (multi) {
@@ -73,7 +98,8 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
       }
       ui.set({ selection: null }); drag = null;
     },
-    onPointerMove(p) {
+    onPointerMove(p, ev) {
+      if (items.getDrag()) { items.apply(p, ev); return; }
       if (!drag) return;
       if (drag.kind === 'bg') {
         const d = sub(p, drag.startP);
@@ -96,8 +122,11 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
       setWalls(store, walls, { record: false });
     },
     onPointerUp(p) {
+      if (items.getDrag()) { items.finish(); return; }
       if (drag?.kind === 'box') {
         const box = boxOf(drag.startP, drag.cur ?? p);
+        const hit = items.pickInBox(box);
+        if (hit.length) { setItemSelection(expandGroups(floor(), hit.map(i => i.id))); drag = null; return; }
         const ids = floor().walls.filter(w => inBox(w.a, box) && inBox(w.b, box)).map(w => w.id); // 완전히 들어온 벽만
         ui.set({ selection: ids.length ? { type: 'multi', kind: 'wall', ids } : null });
         drag = null; return;
@@ -109,12 +138,20 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
       if (ev.key === 'Escape') {
         const u = ui.get();
         if (u.fpPick || u.soloRoom) return false; // 취소할 것이 앱 쪽에 있으면 keymap이 처리한다
+        if (items.getDrag()) { items.cancel(); return true; } // 아이템 드래그 중 Esc는 이동을 되돌린다
         const had = !!drag || !!u.selection || !!u.splitWall;
         if (drag) { store.cancelTransaction(); drag = null; } // 드래그 중 Esc는 이동을 되돌린다
         ui.set({ selection: null, splitWall: false });
         return had; // 취소할 것이 없으면 소비하지 않는다(앱이 선택 도구로 돌아간다)
       }
+      if (items.getDrag() && ev.ctrlKey && ev.key.toLowerCase() === 'z') { items.cancel(); return true; } // 아이템 드래그 중 undo는 드래그 취소로
       if (ev.ctrlKey && ev.key.toLowerCase() === 'z' && drag) { store.cancelTransaction(); drag = null; return true; } // 드래그 중 undo는 드래그 취소로
+      const ids = selIds();
+      if (ARROWS[ev.key] && ids.length) {
+        const k = ev.shiftKey ? ARROW_STEP_SHIFT : ARROW_STEP;
+        nudgeItems(store, ids, [ARROWS[ev.key][0] * k, ARROWS[ev.key][1] * k]);
+        return true;
+      }
       return false;
     },
     onContextMenu(p) {
@@ -146,15 +183,23 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
       ];
     },
     draw(ctx, v) {
+      items.drawOverlay(ctx, v); // 노란 가이드 + 벽까지 거리(v2.gapDims)
       if (drag?.kind === 'box') {
         const [x0, y0, x1, y1] = boxOf(drag.startP, drag.cur ?? drag.startP);
         const s0 = v.toScreen([x0, y0]), s1 = v.toScreen([x1, y1]);
-        ctx.strokeStyle = v.COLORS.wallSel; ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = ITEM_COLORS.sel; ctx.setLineDash([6, 4]);
         ctx.strokeRect(s0[0], s0[1], s1[0] - s0[0], s1[1] - s0[1]);
         ctx.setLineDash([]);
       }
       const sel = ui.get().selection; if (!sel) return;
       const f = floor();
+      if (sel.type === 'item' || (sel.type === 'multi' && sel.kind === 'item')) {
+        for (const id of selIds()) {
+          const it = f.items.find(x => x.id === id);
+          if (it) drawItemSelection(ctx, v, it, { locked: it.locked });
+        }
+        return;
+      }
       if (sel.type === 'multi' && sel.kind === 'wall') {
         for (const w of f.walls.filter(x => sel.ids.includes(x.id))) v.poly(wallPolygon(w, f.walls), v.COLORS.wallSel, null);
         return;
@@ -168,6 +213,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
         for (const q of [w.a, w.b]) { const n = others.find(x => eq(x.a, q) || eq(x.b, q)); if (!n) { const s = v.toScreen(q); ctx.fillStyle = v.COLORS.guide; ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); } }
       }
     },
-    cancel() { if (drag) { store.cancelTransaction(); drag = null; } },
+    cancel() { if (items.getDrag()) items.cancel(); if (drag) { store.cancelTransaction(); drag = null; } },
+    getDrag: () => items.getDrag() ?? (drag ? { kind: drag.kind, box: drag.kind === 'box' ? boxOf(drag.startP, drag.cur ?? drag.startP) : null } : null),
   };
 }
