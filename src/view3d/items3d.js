@@ -3,6 +3,7 @@ import { toThree } from './build.js';
 import { productById } from '../products/catalog.js';
 import { itemVisible } from '../view2d/items2d.js';
 import { RAD } from '../geom/items.js';
+import { collidingIds } from '../geom/collide.js';
 
 const M = v => v / 1000;
 export const itemVisible3 = (item, v3 = {}) => itemVisible(item, v3);
@@ -34,10 +35,13 @@ export function buildItems(floor, view = {}) {
   const g = new THREE.Group();
   g.name = 'items';
   const v3 = view.v3 ?? {};
+  const bad = v3.collision === false ? null : collidingIds(floor.items ?? []);
   for (const item of floor.items ?? []) {
     if (!itemVisible3(item, v3)) continue;
     const mesh = itemMesh(item);
-    if (mesh) g.add(mesh);
+    if (!mesh) continue;
+    if (bad?.has(item.id)) mesh.material.color.set('#e5484d');   // 2D의 빨간 테두리와 같은 신호
+    g.add(mesh);
   }
   return g;
 }

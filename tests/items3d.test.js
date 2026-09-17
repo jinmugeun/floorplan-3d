@@ -3,6 +3,7 @@ import { buildItems, itemMesh, itemVisible3 } from '../src/view3d/items3d.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { RAD } from '../src/geom/items.js';
+import { collidingIds } from '../src/geom/collide.js';
 
 const mk = (id, patch) => createItem(productById(id), patch);
 const floor = items => ({ walls: [], rooms: [], items, height: 2300 });
@@ -51,5 +52,14 @@ describe('3D 아이템', () => {
   test('아이템 색이 재질 색으로 간다', () => {
     const m = itemMesh(mk('sofa-3', { pos: [0, 0], color: '#ff0000' }));
     expect(m.material.color.getHexString()).toBe('ff0000');
+  });
+
+  test('v3.collision이 켜져 있으면 겹친 아이템이 빨갛게 칠해진다', () => {
+    const items = [mk('dining-4', { pos: [0, 0] }), mk('dining-4', { pos: [500, 0] }), mk('dining-4', { pos: [5000, 0] })];
+    expect(collidingIds(items).size).toBe(2);
+    const on = buildItems(floor(items), { v3: {} });
+    expect(on.children.filter(c => c.material.color.getHexString() === 'e5484d')).toHaveLength(2);
+    const off = buildItems(floor(items), { v3: { collision: false } });
+    expect(off.children.some(c => c.material.color.getHexString() === 'e5484d')).toBe(false);
   });
 });

@@ -3,6 +3,7 @@ import { updateItems, itemsOf } from '../../state/floorOps.js';
 import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, HANDLE_HIT_PX } from '../items2d.js';
+import { collidingIds } from '../../geom/collide.js';
 
 // 아이템 드래그 한 묶음. selectTool은 "무엇을 잡았나"만 판단하고 나머지를 여기로 넘긴다.
 // drag.kind: 'items'(이동) | 'scale'(크기 핸들, Task 9) | 'rotate'(회전 핸들, Task 9)
@@ -78,6 +79,14 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
         ...(drag.base.length === 1 ? { wallId: m.wallId, t: m.t, side: m.side } : { wallId: null }),
       },
     })), { record: false });
+    warn();
+  }
+
+  // 드래그당 한 번만 경고한다. 배치 자체는 막지 않는다.
+  function warn() {
+    if (drag.warned || flags().collision === false) return;
+    const bad = collidingIds(floor().items);
+    if (drag.ids.some(id => bad.has(id))) { drag.warned = true; toast('충돌이 발생중입니다'); }
   }
 
   function apply(p, ev) {

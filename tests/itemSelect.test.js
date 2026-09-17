@@ -191,3 +191,14 @@ test('벽 범위 밖으로 끌어낸 문은 부착이 풀린다', () => {
   expect(it.wallId).toBeNull();
   expect(it.pos[1]).toBeGreaterThan(1000);
 });
+
+test('드래그로 겹치면 경고를 한 번만 낸다', () => {
+  const seen = [];
+  // 토스트는 생성 시점에 주입한다(전역 toast를 갈아 끼우지 않는다).
+  const { t } = setup([['dining-4', { pos: [1000, 1000] }], ['dining-4', { pos: [2600, 1000] }]], { toast: m => seen.push(m) });
+  t.onPointerDown([2600, 1000], {});
+  t.onPointerMove([1200, 1000], { ctrlKey: true });
+  t.onPointerMove([1100, 1000], { ctrlKey: true });
+  t.onPointerUp([1100, 1000], {});
+  expect(seen).toEqual(['충돌이 발생중입니다']);
+});

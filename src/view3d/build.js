@@ -46,7 +46,7 @@ export function sceneSignature(state) {
   const f = activeFloor(state) ?? { walls: [], rooms: [] }; // 활성 층이 없어도 구독자가 예외를 던지지 않게
   const v = state.view ?? {};
   const v3 = v.v3 ?? {};
-  return JSON.stringify([f.walls, f.rooms, f.items, state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity, v3.floorItems, v3.wallItems, v3.ceilingItems, v3.structures]);
+  return JSON.stringify([f.walls, f.rooms, f.items, state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity, v3.floorItems, v3.wallItems, v3.ceilingItems, v3.structures, v3.collision]);
 }
 
 export function buildFloorGroup(floor, view) {
