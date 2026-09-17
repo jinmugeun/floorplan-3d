@@ -1,4 +1,4 @@
-import { activeFloor, uid, createFloor } from './schema.js';
+import { activeFloor, uid, createFloor, normalizeItem } from './schema.js';
 import { detectRooms, centroid, pointInPolygon } from '../geom/rooms.js';
 import { transformWalls, wallLength, wallDir } from '../geom/walls.js';
 import { normalizeWalls } from '../geom/normalize.js';
@@ -205,4 +205,42 @@ export function pruneSelection(state, selection) {
     return ids.length ? { ...selection, ids } : null;
   }
   return selectionStillValid(state, selection) ? selection : null;
+}
+
+export const itemsOf = (state, ids) => { const set = new Set(ids); return activeFloor(state).items.filter(i => set.has(i.id)); };
+// 그룹에 속한 아이템을 하나 고르면 그룹 전체가 선택된다.
+export function expandGroups(floor, ids) {
+  const out = new Set(ids);
+  for (const g of floor.groups ?? []) if (g.itemIds.some(id => out.has(id))) for (const id of g.itemIds) out.add(id);
+  return [...out].filter(id => floor.items.some(i => i.id === id));
+}
+// 호출자가 들고 있는 객체를 그대로 상태에 넣지 않는다(밖에서 고치면 스냅샷이 몰래 바뀐다).
+export function addItem(store, item, opts = {}) {
+  const it = normalizeItem(item);
+  store.dispatch(d => { activeFloor(d).items.push(structuredClone(it)); }, opts);
+  return it.id;
+}
+export function updateItem(store, id, patch, opts = {}) { return updateItems(store, [{ id, patch }], opts); }
+export function updateItems(store, patches, opts = {}) {
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    for (const { id, patch } of patches) {
+      const i = f.items.findIndex(x => x.id === id);
+      if (i >= 0) f.items[i] = normalizeItem({ ...f.items[i], ...patch });
+    }
+  }, opts);
+}
+export function deleteItems(store, ids, opts = {}) {
+  const set = new Set(ids);
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    f.items = f.items.filter(i => !set.has(i.id));
+    f.groups = (f.groups ?? []).map(g => ({ ...g, itemIds: g.itemIds.filter(x => !set.has(x)) })).filter(g => g.itemIds.length > 1);
+  }, opts);
+}
+// 새 id를 먼저 만들어 돌려준다(dispatch는 상태를 복제하므로 안에서 만든 id를 밖에서 알 수 없다).
+export function duplicateItems(store, ids, { delta = [0, 0] } = {}) {
+  const copies = itemsOf(store.get(), ids).map(i => normalizeItem({ ...i, id: uid('i'), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] }));
+  store.dispatch(d => { activeFloor(d).items.push(...copies.map(c => structuredClone(c))); });
+  return copies.map(c => c.id);
 }

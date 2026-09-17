@@ -58,6 +58,43 @@ function normalizeWall(w) {
   const src = obj(w);
   return { ...base, ...src, id: str(src.id, base.id), a: pair(src.a), b: pair(src.b), thickness: num(src.thickness, base.thickness, 2, 1000), height: num(src.height, base.height, 2, 8000), colorIn: color(src.colorIn, base.colorIn), colorOut: color(src.colorOut, base.colorOut) };
 }
+export const ITEM_RANGE = { size: [10, 5000], rot: [0, 360], z: [-1000, 8000], t: [0, 1] };
+const deg360 = v => { const n = Number(v); return Number.isFinite(n) ? ((n % 360) + 360) % 360 : 0; };
+const ATTACH = ['floor', 'floorLay', 'wall', 'ceiling'];
+
+// 아이템 하나를 앱이 기대하는 모양으로 맞춘다(아키텍처 §8). 모르는 필드는 그대로 남긴다.
+export function normalizeItem(it) {
+  const src = obj(it);
+  const size = Array.isArray(src.size) ? src.size : [];
+  return {
+    ...src,
+    id: str(src.id, uid('i')),
+    kind: str(src.kind, 'product'),
+    productId: str(src.productId, ''),
+    name: str(src.name, ''),
+    code: str(src.code, ''),
+    color: str(src.color, '#cfd4da'),
+    pos: pair(src.pos),
+    z: num(src.z, 0, ITEM_RANGE.z[0], ITEM_RANGE.z[1]),
+    rot: deg360(src.rot),
+    size: [0, 1, 2].map(i => num(size[i], 600, ITEM_RANGE.size[0], ITEM_RANGE.size[1])),
+    attach: ATTACH.includes(src.attach) ? src.attach : 'floor',
+    wallId: typeof src.wallId === 'string' ? src.wallId : null,
+    t: num(src.t, 0, ITEM_RANGE.t[0], ITEM_RANGE.t[1]),
+    side: src.side === -1 ? -1 : 1,
+    flipH: !!src.flipH, flipV: !!src.flipV, locked: !!src.locked, hidden: !!src.hidden,
+  };
+}
+// 카탈로그 제품에서 아이템을 만든다. 천장 부착의 z는 배치 도구가 층 높이에서 다시 계산한다.
+export function createItem(product, patch = {}) {
+  return normalizeItem({
+    id: uid('i'), kind: product.kind ?? 'product', productId: product.id, name: product.name, code: product.code,
+    pos: [0, 0], z: product.zDefault ?? 0, rot: 0, size: [...product.size], attach: product.attach,
+    wallId: null, t: 0, side: 1, flipH: false, flipV: false, locked: false, hidden: false,
+    color: product.color ?? '#cfd4da',
+    ...patch,
+  });
+}
 function normalizeFloor(f, index) {
   const base = createFloor(`Floor ${index + 1}`);
   const src = obj(f);
@@ -72,7 +109,8 @@ function normalizeFloor(f, index) {
     id: str(src.id, base.id), name: str(src.name, base.name), height: num(src.height, base.height, 2000, 8000),
     slab: num(src.slab, base.slab, 0, 1000),
     walls, rooms: detectRooms(walls, rooms), // 면적 등 파생값을 항상 숫자로 다시 계산한다
-    items: arr(src.items), ducts: arr(src.ducts), guides: arr(src.guides), groups: arr(src.groups),
+    items: arr(src.items).map(normalizeItem), ducts: arr(src.ducts), guides: arr(src.guides),
+    groups: arr(src.groups).filter(g => g && Array.isArray(g.itemIds)).map(g => ({ id: str(g.id, uid('g')), itemIds: g.itemIds.filter(x => typeof x === 'string') })),
     measures: arr(src.measures).filter(m => m && typeof m === 'object' && Array.isArray(m.a) && Array.isArray(m.b)).map(m => ({ id: str(m.id, uid('m')), a: pair(m.a), b: pair(m.b) })),
   };
 }
