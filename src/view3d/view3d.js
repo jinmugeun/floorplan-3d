@@ -149,13 +149,25 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
       m.visible = !isHidden; // wallTop, edges
     }
   }
+  function applySolo() {
+    if (!group) return;
+    const solo = ui.get().soloRoom ?? null;
+    if (!solo) return; // 단일 공간 모드가 아니면 컷어웨이 결과를 그대로 둔다
+    const room = activeFloor(store.get()).rooms.find(r => r.id === solo);
+    if (!room) return;
+    const wallIds = new Set(room.wallIds);
+    for (const m of group.children) {
+      if (m.userData.wallId) { m.visible = m.visible && wallIds.has(m.userData.wallId); continue; }
+      if (m.userData.roomId) m.visible = m.userData.roomId === solo && m.name !== 'ceiling';
+    }
+  }
   function frame(t) {
     raf = 0; if (!alive) return;
     if (mode === 'fp') {
       fpStep(t); group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; }); renderer.render(scene, camera);
       raf = requestAnimationFrame(frame); return;
     }
-    controls.update(); applyCutaway(); renderer.render(scene, camera);
+    controls.update(); applyCutaway(); applySolo(); renderer.render(scene, camera);
   }
   function requestRender() { if (!raf) raf = requestAnimationFrame(frame); }
   controls.addEventListener('change', requestRender);
@@ -169,7 +181,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     if (ss !== lastSun) { lastSun = ss; applySun(v.sun); }
   }
   const unsub = store.subscribe(() => { rebuild(); applyViewSettings(); requestRender(); });
+  const unsubUi = ui.subscribe(requestRender); // 단일 공간 모드·선택 변화도 다시 그린다
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, getCameraInfo, setTarget, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, getCameraInfo, setTarget, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

@@ -170,3 +170,21 @@ test('onCameraChange fires for zoom, centerOn, fit and panning', () => {
   canvas.dispatchEvent(new MouseEvent('pointerup', { clientX: 460, clientY: 320, bubbles: true }));
   v.destroy();
 });
+
+test('right click asks the tool for items and opens the given menu', () => {
+  const store = createStore(createEmptyProject());
+  const canvas = makeCanvas();
+  const opened = [];
+  const menu = { open: (x, y, items) => opened.push({ x, y, items }), close() {}, isOpen: () => false };
+  const v = createView2D(canvas, store, createUiState(), { menu });
+  const items = [{ label: 'A', onSelect() {} }];
+  v.setTool({ name: 't', opts: {}, onPointerDown() {}, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {}, onContextMenu: () => items });
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  canvas.dispatchEvent(new MouseEvent('contextmenu', { clientX: 120, clientY: 90, bubbles: true, cancelable: true }));
+  expect(opened).toHaveLength(1);
+  expect(opened[0].items).toBe(items);
+  v.setTool({ name: 'u', opts: {}, onPointerDown() {}, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {} });
+  canvas.dispatchEvent(new MouseEvent('contextmenu', { clientX: 120, clientY: 90, bubbles: true, cancelable: true }));
+  expect(opened).toHaveLength(1); // onContextMenu가 없는 도구는 메뉴를 열지 않는다
+  v.destroy();
+});

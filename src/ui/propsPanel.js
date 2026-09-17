@@ -36,6 +36,13 @@ const colorField = (label, name, value) => field(label, `<input type="color" nam
 // deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
 export function createPropsPanel(container, store, ui, { deleteSelection = () => {} } = {}) {
   function render() {
+    renderBody();
+    const wanted = ui.get().focusField;
+    if (!wanted) return;
+    ui.set({ focusField: null });                          // 한 번만. 이 set이 renderBody를 다시 돌린다
+    container.querySelector(`[name="${wanted}"]`)?.focus(); // 그래서 새 DOM에서 다시 찾는다
+  }
+  function renderBody() {
     const sel = ui.get().selection, f = activeFloor(store.get());
     const st = store.get(), units = st.units ?? 'mm', pyeong = !!st.settings?.pyeong, showUnit = !!st.settings?.showUnit;
     if (!sel) {

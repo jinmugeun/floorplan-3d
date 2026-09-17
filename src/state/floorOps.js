@@ -1,5 +1,5 @@
 import { activeFloor, uid, createFloor } from './schema.js';
-import { detectRooms, centroid } from '../geom/rooms.js';
+import { detectRooms, centroid, pointInPolygon } from '../geom/rooms.js';
 import { transformWalls, wallLength, wallDir } from '../geom/walls.js';
 import { normalizeWalls } from '../geom/normalize.js';
 import { dist, eq } from '../geom/vec.js';
@@ -96,6 +96,25 @@ function copyRoomProps(fromRooms, toRooms) {
     const src = fromRooms.find(x => Array.isArray(x.points) && x.points.length && dist(centroid(x.points), centroid(r.points)) < 1);
     if (src) for (const k of ROOM_PROPS) if (src[k] !== undefined) r[k] = src[k];
   }
+}
+
+// 방 복사: 그 방의 벽을 방 너비만큼 동쪽(+x)으로 복사한다. 정규화 후 새로 생긴 방에 속성을 옮긴다.
+export function duplicateRoom(store, roomId) {
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    const r = f.rooms.find(x => x.id === roomId);
+    if (!r) return;
+    const xs = r.points.map(p => p[0]);
+    const dx = Math.max(...xs) - Math.min(...xs);
+    if (!(dx > 0)) return;
+    const copies = f.walls.filter(w => r.wallIds.includes(w.id)).map(w => ({ ...w, id: uid('w'), a: [w.a[0] + dx, w.a[1]], b: [w.b[0] + dx, w.b[1]] }));
+    const src = { ...r };
+    f.walls = [...f.walls, ...copies];
+    reroom(f);
+    const c = centroid(r.points.map(p => [p[0] + dx, p[1]]));
+    const copy = f.rooms.find(x => x.id !== roomId && pointInPolygon(c, x.points));
+    if (copy) for (const k of ROOM_PROPS) if (src[k] !== undefined) copy[k] = src[k];
+  });
 }
 
 export function addFloor(store, { name = null, copy = 'none' } = {}) {

@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls } from '../src/state/floorOps.js';
+import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -231,4 +231,23 @@ test('deleteWalls removes several walls in one undo step', () => {
   expect(activeFloor(s.get()).walls).toHaveLength(2);
   s.undo();
   expect(activeFloor(s.get()).walls).toHaveLength(4);
+});
+
+test('duplicateRoom copies the room one width to the east and keeps its properties', () => {
+  const s = createStore(createEmptyProject());
+  addWalls(s, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200)); // 소수 좌표
+  const r = activeFloor(s.get()).rooms[0];
+  updateRoom(s, r.id, { name: '가열조리실', type: 'cook', seats: 12, height: 2800 });
+  duplicateRoom(s, r.id);
+  const f = activeFloor(s.get());
+  expect(f.rooms).toHaveLength(2);
+  const copy = f.rooms.find(x => x.id !== r.id);
+  expect(copy.name).toBe('가열조리실');
+  expect(copy.type).toBe('cook');
+  expect(copy.seats).toBe(12);
+  expect(copy.height).toBe(2800);
+  expect(Math.min(...copy.points.map(p => p[0]))).toBe(4001); // detectRooms가 노드를 정수로 반올림한다(4000.5 → 4001)
+  expect(copy.area).toBeCloseTo(r.area, 6);
+  s.undo();
+  expect(activeFloor(s.get()).rooms).toHaveLength(1);
 });

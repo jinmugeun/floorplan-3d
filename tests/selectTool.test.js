@@ -6,7 +6,7 @@ import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 
-const fakeView = { camera: { scale: 0.1 } };
+const fakeView = { camera: { scale: 0.1 }, fit: () => {} };
 function setup() {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
@@ -218,4 +218,32 @@ test('a multi drag with fractional coordinates moves every selected node', () =>
   const g = activeFloor(store.get());
   expect(Math.min(...g.walls.map(w => w.a[0]))).toBeCloseTo(101.25, 6);
   expect(Math.min(...g.walls.map(w => w.a[1]))).toBeCloseTo(100.5, 6);
+});
+
+test('context menu items depend on what is under the cursor', () => {
+  const { store, ui, t } = setup();
+  const f = activeFloor(store.get());
+  const wallItems = t.onContextMenu([2000, 0], { shiftKey: false });
+  expect(wallItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', 'sep', '삭제']);
+  expect(wallItems[1].disabled).toBe(true);
+  expect(wallItems[1].title).toBe('미지원');
+  wallItems[0].onSelect();
+  expect(ui.get().splitWall).toBe(true);
+  wallItems[2].onSelect();
+  expect(ui.get().selection).toEqual({ type: 'wall', id: f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id });
+  expect(ui.get().focusField).toBe('colorOut');
+
+  const roomItems = t.onContextMenu([2000, 1500], {});
+  expect(roomItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(['방 복사', '마감재 복사', '재질 교체', '단일 공간 모드', 'sep', '삭제']);
+  expect(roomItems[1].disabled).toBe(true);
+  roomItems[0].onSelect();
+  expect(activeFloor(store.get()).rooms).toHaveLength(2);
+  roomItems[3].onSelect();
+  expect(ui.get().soloRoom).toBe(f.rooms[0].id);
+
+  const emptyItems = t.onContextMenu([-9000, -9000], {});
+  expect(emptyItems.map(i => i.label)).toEqual(['전체 선택', '화면 맞추기']);
+  emptyItems[0].onSelect();
+  expect(ui.get().selection.type).toBe('multi');
+  expect(ui.get().selection.ids).toHaveLength(activeFloor(store.get()).walls.length);
 });

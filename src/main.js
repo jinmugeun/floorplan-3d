@@ -16,13 +16,15 @@ import { createShell } from './ui/shell.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
+import { createContextMenu } from './ui/contextMenu.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
 const shell = createShell(document.getElementById('app'), { store, ui });
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
-const view = createView2D(shell.els.canvas2d, store, ui, { onCameraChange: () => minimap?.requestRender() });
+const menu = createContextMenu(document.body);
+const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender() }); // 태스크 5의 onCameraChange를 유지한다
 const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다

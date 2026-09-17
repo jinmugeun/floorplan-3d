@@ -79,6 +79,9 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
+    const solo = ui.get().soloRoom ?? null;
+    const soloRoom = solo ? f.rooms.find(r => r.id === solo) : null;
+    const soloWalls = soloRoom ? new Set(soloRoom.wallIds) : null;
     const units = state.units ?? 'mm', pyeong = !!state.settings?.pyeong, showUnit = !!state.settings?.showUnit;
     const v2 = state.view.v2;
     drawBackground(state);
@@ -86,7 +89,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     // 배경 도면이 보일 때는 바닥을 반투명하게 그려서 도면을 따라 그릴 수 있게 한다.
     const tracing = !!(state.background && state.background.visible && v2.background);
     for (const r of f.rooms) {
-      ctx.globalAlpha = tracing ? 0.35 : 1;
+      ctx.globalAlpha = (tracing ? 0.35 : 1) * (soloRoom && r.id !== solo ? 0.25 : 1);
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
       ctx.globalAlpha = 1;
       if (labels) {
@@ -96,7 +99,11 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       }
     }
     if (!readonly && v2.guides) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
-    for (const wl of f.walls) poly(wallPolygon(wl, f.walls), sel?.type === 'wall' && sel.id === wl.id ? COLORS.wallSel : COLORS.wall, null);
+    for (const wl of f.walls) {
+      ctx.globalAlpha = soloWalls && !soloWalls.has(wl.id) ? 0.25 : 1;
+      poly(wallPolygon(wl, f.walls), sel?.type === 'wall' && sel.id === wl.id ? COLORS.wallSel : COLORS.wall, null);
+    }
+    ctx.globalAlpha = 1;
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
     // 벽마다 치수 라벨을 그리되, 화면에서 40px보다 짧은 벽은 건너뛴다(LOD: 라벨이 겹쳐 뭉치는 것을 막는다).
     if (v2.dims && labels) for (const wl of f.walls) {

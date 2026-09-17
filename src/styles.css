@@ -18,6 +18,11 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #optionBar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 14px; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
 #optionBar input[type=number] { width: 70px; }
 #banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 14px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+#banner button { margin-left: 10px; padding: 3px 8px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
+.ctx-menu { position: fixed; z-index: 60; min-width: 190px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px; }
+.ctx-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; width: 100%; padding: 6px 10px; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; border-radius: 4px; }
+.ctx-item:hover:not(:disabled), .ctx-item:focus-visible { background: #e6eefb; } .ctx-item:disabled { color: var(--muted); cursor: default; } .ctx-item.danger { color: var(--exhaust); border: 0; margin: 0; }
+.ctx-sep { height: 1px; background: var(--line); margin: 4px 2px; }
 #right { grid-area: right; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--line); overflow: auto; }
 #minimap { height: 200px; border-bottom: 1px solid var(--line); position: relative; } #minimap canvas { width: 100%; height: 100%; display: block; } #minimap .mm-label { position: absolute; top: 6px; left: 8px; font-size: 11px; color: var(--muted); }
 #props { padding: 12px; } #props h2 { font-size: 14px; margin: 0 0 10px; } .field { display: block; margin-bottom: 8px; } .field span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; } .field input, .field select { width: 100%; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; }

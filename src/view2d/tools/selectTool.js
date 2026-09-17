@@ -1,5 +1,5 @@
 import { activeFloor } from '../../state/schema.js';
-import { setWalls } from '../../state/floorOps.js';
+import { setWalls, deleteWall, deleteRoom, duplicateRoom } from '../../state/floorOps.js';
 import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall, wallPolygon } from '../../geom/walls.js';
 import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
@@ -98,6 +98,30 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
       }
       if (ev.ctrlKey && ev.key.toLowerCase() === 'z' && drag) { store.cancelTransaction(); drag = null; return true; } // 드래그 중 undo는 드래그 취소로
       return false;
+    },
+    onContextMenu(p) {
+      const f = floor();
+      const w = hitWall(f.walls, p, px(6));
+      if (w) return [
+        { label: '벽 나누기', onSelect: () => { ui.set({ selection: { type: 'wall', id: w.id }, splitWall: true }); } },
+        { label: '곡선벽 전환', disabled: true, title: '미지원' },
+        { label: '재질 교체', onSelect: () => ui.set({ selection: { type: 'wall', id: w.id }, focusField: 'colorOut' }) },
+        'sep',
+        { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => deleteWall(store, w.id) },
+      ];
+      const r = f.rooms.find(x => pointInPolygon(p, x.points));
+      if (r) return [
+        { label: '방 복사', shortcut: 'Ctrl+C', onSelect: () => duplicateRoom(store, r.id) },
+        { label: '마감재 복사', disabled: true, title: '미지원' },
+        { label: '재질 교체', onSelect: () => ui.set({ selection: { type: 'room', id: r.id }, focusField: 'floorColor' }) },
+        { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: r.id }, soloRoom: r.id }) },
+        'sep',
+        { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => { if (window.confirm('방과 그 벽을 모두 삭제할까요?')) deleteRoom(store, r.id); } },
+      ];
+      return [
+        { label: '전체 선택', shortcut: 'Ctrl+A', onSelect: () => { const ids = floor().walls.map(x => x.id); ui.set({ selection: ids.length ? { type: 'multi', kind: 'wall', ids } : null }); } },
+        { label: '화면 맞추기', onSelect: () => view.fit() },
+      ];
     },
     draw(ctx, v) {
       if (drag?.kind === 'box') {

@@ -198,3 +198,14 @@ test('multi selection shows the count, edits height for all and delegates deleti
   el.querySelector('button[name="delete"]').click();
   expect(calls).toEqual(['del']);
 });
+
+test('focusField moves focus to that input exactly once', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200)); // 소수 좌표
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  const w = activeFloor(store.get()).walls[0];
+  ui.set({ selection: { type: 'wall', id: w.id }, focusField: 'colorOut' });
+  expect(document.activeElement.name).toBe('colorOut');
+  expect(ui.get().focusField).toBeNull();
+});

@@ -132,7 +132,9 @@ export function createShell(root, { store, ui }) {
     const is3d = s.mode !== '2d';
     q('#btnCam').hidden = !is3d; q('#btnSun').hidden = !is3d;
     if (!is3d && (popKind === 'cam' || popKind === 'sun')) pop.close();
-    els.banner.hidden = !s.fpPick; if (s.fpPick) els.banner.textContent = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소';
+    if (s.fpPick) { els.banner.hidden = false; els.banner.innerHTML = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소'; }
+    else if (s.soloRoom) { els.banner.hidden = false; els.banner.innerHTML = '단일 공간 모드 <button type="button" id="btnExitSolo">도면 전체 보기</button>'; q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); }
+    else { els.banner.hidden = true; els.banner.innerHTML = ''; }
     if (pop.isOpen() && popKind === 'view') refreshPopover();
   });
   const syncTop = s => {
