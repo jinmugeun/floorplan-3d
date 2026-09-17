@@ -1,8 +1,9 @@
-import { activeFloor } from '../../state/schema.js';
-import { uid } from '../../state/schema.js';
+import { activeFloor, uid } from '../../state/schema.js';
 
-export function createGuideTool({ store, view }) {
-  const opts = { direction: 'v' };
+export const GUIDE_TOOL_DEFAULTS = { direction: 'v' };
+
+export function createGuideTool({ store, view, opts: given = null }) {
+  const opts = given ?? { ...GUIDE_TOOL_DEFAULTS };
   let typed = '', lastId = null;
   const px = n => n / view.camera.scale;
   return {
@@ -19,7 +20,7 @@ export function createGuideTool({ store, view }) {
       if (ev.key === 'Escape') { typed = ''; lastId = null; return false; }
       if (/^[0-9-]$/.test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
-      if (ev.key === 'Enter' && typed && lastId) { const pos = Number(typed); store.dispatch(d => { const g = activeFloor(d).guides.find(x => x.id === lastId); if (g) g.pos = pos; }); typed = ''; return true; }
+      if (ev.key === 'Enter' && typed && lastId) { const pos = Number(typed); if (!Number.isFinite(pos)) { typed = ''; return true; } store.dispatch(d => { const g = activeFloor(d).guides.find(x => x.id === lastId); if (g) g.pos = pos; }); typed = ''; return true; }
       return false;
     },
     draw(ctx, v) { if (typed) v.label(`${typed}|`, v.toWorld([ctx.canvas.clientWidth / 2, 40]), { bg: '#fff', color: v.COLORS.dim }); },

@@ -74,3 +74,14 @@ test('a typed length under 10mm adds neither a wall nor a chain point', () => {
   expect(activeFloor(store.get()).walls).toHaveLength(0);
   expect(t.getPreview().points).toEqual([[0, 0]]);
 });
+
+test('a given opts object is used and exposed', () => {
+  const store = createStore(createEmptyProject());
+  const opts = { reference: 'center', thickness: 120, snap: true, ortho: false };
+  const t = createWallTool({ store, opts, onDone() {} });
+  expect(t.opts).toBe(opts);
+  t.onPointerDown([0, 0]); t.onPointerMove([3000, 200]);
+  expect(t.getPreview().cursor).toEqual([3000, 200]); // ortho: false 가 적용됐다
+  t.onPointerDown([3000, 200]);
+  expect(activeFloor(store.get()).walls[0].thickness).toBe(120);
+});

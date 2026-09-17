@@ -29,3 +29,18 @@ test('room tool snaps to a guide', () => {
   rt.onPointerDown([0, 0]); rt.onPointerMove([2950, 2000]);
   expect(rt.getPreview().w).toBe(3000);
 });
+test('a given opts object is used and exposed', () => {
+  const store = createStore(createEmptyProject());
+  const opts = { direction: 'h' };
+  const t = createGuideTool({ store, view: fakeView, opts });
+  expect(t.opts).toBe(opts);
+  t.onPointerDown([1234, 777]);
+  expect(activeFloor(store.get()).guides[0]).toMatchObject({ type: 'h', pos: 777 });
+});
+test('a non-numeric typed position (e.g. "-") is discarded instead of writing NaN', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  t.onPointerDown([1234, 0]);
+  t.onKey(key('-')); expect(t.onKey(key('Enter'))).toBe(true);
+  expect(activeFloor(store.get()).guides[0].pos).toBe(1234);
+});

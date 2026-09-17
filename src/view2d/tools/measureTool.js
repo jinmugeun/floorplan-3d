@@ -3,8 +3,10 @@ import { endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
 import { dist } from '../../geom/vec.js';
 
-export function createMeasureTool({ store }) {
-  const opts = { snap: true };
+export const MEASURE_TOOL_DEFAULTS = { snap: true };
+
+export function createMeasureTool({ store, opts: given = null }) {
+  const opts = given ?? { ...MEASURE_TOOL_DEFAULTS };
   let a = null, b = null, cur = null;
   const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, snap: opts.snap }).point; };
   return {

@@ -4,8 +4,10 @@ import { makeWall, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
 
-export function createWallTool({ store, onDone = () => {} }) {
-  const opts = { reference: 'center', thickness: 200, snap: true, ortho: true };
+export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
+
+export function createWallTool({ store, onDone = () => {}, opts: given = null }) {
+  const opts = given ?? { ...WALL_TOOL_DEFAULTS };
   let points = [], cursor = null, guides = [], typed = '';
   const reset = () => { points = []; cursor = null; guides = []; typed = ''; };
   const last = () => points[points.length - 1] ?? null;
@@ -35,7 +37,7 @@ export function createWallTool({ store, onDone = () => {} }) {
       if (/^[0-9]$/.test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
       if (ev.key === 'Enter') {
-        if (typed && cursor) { const d = norm(sub(cursor, last())); const e = add(last(), mul(d, Number(typed))); if (addSegment(last(), e)) points.push(e); typed = ''; }
+        if (typed) { const d = norm(sub(cursor, last())); const e = add(last(), mul(d, Number(typed))); if (addSegment(last(), e)) points.push(e); typed = ''; }
         else finish();
         return true;
       }

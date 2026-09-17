@@ -48,3 +48,12 @@ test('second click snaps to existing endpoints', () => {
   expect(f.rooms).toHaveLength(2);
   expect(f.walls.some(w => w.a[1] === 3000 && w.b[1] === 3000 && Math.max(w.a[0], w.b[0]) === 7000)).toBe(true);
 });
+
+test('a given opts object is used and exposed so option edits persist across tool switches', () => {
+  const store = createStore(createEmptyProject());
+  const opts = { thickness: 100, snap: true };
+  const t = createRoomTool({ store, opts, onDone() {} });
+  expect(t.opts).toBe(opts);
+  t.onPointerDown([0, 0]); t.onPointerMove([4000, 3000]); t.onPointerDown([4000, 3000]);
+  expect(activeFloor(store.get()).walls.every(w => w.thickness === 100)).toBe(true);
+});

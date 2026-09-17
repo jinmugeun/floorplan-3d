@@ -3,8 +3,11 @@ import { addWalls } from '../../state/floorOps.js';
 import { rectWalls, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
 
-export function createRoomTool({ store, onDone = () => {} }) {
-  const opts = { thickness: 200, snap: true };
+export const ROOM_TOOL_DEFAULTS = { thickness: 200, snap: true };
+
+// opts를 넘기면 그 객체를 그대로 쓰고 tool.opts로 돌려준다(도구를 다시 켜도 옵션 바의 편집이 유지되도록).
+export function createRoomTool({ store, onDone = () => {}, opts: given = null }) {
+  const opts = given ?? { ...ROOM_TOOL_DEFAULTS };
   let start = null, cur = null, typed = { w: '', h: '', field: 'w' };
   const reset = () => { start = null; cur = null; typed = { w: '', h: '', field: 'w' }; };
   const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, snap: opts.snap }).point; };

@@ -4,11 +4,11 @@ import { createEmptyProject, activeFloor } from './state/schema.js';
 import { deleteWall, deleteRoom, transformFloor } from './state/floorOps.js';
 import { hitWall } from './geom/walls.js';
 import { createView2D } from './view2d/view2d.js';
-import { createRoomTool } from './view2d/tools/roomTool.js';
-import { createWallTool } from './view2d/tools/wallTool.js';
+import { createRoomTool, ROOM_TOOL_DEFAULTS } from './view2d/tools/roomTool.js';
+import { createWallTool, WALL_TOOL_DEFAULTS } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
-import { createGuideTool } from './view2d/tools/guideTool.js';
-import { createMeasureTool } from './view2d/tools/measureTool.js';
+import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.js';
+import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { createShell } from './ui/shell.js';
 import { createKeyHandler } from './ui/keymap.js';
@@ -27,13 +27,15 @@ createPropsPanel(shell.els.props, store, ui);
 function createDeleteTool() {
   return { name: 'delete', opts: {}, onPointerDown(p) { const w = hitWall(activeFloor(store.get()).walls, p, 6 / view.camera.scale); if (w) deleteWall(store, w.id); }, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {} };
 }
+// 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
+const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS } };
 const tools = {
   select: () => createSelectTool({ store, ui, view }),
-  room: () => createRoomTool({ store, onDone: () => setTool('select') }),
-  wall: () => createWallTool({ store, onDone: () => setTool('select') }),
+  room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
+  wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
   delete: createDeleteTool,
-  guide: () => createGuideTool({ store, view }),
-  measure: () => createMeasureTool({ store }),
+  guide: () => createGuideTool({ store, view, opts: toolOpts.guide }),
+  measure: () => createMeasureTool({ store, opts: toolOpts.measure }),
 };
 function setTool(name) { const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
 function setMode(mode, opts) {
