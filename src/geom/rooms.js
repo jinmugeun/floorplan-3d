@@ -68,20 +68,16 @@ export function detectRooms(walls, prevRooms = []) {
       h = out[(idx + 1) % out.length];
       guard++;
     } while (h !== start && guard < 10000);
-    // 수학 좌표계(y 위)에서 내부 면은 양수. 우리 좌표계(y 남)에서는 부호가 반대이므로 음수를 취한다.
+    // 위 순회 규칙(각도 정렬은 y를 뒤집어 수학 좌표계 기준)으로 추적하면, 이 y-남 좌표계에서
+    // 방 내부 면은 polygonArea가 양수, 바깥 면은 음수로 나온다. 양수 면만 방으로 취한다.
     const area = polygonArea(pts);
-    if (area > 1) faces.push({ pts, wallIds: [...new Set(wallIds)], area: -area });
+    if (area > 1) faces.push({ pts, wallIds: [...new Set(wallIds)], area });
   }
   const wallById = Object.fromEntries(walls.map(w => [w.id, w]));
   return faces.map(f => {
     const c = centroid(f.pts);
     const prev = prevRooms.find(r => dist(centroid(r.points), c) < 500);
-    const insets = f.pts.map((_, i) => {
-      const a = f.pts[i], b = f.pts[(i + 1) % f.pts.length];
-      const w = walls.find(x => (eq(x.a, a) && eq(x.b, b)) || (eq(x.a, b) && eq(x.b, a)));
-      return (w ? w.thickness : 200) / 2;
-    });
-    const inner = offsetPolygon(f.pts, insets);
+    const inner = roomInnerPolygon({ points: f.pts }, walls);
     return {
       id: prev?.id ?? uid('r'),
       name: prev?.name ?? '', type: prev?.type ?? 'none',
