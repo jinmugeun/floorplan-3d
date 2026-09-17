@@ -38,9 +38,12 @@ export function createSelectTool({ store, ui, view }) {
       drag.moved = true;
       setWalls(store, walls, { record: false });
     },
-    onPointerUp() { if (drag && !drag.moved) store.cancelTransaction(); drag = null; },
+    onPointerUp() { if (drag) drag.moved ? store.endTransaction() : store.cancelTransaction(); drag = null; },
     onKey(ev) {
-      if (ev.key === 'Escape') { ui.set({ selection: null, splitWall: false }); return true; }
+      if (ev.key === 'Escape') {
+        if (drag) { store.cancelTransaction(); drag = null; } // 드래그 중 Esc는 이동을 되돌린다
+        ui.set({ selection: null, splitWall: false }); return true;
+      }
       return false;
     },
     draw(ctx, v) {

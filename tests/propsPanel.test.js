@@ -22,3 +22,31 @@ test('wall panel edits thickness; room panel edits name', () => {
   expect(activeFloor(store.get()).rooms[0].name).toBe('식당');
   expect(el.textContent).toContain('m²');
 });
+
+test('numeric inputs reject empty values and clamp to their range', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  const wallId = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id: wallId } });
+  let th = el.querySelector('input[name="thickness"]');
+  th.value = ''; th.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls[0].thickness).toBe(200);
+  expect(el.querySelector('input[name="thickness"]').value).toBe('200');
+  th = el.querySelector('input[name="thickness"]');
+  th.value = '5000'; th.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls[0].thickness).toBe(1000);
+});
+
+test('room name with quotes is escaped in the panel markup', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  const room = activeFloor(store.get()).rooms[0];
+  ui.set({ selection: { type: 'room', id: room.id } });
+  const name = el.querySelector('input[name="name"]');
+  name.value = 'a" onfocus="x'; name.dispatchEvent(new Event('change', { bubbles: true }));
+  const again = el.querySelector('input[name="name"]');
+  expect(again.value).toBe('a" onfocus="x');
+  expect(again.hasAttribute('onfocus')).toBe(false);
+});

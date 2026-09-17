@@ -41,3 +41,33 @@ test('dragging a selected wall vertex moves the corner', () => {
   expect(f.walls.filter(w => (w.a[0] === -500 && w.a[1] === -500) || (w.b[0] === -500 && w.b[1] === -500))).toHaveLength(2);
   expect(f.rooms).toHaveLength(1);
 });
+
+test('a finished drag survives the next plain click and stays one undo step', () => {
+  const { store, t } = setup();
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  t.onPointerDown([2000, 0]); t.onPointerMove([2000, -600]); t.onPointerUp([2000, -600]);
+  t.onPointerDown([2000, 1500]); t.onPointerUp([2000, 1500]); // 방 클릭(이동 없음)
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(-600);
+  expect(store.canUndo()).toBe(true);
+  store.undo();
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(0);
+  // 드래그는 정확히 한 단계였다: 남은 건 setup()이 만든 벽 생성 기록뿐이다.
+  expect(store.canUndo()).toBe(true);
+  store.undo();
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(store.canUndo()).toBe(false);
+});
+
+test('escape during a drag reverts the movement', () => {
+  const { store, t } = setup();
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  t.onPointerDown([2000, 0]); t.onPointerMove([2000, -600]);
+  expect(t.onKey({ key: 'Escape' })).toBe(true);
+  t.onPointerUp([2000, -600]);
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(0);
+  // 취소된 드래그는 아무 기록도 남기지 않는다: 남은 건 setup()의 벽 생성 기록뿐이다.
+  expect(store.canUndo()).toBe(true);
+  store.undo();
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(store.canUndo()).toBe(false);
+});

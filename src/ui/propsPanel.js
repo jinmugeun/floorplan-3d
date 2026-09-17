@@ -4,8 +4,16 @@ import { wallLength } from '../geom/walls.js';
 
 export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
 
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const field = (label, inner) => `<label class="field"><span>${label}</span>${inner}</label>`;
 const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
+// 숫자 입력: 비어 있거나 숫자가 아니면 null, 범위를 벗어나면 min/max로 잘라 준다.
+function numValue(el) {
+  if (el.value.trim() === '') return null;
+  const v = Number(el.value); if (Number.isNaN(v)) return null;
+  const min = el.min === '' ? -Infinity : Number(el.min), max = el.max === '' ? Infinity : Number(el.max);
+  return Math.min(max, Math.max(min, v));
+}
 
 export function createPropsPanel(container, store, ui) {
   function render() {
@@ -26,7 +34,7 @@ export function createPropsPanel(container, store, ui) {
       const t = f.walls.find(x => r.wallIds.includes(x.id))?.thickness ?? 200;
       container.innerHTML = `<h2>공간 상세 정보</h2>
         ${field('공간 타입', `<select name="type">${ROOM_TYPES.map(([v, l]) => `<option value="${v}" ${r.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`)}
-        ${field('공간 이름', `<input type="text" name="name" value="${r.name}" placeholder="공간 이름을 입력해 주세요">`)}
+        ${field('공간 이름', `<input type="text" name="name" value="${esc(r.name)}" placeholder="공간 이름을 입력해 주세요">`)}
         ${field('면적', `<output>${r.area.toFixed(1)} m²</output>`)}
         ${field('벽 두께 (mm)', num('wallThickness', t, 2, 1000))}
         ${field('바닥 기준 높이 (mm)', num('floorOffset', r.floorOffset, -1000, 1000, 10))}
@@ -37,13 +45,17 @@ export function createPropsPanel(container, store, ui) {
   }
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
-    if (!sel) { if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = Number(el.value); }); return; }
-    if (sel.type === 'wall') updateWall(store, sel.id, { [name]: Number(el.value) });
-    if (sel.type === 'room') {
-      if (name === 'wallThickness') setRoomWallThickness(store, sel.id, Number(el.value));
-      else if (name === 'hideCeiling') updateRoom(store, sel.id, { hideCeiling: el.checked });
+    if (el.type === 'number') {
+      const v = numValue(el);
+      if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
+      if (!sel) { if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = v; }); return; }
+      if (sel.type === 'wall') updateWall(store, sel.id, { [name]: v });
+      if (sel.type === 'room') { if (name === 'wallThickness') setRoomWallThickness(store, sel.id, v); else updateRoom(store, sel.id, { [name]: v }); }
+      return;
+    }
+    if (sel?.type === 'room') {
+      if (name === 'hideCeiling') updateRoom(store, sel.id, { hideCeiling: el.checked });
       else if (name === 'name' || name === 'type') updateRoom(store, sel.id, { [name]: el.value });
-      else updateRoom(store, sel.id, { [name]: Number(el.value) });
     }
   };
   const onClick = ev => {

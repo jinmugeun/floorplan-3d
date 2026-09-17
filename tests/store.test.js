@@ -86,6 +86,16 @@ describe('store', () => {
     s.undo();
     expect(s.get().n).toBe(0); expect(s.canUndo()).toBe(false);
   });
+  test('endTransaction commits unrecorded changes as one undo step', () => {
+    const s = createStore({ n: 0 });
+    s.beginTransaction();
+    s.dispatch(d => { d.n = 8; }, { record: false });
+    s.endTransaction();
+    s.cancelTransaction(); // 닫힌 뒤에는 아무 일도 하지 않는다
+    expect(s.get().n).toBe(8); expect(s.canUndo()).toBe(true);
+    s.undo();
+    expect(s.get().n).toBe(0);
+  });
   test('subscribe is called on every change', () => {
     const s = createStore({ n: 0 });
     let calls = 0; s.subscribe(() => calls++);

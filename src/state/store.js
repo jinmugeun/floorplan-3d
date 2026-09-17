@@ -19,6 +19,7 @@ export function createStore(initial, { limit = 100 } = {}) {
       return state;
     },
     beginTransaction() { if (tx) return; const pastLength = past.length; record(); tx = { snapshot: state, pastLength }; },
+    endTransaction() { tx = null; }, // 지금까지의 변경을 한 단계로 확정한다
     cancelTransaction() {
       if (!tx) return;
       past.length = tx.pastLength;
