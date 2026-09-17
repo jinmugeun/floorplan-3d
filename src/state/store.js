@@ -3,10 +3,13 @@ export function createStore(initial, { limit = 100 } = {}) {
   const past = [];
   const future = [];
   const subs = new Set();
-  let tx = null; // 열린 트랜잭션: { snapshot, pastLength }
+  let tx = null; // 열린 트랜잭션: { snapshot } — 시작 시점의 상태만 들고 있고, 히스토리는 아직 건드리지 않는다(지연 기록)
   const notify = () => subs.forEach(fn => fn(state));
-  // 트랜잭션이 열려 있으면 beginTransaction이 이미 시작 상태를 기록했으므로 한 단계로 접는다.
-  const record = () => { if (tx) { tx = null; return; } past.push(state); if (past.length > limit) past.shift(); future.length = 0; };
+  const pushPast = snapshot => { past.push(snapshot); if (past.length > limit) past.shift(); future.length = 0; };
+  // 되돌릴 시작점을 히스토리에 넣는다. 트랜잭션이 열려 있으면 그 시작 상태를 한 단계로 접어 넣고 닫는다.
+  const record = () => { if (tx) { pushPast(tx.snapshot); tx = null; } else pushPast(state); };
+  // 지금까지의 변경을 한 단계로 확정한다. 아무것도 바뀌지 않았으면 히스토리(redo 포함)를 그대로 둔다.
+  const closeTransaction = () => { if (tx && state !== tx.snapshot) pushPast(tx.snapshot); tx = null; };
   return {
     get: () => state,
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
@@ -18,17 +21,13 @@ export function createStore(initial, { limit = 100 } = {}) {
       notify();
       return state;
     },
-    beginTransaction() { if (tx) return; const pastLength = past.length; record(); tx = { snapshot: state, pastLength }; },
-    endTransaction() { tx = null; }, // 지금까지의 변경을 한 단계로 확정한다
-    cancelTransaction() {
-      if (!tx) return;
-      past.length = tx.pastLength;
-      if (past[past.length - 1] === tx.snapshot) past.pop(); // limit 초과로 shift된 경우
-      state = tx.snapshot; tx = null; notify();
-    },
-    replace(next) { record(); state = next; notify(); },
-    undo() { if (!past.length) return false; tx = null; future.push(state); state = past.pop(); notify(); return true; },
-    redo() { if (!future.length) return false; tx = null; past.push(state); state = future.pop(); notify(); return true; },
+    beginTransaction() { if (!tx) tx = { snapshot: state }; },
+    endTransaction: closeTransaction,
+    cancelTransaction() { if (!tx) return; state = tx.snapshot; tx = null; notify(); },
+    replace(next, { record: rec = true } = {}) { if (rec) record(); state = next; notify(); },
+    // 열린 트랜잭션이 있으면 먼저 한 단계로 확정하고 나서 되돌린다(드래그 도중 undo → 드래그 시작점으로).
+    undo() { closeTransaction(); if (!past.length) return false; future.push(state); state = past.pop(); notify(); return true; },
+    redo() { closeTransaction(); if (!future.length) return false; past.push(state); state = future.pop(); notify(); return true; },
     canUndo: () => past.length > 0,
     canRedo: () => future.length > 0,
   };

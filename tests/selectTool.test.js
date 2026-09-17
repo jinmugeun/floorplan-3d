@@ -82,3 +82,15 @@ test('escape during a drag reverts the movement', () => {
   expect(activeFloor(store.get()).walls).toHaveLength(0);
   expect(store.canUndo()).toBe(false);
 });
+
+test('a plain click after undo keeps the redo stack', () => {
+  const { store, t } = setup();
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  t.onPointerDown([2000, 0]); t.onPointerMove([2000, -600]); t.onPointerUp([2000, -600]);
+  store.undo();
+  expect(store.canRedo()).toBe(true);
+  t.onPointerDown([2000, 0]); t.onPointerUp([2000, 0]); // 이동 없는 클릭(선택만)
+  expect(store.canRedo()).toBe(true);
+  store.redo();
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(-600);
+});

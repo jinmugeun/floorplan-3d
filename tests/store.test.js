@@ -96,6 +96,27 @@ describe('store', () => {
     s.undo();
     expect(s.get().n).toBe(0);
   });
+  test('a transaction that ends without changes leaves the redo stack intact', () => {
+    const s = createStore({ n: 0 });
+    s.dispatch(d => { d.n = 1; });
+    s.undo();
+    expect(s.canRedo()).toBe(true);
+    s.beginTransaction(); s.cancelTransaction();
+    expect(s.canRedo()).toBe(true);
+    expect(s.canUndo()).toBe(false);
+    s.beginTransaction(); s.endTransaction(); // 변경 없이 끝난 트랜잭션은 undo 단계도 남기지 않는다
+    expect(s.canRedo()).toBe(true);
+    expect(s.canUndo()).toBe(false);
+    expect(s.redo()).toBe(true); expect(s.get().n).toBe(1);
+  });
+  test('replace records by default and can be told not to', () => {
+    const s = createStore({ n: 0 });
+    s.replace({ n: 1 });
+    expect(s.get().n).toBe(1); expect(s.canUndo()).toBe(true);
+    const t = createStore({ n: 0 });
+    t.replace({ n: 1 }, { record: false });
+    expect(t.get().n).toBe(1); expect(t.canUndo()).toBe(false); // 자동 저장 복원처럼 되돌릴 이유가 없는 교체
+  });
   test('subscribe is called on every change', () => {
     const s = createStore({ n: 0 });
     let calls = 0; s.subscribe(() => calls++);
