@@ -1,64 +1,65 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
-import { createEmptyProject } from './state/schema.js';
-import { addWalls, deleteWall, deleteRoom } from './state/floorOps.js';
-import { rectWalls } from './geom/walls.js';
+import { createEmptyProject, activeFloor } from './state/schema.js';
+import { deleteWall, deleteRoom, transformFloor } from './state/floorOps.js';
+import { hitWall } from './geom/walls.js';
 import { createView2D } from './view2d/view2d.js';
 import { createRoomTool } from './view2d/tools/roomTool.js';
 import { createWallTool } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
+import { createView3D } from './view3d/view3d.js';
+import { createShell } from './ui/shell.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
-import { createView3D } from './view3d/view3d.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
-const canvas = document.createElement('canvas');
-canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
-const c3d = document.createElement('div');
-c3d.id = 'c3d';
-c3d.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
-const app = document.getElementById('app');
-app.style.position = 'relative';
-app.replaceChildren(canvas, c3d);
-addWalls(store, rectWalls([0, 0], [7892, 5464], 200));
-const view = createView2D(canvas, store, ui);
-view.fit();
-const view3d = createView3D(c3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
-function syncMode() { const is2d = ui.get().mode === '2d'; canvas.hidden = !is2d; c3d.hidden = is2d; }
-ui.subscribe(syncMode);
-syncMode();
-canvas.addEventListener('pointerdown', ev => {
-  if (!ui.get().fpPick || ev.button !== 0) return;
-  ev.stopImmediatePropagation();
-  const at = view.toWorld([ev.offsetX, ev.offsetY]);
-  ui.set({ mode: 'fp', fpPick: false });
-  view3d.setMode('fp', { at });
-}, true);
-const props = document.createElement('div');
-props.id = 'props';
-props.style.cssText = 'position:fixed;right:0;top:0;width:300px;height:100%;background:#fff;padding:16px;overflow:auto;';
-document.body.appendChild(props);
-createPropsPanel(props, store, ui);
-window.__app = { store, ui, view, view3d };
-const tools = { room: () => createRoomTool({ store, onDone: () => setTool('select') }), wall: () => createWallTool({ store, onDone: () => setTool('select') }), select: () => createSelectTool({ store, ui, view }) };
-function setTool(name) { ui.set({ tool: name }); view.setTool(tools[name] ? tools[name]() : null); }
-setTool('select');
-const exitFp = () => { if (view3d.getMode() === 'fp') view3d.setMode('iso'); };
+const shell = createShell(document.getElementById('app'), { store, ui });
+const view = createView2D(shell.els.canvas2d, store, ui);
+const minimap = createView2D(shell.els.minimap, store, ui, { readonly: true, labels: false });
+const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
+createPropsPanel(shell.els.props, store, ui);
+
+function createDeleteTool() {
+  return { name: 'delete', opts: {}, onPointerDown(p) { const w = hitWall(activeFloor(store.get()).walls, p, 6 / view.camera.scale); if (w) deleteWall(store, w.id); }, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {} };
+}
+const tools = {
+  select: () => createSelectTool({ store, ui, view }),
+  room: () => createRoomTool({ store, onDone: () => setTool('select') }),
+  wall: () => createWallTool({ store, onDone: () => setTool('select') }),
+  delete: createDeleteTool,
+};
+function setTool(name) { const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
+function setMode(mode, opts) {
+  if (mode === 'fp') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ fpPick: true, mode: '2d' }); return; }
+  ui.set({ mode, fpPick: false });
+  if (mode !== '2d') view3d.setMode(mode, opts);
+  else { if (view3d.getMode() === 'fp') view3d.setMode('iso'); view.requestRender(); } // 2D로 갈 때 fp(포인터 락, 렌더 루프)를 끝낸다
+}
+const originalDown = shell.els.canvas2d;
+originalDown.addEventListener('pointerdown', ev => { if (ui.get().fpPick && ev.button === 0) { const at = view.toWorld([ev.offsetX, ev.offsetY]); ui.set({ mode: 'fp', fpPick: false }); view3d.setMode('fp', { at }); ev.stopImmediatePropagation(); } }, true);
+
+document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelector('[data-action="background"]').addEventListener('click', () => openBackgroundDialog({ store }));
+document.querySelector('[data-action="flipH"]').addEventListener('click', () => transformFloor(store, p => [-p[0], p[1]]));
+document.querySelector('[data-action="flipV"]').addEventListener('click', () => transformFloor(store, p => [p[0], -p[1]]));
+document.querySelector('[data-action="rotL"]').addEventListener('click', () => transformFloor(store, p => [p[1], -p[0]]));
+document.querySelector('[data-action="rotR"]').addEventListener('click', () => transformFloor(store, p => [-p[1], p[0]]));
+document.getElementById('btnUndo').addEventListener('click', () => store.undo());
+document.getElementById('btnRedo').addEventListener('click', () => store.redo());
+document.getElementById('btnFit').addEventListener('click', () => view.fit());
+document.getElementById('projectName').addEventListener('change', ev => store.dispatch(d => { d.name = ev.target.value; }));
+
 window.addEventListener('keydown', ev => {
-  if (ev.target.tagName === 'INPUT') return;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target.tagName)) return;
+  if (ev.ctrlKey && ev.key.toLowerCase() === 'z') { ev.preventDefault(); ev.shiftKey ? store.redo() : store.undo(); return; }
   if (view.tool?.onKey?.(ev)) { view.requestRender(); return; }
-  if (ev.key === 'f' || ev.key === 'F') setTool('room');
-  if (ev.key === 'l' || ev.key === 'L') setTool('wall');
-  if (ev.key === 'Escape') { setTool('select'); if (ui.get().fpPick) ui.set({ fpPick: false }); }
-  if (ev.key === 'b' || ev.key === 'B') openBackgroundDialog({ store });
-  if (ev.key === '1') { exitFp(); ui.set({ mode: '2d', fpPick: false }); }
-  if (ev.key === '2') { ui.set({ mode: 'plan', fpPick: false }); view3d.setMode('plan'); }
-  if (ev.key === '3') { ui.set({ mode: 'iso', fpPick: false }); view3d.setMode('iso'); }
-  if (ev.key === '4') { exitFp(); ui.set({ fpPick: true, mode: '2d' }); console.log('1인칭으로 확인할 위치를 클릭해주세요'); }
-  if (ev.key === 'Delete' || ev.key === 'Backspace') {
-    const sel = ui.get().selection;
-    if (sel?.type === 'wall') { deleteWall(store, sel.id); ui.set({ selection: null }); }
-    else if (sel?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, sel.id); ui.set({ selection: null }); }
-  }
+  const k = ev.key.toLowerCase();
+  if (k === 'f') setTool('room'); else if (k === 'l') setTool('wall'); else if (k === 'd') setTool('delete'); else if (k === 'b') openBackgroundDialog({ store });
+  else if (k === 'escape') { if (ui.get().fpPick) ui.set({ fpPick: false }); setTool('select'); }
+  else if (['1', '2', '3', '4'].includes(k)) setMode({ 1: '2d', 2: 'plan', 3: 'iso', 4: 'fp' }[k]);
+  else if (k === 'delete' || k === 'backspace') { const s = ui.get().selection; if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); } if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); } }
 });
+setTool('select'); view.fit(); minimap.fit(500);
+window.__app = { store, ui, view, view3d };

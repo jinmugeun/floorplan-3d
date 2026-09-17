@@ -1,5 +1,29 @@
 :root { --bg: #eef1f4; --ink: #1b2430; --muted: #5b6775; --panel: #ffffff; --line: #c9d1da; --accent: #1f5fd0; --supply: #2b6be0; --exhaust: #d8452c; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif; font-size: 13px; }
-#app { position: relative; width: 100%; height: 100%; overflow: hidden; }
-#app canvas { display: block; touch-action: none; cursor: default; }
+#layout { display: grid; grid-template-columns: 64px 240px 1fr 300px; grid-template-rows: 48px 1fr 44px; grid-template-areas: "top top top top" "rail panel canvas right" "rail panel bottom right"; height: 100vh; }
+#topbar { grid-area: top; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+#topbar .group { display: flex; gap: 8px; align-items: center; }
+#projectName { font: inherit; font-weight: 600; border: 1px solid transparent; padding: 4px 6px; border-radius: 4px; } #projectName:focus { border-color: var(--accent); outline: none; }
+#rail { grid-area: rail; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); }
+#rail button { height: 64px; border: 0; background: none; font-size: 11px; color: var(--muted); cursor: pointer; } #rail button.on { color: var(--accent); background: #e6eefb; }
+#panel { grid-area: panel; background: var(--panel); border-right: 1px solid var(--line); padding: 12px; overflow: auto; }
+#panel h3 { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+#panel button { display: flex; justify-content: space-between; width: 100%; padding: 8px 10px; margin-bottom: 4px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; } #panel button.on { border-color: var(--accent); background: #e6eefb; }
+#panel .row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#canvasWrap { grid-area: canvas; position: relative; overflow: hidden; }
+#c2d, #c3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+#optionBar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 14px; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+#optionBar input[type=number] { width: 70px; }
+#banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 14px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+#right { grid-area: right; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--line); overflow: auto; }
+#minimap { height: 200px; border-bottom: 1px solid var(--line); position: relative; } #minimap canvas { width: 100%; height: 100%; display: block; } #minimap .mm-label { position: absolute; top: 6px; left: 8px; font-size: 11px; color: var(--muted); }
+#props { padding: 12px; } #props h2 { font-size: 14px; margin: 0 0 10px; } .field { display: block; margin-bottom: 8px; } .field span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; } .field input, .field select { width: 100%; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; }
+.check { display: flex; gap: 6px; align-items: center; margin: 8px 0; } .danger { color: var(--exhaust); border-color: var(--exhaust); background: #fff; border: 1px solid; padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+#bottombar { grid-area: bottom; display: flex; gap: 16px; align-items: center; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); }
+.seg { display: flex; gap: 6px; align-items: center; } .seg button { padding: 5px 10px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; } .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+kbd { font-family: "IBM Plex Mono", monospace; font-size: 10px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+.muted { color: var(--muted); font-size: 12px; } .hint { font-size: 12px; color: var(--muted); } .primary { background: var(--accent); color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; z-index: 50; } .modal-card { background: #fff; border-radius: 8px; width: min(960px, 96vw); padding: 16px; } .modal-card header { display: flex; justify-content: space-between; align-items: center; } .modal .toolbar { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; } .modal canvas { width: 100%; background: #f4f6f8; border: 1px solid var(--line); cursor: crosshair; }
+#toasts { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 60; } .toast { background: #1b2430; color: #fff; padding: 8px 14px; border-radius: 6px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
