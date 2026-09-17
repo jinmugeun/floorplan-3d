@@ -1,3 +1,5 @@
 :root { --bg: #eef1f4; --ink: #1b2430; --muted: #5b6775; --panel: #ffffff; --line: #c9d1da; --accent: #1f5fd0; --supply: #2b6be0; --exhaust: #d8452c; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif; font-size: 13px; }
+#app { position: relative; width: 100%; height: 100%; overflow: hidden; }
+#app canvas { display: block; touch-action: none; cursor: default; }
