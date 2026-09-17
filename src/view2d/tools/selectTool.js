@@ -25,7 +25,14 @@ export function createSelectTool({ store, ui, view }) {
       const w = hitWall(f.walls, p, px(6));
       if (w) { ui.set({ selection: { type: 'wall', id: w.id } }); drag = { kind: 'wall', id: w.id, startP: p, base: f.walls }; store.beginTransaction(); return; }
       const r = f.rooms.find(x => pointInPolygon(p, x.points));
-      if (r) { ui.set({ selection: { type: 'room', id: r.id } }); drag = { kind: 'room', id: r.id, wallIds: r.wallIds, startP: p, base: f.walls }; store.beginTransaction(); return; }
+      if (r) {
+        ui.set({ selection: { type: 'room', id: r.id } });
+        const pts = new Set();
+        for (const w of f.walls) if (r.wallIds.includes(w.id)) { pts.add(w.a.join(',')); pts.add(w.b.join(',')); }
+        const attached = f.walls.some(w => !r.wallIds.includes(w.id) && (pts.has(w.a.join(',')) || pts.has(w.b.join(','))));
+        drag = { kind: 'room', id: r.id, wallIds: r.wallIds, startP: p, base: f.walls, pts, attached };
+        store.beginTransaction(); return;
+      }
       ui.set({ selection: null }); drag = null;
     },
     onPointerMove(p) {
@@ -34,7 +41,11 @@ export function createSelectTool({ store, ui, view }) {
       let walls = drag.base;
       if (drag.kind === 'vertex') walls = moveVertex(walls, drag.point, add(drag.point, d));
       else if (drag.kind === 'wall') walls = moveWallParallel(walls, drag.id, d);
-      else if (drag.kind === 'room') { const pts = new Set(); for (const w of walls) if (drag.wallIds.includes(w.id)) { pts.add(w.a.join(',')); pts.add(w.b.join(',')); } walls = translateNodes(walls, q => pts.has(q.join(',')), d); }
+      else if (drag.kind === 'room') {
+        const dd = drag.attached ? (Math.abs(d[0]) >= Math.abs(d[1]) ? [d[0], 0] : [0, d[1]]) : d;
+        if (Math.abs(dd[0]) < 1 && Math.abs(dd[1]) < 1) return;
+        walls = translateNodes(walls, q => drag.pts.has(q.join(',')), dd);
+      }
       drag.moved = true;
       setWalls(store, walls, { record: false });
     },

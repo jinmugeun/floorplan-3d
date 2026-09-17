@@ -12,6 +12,12 @@ function setup() {
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
   return { store, ui, t: createSelectTool({ store, ui, view: fakeView }) };
 }
+function setupAdjacent() {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  addWalls(store, rectWalls([4000, 0], [5500, 2000], 200));
+  return { store, ui, t: createSelectTool({ store, ui, view: fakeView }) };
+}
 
 test('click on wall selects it, click on floor selects room, click outside clears', () => {
   const { store, ui, t } = setup();
@@ -81,6 +87,45 @@ test('escape during a drag reverts the movement', () => {
   store.undo();
   expect(activeFloor(store.get()).walls).toHaveLength(0);
   expect(store.canUndo()).toBe(false);
+});
+
+test('dragging a room with an attached neighbour locks to the dominant (x) axis', () => {
+  const { store, t } = setupAdjacent();
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0 && w.a[0] === 0);
+  t.onPointerDown([1000, 1500]); t.onPointerMove([1300, 1200]); t.onPointerUp([1300, 1200]);
+  const f = activeFloor(store.get());
+  for (const w of f.walls) expect(Math.abs(w.a[0] - w.b[0]) < 1 || Math.abs(w.a[1] - w.b[1]) < 1).toBe(true);
+  expect(f.rooms).toHaveLength(2);
+  for (const r of f.rooms) expect(r.area).toBeGreaterThan(0);
+  const moved = f.walls.find(w => w.id === top.id);
+  expect(moved.a[1]).toBe(0);
+  expect(moved.b[1]).toBe(0);
+  expect([moved.a[0], moved.b[0]].sort((a, b) => a - b)).toEqual([300, 4300]);
+});
+
+test('dragging a room with an attached neighbour locks to the dominant (y) axis', () => {
+  const { store, t } = setupAdjacent();
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0 && w.a[0] === 0);
+  const left = activeFloor(store.get()).walls.find(w => w.a[0] === 0 && w.b[0] === 0 && (w.a[1] === 0 || w.b[1] === 0));
+  t.onPointerDown([1000, 1500]); t.onPointerMove([1200, 1000]); t.onPointerUp([1200, 1000]);
+  const f = activeFloor(store.get());
+  const movedTop = f.walls.find(w => w.id === top.id);
+  const movedLeft = f.walls.find(w => w.id === left.id);
+  expect(movedTop.a[1]).toBe(-500);
+  expect(movedTop.b[1]).toBe(-500);
+  expect(movedLeft.a[0]).toBe(0);
+  expect(movedLeft.b[0]).toBe(0);
+});
+
+test('dragging an independent room moves freely on both axes', () => {
+  const { store, t } = setup();
+  t.onPointerDown([1000, 1500]); t.onPointerMove([1300, 1200]); t.onPointerUp([1300, 1200]);
+  const f = activeFloor(store.get());
+  expect(f.walls).toHaveLength(4);
+  const top = f.walls.find(w => w.b[1] - w.a[1] === 0 && w.a[1] === -300);
+  expect(top).toBeTruthy();
+  const left = f.walls.find(w => w.a[0] === 300 && w.b[0] === 300);
+  expect(left).toBeTruthy();
 });
 
 test('a plain click after undo keeps the redo stack', () => {
