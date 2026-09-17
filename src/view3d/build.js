@@ -5,7 +5,8 @@ import { roomInnerPolygon } from '../geom/rooms.js';
 const M = v => v / 1000;
 export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
 const MAT = {
-  wall: () => new THREE.MeshStandardMaterial({ color: 0xe9e6e0, roughness: 0.9, transparent: true }),
+  // 벽 재질은 벽마다 새로 만든다(불투명도가 개별). perMesh 표시가 있는 재질만 dispose 대상이다.
+  wall: () => { const m = new THREE.MeshStandardMaterial({ color: 0xe9e6e0, roughness: 0.9, transparent: true }); m.userData.perMesh = true; return m; },
   wallTop: new THREE.MeshStandardMaterial({ color: 0x3a4351, roughness: 1, side: THREE.DoubleSide }),
   floor: new THREE.MeshStandardMaterial({ color: 0xc9a77a, roughness: 1, side: THREE.DoubleSide }),
   ceiling: new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 1 }),
@@ -35,4 +36,12 @@ export function buildFloorGroup(floor, view) {
     top.rotation.x = Math.PI / 2; top.position.y = M(w.height) + 0.002; top.name = 'wallTop'; top.userData.wallId = w.id; g.add(top);
   }
   return g;
+}
+
+// 그룹을 씬에서 뺀 뒤 GPU 자원을 해제한다. 공유 재질(floor, ceiling, wallTop)은 남긴다.
+export function disposeGroup(g) {
+  g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material?.userData?.perMesh) o.material.dispose();
+  });
 }
