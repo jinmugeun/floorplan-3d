@@ -42,6 +42,31 @@ export function offsetPolygon(pts, insets) {
 
 function nodeKey(p) { return `${Math.round(p[0])},${Math.round(p[1])}`; }
 
+function jaccard(a, b) {
+  const A = new Set(a), B = new Set(b);
+  let inter = 0; for (const x of A) if (B.has(x)) inter++;
+  const union = A.size + B.size - inter;
+  return union ? inter / union : 0;
+}
+
+// 새 면마다 이전 방을 하나씩 짝짓는다(이전 방은 최대 한 번만 쓴다).
+// 1순위: 공유하는 벽 id의 자카드 겹침이 가장 큰 방(겹침 > 0). 벽을 하나도 공유하지 않을 때만
+// 2순위로 중심점이 500 mm 안에 있는 방으로 대체한다(좌표만 바뀐 옛 파일 등).
+function matchPrevRooms(faces, prevRooms) {
+  const used = new Set(), result = new Array(faces.length).fill(null);
+  const pairs = [];
+  faces.forEach((f, i) => prevRooms.forEach(r => { const s = jaccard(f.wallIds, r.wallIds ?? []); if (s > 0) pairs.push({ i, r, s }); }));
+  pairs.sort((x, y) => y.s - x.s);
+  for (const { i, r, s } of pairs) { if (result[i] || used.has(r) || s <= 0) continue; result[i] = r; used.add(r); }
+  faces.forEach((f, i) => {
+    if (result[i]) return;
+    const c = centroid(f.pts);
+    const r = prevRooms.find(x => !used.has(x) && Array.isArray(x.points) && x.points.length && dist(centroid(x.points), c) < 500);
+    if (r) { result[i] = r; used.add(r); }
+  });
+  return result;
+}
+
 export function detectRooms(walls, prevRooms = []) {
   const nodes = new Map();
   const getNode = p => { const k = nodeKey(p); if (!nodes.has(k)) nodes.set(k, { p: [Math.round(p[0]), Math.round(p[1])], out: [] }); return nodes.get(k); };
@@ -77,9 +102,9 @@ export function detectRooms(walls, prevRooms = []) {
     if (area > 1) faces.push({ pts, wallIds: [...new Set(wallIds)], area });
   }
   const wallById = Object.fromEntries(walls.map(w => [w.id, w]));
-  return faces.map(f => {
-    const c = centroid(f.pts);
-    const prev = prevRooms.find(r => dist(centroid(r.points), c) < 500);
+  const matches = matchPrevRooms(faces, prevRooms);
+  return faces.map((f, i) => {
+    const prev = matches[i];
     const inner = roomInnerPolygon({ points: f.pts }, walls);
     return {
       id: prev?.id ?? uid('r'),

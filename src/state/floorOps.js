@@ -42,5 +42,10 @@ export function setRoomWallThickness(store, roomId, thickness) {
   });
 }
 export function transformFloor(store, fn) {
-  return store.dispatch(d => { const f = activeFloor(d); f.walls = transformWalls(f.walls, fn); reroom(f); });
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    f.walls = transformWalls(f.walls, fn);
+    f.rooms = f.rooms.map(r => ({ ...r, points: r.points.map(fn) })); // 중심점 대체 매칭도 계속 맞도록 방 좌표도 같이 옮긴다
+    reroom(f);
+  });
 }

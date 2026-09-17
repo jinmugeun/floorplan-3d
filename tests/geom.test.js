@@ -99,6 +99,16 @@ describe('rooms', () => {
     const b = rectWalls([4000, 0], [7000, 3000], 200); // b의 왼쪽 벽이 a의 오른쪽 벽과 겹친다
     expect(detectRooms([...a, ...b])).toHaveLength(2);
   });
+  test('detectRooms matches a previous room by shared wall ids even when the centroid moved far', () => {
+    const ws = rectWalls([0, 0], [4000, 3000], 200);
+    const first = detectRooms(ws);
+    first[0].name = '식당';
+    // 이전 방의 중심을 2 m 옮겨 두어도 벽 id 4개 중 3개가 같으면 같은 방이다
+    const prev = { ...first[0], points: first[0].points.map(p => [p[0] + 2000, p[1] + 2000]), wallIds: first[0].wallIds.slice(0, 3) };
+    const again = detectRooms(ws, [prev]);
+    expect(again[0].id).toBe(prev.id);
+    expect(again[0].name).toBe('식당');
+  });
   test('detectRooms keeps user props by centroid', () => {
     const ws = rectWalls([0, 0], [4000, 3000], 200);
     const first = detectRooms(ws);
