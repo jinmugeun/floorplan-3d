@@ -44,7 +44,7 @@ export function createShell(root, { store, ui }) {
         <button data-action="background">도면 이미지 업로드 <kbd>B</kbd></button>
         <p class="hint">사진이나 스캔을 올리고 모서리를 찍어 펴고, 두 점으로 축척을 잡습니다.</p>
       </section>
-      <section data-panel="layers" hidden><h3>레이어</h3><ul id="layerList"></ul></section>
+      <section data-panel="layers" hidden><h3>리소스 관리</h3><div id="layers"></div></section>
     </aside>
     <main id="canvasWrap">
       <canvas id="c2d"></canvas>
@@ -68,7 +68,7 @@ export function createShell(root, { store, ui }) {
     </footer>
   </div>`;
   const q = s => root.querySelector(s);
-  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layerList: q('#layerList'), library: q('#library') };
+  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library') };
   const strip = q('#imageStrip');
   strip.addEventListener('change', ev => {
     const el = ev.target;

@@ -16,6 +16,7 @@ import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
 import { createLibraryPanel } from './ui/libraryPanel.js';
+import { createLayersPanel } from './ui/layersPanel.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openRelativeMoveDialog, openArrayDialog } from './ui/itemDialogs.js';
@@ -37,6 +38,7 @@ minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 function replaceProductOf(itemIds, product) { if (itemIds?.length) { replaceProduct(store, itemIds, product); shell.toast('제품을 교체했습니다'); } }
 const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
+createLayersPanel(shell.els.layers, { store, ui });
 
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
 const selectItems = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids } });
