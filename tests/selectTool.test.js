@@ -160,3 +160,56 @@ test('with the plan locked, clicks still select but drags and vertex edits do no
   store.undo();
   expect(activeFloor(store.get()).walls).toHaveLength(0); // 남은 기록은 벽 생성 하나뿐
 });
+
+const shift = { shiftKey: true };
+
+test('shift+click toggles walls into a multi selection', () => {
+  const { store, ui, t } = setup();
+  const f = activeFloor(store.get());
+  const top = f.walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const left = f.walls.find(w => w.a[0] === 0 && w.b[0] === 0);
+  t.onPointerDown([2000, 0]); t.onPointerUp([2000, 0]);
+  expect(ui.get().selection).toEqual({ type: 'wall', id: top.id });
+  t.onPointerDown([0, 1500], shift); t.onPointerUp([0, 1500], shift);
+  expect(ui.get().selection).toEqual({ type: 'multi', kind: 'wall', ids: [top.id, left.id] });
+  t.onPointerDown([0, 1500], shift); t.onPointerUp([0, 1500], shift); // 다시 누르면 빠진다
+  expect(ui.get().selection).toEqual({ type: 'multi', kind: 'wall', ids: [top.id] });
+});
+
+test('shift+drag on empty canvas selects walls fully inside the box', () => {
+  const { store, ui, t } = setup();
+  const f = activeFloor(store.get());
+  const top = f.walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  t.onPointerDown([-500, -500], shift);
+  t.onPointerMove([4500, 500], shift);
+  t.onPointerUp([4500, 500], shift);
+  expect(ui.get().selection).toEqual({ type: 'multi', kind: 'wall', ids: [top.id] }); // 위쪽 벽만 완전히 들어온다
+  t.onPointerDown([-500, -500], shift); t.onPointerMove([5000, 4000], shift); t.onPointerUp([5000, 4000], shift);
+  expect(ui.get().selection.ids).toHaveLength(4);
+});
+
+test('a multi selection moves together in one undo step and axis-locks next to an attached room', () => {
+  const { store, ui, t } = setupAdjacent();
+  const f = activeFloor(store.get());
+  const top = f.walls.find(w => w.a[1] === 0 && w.b[1] === 0 && w.a[0] === 0);
+  const left = f.walls.find(w => w.a[0] === 0 && w.b[0] === 0);
+  ui.set({ selection: { type: 'multi', kind: 'wall', ids: [top.id, left.id] } });
+  t.onPointerDown([2000, 0]); t.onPointerMove([2300, -200]); t.onPointerUp([2300, -200]);
+  const g = activeFloor(store.get());
+  for (const w of g.walls) expect(Math.abs(w.a[0] - w.b[0]) < 1 || Math.abs(w.a[1] - w.b[1]) < 1).toBe(true); // 축 고정으로 기울지 않는다
+  expect(g.walls.find(w => w.id === top.id).a[0]).toBe(300);
+  store.undo();
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[0]).toBe(0);
+});
+
+test('a multi drag with fractional coordinates moves every selected node', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200)); // 소수 좌표, 붙은 이웃 없음
+  const t = createSelectTool({ store, ui, view: fakeView });
+  const f = activeFloor(store.get());
+  ui.set({ selection: { type: 'multi', kind: 'wall', ids: f.walls.map(w => w.id) } });
+  t.onPointerDown([2000, 0.25]); t.onPointerMove([2100.75, 100.5]); t.onPointerUp([2100.75, 100.5]);
+  const g = activeFloor(store.get());
+  expect(Math.min(...g.walls.map(w => w.a[0]))).toBeCloseTo(101.25, 6);
+  expect(Math.min(...g.walls.map(w => w.a[1]))).toBeCloseTo(100.5, 6);
+});

@@ -178,3 +178,19 @@ test('the delete button refuses to remove the last floor', () => {
   el.querySelector('button[name="floorDelete"]').click();
   expect(store.get().floors).toHaveLength(1);
 });
+
+test('multi selection shows the count, edits height for all and delegates deletion', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const calls = [];
+  const el = document.createElement('div'); createPropsPanel(el, store, ui, { deleteSelection: () => calls.push('del') });
+  const ids = activeFloor(store.get()).walls.slice(0, 2).map(w => w.id);
+  ui.set({ selection: { type: 'multi', kind: 'wall', ids } });
+  expect(el.textContent).toContain('선택된 벽 2개');
+  const h = el.querySelector('input[name="height"]');
+  h.value = '2600'; h.dispatchEvent(new Event('change', { bubbles: true }));
+  const f = activeFloor(store.get());
+  for (const w of f.walls) expect(w.height).toBe(ids.includes(w.id) ? 2600 : 2300);
+  el.querySelector('button[name="delete"]').click();
+  expect(calls).toEqual(['del']);
+});

@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { deleteWall, deleteRoom, transformFloor, selectionStillValid } from './state/floorOps.js';
+import { deleteWall, deleteWalls, deleteRoom, transformFloor, pruneSelection } from './state/floorOps.js';
 import { hitWall } from './geom/walls.js';
 import { pointInPolygon } from './geom/rooms.js';
 import { createView2D } from './view2d/view2d.js';
@@ -27,8 +27,8 @@ const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.se
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 createPropsPanel(shell.els.props, store, ui, { deleteSelection });
-// undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다
-store.subscribe(s => { if (!selectionStillValid(s, ui.get().selection)) ui.set({ selection: null }); });
+// undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
+store.subscribe(s => { const cur = ui.get().selection; const next = pruneSelection(s, cur); if (next !== cur) ui.set({ selection: next }); });
 
 function createDeleteTool() {
   return {
@@ -84,6 +84,7 @@ document.getElementById('projectName').addEventListener('change', ev => store.di
 function deleteSelection() {
   const s = ui.get().selection;
   if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); }
+  if (s?.type === 'multi' && s.kind === 'wall') { deleteWalls(store, s.ids); ui.set({ selection: null }); }
   if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); }
 }
 function deleteOrTool() { if (ui.get().selection) deleteSelection(); else setTool('delete'); }

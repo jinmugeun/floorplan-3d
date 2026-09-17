@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight } from '../src/state/floorOps.js';
+import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -208,4 +208,27 @@ test('deleting a floor before the active one keeps the same floor active', () =>
   s.undo(); s.undo();
   expect(s.get().floors).toHaveLength(3);
   expect(s.get().floors[s.get().activeFloor].name).toBe('F1');
+});
+
+test('pruneSelection keeps live ids, drops dead ones and returns the same object when unchanged', () => {
+  const s = setup();
+  const f = activeFloor(s.get());
+  const ids = f.walls.map(w => w.id);
+  const sel = { type: 'multi', kind: 'wall', ids };
+  expect(pruneSelection(s.get(), sel)).toBe(sel);
+  const mixed = { type: 'multi', kind: 'wall', ids: [ids[0], 'gone'] };
+  expect(pruneSelection(s.get(), mixed)).toEqual({ type: 'multi', kind: 'wall', ids: [ids[0]] });
+  expect(pruneSelection(s.get(), { type: 'multi', kind: 'wall', ids: ['gone'] })).toBeNull();
+  expect(pruneSelection(s.get(), null)).toBeNull();
+  expect(selectionStillValid(s.get(), { type: 'multi', kind: 'wall', ids: [ids[0], 'gone'] })).toBe(true);
+  expect(selectionStillValid(s.get(), { type: 'multi', kind: 'wall', ids: ['gone'] })).toBe(false);
+});
+
+test('deleteWalls removes several walls in one undo step', () => {
+  const s = setup();
+  const ids = activeFloor(s.get()).walls.slice(0, 2).map(w => w.id);
+  deleteWalls(s, ids);
+  expect(activeFloor(s.get()).walls).toHaveLength(2);
+  s.undo();
+  expect(activeFloor(s.get()).walls).toHaveLength(4);
 });

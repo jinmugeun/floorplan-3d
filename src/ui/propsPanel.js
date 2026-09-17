@@ -72,6 +72,17 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
       return;
     }
+    if (sel.type === 'multi') {
+      const picked = f.walls.filter(w => sel.ids.includes(w.id));
+      const h = picked[0]?.height ?? 2300, t = picked[0]?.thickness ?? 200;
+      container.innerHTML = `<h2>여러 벽 선택</h2>
+        <p class="hint">선택된 벽 ${picked.length}개</p>
+        ${lenField(withUnit('벽 높이', units, showUnit), 'height', h, 2, 8000, false, units)}
+        ${lenField(withUnit('두께', units, showUnit), 'thickness', t, 2, 1000, false, units)}
+        ${field('선택된 벽 면적 합', `<output name="wallArea">${fmtArea(picked.reduce((s, w) => s + (wallLength(w) * w.height) / 1e6, 0), { pyeong })}</output>`)}
+        <button type="button" name="delete" class="danger">선택 삭제</button>`;
+      return;
+    }
     if (sel.type === 'room') {
       const r = f.rooms.find(x => x.id === sel.id); if (!r) { container.innerHTML = ''; return; }
       const t = f.walls.find(x => r.wallIds.includes(x.id))?.thickness ?? 200;
@@ -100,6 +111,14 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       if (name === 'wallLength') setWallLength(store, sel.id, v);
       else if (name === 'height') updateWallProps(store, sel.id, { height: v }); // 기하 불변 → reroom 없음
       else updateWall(store, sel.id, { [name]: v });                            // 두께는 방 면적을 바꾼다
+      return;
+    }
+    // 여러 dispatch를 한 undo 단계로 묶는다: 안쪽 updateWall은 { record: false }를 넘겨야 한다
+    // (기본 record로 두면 첫 updateWall이 트랜잭션을 조기에 닫아 벽마다 되돌릴 단계가 생긴다).
+    if (sel.type === 'multi') {
+      store.beginTransaction();
+      for (const id of sel.ids) updateWall(store, id, { [name]: v }, { record: false });
+      store.endTransaction();
       return;
     }
     if (sel.type === 'room') {

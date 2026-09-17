@@ -20,6 +20,10 @@ export function addWalls(store, walls) {
 export function deleteWall(store, id) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => w.id !== id); reroom(f); });
 }
+export function deleteWalls(store, ids) {
+  const kill = new Set(ids);
+  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => !kill.has(w.id)); reroom(f); });
+}
 export function deleteRoom(store, id) {
   return store.dispatch(d => {
     const f = activeFloor(d);
@@ -29,8 +33,9 @@ export function deleteRoom(store, id) {
     reroom(f);
   });
 }
-export function updateWall(store, id, patch) {
-  return store.dispatch(d => { const f = activeFloor(d); const w = f.walls.find(x => x.id === id); if (w) Object.assign(w, patch); reroom(f); });
+// opts는 store.dispatch로 그대로 전달된다(트랜잭션 안에서 여러 벽을 한 번에 고칠 때 { record: false }가 필요하다).
+export function updateWall(store, id, patch, opts) {
+  return store.dispatch(d => { const f = activeFloor(d); const w = f.walls.find(x => x.id === id); if (w) Object.assign(w, patch); reroom(f); }, opts);
 }
 // opts는 store.dispatch로 그대로 전달된다: 여러 dispatch를 store.beginTransaction()/endTransaction()로
 // 한 단계로 묶을 때, 안의 dispatch들은 { record: false }를 넘겨야 첫 dispatch가 트랜잭션을 조기에 닫지 않는다.
@@ -147,5 +152,22 @@ export function selectionStillValid(state, selection) {
   if (!f) return true; // 활성 층을 찾지 못해도 구독이 절대 예외를 던지면 안 된다
   if (selection.type === 'wall') return f.walls.some(w => w.id === selection.id);
   if (selection.type === 'room') return f.rooms.some(r => r.id === selection.id);
+  if (selection.type === 'multi') {
+    const pool = selection.kind === 'wall' ? f.walls : f.items;
+    return selection.ids.some(id => pool.some(x => x.id === id));
+  }
   return true;
+}
+// ui.selection이 가리키는 객체가 아직 활성 층에 있는지. multi는 살아 있는 id만 남긴다(0개면 null).
+export function pruneSelection(state, selection) {
+  if (!selection) return null;
+  const f = activeFloor(state);
+  if (!f) return selection; // 활성 층을 못 찾아도 예외를 던지지 않는다
+  if (selection.type === 'multi') {
+    const pool = selection.kind === 'wall' ? f.walls : f.items;
+    const ids = selection.ids.filter(id => pool.some(x => x.id === id));
+    if (ids.length === selection.ids.length) return selection; // 그대로면 같은 객체
+    return ids.length ? { ...selection, ids } : null;
+  }
+  return selectionStillValid(state, selection) ? selection : null;
 }
