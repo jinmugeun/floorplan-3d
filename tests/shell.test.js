@@ -183,8 +183,9 @@ test('switching units re-renders the option bar label', () => {
 
 test('기즈모 모드 버튼은 3D에서 아이템을 골랐을 때만 보이고 이동/회전을 뒤집는다', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
-  const ui = createUiState(); const modes = [];
-  createShell(root, { store: createStore(createEmptyProject()), ui, onGizmoMode: m => modes.push(m) });
+  const ui = createUiState(); const modes = []; const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.floors[0].items = [{ id: 'i1', attach: 'floor', wallId: null, locked: false, pos: [0, 0], size: [600, 600, 600] }]; });
+  createShell(root, { store, ui, onGizmoMode: m => modes.push(m) });
   const btn = root.querySelector('#btnGizmoMode');
   expect(btn.hidden).toBe(true);
   ui.set({ selection: { type: 'item', id: 'i1' } });
@@ -204,4 +205,24 @@ test('기즈모 모드 버튼은 3D에서 아이템을 골랐을 때만 보이�
   expect(btn.hidden).toBe(true);           // 기즈모는 한 개를 고른 때만 붙는다
   ui.set({ selection: null });
   expect(btn.hidden).toBe(true);
+});
+
+test('기즈모 모드 버튼은 벽 부착·잠긴 아이템에는 보이지 않는다(3D에서 기즈모가 붙지 않는 것과 같은 규칙)', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState(); const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.floors[0].items = [
+    { id: 'a', attach: 'floor', wallId: null, locked: false, pos: [0.5, 0], size: [600, 600, 600] },
+    { id: 'b', attach: 'wall', wallId: 'w1', locked: false, pos: [0, 0], size: [900, 40, 2100] },
+    { id: 'c', attach: 'floor', wallId: null, locked: true, pos: [0, 0], size: [600, 600, 600] },
+  ]; });
+  createShell(root, { store, ui });
+  const btn = root.querySelector('#btnGizmoMode');
+  ui.set({ mode: 'iso', selection: { type: 'item', id: 'a' } });
+  expect(btn.hidden).toBe(false);
+  ui.set({ selection: { type: 'item', id: 'b' } });
+  expect(btn.hidden).toBe(true);   // 벽 부착
+  ui.set({ selection: { type: 'item', id: 'c' } });
+  expect(btn.hidden).toBe(true);   // 잠김
+  ui.set({ selection: { type: 'item', id: '없음' } });
+  expect(btn.hidden).toBe(true);   // 없는 아이템
 });

@@ -1,4 +1,5 @@
 import { esc } from '../util/html.js';
+import { activeFloor } from '../state/schema.js';
 import { toast } from './toast.js';
 import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
@@ -160,7 +161,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
     const is3d = s.mode !== '2d';
     q('#btnCam').hidden = !is3d; q('#btnSun').hidden = !is3d;
     // 기즈모 모드 토글은 3D에서 아이템 하나를 골랐을 때만 쓸 일이 있다(1인칭에는 기즈모가 없다).
-    q('#btnGizmoMode').hidden = !(is3d && s.mode !== 'fp' && s.selection?.type === 'item');
+    // 벽 부착·잠긴 아이템은 3D에서 기즈모가 붙지 않으므로 버튼도 숨긴다.
+    const gizmoItem = s.selection?.type === 'item' ? activeFloor(store.get())?.items.find(i => i.id === s.selection.id) : null;
+    q('#btnGizmoMode').hidden = !(is3d && s.mode !== 'fp' && gizmoItem && !gizmoItem.locked && !(gizmoItem.attach === 'wall' && gizmoItem.wallId));
     if (!is3d && (popKind === 'cam' || popKind === 'sun')) pop.close();
     if (s.fpPick) { els.banner.hidden = false; els.banner.innerHTML = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소'; }
     else if (s.soloRoom) { els.banner.hidden = false; els.banner.innerHTML = '단일 공간 모드 <button type="button" id="btnExitSolo">도면 전체 보기</button>'; q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); }

@@ -171,6 +171,18 @@ describe('3D 아이템 피커', () => {
     expect(a.ui.get().selection).toBeNull();
   });
 
+  test('빗장은 오른쪽 버튼을 떼는 경로로도 한 번만 쓰이고 다음 왼클릭으로 새지 않는다', () => {
+    const a = setupPicker();
+    const id = addItem(a.store, createItem(productById('sofa-3'), { pos: [0.5, 0.25] }));
+    a.ui.set({ selection: { type: 'item', id } });
+    a.picker.attach({ type: 'item', id });
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: true });
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: false });
+    a.domElement.dispatchEvent(new MouseEvent('pointerup', { button: 2, clientX: 10, clientY: 10 })); // 오른쪽 버튼 up이 빗장을 소모한다
+    a.click(10, 10); // 그 다음 왼클릭은 빈 곳 클릭으로 정상 처리된다
+    expect(a.ui.get().selection).toBeNull();
+  });
+
   test('1인칭에서는 클릭·우클릭이 선택을 건드리지 않는다', () => {
     const a = setupPicker();
     const id = addItem(a.store, createItem(productById('sofa-3'), { pos: [0, 0] }));

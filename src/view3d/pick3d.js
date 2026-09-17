@@ -75,13 +75,14 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   let down = null;
   const onDown = ev => { if (getMode() === 'fp') return; if (ev.button === 0) down = [ev.clientX, ev.clientY]; };
   const onUp = ev => {
+    const latched = wasDragging; wasDragging = false; // 빗장은 어느 경로로 나가든 한 번만 쓴다(오른쪽 버튼·fp 진입으로 새지 않게)
     if (getMode() === 'fp') return;
     if (ev.button !== 0 || !down) return;
     const moved = Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 4;
     down = null;
     // 궤도 회전이나 기즈모 드래그는 선택이 아니다. TransformControls는 pointerup 전에 dragging을
     // 되돌리므로 dragging-changed에서 걸어 둔 빗장(wasDragging)을 본다.
-    if (moved || wasDragging) { wasDragging = false; return; }
+    if (moved || latched) return;
     const id = pointFrom(ev);
     ui.set({ selection: id ? { type: 'item', id } : null });
   };

@@ -56,14 +56,19 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
     requestRender();
   }
   function clearOrthoView() {
+    if (!useOrtho) return;                             // 투영 중이 아니면 할 일이 없다(하단 바 "—" 선택이 늘 부른다)
     useOrtho = false; orthoName = null; controls.enabled = mode !== 'fp';
-    picker.attach(ui.get().selection);               // 투영에서 빠져나오면 선택한 아이템에 기즈모를 다시 붙인다
+    reattachPicker();                                  // 투영에서 빠져나오면 선택한 아이템에 기즈모를 다시 붙인다
     onOrthoView(null);
     requestRender();
   }
   // rebuild가 picker를 읽으므로 picker를 먼저 만든다(TDZ).
+  // 기즈모를 다시 붙여도 되는 상황(1인칭·투영 아님, 드래그 중 아님)에서만 붙인다.
+  const reattachPicker = () => { if (mode === 'fp' || useOrtho) picker.detach(); else if (!picker.isDragging()) picker.attach(ui.get().selection); };
+  // 컷어웨이가 감춘 벽을 모두 되돌린다(1인칭·투영 뷰는 벽을 숨기지 않는다). 밑동 윤곽만 계속 숨긴다.
+  const showAllWalls = () => group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; });
   const picker = createItemPicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), controls, scene, store, ui, getGroup: () => group, getMode: () => mode, requestRender, openMenu, itemActions });
-  function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); if (mode === 'fp' || useOrtho) picker.detach(); else if (!picker.isDragging()) picker.attach(ui.get().selection); }
+  function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); reattachPicker(); }
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
     renderer.setSize(w, h);
@@ -149,7 +154,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
       controls.enabled = false; const at = opts.at ?? center();
       camera.position.copy(toThree([at[0], at[1], 1500])); camera.lookAt(toThree([at[0], at[1] - 1000, 1500]));
       window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); fp.lock();
-      group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; if (mm.userData.wallId) mm.visible = mm.name !== 'wallFoot'; });
+      group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); showAllWalls();
       requestRender(); return;
     }
     controls.enabled = true; window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); keys.clear();
@@ -157,6 +162,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
     group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = false; });
     controls.minPolarAngle = 0;
     controls.maxPolarAngle = m === 'plan' ? 0.05 : Math.PI / 2 - 0.02;
+    reattachPicker(); // 투영에서 모드 키로 빠져나온 경우 ui 구독이 먼저 떼어 둔 기즈모를 되살린다
     frameScene();
   }
   function applyCutaway() {
@@ -186,12 +192,12 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   function frame(t) {
     raf = 0; if (!alive) return;
     if (mode === 'fp') {
-      fpStep(t); group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; }); renderer.render(scene, useOrtho ? ortho2 : camera);
+      fpStep(t); showAllWalls(); renderer.render(scene, useOrtho ? ortho2 : camera);
       raf = requestAnimationFrame(frame); return;
     }
     controls.update();
     // 2D 투영은 정면·평면 도면이다: 궤도 카메라 기준의 컷어웨이로 벽을 지우면 도면이 비어 보인다.
-    if (useOrtho) group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; });
+    if (useOrtho) showAllWalls();
     else applyCutaway();
     applySolo(); renderer.render(scene, useOrtho ? ortho2 : camera);
   }
