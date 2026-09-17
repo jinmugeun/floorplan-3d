@@ -7,7 +7,7 @@ export function loadImageFile(file, maxEdge = 1600) {
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url); resolve(c);
     };
-    img.onerror = () => reject(new Error('이미지를 읽을 수 없습니다'));
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 읽을 수 없습니다')); };
     img.src = url;
   });
 }

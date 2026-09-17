@@ -9,7 +9,8 @@ export function openBackgroundDialog({ store, onClose = () => {} }) {
     <div class="modal-body">
       <p class="step" data-step="1">① 이미지를 고르고 방향을 맞춘 뒤, 도면의 네 모서리를 <b>좌상 → 우상 → 우하 → 좌하</b> 순서로 클릭하세요. 정면에서 찍은 스캔이면 "보정 생략"을 누르세요.</p>
       <p class="step" data-step="2" hidden>② 도면 위 치수를 아는 두 점을 클릭하고 실제 거리를 입력하세요.</p>
-      <div class="toolbar"><input type="file" name="file" accept="image/png,image/jpeg"><button type="button" name="rotL">↺ 회전</button><button type="button" name="rotR">↻ 회전</button><button type="button" name="flipH">좌우 반전</button><button type="button" name="flipV">상하 반전</button><button type="button" name="skip">보정 생략</button></div>
+      <p class="error" name="error" hidden></p>
+      <div class="toolbar" data-step="1"><input type="file" name="file" accept="image/png,image/jpeg"><button type="button" name="rotL">↺ 회전</button><button type="button" name="rotR">↻ 회전</button><button type="button" name="flipH">좌우 반전</button><button type="button" name="flipV">상하 반전</button><button type="button" name="skip">보정 생략</button></div>
       <canvas name="preview" width="900" height="600"></canvas>
       <div class="toolbar" data-step="2" hidden><label>실제 거리 <input type="number" name="mm" min="1" step="1" placeholder="mm"></label><button type="button" name="apply" disabled>적용</button></div>
     </div></div>`;
@@ -17,6 +18,8 @@ export function openBackgroundDialog({ store, onClose = () => {} }) {
   const q = s => root.querySelector(`[name="${s}"]`);
   const cv = q('preview'), ctx = cv.getContext('2d');
   let src = null, rect = null, corners = [], pts = [], step = 1;
+  const MAX_BYTES = 10 * 1024 * 1024;
+  const showError = msg => { const e = q('error'); e.textContent = msg; e.hidden = !msg; };
 
   const fitDraw = img => { ctx.clearRect(0, 0, cv.width, cv.height); if (!img) return 1; const k = Math.min(cv.width / img.width, cv.height / img.height); ctx.drawImage(img, 0, 0, img.width * k, img.height * k); return k; };
   const draw = () => {
@@ -30,14 +33,28 @@ export function openBackgroundDialog({ store, onClose = () => {} }) {
   const toStep2 = () => { step = 2; root.querySelectorAll('[data-step="1"]').forEach(e => e.hidden = true); root.querySelectorAll('[data-step="2"]').forEach(e => e.hidden = false); draw(); };
   const imgPoint = ev => { const r = cv.getBoundingClientRect(); const img = step === 1 ? src : rect; const k = Math.min(cv.width / img.width, cv.height / img.height); return [(ev.clientX - r.left) * (cv.width / r.width) / k, (ev.clientY - r.top) * (cv.height / r.height) / k]; };
 
-  q('file').addEventListener('change', async ev => { src = await loadImageFile(ev.target.files[0]); corners = []; draw(); });
+  q('file').addEventListener('change', async ev => {
+    const file = ev.target.files[0]; if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) { showError('PNG 또는 JPG 이미지만 올릴 수 있습니다'); return; }
+    if (file.size > MAX_BYTES) { showError('10MB 이하 이미지만 올릴 수 있습니다'); return; }
+    try { src = await loadImageFile(file); showError(''); corners = []; draw(); }
+    catch (e) { showError(e.message); }
+  });
   q('rotL').onclick = () => { if (src) { src = rotateCanvas(src, -1); corners = []; draw(); } };
   q('rotR').onclick = () => { if (src) { src = rotateCanvas(src, 1); corners = []; draw(); } };
   q('flipH').onclick = () => { if (src) { src = flipCanvas(src, true); corners = []; draw(); } };
   q('flipV').onclick = () => { if (src) { src = flipCanvas(src, false); corners = []; draw(); } };
   q('skip').onclick = () => { if (src) { rect = src; toStep2(); } };
   cv.addEventListener('click', ev => {
-    if (step === 1 && src) { corners.push(imgPoint(ev)); if (corners.length === 4) { const w = Math.round((dist(corners[0], corners[1]) + dist(corners[3], corners[2])) / 2), h = Math.round((dist(corners[0], corners[3]) + dist(corners[1], corners[2])) / 2); rect = rectifyImage(src, corners, w, h); toStep2(); } draw(); }
+    if (step === 1 && src) {
+      corners.push(imgPoint(ev));
+      if (corners.length === 4) {
+        const w = Math.round((dist(corners[0], corners[1]) + dist(corners[3], corners[2])) / 2), h = Math.round((dist(corners[0], corners[3]) + dist(corners[1], corners[2])) / 2);
+        try { rect = rectifyImage(src, corners, w, h); showError(''); toStep2(); }
+        catch (e) { showError(`${e.message}. 모서리 네 점을 다시 클릭해 주세요.`); corners = []; }
+      }
+      draw();
+    }
     else if (step === 2 && rect) { pts = pts.length >= 2 ? [imgPoint(ev)] : [...pts, imgPoint(ev)]; q('apply').disabled = !(pts.length === 2 && Number(q('mm').value) > 0); draw(); }
   });
   q('mm').addEventListener('input', () => { q('apply').disabled = !(pts.length === 2 && Number(q('mm').value) > 0); });
