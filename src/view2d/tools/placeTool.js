@@ -1,6 +1,7 @@
 import { activeFloor, createItem } from '../../state/schema.js';
 import { addItem } from '../../state/floorOps.js';
-import { snapItemPos, nearestWallPlacement, itemAABB, WALL_ATTACH_DIST } from '../../geom/items.js';
+import { snapItemPos, nearestWallPlacement, WALL_ATTACH_DIST } from '../../geom/items.js';
+import { drawItem } from '../items2d.js';
 
 // 라이브러리 타일을 누르면 켜지는 도구. 한 번 배치하면 선택 도구로 돌아간다(오늘의집과 같은 동작).
 export function createPlaceTool({ store, ui, view, product, onDone = () => {} }) {
@@ -42,12 +43,7 @@ export function createPlaceTool({ store, ui, view, product, onDone = () => {} })
     onHintClick() { onDone(); },
     onContextMenu() { onDone(); return null; },
     draw(ctx, v) {
-      // 고스트: 회전 사각형 점선 + 이름(Task 6에서 심벌 그림으로 교체한다)
-      const box = itemAABB(ghost.item), s0 = v.toScreen(box.min), s1 = v.toScreen(box.max);
-      ctx.save();
-      ctx.setLineDash([6, 4]); ctx.strokeStyle = v.COLORS.wallSel; ctx.lineWidth = 1.5;
-      ctx.strokeRect(s0[0], s0[1], s1[0] - s0[0], s1[1] - s0[1]);
-      ctx.restore();
+      drawItem(ctx, v, ghost.item, { alpha: 0.6, outline: v.COLORS.wallSel, labels: false });
       for (const g of ghost.guides) {
         const [w, h] = [ctx.canvas.clientWidth, ctx.canvas.clientHeight];
         ctx.save(); ctx.strokeStyle = v.COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath();

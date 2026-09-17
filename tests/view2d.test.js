@@ -207,3 +207,32 @@ test('right click does not start panning when the tool has a context menu', () =
   expect(v.camera.cx).not.toBe(before.cx);
   v.destroy();
 });
+
+test('items are drawn after walls and follow the v2 toggles', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  addItem(store, createItem(productById('sofa-3'), { pos: [2000, 1500] }));
+  const calls = [];
+  const c = document.createElement('canvas');
+  Object.defineProperty(c, 'clientWidth', { value: 800 }); Object.defineProperty(c, 'clientHeight', { value: 600 });
+  c.getContext = () => new Proxy({}, {
+    get: (t, k) => (k === 'canvas' ? c : k === 'measureText' ? () => ({ width: 10 }) : (...args) => { calls.push([k, ...args]); }),
+    set: () => true,
+  });
+  const v = createView2D(c, store, createUiState());
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  await frame(); await frame();
+  const firstRotate = calls.findIndex(x => x[0] === 'rotate');
+  const firstFill = calls.findIndex(x => x[0] === 'fill');
+  expect(firstRotate).toBeGreaterThan(-1);
+  expect(firstFill).toBeGreaterThan(-1);
+  expect(firstFill).toBeLessThan(firstRotate); // 방·벽 채우기가 아이템보다 먼저다
+  calls.length = 0;
+  store.dispatch(d => { d.view.v2 = { ...(d.view.v2 ?? {}), floorItems: false }; }, { record: false });
+  await frame(); await frame();
+  expect(calls.some(x => x[0] === 'rotate')).toBe(false);
+  v.destroy();
+});
