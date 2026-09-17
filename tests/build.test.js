@@ -118,3 +118,20 @@ test('sceneSignature changes for geometry and display settings but not for sun o
   store.dispatch(d => { activeFloor(d).walls[0].thickness = 150; }, { record: false });
   expect(sceneSignature(store.get())).not.toBe(withOpacity);
 });
+
+test('a wall with a door becomes three boxes that keep the wall id, and items get their own group', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const walls = rectWalls([0, 0], [4000, 3000], 200);
+  const top = walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const items = [createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }), createItem(productById('sofa-3'), { pos: [2000, 1500] })];
+  const f = { walls, rooms: detectRooms(walls), items, height: 2300 };
+  const g = buildFloorGroup(f, { wallOpacity: 1, v3: {} });
+  const wallMeshes = g.children.filter(c => c.name === 'wall');
+  expect(wallMeshes).toHaveLength(3 + 3); // 문이 있는 벽 3조각 + 나머지 벽 3개
+  expect(wallMeshes.filter(c => c.userData.wallId === top.id)).toHaveLength(3);
+  expect(wallMeshes.filter(c => c.userData.wallId === top.id).every(c => c.geometry.type === 'BoxGeometry')).toBe(true);
+  const itemsGroup = g.children.find(c => c.name === 'items');
+  expect(itemsGroup.children).toHaveLength(2); // 소파 + 문(문짝은 보인다)
+  disposeGroup(g);
+});

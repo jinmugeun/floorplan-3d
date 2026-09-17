@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { activeFloor } from '../state/schema.js';
 import { wallPolygon } from '../geom/walls.js';
 import { roomInnerPolygon } from '../geom/rooms.js';
-import { eq } from '../geom/vec.js';
+import { add, mul, eq } from '../geom/vec.js';
+import { openingsOnWall, wallPieces } from '../geom/openings.js';
+import { wallAxis, RAD } from '../geom/items.js';
+import { buildItems } from './items3d.js';
 
 const M = v => v / 1000;
 export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
@@ -42,7 +45,7 @@ function edgeWall(room, walls, i) {
 export function sceneSignature(state) {
   const f = activeFloor(state) ?? { walls: [], rooms: [] }; // 활성 층이 없어도 구독자가 예외를 던지지 않게
   const v = state.view ?? {};
-  return JSON.stringify([f.walls, f.rooms, state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity]);
+  return JSON.stringify([f.walls, f.rooms, f.items, state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity]);
 }
 
 export function buildFloorGroup(floor, view) {
@@ -80,21 +83,44 @@ export function buildFloorGroup(floor, view) {
   }
   for (const w of floor.walls) {
     const poly = wallPolygon(w, floor.walls);
-    const geo = new THREE.ExtrudeGeometry(shapeFrom(poly), { depth: M(w.height), bevelEnabled: false });
-    geo.rotateX(Math.PI / 2); geo.translate(0, M(w.height), 0);
-    const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null)));
-    mesh.name = 'wall'; mesh.userData.wallId = w.id; mesh.castShadow = true; mesh.receiveShadow = true;
-    g.add(mesh);
+    const openings = openingsOnWall(floor.items, w);
+    // 벽 본체 메시 하나(및 hiddenLine이면 그 엣지)를 그룹에 넣는다. 개구부가 있는 벽은 이 함수를
+    // 조각마다 부른다 — 모두 같은 name: 'wall' / userData.wallId라 컷어웨이가 그대로 동작한다.
+    const addWallMesh = (geo, pos = null, rotY = 0) => {
+      const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null)));
+      if (pos) mesh.position.copy(pos);
+      mesh.rotation.y = rotY;
+      mesh.name = 'wall'; mesh.userData.wallId = w.id; mesh.castShadow = true; mesh.receiveShadow = true;
+      g.add(mesh);
+      if (view.hiddenLine) {
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), lineMaterial(COLOR.edge));
+        edges.name = 'edges'; edges.userData.wallId = w.id; g.add(edges);
+      }
+    };
+    if (!openings.length) {
+      const geo = new THREE.ExtrudeGeometry(shapeFrom(poly), { depth: M(w.height), bevelEnabled: false });
+      geo.rotateX(Math.PI / 2); geo.translate(0, M(w.height), 0);
+      addWallMesh(geo);
+    } else {
+      // 개구부가 있는 벽은 조각 박스로 쌓는다. 벽 접합(다른 벽이 끝점을 공유)만큼 범위를 늘려
+      // 모서리에서 빈틈이 생기지 않게 한다(wallPolygon과 같은 규칙).
+      const { dir, len, rot } = wallAxis(w);
+      const joined = q => floor.walls.some(o => o.id !== w.id && (eq(o.a, q) || eq(o.b, q)));
+      const start = joined(w.a) ? -w.thickness / 2 : 0;
+      const end = len + (joined(w.b) ? w.thickness / 2 : 0);
+      for (const pc of wallPieces(w, openings, { start, end })) {
+        const geo = new THREE.BoxGeometry(M(pc.u1 - pc.u0), M(pc.z1 - pc.z0), M(w.thickness));
+        const c = add(w.a, mul(dir, (pc.u0 + pc.u1) / 2));
+        addWallMesh(geo, toThree([c[0], c[1], (pc.z0 + pc.z1) / 2]), -RAD(rot));
+      }
+    }
     const top = new THREE.Mesh(new THREE.ShapeGeometry(shapeFrom(poly)), surfaceMaterial('wallTop', view));
     top.rotation.x = Math.PI / 2; top.position.y = M(w.height) + 0.002; top.name = 'wallTop'; top.userData.wallId = w.id; g.add(top);
     // 컷어웨이로 감춘 벽이 바닥에 남기는 밑동 윤곽(명세 9.3.2). 기본은 숨김, view3d가 필요할 때 켠다.
     const foot = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(poly.map(p => new THREE.Vector3(M(p[0]), 0.004, M(p[1])))), lineMaterial(COLOR.foot));
     foot.name = 'wallFoot'; foot.userData.wallId = w.id; foot.visible = false; g.add(foot);
-    if (view.hiddenLine) {
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), lineMaterial(COLOR.edge));
-      edges.name = 'edges'; edges.userData.wallId = w.id; g.add(edges);
-    }
   }
+  g.add(buildItems(floor, view));
   return g;
 }
 
