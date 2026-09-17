@@ -135,3 +135,13 @@ test('a wall with a door becomes three boxes that keep the wall id, and items ge
   expect(itemsGroup.children).toHaveLength(2); // 소파 + 문(문짝은 보인다)
   disposeGroup(g);
 });
+
+test('sceneSignature changes when a v3 item-visibility flag changes but not for sun/camera', () => {
+  const s = createEmptyProject();
+  s.floors[0].items = [{ id: 'i1', kind: 'product', pos: [100.5, 200.25], z: 0, rot: 0, size: [500, 400, 700], attach: 'floor' }];
+  const a = sceneSignature(s);
+  const b = sceneSignature({ ...s, view: { ...s.view, sun: { ...s.view.sun, hour: 8 } } });
+  const c = sceneSignature({ ...s, view: { ...s.view, v3: { ...s.view.v3, wallItems: false } } });
+  expect(b).toBe(a);
+  expect(c).not.toBe(a);
+});
