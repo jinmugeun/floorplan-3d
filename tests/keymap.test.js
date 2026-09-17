@@ -37,3 +37,17 @@ test('keys are ignored while typing in an input', () => {
   const a = setup(); a.key('f', { target: document.createElement('input') });
   expect(a.calls.setTool).toEqual([]); expect(a.view.tool.onKey).not.toHaveBeenCalled();
 });
+
+test('modified letters (ctrl/meta/alt) are left to the browser', () => {
+  const a = setup();
+  a.key('f', { ctrlKey: true }); a.key('l', { metaKey: true }); a.key('d', { altKey: true });
+  expect(a.calls.setTool).toEqual([]); expect(a.calls.del).toBe(0);
+});
+
+test('in first-person mode tool letters and Delete are ignored but Escape and 1-4 still work', () => {
+  const a = setup(); a.ui.set({ mode: 'fp' });
+  a.key('d'); a.key('e'); a.key('f'); a.key('l'); a.key('m'); a.key('b'); a.key('Delete');
+  expect(a.calls.setTool).toEqual([]); expect(a.calls.bg).toBe(0); expect(a.calls.del).toBe(0);
+  a.key('2'); expect(a.calls.setMode).toEqual(['plan']);
+  a.key('Escape'); expect(a.calls.setTool).toEqual(['select']);
+});
