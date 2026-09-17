@@ -18,7 +18,12 @@ function numValue(el) {
 export function createPropsPanel(container, store, ui) {
   function render() {
     const sel = ui.get().selection, f = activeFloor(store.get());
-    if (!sel) { container.innerHTML = `<h2>층 관리</h2>${field('층 높이 (mm)', num('floorHeight', f.height, 2000, 8000, 10))}<p class="hint">객체를 클릭하면 상세 정보가 표시됩니다.</p>`; return; }
+    if (!sel) {
+      container.innerHTML = `<h2>층 관리</h2>${field('층 높이 (mm)', num('floorHeight', f.height, 2000, 8000, 10))}<p class="hint">객체를 클릭하면 상세 정보가 표시됩니다.</p>`;
+      const bg = store.get().background;
+      if (bg) container.insertAdjacentHTML('beforeend', `<h2>배경 이미지</h2>${field('투명도', `<input type="range" name="bgOpacity" min="0" max="1" step="0.05" value="${bg.opacity}">`)}<label class="check"><input type="checkbox" name="bgVisible" ${bg.visible ? 'checked' : ''}> 표시</label><button type="button" name="bgRemove">배경 제거</button>`);
+      return;
+    }
     if (sel.type === 'wall') {
       const w = f.walls.find(x => x.id === sel.id); if (!w) { container.innerHTML = ''; return; }
       container.innerHTML = `<h2>벽 상세 정보</h2>
@@ -45,6 +50,8 @@ export function createPropsPanel(container, store, ui) {
   }
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
+    if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }); return; }
+    if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }); return; }
     if (el.type === 'number') {
       const v = numValue(el);
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
@@ -60,6 +67,7 @@ export function createPropsPanel(container, store, ui) {
   };
   const onClick = ev => {
     if (ev.target.name === 'split') { ui.set({ splitWall: true }); return; }
+    if (ev.target.name === 'bgRemove') { store.dispatch(d => { d.background = null; }); return; }
     if (ev.target.name !== 'delete') return;
     const sel = ui.get().selection; if (!sel) return;
     if (sel.type === 'wall') { deleteWall(store, sel.id); ui.set({ selection: null }); }

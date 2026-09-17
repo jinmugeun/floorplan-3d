@@ -8,6 +8,7 @@ import { createRoomTool } from './view2d/tools/roomTool.js';
 import { createWallTool } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
 import { createPropsPanel } from './ui/propsPanel.js';
+import { openBackgroundDialog } from './ui/backgroundDialog.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -32,6 +33,7 @@ window.addEventListener('keydown', ev => {
   if (ev.key === 'f' || ev.key === 'F') setTool('room');
   if (ev.key === 'l' || ev.key === 'L') setTool('wall');
   if (ev.key === 'Escape') setTool('select');
+  if (ev.key === 'b' || ev.key === 'B') openBackgroundDialog({ store });
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
     const sel = ui.get().selection;
     if (sel?.type === 'wall') { deleteWall(store, sel.id); ui.set({ selection: null }); }

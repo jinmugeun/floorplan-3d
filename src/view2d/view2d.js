@@ -59,7 +59,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     ctx.fillStyle = color; ctx.fillText(text, s[0], s[1]);
   }
   function drawBackground(state) {
-    const bg = state.background; if (!bg || !state.view.background) return;
+    const bg = state.background; if (!bg || !bg.visible || !state.view.background) return;
     if (bgCache.src !== bg.src) { bgCache.src = bg.src; bgCache.img = new Image(); bgCache.img.onload = requestRender; bgCache.img.src = bg.src; }
     if (!bgCache.img?.complete) return;
     const s = toScreen(bg.offset); ctx.globalAlpha = bg.opacity;
