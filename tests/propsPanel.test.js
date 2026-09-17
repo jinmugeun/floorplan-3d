@@ -374,3 +374,36 @@ test('wall item keeps sitting on its wall when resized', async () => {
   expect(it.size[1]).toBe(700);
   expect(it.pos).toEqual([2000, 450]); // 벽 두께 절반 100 + 깊이 절반 350
 });
+
+test('a multi-item selection shows a count panel and never routes edits to walls', async () => {
+  const { addItem } = await import('../src/state/floorOps.js');
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const a = addItem(store, createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] }));
+  const b = addItem(store, createItem(productById('sofa-3'), { pos: [2500, 1000] }));
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'item', id: a } });
+  expect(el.querySelector('input[name="w"]')).not.toBeNull();
+  ui.set({ selection: { type: 'multi', kind: 'item', ids: [a, b] } });
+  expect(el.textContent).toContain('선택된 제품 2개');
+  expect(el.querySelector('input[name="w"]')).toBeNull(); // 이전 아이템 패널이 남지 않는다
+  const undoBefore = store.canUndo();
+  const { applyNumber } = await import('../src/ui/propsPanel.js');
+  applyNumber(store, ui.get().selection, 'w', 1500); // 벽 일괄 편집으로 흘러가지 않는다
+  expect(store.canUndo()).toBe(undoBefore);
+});
+
+test('a wall-attached item ignores 각도 edits and keeps its wall direction', async () => {
+  const { addItem } = await import('../src/state/floorOps.js');
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const id = addItem(store, createItem(productById('hood-wall'), { wallId: top.id, t: 0.5, pos: [2000, 450.5], rot: 0 }));
+  const { applyNumber } = await import('../src/ui/propsPanel.js');
+  applyNumber(store, { type: 'item', id }, 'rot', 90);
+  expect(activeFloor(store.get()).items.find(i => i.id === id).rot).toBe(0);
+});

@@ -202,3 +202,23 @@ test('드래그로 겹치면 경고를 한 번만 낸다', () => {
   t.onPointerUp([1100, 1000], {});
   expect(seen).toEqual(['충돌이 발생중입니다']);
 });
+
+test('벽 부착 제품은 회전 핸들이 없고 크기 핸들로 늘려도 벽에 붙어 있다', () => {
+  const { store, ids, t } = setup([['hood-wall', { pos: [2000, 450.5] }]]);
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  store.dispatch(d => { const it = activeFloor(d).items[0]; it.wallId = top.id; it.t = 0.5; it.side = 1; it.pos = [2000, 450]; it.rot = 0; });
+  t.onPointerDown([2000, 450], {}); t.onPointerUp([2000, 450], {});
+  const before = item(store, ids[0]);
+  // 회전 핸들 자리를 눌러 끌어도 회전하지 않는다
+  t.onPointerDown([2000, 450 + 200 + 260], {}); t.onPointerMove([2600, 900], {});
+  t.onKey({ key: 'Escape' }); t.onPointerUp([2600, 900], {}); // 핸들이 없으니 방 드래그가 시작됐을 뿐이다 → 취소
+  expect(item(store, ids[0]).rot).toBe(before.rot);
+  expect(item(store, ids[0]).pos).toEqual(before.pos);
+  t.onPointerDown([2000, 450], {}); t.onPointerUp([2000, 450], {}); // 다시 아이템을 고른다
+  // 오른쪽 가운데 핸들로 너비를 늘리면 벽에 그대로 붙어 있다
+  t.onPointerDown([2450, 450], {}); t.onPointerMove([2650.5, 450], {}); t.onPointerUp([2650.5, 450], {});
+  const after = item(store, ids[0]);
+  expect(after.size[0]).toBeGreaterThan(before.size[0]);
+  expect(after.wallId).toBe(top.id);
+  expect(Math.abs(after.pos[1] - (100 + after.size[1] / 2))).toBeLessThanOrEqual(1);
+});

@@ -1,5 +1,5 @@
 import { activeFloor } from '../../state/schema.js';
-import { updateItems, itemsOf } from '../../state/floorOps.js';
+import { updateItems, itemsOf, resizeItem } from '../../state/floorOps.js';
 import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, HANDLE_HIT_PX } from '../items2d.js';
@@ -33,7 +33,8 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
   function handleHit(item, p) {
     if (!item || item.locked) return null;
     const h = itemHandles(item, view.camera.scale);
-    if (dist(p, h.rotHandle) <= px(HANDLE_HIT_PX)) return { kind: 'rotate' };
+    const onWall = item.attach === 'wall' && item.wallId; // 벽 부착 제품은 벽 방향에 고정된다(명세 8.5): 회전 핸들이 없다
+    if (!onWall && dist(p, h.rotHandle) <= px(HANDLE_HIT_PX)) return { kind: 'rotate' };
     const index = h.handles.findIndex(q => dist(p, q) <= px(HANDLE_HIT_PX));
     return index >= 0 ? { kind: 'scale', index } : null;
   }
@@ -100,7 +101,9 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
     if (drag.kind === 'scale') {
       const r = scaleFromHandle(drag.base[0], drag.index, p, { keepRatio: !!ev?.shiftKey });
       drag.moved = true;
-      updateItems(store, [{ id: drag.ids[0], patch: { size: [Math.round(r.size[0]), Math.round(r.size[1]), r.size[2]], pos: [Math.round(r.pos[0]), Math.round(r.pos[1])] } }], { record: false });
+      const size = [Math.round(r.size[0]), Math.round(r.size[1]), r.size[2]];
+      if (drag.base[0].attach === 'wall' && drag.base[0].wallId) resizeItem(store, drag.ids[0], size, { record: false }); // 벽 부착 제품은 새 크기로 벽에 다시 앉힌다
+      else updateItems(store, [{ id: drag.ids[0], patch: { size, pos: [Math.round(r.pos[0]), Math.round(r.pos[1])] } }], { record: false });
       return;
     }
     if (drag.kind === 'items') move(p, ev);

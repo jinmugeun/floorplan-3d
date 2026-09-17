@@ -90,7 +90,7 @@ export function drawItemSelection(ctx, v, item, { locked = false } = {}) {
     ctx.beginPath(); ctx.rect(s[0] - HANDLE_PX / 2, s[1] - HANDLE_PX / 2, HANDLE_PX, HANDLE_PX);
     ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
   }
-  if (!locked) { // 회전 핸들: 아래쪽 파란 호 + 손잡이
+  if (!locked && !(item.attach === 'wall' && item.wallId)) { // 회전 핸들: 아래쪽 파란 호 + 손잡이(벽 부착 제품은 벽 방향에 고정이라 없다)
     const s = v.toScreen(h.rotHandle);
     ctx.beginPath(); ctx.arc(s[0], s[1], HANDLE_PX, 0, Math.PI * 2);
     ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = ITEM_COLORS.rot; ctx.lineWidth = 2; ctx.stroke();

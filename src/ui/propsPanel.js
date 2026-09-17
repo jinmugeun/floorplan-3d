@@ -58,6 +58,7 @@ export function applyNumber(store, sel, name, v) {
     }
     if (name === 'posX') updateItem(store, sel.id, { pos: [v, it.pos[1]] });
     else if (name === 'posY') updateItem(store, sel.id, { pos: [it.pos[0], v] });
+    else if (name === 'rot' && it.attach === 'wall' && it.wallId) return; // 벽 부착 제품은 벽 방향에 고정(명세 8.5)
     else updateItem(store, sel.id, { [name]: v });   // z, rot
     return;
   }
@@ -69,7 +70,7 @@ export function applyNumber(store, sel, name, v) {
   }
   // 여러 dispatch를 한 undo 단계로 묶는다: 안쪽 updateWall은 { record: false }를 넘겨야 한다
   // (기본 record로 두면 첫 updateWall이 트랜잭션을 조기에 닫아 벽마다 되돌릴 단계가 생긴다).
-  if (sel.type === 'multi') {
+  if (sel.type === 'multi' && sel.kind === 'wall') { // 아이템 다중 선택은 여기로 오지 않는다(Task 12 패널이 따로 처리)
     store.beginTransaction();
     for (const id of sel.ids) updateWall(store, id, { [name]: v }, { record: false });
     store.endTransaction();
@@ -157,6 +158,10 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${colorField('외벽 색', 'colorOut', w.colorOut)}
         <button type="button" name="split">벽 나누기 (나눌 지점 클릭)</button>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
+      return;
+    }
+    if (sel.type === 'multi' && sel.kind === 'item') { // Task 12가 정렬·그룹 패널로 바꾼다. 지금은 개수와 삭제만.
+      container.innerHTML = `<h2>여러 제품 선택</h2><p class="hint">선택된 제품 ${sel.ids.length}개</p><button type="button" name="delete" class="danger">선택 삭제</button>`;
       return;
     }
     if (sel.type === 'multi' && sel.kind === 'wall') {
