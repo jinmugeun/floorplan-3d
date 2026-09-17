@@ -13,8 +13,9 @@ export function createView3D(container, store, ui) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.1; controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.9));
-  const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(-12, 30, -18); sun.castShadow = true; scene.add(sun);
+  // three r155+ 는 물리 광량 단위를 쓰므로 예전 값(0.9/0.8)으로는 장면이 어둡다.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-12, 30, -18); sun.castShadow = true; scene.add(sun);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xdfe4e9 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.005; ground.receiveShadow = true; scene.add(ground);
 
   let group = null, mode = 'iso', raf = 0, alive = true;
