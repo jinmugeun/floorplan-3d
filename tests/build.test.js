@@ -66,6 +66,17 @@ test('a floor with fractional coordinates still builds one mesh per wall', () =>
   expect(g.children.filter(c => c.name === 'wallFoot')).toHaveLength(4);
 });
 
+test('each room gets inner wall faces painted with colorIn', () => {
+  const walls = rectWalls([0, 0], [4000, 3000], 200).map(w => ({ ...w, colorIn: '#ff8800' }));
+  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), height: 2300 }, { wallOpacity: 1 });
+  const faces = g.children.filter(c => c.name === 'wallFace');
+  expect(faces).toHaveLength(4);
+  expect(faces.every(f => typeof f.userData.wallId === 'string')).toBe(true);
+  expect(faces[0].material.color.getHex()).toBe(0xff8800);
+  const white = buildFloorGroup({ walls, rooms: detectRooms(walls), height: 2300 }, { display: 'white', wallOpacity: 1 });
+  expect(white.children.find(c => c.name === 'wallFace').material.color.getHex()).toBe(0xffffff);
+});
+
 test('only the active floor is built', () => {
   const walls1 = rectWalls([0, 0], [4000, 3000], 200);
   const walls2 = rectWalls([0, 0], [2000, 2000], 200);

@@ -1,5 +1,5 @@
 import { activeFloor } from '../state/schema.js';
-import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFloor, deleteFloor, totalArea } from '../state/floorOps.js';
+import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFloor, deleteFloor, totalArea, setWallLength, setRoomWallHeight, updateWallProps } from '../state/floorOps.js';
 import { wallLength } from '../geom/walls.js';
 import { fmtLen, parseLen, fmtArea } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
@@ -31,6 +31,7 @@ function readLen(el, units) {
 }
 // 치수 단위 표시가 꺼져 있으면 라벨에 단위를 쓰지 않는다: "벽 높이" / "벽 높이 (mm)"
 const withUnit = (label, units, showUnit) => (showUnit ? `${label} (${units === 'ftin' ? 'ft·in' : 'mm'})` : label);
+const colorField = (label, name, value) => field(label, `<input type="color" name="${name}" value="${esc(value)}">`);
 
 // deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
 export function createPropsPanel(container, store, ui, { deleteSelection = () => {} } = {}) {
@@ -58,10 +59,15 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
     if (sel.type === 'wall') {
       const w = f.walls.find(x => x.id === sel.id); if (!w) { container.innerHTML = ''; return; }
+      const len = wallLength(w);
       container.innerHTML = `<h2>벽 상세 정보</h2>
-        ${lenField(withUnit('벽 중심선 길이', units, showUnit), 'length', Math.round(wallLength(w)), 0, 999999, true, units)}
+        ${lenField(withUnit('벽 중심선 길이', units, showUnit), 'length', Math.round(len), 0, 999999, true, units)}
+        ${lenField(withUnit('벽 길이', units, showUnit), 'wallLength', Math.round(len), 1, 999999, false, units)}
         ${lenField(withUnit('두께', units, showUnit), 'thickness', w.thickness, 2, 1000, false, units)}
         ${lenField(withUnit('벽 높이', units, showUnit), 'height', w.height, 2, 8000, false, units)}
+        ${field('선택된 벽 면적', `<output name="wallArea">${fmtArea((len * w.height) / 1e6, { pyeong })}</output>`)}
+        ${colorField('내벽 색', 'colorIn', w.colorIn)}
+        ${colorField('외벽 색', 'colorOut', w.colorOut)}
         <button type="button" name="split">벽 나누기 (나눌 지점 클릭)</button>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
       return;
@@ -76,6 +82,10 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${lenField(withUnit('벽 두께', units, showUnit), 'wallThickness', t, 2, 1000, false, units)}
         ${lenField(withUnit('바닥 기준 높이', units, showUnit), 'floorOffset', r.floorOffset, -1000, 1000, false, units, 10)}
         ${lenField(withUnit('방 높이', units, showUnit), 'height', r.height, 0, 8000, false, units, 10)}
+        ${field('좌석수', num('seats', r.seats ?? 0, 0, 999, 1))}
+        <label class="check"><input type="checkbox" name="matchWallHeight" ${r.matchWallHeight ? 'checked' : ''}> 공간 높이 맞추기</label>
+        ${colorField('바닥 색', 'floorColor', r.floorColor)}
+        ${colorField('천장 색', 'ceilingColor', r.ceilingColor)}
         <label class="check"><input type="checkbox" name="hideCeiling" ${r.hideCeiling ? 'checked' : ''}> 천장 감추기</label>
         <button type="button" name="delete" class="danger">방 삭제</button>`;
     }
@@ -86,8 +96,23 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       if (name === 'slab') updateFloor(store, store.get().activeFloor ?? 0, { slab: v });
       return;
     }
-    if (sel.type === 'wall') updateWall(store, sel.id, { [name]: v });
-    if (sel.type === 'room') { if (name === 'wallThickness') setRoomWallThickness(store, sel.id, v); else updateRoom(store, sel.id, { [name]: v }); }
+    if (sel.type === 'wall') {
+      if (name === 'wallLength') setWallLength(store, sel.id, v);
+      else if (name === 'height') updateWallProps(store, sel.id, { height: v }); // 기하 불변 → reroom 없음
+      else updateWall(store, sel.id, { [name]: v });                            // 두께는 방 면적을 바꾼다
+      return;
+    }
+    if (sel.type === 'room') {
+      if (name === 'wallThickness') { setRoomWallThickness(store, sel.id, v); return; }
+      // 방 높이 변경이 "공간 높이 맞추기"로 벽 높이까지 바꿀 수 있으므로, 두 dispatch를
+      // 트랜잭션으로 묶는다. 안쪽 dispatch는 { record: false }로 넘겨야 endTransaction이
+      // 되돌림 한 단계로 묶어 준다(첫 dispatch가 기본 record로 트랜잭션을 미리 닫으면 두 단계가 된다).
+      store.beginTransaction();
+      updateRoom(store, sel.id, { [name]: v }, { record: false });
+      const room = activeFloor(store.get()).rooms.find(x => x.id === sel.id);
+      if (name === 'height' && room?.matchWallHeight) setRoomWallHeight(store, sel.id, v, { record: false }); // "공간 높이 맞추기"
+      store.endTransaction();
+    }
   }
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
@@ -106,8 +131,19 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
       applyNumber(sel, name, v); return;
     }
+    if (el.type === 'color') {
+      if (sel?.type === 'wall') updateWallProps(store, sel.id, { [name]: el.value }); // 색도 기하 불변 → reroom 없음
+      if (sel?.type === 'room') updateRoom(store, sel.id, { [name]: el.value });
+      return;
+    }
     if (sel?.type === 'room') {
       if (name === 'hideCeiling') updateRoom(store, sel.id, { hideCeiling: el.checked });
+      else if (name === 'matchWallHeight') {
+        store.beginTransaction();
+        updateRoom(store, sel.id, { matchWallHeight: el.checked }, { record: false });
+        if (el.checked) { const room = activeFloor(store.get()).rooms.find(x => x.id === sel.id); if (room) setRoomWallHeight(store, sel.id, room.height, { record: false }); } // 켜는 순간 한 번 맞춘다
+        store.endTransaction();
+      }
       else if (name === 'name' || name === 'type') updateRoom(store, sel.id, { [name]: el.value });
     }
   };

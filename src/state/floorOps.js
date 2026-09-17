@@ -1,6 +1,6 @@
 import { activeFloor, uid, createFloor } from './schema.js';
 import { detectRooms, centroid } from '../geom/rooms.js';
-import { transformWalls, wallLength } from '../geom/walls.js';
+import { transformWalls, wallLength, wallDir } from '../geom/walls.js';
 import { normalizeWalls } from '../geom/normalize.js';
 import { dist, eq } from '../geom/vec.js';
 
@@ -32,8 +32,10 @@ export function deleteRoom(store, id) {
 export function updateWall(store, id, patch) {
   return store.dispatch(d => { const f = activeFloor(d); const w = f.walls.find(x => x.id === id); if (w) Object.assign(w, patch); reroom(f); });
 }
-export function updateRoom(store, id, patch) {
-  return store.dispatch(d => { const f = activeFloor(d); const r = f.rooms.find(x => x.id === id); if (r) Object.assign(r, patch); });
+// opts는 store.dispatch로 그대로 전달된다: 여러 dispatch를 store.beginTransaction()/endTransaction()로
+// 한 단계로 묶을 때, 안의 dispatch들은 { record: false }를 넘겨야 첫 dispatch가 트랜잭션을 조기에 닫지 않는다.
+export function updateRoom(store, id, patch, opts) {
+  return store.dispatch(d => { const f = activeFloor(d); const r = f.rooms.find(x => x.id === id); if (r) Object.assign(r, patch); }, opts);
 }
 export function setRoomWallThickness(store, roomId, thickness) {
   return store.dispatch(d => {
@@ -41,6 +43,31 @@ export function setRoomWallThickness(store, roomId, thickness) {
     for (const w of f.walls) if (r.wallIds.includes(w.id)) w.thickness = thickness;
     reroom(f);
   });
+}
+export function setWallLength(store, id, mm) {
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    const w = f.walls.find(x => x.id === id);
+    if (!w || !(mm > 0)) return;
+    const dir = wallDir(w); // b를 방향 그대로 옮긴다: a와 각도는 그대로 두고 길이만 바꾼다
+    w.b = [w.a[0] + dir[0] * mm, w.a[1] + dir[1] * mm];
+    reroom(f);
+  });
+}
+// 높이는 기하(방 폴리곤·면적)를 바꾸지 않으므로 reroom을 부르지 않는다.
+// opts는 updateRoom과 마찬가지로 store.dispatch에 전달된다(트랜잭션 안에서는 { record: false }).
+export function setRoomWallHeight(store, roomId, height, opts) {
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    const r = f.rooms.find(x => x.id === roomId);
+    if (!r) return;
+    for (const w of f.walls) if (r.wallIds.includes(w.id)) w.height = height;
+  }, opts);
+}
+// 기하에 영향이 없는 벽 필드(height, colorIn, colorOut …)를 고칠 때 쓴다. reroom을 부르지 않는다.
+// 끝점 이동과 두께 변경만 updateWall(= reroom 포함)을 쓴다.
+export function updateWallProps(store, id, patch) {
+  return store.dispatch(d => { const w = activeFloor(d).walls.find(x => x.id === id); if (w) Object.assign(w, patch); });
 }
 export function transformFloor(store, fn) {
   return store.dispatch(d => {

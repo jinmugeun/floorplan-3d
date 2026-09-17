@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { wallPolygon } from '../geom/walls.js';
 import { roomInnerPolygon } from '../geom/rooms.js';
+import { eq } from '../geom/vec.js';
 
 const M = v => v / 1000;
 export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
@@ -28,6 +29,12 @@ const hex = (css, fallback) => (typeof css === 'string' && /^#[0-9a-fA-F]{3,8}$/
 
 function shapeFrom(pts) { const s = new THREE.Shape(); pts.forEach((p, i) => (i ? s.lineTo(M(p[0]), M(p[1])) : s.moveTo(M(p[0]), M(p[1])))); s.closePath(); return s; }
 
+// 방 폴리곤의 i번째 변(points[i] → points[i+1])에 대응하는 벽. roomInnerPolygon도 같은 순서를 쓴다.
+function edgeWall(room, walls, i) {
+  const a = room.points[i], b = room.points[(i + 1) % room.points.length];
+  return walls.find(x => (eq(x.a, a) && eq(x.b, b)) || (eq(x.a, b) && eq(x.b, a))) ?? null;
+}
+
 export function buildFloorGroup(floor, view) {
   const g = new THREE.Group();
   for (const r of floor.rooms) {
@@ -39,6 +46,25 @@ export function buildFloorGroup(floor, view) {
       const ce = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('ceiling', view, hex(r.ceilingColor, null)));
       ce.rotation.x = Math.PI / 2; ce.position.y = M(r.floorOffset + r.height); ce.name = 'ceiling'; ce.userData.roomId = r.id; ce.visible = false; g.add(ce);
     }
+    // 방 안쪽에서 보이는 벽면 색(colorIn). 내부 폴리곤보다 5 mm 더 들여 z-파이팅을 피한다.
+    const faces = roomInnerPolygon(r, floor.walls, 5);
+    faces.forEach((p, i) => {
+      const q = faces[(i + 1) % faces.length];
+      const w = edgeWall(r, floor.walls, i);
+      if (!w) return;
+      const y0 = M(r.floorOffset), y1 = M(r.floorOffset + Math.min(r.height, w.height));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([
+        M(p[0]), y0, M(p[1]), M(q[0]), y0, M(q[1]), M(q[0]), y1, M(q[1]), M(p[0]), y1, M(p[1]),
+      ], 3));
+      geo.setIndex([0, 1, 2, 0, 2, 3]);
+      geo.computeVertexNormals();
+      const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null)));
+      face.name = 'wallFace'; face.userData.wallId = w.id; face.userData.roomId = r.id;
+      // 방 폴리곤의 회전 방향이 반대로 나올 수 있어(법선이 밖을 향할 수 있어) 양면으로 둔다.
+      face.material.side = THREE.DoubleSide;
+      g.add(face);
+    });
   }
   for (const w of floor.walls) {
     const poly = wallPolygon(w, floor.walls);

@@ -1,6 +1,9 @@
 import { uid } from '../state/schema.js';
 import { add, sub, mul, dot, cross, norm, perp, eq, dist } from './vec.js';
 
+export const ROOM_FLOOR_COLOR = '#c9a77a';
+export const ROOM_CEILING_COLOR = '#f4f4f2';
+
 export function polygonArea(pts) {
   let s = 0;
   for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; s += a[0] * b[1] - b[0] * a[1]; }
@@ -111,6 +114,8 @@ export function detectRooms(walls, prevRooms = []) {
       name: prev?.name ?? '', type: prev?.type ?? 'none',
       floorOffset: prev?.floorOffset ?? 0, height: prev?.height ?? 2300, hideCeiling: prev?.hideCeiling ?? false,
       floorMaterial: prev?.floorMaterial ?? 'wood', ceilingMaterial: prev?.ceilingMaterial ?? 'paint-white',
+      seats: prev?.seats ?? 0, matchWallHeight: prev?.matchWallHeight ?? false,
+      floorColor: prev?.floorColor ?? ROOM_FLOOR_COLOR, ceilingColor: prev?.ceilingColor ?? ROOM_CEILING_COLOR,
       points: f.pts, wallIds: f.wallIds.filter(id => wallById[id]),
       area: Math.abs(polygonArea(inner)) / 1e6,
     };

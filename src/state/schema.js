@@ -1,5 +1,5 @@
 import { makeWall } from '../geom/walls.js';
-import { detectRooms } from '../geom/rooms.js';
+import { detectRooms, ROOM_FLOOR_COLOR, ROOM_CEILING_COLOR } from '../geom/rooms.js';
 
 let counter = 0;
 export const SCHEMA_VERSION = 1;
@@ -51,17 +51,22 @@ const pair = (v, def = [0, 0]) => (Array.isArray(v) ? [num(v[0], def[0]), num(v[
 const arr = v => (Array.isArray(v) ? v : []);
 const str = (v, def) => (typeof v === 'string' ? v : def);
 const obj = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+const color = (v, def) => (typeof v === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : def);
 
 function normalizeWall(w) {
   const base = makeWall({ a: [0, 0], b: [0, 0] });
   const src = obj(w);
-  return { ...base, ...src, id: str(src.id, base.id), a: pair(src.a), b: pair(src.b), thickness: num(src.thickness, base.thickness, 2, 1000), height: num(src.height, base.height, 2, 8000) };
+  return { ...base, ...src, id: str(src.id, base.id), a: pair(src.a), b: pair(src.b), thickness: num(src.thickness, base.thickness, 2, 1000), height: num(src.height, base.height, 2, 8000), colorIn: color(src.colorIn, base.colorIn), colorOut: color(src.colorOut, base.colorOut) };
 }
 function normalizeFloor(f, index) {
   const base = createFloor(`Floor ${index + 1}`);
   const src = obj(f);
   const walls = arr(src.walls).map(normalizeWall);
-  const rooms = arr(src.rooms).filter(r => r && typeof r === 'object').map(r => ({ ...r, points: arr(r.points).map(p => pair(p)), wallIds: arr(r.wallIds) }));
+  const rooms = arr(src.rooms).filter(r => r && typeof r === 'object').map(r => ({
+    ...r, points: arr(r.points).map(p => pair(p)), wallIds: arr(r.wallIds),
+    seats: Math.floor(num(r.seats, 0, 0, 999)), matchWallHeight: !!r.matchWallHeight,
+    floorColor: color(r.floorColor, ROOM_FLOOR_COLOR), ceilingColor: color(r.ceilingColor, ROOM_CEILING_COLOR),
+  }));
   return {
     ...base, ...src,
     id: str(src.id, base.id), name: str(src.name, base.name), height: num(src.height, base.height, 2000, 8000),

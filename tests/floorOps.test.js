@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea } from '../src/state/floorOps.js';
+import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -171,6 +171,28 @@ test('totalArea sums room areas, and gross adds the wall footprints', () => {
   expect(totalArea({ rooms: [], walls: [] }, 'gross')).toBe(0);
   // 소수 좌표: 길이 4000 x 두께 200 = 0.8 m²
   expect(totalArea({ rooms: [{ area: 1.5 }], walls: [{ a: [0.5, 0.25], b: [4000.5, 0.25], thickness: 200 }] }, 'gross')).toBeCloseTo(1.5 + 0.8, 3);
+});
+
+test('setWallLength moves b along the wall direction and keeps the room', () => {
+  const s = createStore(createEmptyProject());
+  addWalls(s, [makeWall({ a: [0.5, 0.25], b: [4000.5, 0.25] })]); // 소수 좌표, 동쪽 방향
+  const w = activeFloor(s.get()).walls[0];
+  setWallLength(s, w.id, 2500);
+  const moved = activeFloor(s.get()).walls.find(x => x.id === w.id);
+  expect(moved.b[0]).toBeCloseTo(2500.5, 6);
+  expect(moved.b[1]).toBeCloseTo(0.25, 6);
+  setWallLength(s, w.id, 0); // 0 이하는 무시
+  expect(activeFloor(s.get()).walls.find(x => x.id === w.id).b[0]).toBeCloseTo(2500.5, 6);
+});
+
+test('setRoomWallHeight applies one height to every wall of that room only', () => {
+  const s = setup();
+  addWalls(s, rectWalls([9000, 0], [11000, 2000], 200)); // 떨어진 두 번째 방
+  const f = activeFloor(s.get());
+  const room = f.rooms.find(r => r.points.some(p => p[0] === 0));
+  setRoomWallHeight(s, room.id, 2800);
+  const g = activeFloor(s.get());
+  for (const w of g.walls) expect(w.height).toBe(room.wallIds.includes(w.id) ? 2800 : 2300);
 });
 
 test('deleting a floor before the active one keeps the same floor active', () => {

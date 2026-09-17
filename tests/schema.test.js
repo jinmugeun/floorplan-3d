@@ -73,6 +73,18 @@ describe('normalizeProject / migrate', () => {
     const q = normalizeProject(structuredClone(p));
     expect(q.name).toBe('그대로'); expect(q.floors[0].id).toBe(p.floors[0].id); expect(q.view).toEqual(p.view);
   });
+  test('wall colours and room extras get defaults and are validated', () => {
+    const p = migrate({ version: 1, floors: [{ walls: [{ id: 'w1', a: [0, 0], b: [4000, 0], colorIn: 'red', colorOut: '#123456' }] }] });
+    const w = activeFloor(p).walls[0];
+    expect(w.colorIn).toBe('#f2efe9'); // CSS 이름은 거부하고 기본값
+    expect(w.colorOut).toBe('#123456');
+    const q = migrate({ version: 1, floors: [{ walls: rectWalls([0, 0], [4000, 3000], 200), rooms: [{ id: 'r1', points: [[0, 0], [4000, 0], [4000, 3000], [0, 3000]], seats: '42.7', matchWallHeight: 1, floorColor: '#aabbcc', ceilingColor: 'x' }] }] });
+    const r = activeFloor(q).rooms[0];
+    expect(r.seats).toBe(42);
+    expect(r.matchWallHeight).toBe(true);
+    expect(r.floorColor).toBe('#aabbcc');
+    expect(r.ceilingColor).toBe('#f4f4f2');
+  });
   test('units accepts only mm or ftin, and settings/areaMode get defaults', () => {
     expect(migrate({ version: 1, units: 'ftin' }).units).toBe('ftin');
     expect(migrate({ version: 1, units: '척' }).units).toBe('mm');

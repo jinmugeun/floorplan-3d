@@ -1,8 +1,11 @@
 import { uid } from '../state/schema.js';
 import { add, sub, mul, dot, cross, dist, norm, perp, eq } from './vec.js';
 
-export function makeWall({ a, b, thickness = 200, height = 2300, material = 'paint-white' }) {
-  return { id: uid('w'), a: [...a], b: [...b], thickness, height, material };
+export const WALL_COLOR_IN = '#f2efe9';
+export const WALL_COLOR_OUT = '#e9e6e0';
+
+export function makeWall({ a, b, thickness = 200, height = 2300, material = 'paint-white', colorIn = WALL_COLOR_IN, colorOut = WALL_COLOR_OUT }) {
+  return { id: uid('w'), a: [...a], b: [...b], thickness, height, material, colorIn, colorOut };
 }
 export const wallDir = w => norm(sub(w.b, w.a));
 export const wallLength = w => dist(w.a, w.b);

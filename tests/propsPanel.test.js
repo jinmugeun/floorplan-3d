@@ -4,7 +4,7 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addFloor, setActiveFloor } from '../src/state/floorOps.js';
-import { rectWalls } from '../src/geom/walls.js';
+import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { createPropsPanel } from '../src/ui/propsPanel.js';
 
 test('wall panel edits thickness; room panel edits name', () => {
@@ -117,6 +117,54 @@ test('the floor panel switches floors, edits slab and opacity and shows the tota
   mode.value = 'gross'; mode.dispatchEvent(new Event('change', { bubbles: true }));
   expect(store.get().areaMode).toBe('gross');
   expect(el.querySelector('output[name="totalArea"]').textContent).toBe('13.4 m²'); // 10.64 + 2.8
+});
+
+test('wall panel shows centreline length, an editable length, the wall area and two colours', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, [makeWall({ a: [0, 0], b: [4000, 0], thickness: 200, height: 2500 })]);
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  const w = activeFloor(store.get()).walls[0];
+  ui.set({ selection: { type: 'wall', id: w.id } });
+  expect(el.querySelector('input[name="length"]').readOnly).toBe(true);
+  expect(el.querySelector('output[name="wallArea"]').textContent).toBe('10.0 m²'); // 4.0 x 2.5
+  const len = el.querySelector('input[name="wallLength"]');
+  len.value = '3000'; len.dispatchEvent(new Event('change', { bubbles: true }));
+  const after = activeFloor(store.get()).walls.find(x => x.id === w.id);
+  expect(after.b[0]).toBeCloseTo(3000, 6);
+  const cin = el.querySelector('input[name="colorIn"]');
+  expect(cin.type).toBe('color');
+  cin.value = '#ff8800'; cin.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(x => x.id === w.id).colorIn).toBe('#ff8800');
+  const cout = el.querySelector('input[name="colorOut"]');
+  cout.value = '#001122'; cout.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(x => x.id === w.id).colorOut).toBe('#001122');
+});
+
+test('room panel edits seats, floor/ceiling colours, and 공간 높이 맞추기 drives the wall heights', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200)); // 소수 좌표
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  const room = activeFloor(store.get()).rooms[0];
+  ui.set({ selection: { type: 'room', id: room.id } });
+  const seats = el.querySelector('input[name="seats"]');
+  seats.value = '24'; seats.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).rooms[0].seats).toBe(24);
+  const fc = el.querySelector('input[name="floorColor"]');
+  fc.value = '#102030'; fc.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).rooms[0].floorColor).toBe('#102030');
+  const match = el.querySelector('input[name="matchWallHeight"]');
+  match.checked = true; match.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).rooms[0].matchWallHeight).toBe(true);
+  expect(activeFloor(store.get()).walls.every(w => w.height === 2300)).toBe(true);
+  const h = el.querySelector('input[name="height"]');
+  h.value = '2800'; h.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).rooms[0].height).toBe(2800);
+  expect(activeFloor(store.get()).walls.every(w => w.height === 2800)).toBe(true); // 벽도 따라간다
+  const again = el.querySelector('input[name="matchWallHeight"]');
+  again.checked = false; again.dispatchEvent(new Event('change', { bubbles: true }));
+  const h2 = el.querySelector('input[name="height"]');
+  h2.value = '2400'; h2.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.every(w => w.height === 2800)).toBe(true); // 끄면 벽은 그대로
 });
 
 test('the delete button refuses to remove the last floor', () => {
