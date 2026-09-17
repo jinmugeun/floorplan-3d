@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 import { activeFloor } from '../state/schema.js';
-import { buildFloorGroup, disposeGroup, toThree } from './build.js';
-import { hiddenWallIds } from './cutaway.js';
+import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPACITY } from './build.js';
+import { hiddenWallIds, cutawayMeshStyle, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
 import { cameraDistance } from './fit.js';
 import { sunPosition } from './sun.js';
@@ -99,6 +99,21 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     hemi.intensity = (s.ambient ?? 0.6) * 4.33;
     requestRender();
   }
+  // 도면 전체가 들어오도록 카메라를 다시 잡는다. 현재 모드(plan / iso)의 프레이밍을 그대로 쓴다.
+  function frameScene() {
+    const c = center(), t = toThree([c[0], c[1], 0]); controls.target.copy(t);
+    const r = cameraDistance(bounds().extent); // 도면 크기에 맞춘 카메라 거리(m)
+    if (mode === 'plan') camera.position.set(t.x, r * 1.6, t.z + 0.01);
+    else {
+      const { elevation, azimuth, fov } = store.get().view.cameraPreset;
+      const el = THREE.MathUtils.degToRad(elevation), az = THREE.MathUtils.degToRad(azimuth);
+      camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), t.y + r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az));
+      if (camera.isPerspectiveCamera) { camera.fov = fov; camera.updateProjectionMatrix(); } else frustum();
+    }
+    controls.update(); requestRender();
+  }
+  // 하단 바 "화면 맞추기"(키 0)의 3D 쪽 동작. 모드는 바꾸지 않는다.
+  function fit() { if (mode === 'fp') return; resize(); frameScene(); }
   function setMode(m, opts = {}) {
     resize(); // 숨겨져 있다가 보이는 경우 크기를 다시 맞춘다
     mode = m;
@@ -114,17 +129,9 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     controls.enabled = true; window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); keys.clear();
     if (fp.isLocked) fp.unlock(); // 1/2/3 키로 fp를 떠날 때도 포인터 락을 반드시 해제한다
     group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = false; });
-    const c = center(), t = toThree([c[0], c[1], 0]); controls.target.copy(t);
-    const r = cameraDistance(bounds().extent); // 도면 크기에 맞춘 카메라 거리(m)
-    if (m === 'plan') { camera.position.set(t.x, r * 1.6, t.z + 0.01); controls.minPolarAngle = 0; controls.maxPolarAngle = 0.05; }
-    else {
-      const { elevation, azimuth, fov } = store.get().view.cameraPreset;
-      const el = THREE.MathUtils.degToRad(elevation), az = THREE.MathUtils.degToRad(azimuth);
-      camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), t.y + r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az));
-      if (camera.isPerspectiveCamera) { camera.fov = fov; camera.updateProjectionMatrix(); } else frustum();
-      controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI / 2 - 0.02;
-    }
-    controls.update(); requestRender();
+    controls.minPolarAngle = 0;
+    controls.maxPolarAngle = m === 'plan' ? 0.05 : Math.PI / 2 - 0.02;
+    frameScene();
   }
   function applyCutaway() {
     if (!group) return;
@@ -134,32 +141,21 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     const elev = THREE.MathUtils.radToDeg(Math.asin(d.y / (d.length() || 1)));
     const hidden = hiddenWallIds(activeFloor(store.get()), camMm, elev, view);
     const seeThrough = !!view.v3?.wallTransparent;
-    const baseOpacity = view.display === 'transparent' ? Math.min(view.wallOpacity ?? 1, 0.3) : (view.wallOpacity ?? 1);
+    const baseOpacity = view.display === 'transparent' ? Math.min(view.wallOpacity ?? 1, TRANSPARENT_OPACITY.wall) : (view.wallOpacity ?? 1);
     for (const m of group.children) {
       const id = m.userData.wallId;
       if (!id) continue;
-      const isHidden = hidden.has(id);
-      if (m.name === 'wallFoot') { m.visible = isHidden && !seeThrough; continue; } // 감춘 벽은 밑동 윤곽만 남긴다
-      if (m.name === 'wall') {
-        m.visible = !isHidden || seeThrough;
-        const o = isHidden && seeThrough ? 0.25 : baseOpacity; // "벽 투명화": 지우지 않고 25%로
-        m.material.opacity = o; m.material.transparent = o < 1; m.material.depthWrite = o >= 1;
-        continue;
-      }
-      m.visible = !isHidden; // wallTop, edges
+      const { visible, opacity } = cutawayMeshStyle(m.name, { isHidden: hidden.has(id), seeThrough, baseOpacity });
+      m.visible = visible;
+      if (opacity !== null && m.material) { m.material.opacity = opacity; m.material.transparent = opacity < 1; m.material.depthWrite = opacity >= 1; }
     }
   }
+  // 단일 공간 모드를 끄면 컷어웨이가 손대지 않는 바닥·천장도 다시 보이게 되돌린다.
   function applySolo() {
     if (!group) return;
     const solo = ui.get().soloRoom ?? null;
-    if (!solo) return; // 단일 공간 모드가 아니면 컷어웨이 결과를 그대로 둔다
-    const room = activeFloor(store.get()).rooms.find(r => r.id === solo);
-    if (!room) return;
-    const wallIds = new Set(room.wallIds);
-    for (const m of group.children) {
-      if (m.userData.wallId) { m.visible = m.visible && wallIds.has(m.userData.wallId); continue; }
-      if (m.userData.roomId) m.visible = m.userData.roomId === solo && m.name !== 'ceiling';
-    }
+    const room = (solo ? activeFloor(store.get()).rooms.find(r => r.id === solo) : null) ?? null;
+    for (const m of group.children) m.visible = soloMeshVisible(m, room, mode);
   }
   function frame(t) {
     raf = 0; if (!alive) return;
@@ -180,9 +176,15 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     const ss = JSON.stringify(v.sun);
     if (ss !== lastSun) { lastSun = ss; applySun(v.sun); }
   }
-  const unsub = store.subscribe(() => { rebuild(); applyViewSettings(); requestRender(); });
+  // 기하·표시 모드가 실제로 바뀐 경우에만 씬을 다시 만든다(슬라이더 드래그 같은 { record: false } 연속 dispatch로 재빌드하지 않게).
+  let lastSig = null;
+  const unsub = store.subscribe(() => {
+    const sig = sceneSignature(store.get());
+    if (sig !== lastSig) { lastSig = sig; rebuild(); }
+    applyViewSettings(); requestRender();
+  });
   const unsubUi = ui.subscribe(requestRender); // 단일 공간 모드·선택 변화도 다시 그린다
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
-  rebuild(); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, getCameraInfo, setTarget, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, getCameraInfo, setTarget, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

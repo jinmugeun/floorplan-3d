@@ -3,7 +3,10 @@ import { test, expect, vi } from 'vitest';
 import { createKeyHandler, KEYMAP } from '../src/ui/keymap.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject } from '../src/state/schema.js';
+import { createEmptyProject, activeFloor } from '../src/state/schema.js';
+import { addWalls } from '../src/state/floorOps.js';
+import { rectWalls } from '../src/geom/walls.js';
+import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 
 function setup(toolConsumes = false) {
   const store = createStore(createEmptyProject()); const ui = createUiState();
@@ -106,4 +109,43 @@ test('new actions route: Ctrl+A selects all, Ctrl+comma opens settings, +/- zoom
   const key = (k, extra = {}) => h({ key: k, target: document.body, preventDefault() {}, ...extra });
   key('a', { ctrlKey: true }); key(',', { ctrlKey: true }); key('+'); key('-'); key('0');
   expect(calls).toEqual({ selectAll: 1, settings: 1, zoomIn: 1, zoomOut: 1, fit: 1 });
+});
+
+// 실제 선택 도구를 물려서 확인한다: 스텁이 아니면 Esc가 앱까지 오는지가 도구 구현에 달려 있다.
+function setupReal() {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const view = { camera: { scale: 0.1 }, fit: vi.fn(), requestRender: vi.fn(), tool: null };
+  view.tool = createSelectTool({ store, ui, view });
+  const setTool = vi.fn();
+  const h = createKeyHandler({ store, ui, view, setTool, setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn() });
+  return { store, ui, setTool, esc: () => h({ key: 'Escape', target: document.body, preventDefault() {} }) };
+}
+
+test('Escape clears soloRoom through the app even with the real select tool active', () => {
+  const a = setupReal();
+  const room = activeFloor(a.store.get()).rooms[0];
+  a.ui.set({ soloRoom: room.id, selection: { type: 'room', id: room.id } });
+  a.esc();
+  expect(a.ui.get().soloRoom).toBeNull();
+  expect(a.ui.get().selection).toBeNull();
+  expect(a.setTool).toHaveBeenCalledWith('select');
+});
+
+test('Escape with only a selection is consumed by the select tool', () => {
+  const a = setupReal();
+  a.ui.set({ selection: { type: 'wall', id: activeFloor(a.store.get()).walls[0].id } });
+  a.esc();
+  expect(a.ui.get().selection).toBeNull();
+  expect(a.setTool).not.toHaveBeenCalled(); // 도구가 소비했으므로 앱은 관여하지 않는다
+  a.esc(); // 취소할 것이 없으면 도구는 소비하지 않고 앱이 선택 모드로 돌아간다
+  expect(a.setTool).toHaveBeenCalledWith('select');
+});
+
+test('Escape clears fpPick even while a wall is selected', () => {
+  const a = setupReal();
+  a.ui.set({ fpPick: true, selection: { type: 'wall', id: activeFloor(a.store.get()).walls[0].id } });
+  a.esc();
+  expect(a.ui.get().fpPick).toBe(false);
+  expect(a.setTool).toHaveBeenCalledWith('select');
 });

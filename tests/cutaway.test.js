@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { rectWalls } from '../src/geom/walls.js';
 import { detectRooms } from '../src/geom/rooms.js';
-import { hiddenWallIds, wallOwners, isExteriorWall } from '../src/view3d/cutaway.js';
+import { hiddenWallIds, wallOwners, isExteriorWall, cutawayMeshStyle, soloMeshVisible } from '../src/view3d/cutaway.js';
 
 function floor() { const walls = rectWalls([0, 0], [4000, 3000], 200); return { walls, rooms: detectRooms(walls) }; }
 const top = f => f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id;
@@ -71,4 +71,42 @@ test('with both flags on, the cutaway rules are unchanged', () => {
   const hid = hiddenWallIds(f, [-5000, 8000, 4000], 35, { cutaway: true, v3: { outerWalls: true, innerWalls: true } });
   expect(hid.has(f.shared.id)).toBe(false);
   expect(hid.size).toBeGreaterThan(0);
+});
+
+// --- 순수 가시성 규칙(applyCutaway / applySolo가 메시마다 쓰는 규칙) ---
+const mesh = (name, userData = {}, visible = true) => ({ name, visible, userData });
+
+test('cutawayMeshStyle: 감춘 벽은 밑동만, 벽 투명화는 윗면·선·안쪽 면까지 남긴다', () => {
+  expect(cutawayMeshStyle('wallFoot', { isHidden: true, seeThrough: false })).toEqual({ visible: true, opacity: null });
+  expect(cutawayMeshStyle('wallFoot', { isHidden: true, seeThrough: true }).visible).toBe(false);
+  expect(cutawayMeshStyle('wall', { isHidden: false, seeThrough: false, baseOpacity: 0.4 })).toEqual({ visible: true, opacity: 0.4 });
+  expect(cutawayMeshStyle('wall', { isHidden: true, seeThrough: false }).visible).toBe(false);
+  for (const n of ['wallTop', 'edges', 'wallFace']) {
+    expect(cutawayMeshStyle(n, { isHidden: true, seeThrough: false }).visible).toBe(false);
+    expect(cutawayMeshStyle(n, { isHidden: true, seeThrough: true }).visible).toBe(true); // 벽 투명화를 따라간다
+  }
+  expect(cutawayMeshStyle('wallFace', { isHidden: true, seeThrough: true }).opacity).toBe(0.25);
+  expect(cutawayMeshStyle('wallTop', { isHidden: true, seeThrough: true }).opacity).toBeNull(); // 윗면·선은 재질을 건드리지 않는다
+});
+
+test('soloMeshVisible: 단일 공간 모드를 끄면 바닥이 다시 보이고 천장은 1인칭에서만 보인다', () => {
+  const room = { id: 'r1', wallIds: ['w1'] };
+  const floorOther = mesh('floor', { roomId: 'r2' });
+  expect(soloMeshVisible(mesh('floor', { roomId: 'r1' }), room)).toBe(true);
+  expect(soloMeshVisible(floorOther, room)).toBe(false);
+  expect(soloMeshVisible(mesh('ceiling', { roomId: 'r1' }), room)).toBe(false);
+  // 단일 공간 모드 해제: 숨겨져 있던 다른 방 바닥도 되돌아온다
+  expect(soloMeshVisible(mesh('floor', { roomId: 'r2' }, false), null)).toBe(true);
+  expect(soloMeshVisible(mesh('ceiling', { roomId: 'r2' }, false), null, 'iso')).toBe(false);
+  expect(soloMeshVisible(mesh('ceiling', { roomId: 'r2' }, false), null, 'fp')).toBe(true);
+});
+
+test('soloMeshVisible: 벽은 컷어웨이 결과를 존중하고 이웃 방의 wallFace는 숨는다', () => {
+  const room = { id: 'r1', wallIds: ['w1', 'w2'] };
+  expect(soloMeshVisible(mesh('wall', { wallId: 'w1' }), room)).toBe(true);
+  expect(soloMeshVisible(mesh('wall', { wallId: 'w9' }), room)).toBe(false); // 방 밖의 벽
+  expect(soloMeshVisible(mesh('wall', { wallId: 'w1' }, false), room)).toBe(false); // 컷어웨이가 감춘 벽은 그대로 감춘다
+  expect(soloMeshVisible(mesh('wallFace', { wallId: 'w1', roomId: 'r1' }), room)).toBe(true);
+  expect(soloMeshVisible(mesh('wallFace', { wallId: 'w1', roomId: 'r2' }), room)).toBe(false);
+  expect(soloMeshVisible(mesh('wall', { wallId: 'w1' }, false), null)).toBe(false); // 해제해도 벽은 컷어웨이가 정한 대로
 });

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { activeFloor } from '../state/schema.js';
 import { wallPolygon } from '../geom/walls.js';
 import { roomInnerPolygon } from '../geom/rooms.js';
 import { eq } from '../geom/vec.js';
@@ -6,15 +7,16 @@ import { eq } from '../geom/vec.js';
 const M = v => v / 1000;
 export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
 const COLOR = { wall: 0xe9e6e0, wallTop: 0x3a4351, floor: 0xc9a77a, ceiling: 0xf4f4f2, edge: 0x2b3440, foot: 0x3a4351 };
-const TRANSPARENT_OPACITY = { wall: 0.3, floor: 0.6, ceiling: 0.6 };
+export const TRANSPARENT_OPACITY = { wall: 0.3, floor: 0.6, ceiling: 0.6 };
 // 재질은 메시마다 새로 만든다(불투명도·색이 벽/방마다 다르다). perMesh 표시가 있는 재질만 dispose 대상이다.
 function surfaceMaterial(kind, view, color = null) {
   const display = view.display ?? 'normal';
   const base = display === 'white' ? 0xffffff : (color ?? COLOR[kind]);
   const twoSided = kind === 'floor' || kind === 'wallTop';
   const m = new THREE.MeshStandardMaterial({ color: base, roughness: kind === 'wall' ? 0.9 : 1, side: twoSided ? THREE.DoubleSide : THREE.FrontSide });
-  let opacity = kind === 'wall' ? (view.wallOpacity ?? 1) : kind === 'floor' ? (view.floorOpacity ?? 1) : 1;
-  if (display === 'transparent' && TRANSPARENT_OPACITY[kind]) opacity = Math.min(opacity, TRANSPARENT_OPACITY[kind]);
+  const key = kind === 'wallTop' ? 'wall' : kind; // 벽 윗면은 벽과 같은 불투명도를 쓴다
+  let opacity = key === 'wall' ? (view.wallOpacity ?? 1) : key === 'floor' ? (view.floorOpacity ?? 1) : 1;
+  if (display === 'transparent' && TRANSPARENT_OPACITY[key]) opacity = Math.min(opacity, TRANSPARENT_OPACITY[key]);
   m.opacity = opacity;
   m.transparent = opacity < 1; // 불투명 면은 투명 정렬 패스를 타지 않게 한다
   m.depthWrite = opacity >= 1; // 반투명 면이 깊이 버퍼를 쓰면 뒤 벽과 z-fighting이 난다
@@ -33,6 +35,14 @@ function shapeFrom(pts) { const s = new THREE.Shape(); pts.forEach((p, i) => (i 
 function edgeWall(room, walls, i) {
   const a = room.points[i], b = room.points[(i + 1) % room.points.length];
   return walls.find(x => (eq(x.a, a) && eq(x.b, b)) || (eq(x.a, b) && eq(x.b, a))) ?? null;
+}
+
+// 3D 씬을 다시 만들어야 하는지 가리는 서명. buildFloorGroup이 읽는 값만 담는다:
+// 여기 없는 값(sun, cameraPreset, projection, v3 …)이 바뀌어도 씬을 다시 만들지 않는다.
+export function sceneSignature(state) {
+  const f = activeFloor(state);
+  const v = state.view ?? {};
+  return JSON.stringify([f.walls, f.rooms, state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity]);
 }
 
 export function buildFloorGroup(floor, view) {

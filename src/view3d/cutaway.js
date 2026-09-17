@@ -28,3 +28,27 @@ export function hiddenWallIds(floor, camPos, elevationDeg, view) {
   }
   return out;
 }
+
+// 컷어웨이가 벽 메시 하나에 주는 가시성과 불투명도(순수 규칙: three 없이 테스트된다).
+// opacity가 null이면 재질을 건드리지 않는다(선/윗면).
+export function cutawayMeshStyle(name, { isHidden = false, seeThrough = false, baseOpacity = 1 } = {}) {
+  if (name === 'wallFoot') return { visible: isHidden && !seeThrough, opacity: null }; // 감춘 벽은 밑동 윤곽만 남긴다
+  const visible = !isHidden || seeThrough; // wallTop·edges·wallFace도 "벽 투명화"를 따른다
+  if (name === 'wall' || name === 'wallFace') return { visible, opacity: isHidden && seeThrough ? 0.25 : baseOpacity };
+  return { visible, opacity: null };
+}
+
+// 단일 공간 모드에서 메시 하나가 보여야 하는지(순수 규칙).
+// room이 null이면 단일 공간 모드가 아니다: 벽은 컷어웨이 결과를 그대로 두고, 방 면은 다시 보이게 한다.
+// mesh는 { name, visible, userData }만 읽는다.
+export function soloMeshVisible(mesh, room, mode = 'iso') {
+  const solo = room?.id ?? null;
+  if (mesh.userData?.wallId) {
+    if (!room) return mesh.visible;
+    // 이웃 방의 wallFace는 단일 공간 모드에서 숨긴다(벽 본체는 남는다).
+    return mesh.visible && room.wallIds.includes(mesh.userData.wallId) && (mesh.name !== 'wallFace' || mesh.userData.roomId === solo);
+  }
+  if (!mesh.userData?.roomId) return mesh.visible;
+  if (room) return mesh.userData.roomId === solo && mesh.name !== 'ceiling';
+  return mesh.name === 'ceiling' ? mode === 'fp' : true; // 천장은 1인칭에서만 보인다
+}

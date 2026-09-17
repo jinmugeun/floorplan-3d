@@ -108,8 +108,12 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
     },
     onKey(ev) {
       if (ev.key === 'Escape') {
+        const u = ui.get();
+        if (u.fpPick || u.soloRoom) return false; // 취소할 것이 앱 쪽에 있으면 keymap이 처리한다
+        const had = !!drag || !!u.selection || !!u.splitWall;
         if (drag) { store.cancelTransaction(); drag = null; } // 드래그 중 Esc는 이동을 되돌린다
-        ui.set({ selection: null, splitWall: false }); return true;
+        ui.set({ selection: null, splitWall: false });
+        return had; // 취소할 것이 없으면 소비하지 않는다(앱이 선택 도구로 돌아간다)
       }
       if (ev.ctrlKey && ev.key.toLowerCase() === 'z' && drag) { store.cancelTransaction(); drag = null; return true; } // 드래그 중 undo는 드래그 취소로
       return false;

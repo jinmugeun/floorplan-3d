@@ -43,7 +43,11 @@ function tokenOf(ev) {
 
 export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null, selectAll = () => {}, openSettings = () => {}, zoomIn = () => {}, zoomOut = () => {}, fit = () => {} }) {
   const run = action => {
-    if (action === 'escape') { const u = ui.get(); if (u.fpPick) ui.set({ fpPick: false }); if (u.soloRoom) ui.set({ soloRoom: null }); setTool('select'); return; }
+    if (action === 'escape') {
+      const u = ui.get();
+      if (u.fpPick || u.soloRoom || u.selection || u.splitWall) ui.set({ fpPick: false, soloRoom: null, selection: null, splitWall: false });
+      setTool('select'); return;
+    }
     if (action === 'undo') { store.undo(); return; }
     if (action === 'redo') { store.redo(); return; }
     if (action === 'save') { if (save) save(); return; }
