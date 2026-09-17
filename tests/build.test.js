@@ -28,9 +28,9 @@ test('disposeGroup disposes every geometry and only per-mesh materials', () => {
 
 test('wall material is transparent only when wallOpacity < 1', () => {
   const opaque = buildFloorGroup(floor(), { wallOpacity: 1 }).children.filter(c => c.name === 'wall');
-  expect(opaque.every(c => c.material.transparent === false && c.material.opacity === 1)).toBe(true);
+  expect(opaque.every(c => c.material.transparent === false && c.material.opacity === 1 && c.material.depthWrite === true)).toBe(true);
   const seeThrough = buildFloorGroup(floor(), { wallOpacity: 0.4 }).children.filter(c => c.name === 'wall');
-  expect(seeThrough.every(c => c.material.transparent === true && c.material.opacity === 0.4)).toBe(true);
+  expect(seeThrough.every(c => c.material.transparent === true && c.material.opacity === 0.4 && c.material.depthWrite === false)).toBe(true); // 반투명 면은 깊이를 쓰지 않는다
 });
 
 test('every wall gets a hidden footprint outline that carries its wallId', () => {

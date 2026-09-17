@@ -16,6 +16,7 @@ function surfaceMaterial(kind, view, color = null) {
   if (display === 'transparent' && TRANSPARENT_OPACITY[kind]) opacity = Math.min(opacity, TRANSPARENT_OPACITY[kind]);
   m.opacity = opacity;
   m.transparent = opacity < 1; // 불투명 면은 투명 정렬 패스를 타지 않게 한다
+  m.depthWrite = opacity >= 1; // 반투명 면이 깊이 버퍼를 쓰면 뒤 벽과 z-fighting이 난다
   m.userData.perMesh = true;
   return m;
 }

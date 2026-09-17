@@ -124,7 +124,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
       if (m.name === 'wall') {
         m.visible = !isHidden || seeThrough;
         const o = isHidden && seeThrough ? 0.25 : baseOpacity; // "벽 투명화": 지우지 않고 25%로
-        m.material.opacity = o; m.material.transparent = o < 1;
+        m.material.opacity = o; m.material.transparent = o < 1; m.material.depthWrite = o >= 1;
         continue;
       }
       m.visible = !isHidden; // wallTop, edges
