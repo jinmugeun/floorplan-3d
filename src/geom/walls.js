@@ -1,5 +1,5 @@
 import { uid } from '../state/schema.js';
-import { add, sub, mul, dot, dist, norm, perp, eq } from './vec.js';
+import { add, sub, mul, dot, cross, dist, norm, perp, eq } from './vec.js';
 
 export function makeWall({ a, b, thickness = 200, height = 2300, material = 'paint-white' }) {
   return { id: uid('w'), a: [...a], b: [...b], thickness, height, material };
@@ -32,18 +32,62 @@ export function splitWall(walls, id, point) {
   return walls.flatMap(x => (x.id === id ? [w1, w2] : [x]));
 }
 
+const COLLINEAR_TOL = 0.05; // 두 단위 방향의 외적 절댓값, 약 3도
+
+// x가 점 q에서 다른 벽 d(단위 방향)와 같은 직선 위에 이어져 있는가
+const isCollinearAt = (x, d) => Math.abs(cross(d, wallDir(x))) < COLLINEAR_TOL;
+
 export function moveWallParallel(walls, id, delta) {
   const w = walls.find(x => x.id === id);
   if (!w) return walls;
   const n = wallNormal(w), off = mul(n, dot(delta, n));
+  if (dist(off, [0, 0]) <= 1) return walls.map(x => ({ ...x, a: [...x.a], b: [...x.b] }));
   const na = add(w.a, off), nb = add(w.b, off);
-  return walls.map(x => {
+  const d = wallDir(w);
+  const moves = [[w.a, na], [w.b, nb]];
+  const out = walls.map(x => {
     if (x.id === id) return { ...x, a: na, b: nb };
-    const y = { ...x };
-    if (eq(x.a, w.a)) y.a = na; else if (eq(x.a, w.b)) y.a = nb;
-    if (eq(x.b, w.a)) y.b = na; else if (eq(x.b, w.b)) y.b = nb;
+    const y = { ...x, a: [...x.a], b: [...x.b] };
+    for (const [q, qp] of moves) {
+      if (isCollinearAt(x, d)) continue; // 공선 이웃은 끝점을 옮기지 않는다
+      if (eq(x.a, q)) y.a = [...qp];
+      if (eq(x.b, q)) y.b = [...qp];
+    }
     return y;
   });
+  const connectors = [];
+  for (const [q, qp] of moves) {
+    const hasCollinearNeighbour = walls.some(x => x.id !== id && (eq(x.a, q) || eq(x.b, q)) && isCollinearAt(x, d));
+    if (hasCollinearNeighbour) connectors.push({ ...w, id: uid('w'), a: [...q], b: [...qp] });
+  }
+  return [...out, ...connectors];
+}
+
+// isMoved(point) → boolean인 노드 집합을 delta만큼 평행 이동한다.
+// 한쪽 끝점만 이동하는 바깥 이웃 벽은, delta와 평행하면 그 끝점을 따라 늘어나고/줄어들고,
+// 그렇지 않으면 그대로 둔 채 연결 벽(jog connector)을 노드마다 최대 1개 추가한다.
+export function translateNodes(walls, isMoved, delta) {
+  if (dist(delta, [0, 0]) <= 1) return walls.map(w => ({ ...w, a: [...w.a], b: [...w.b] }));
+  const du = norm(delta);
+  const connectorAt = new Set(); // 이미 연결 벽을 추가한 노드 키
+  const connectors = [];
+  const out = walls.map(w => {
+    const aMoved = isMoved(w.a), bMoved = isMoved(w.b);
+    if (aMoved && bMoved) return { ...w, a: add(w.a, delta), b: add(w.b, delta) };
+    if (!aMoved && !bMoved) return { ...w, a: [...w.a], b: [...w.b] };
+    const parallel = Math.abs(cross(wallDir(w), du)) < COLLINEAR_TOL;
+    if (parallel) {
+      return aMoved ? { ...w, a: add(w.a, delta), b: [...w.b] } : { ...w, a: [...w.a], b: add(w.b, delta) };
+    }
+    const oldPt = aMoved ? w.a : w.b;
+    const key = oldPt.join(',');
+    if (!connectorAt.has(key)) {
+      connectorAt.add(key);
+      connectors.push({ ...w, id: uid('w'), a: [...oldPt], b: add(oldPt, delta) });
+    }
+    return { ...w, a: [...w.a], b: [...w.b] };
+  });
+  return [...out, ...connectors];
 }
 
 export function moveVertex(walls, point, newPoint) {

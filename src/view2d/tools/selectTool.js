@@ -1,6 +1,6 @@
 import { activeFloor } from '../../state/schema.js';
 import { setWalls } from '../../state/floorOps.js';
-import { hitWall, moveWallParallel, moveVertex, transformWalls, splitWall } from '../../geom/walls.js';
+import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall } from '../../geom/walls.js';
 import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
 
@@ -34,7 +34,7 @@ export function createSelectTool({ store, ui, view }) {
       let walls = drag.base;
       if (drag.kind === 'vertex') walls = moveVertex(walls, drag.point, add(drag.point, d));
       else if (drag.kind === 'wall') walls = moveWallParallel(walls, drag.id, d);
-      else if (drag.kind === 'room') { const pts = new Set(); for (const w of walls) if (drag.wallIds.includes(w.id)) { pts.add(w.a.join(',')); pts.add(w.b.join(',')); } walls = transformWalls(walls, q => (pts.has(q.join(',')) ? add(q, d) : q)); }
+      else if (drag.kind === 'room') { const pts = new Set(); for (const w of walls) if (drag.wallIds.includes(w.id)) { pts.add(w.a.join(',')); pts.add(w.b.join(',')); } walls = translateNodes(walls, q => pts.has(q.join(',')), d); }
       drag.moved = true;
       setWalls(store, walls, { record: false });
     },
