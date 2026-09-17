@@ -45,10 +45,13 @@ function nodeKey(p) { return `${Math.round(p[0])},${Math.round(p[1])}`; }
 export function detectRooms(walls, prevRooms = []) {
   const nodes = new Map();
   const getNode = p => { const k = nodeKey(p); if (!nodes.has(k)) nodes.set(k, { p: [Math.round(p[0]), Math.round(p[1])], out: [] }); return nodes.get(k); };
-  const halfEdges = [];
+  const halfEdges = [], seenPairs = new Set();
   for (const w of walls) {
     const A = getNode(w.a), B = getNode(w.b);
     if (A === B) continue;
+    const pairKey = [nodeKey(A.p), nodeKey(B.p)].sort().join('|');
+    if (seenPairs.has(pairKey)) continue; // 같은 두 점을 잇는 중복 벽은 한 번만 센다
+    seenPairs.add(pairKey);
     const h1 = { from: A, to: B, wall: w.id }, h2 = { from: B, to: A, wall: w.id };
     h1.twin = h2; h2.twin = h1;
     A.out.push(h1); B.out.push(h2);

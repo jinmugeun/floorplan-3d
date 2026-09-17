@@ -94,6 +94,11 @@ describe('rooms', () => {
     const rooms = detectRooms(ws);
     expect(rooms).toHaveLength(2);
   });
+  test('detectRooms ignores a duplicate wall on the same two points', () => {
+    const a = rectWalls([0, 0], [4000, 3000], 200);
+    const b = rectWalls([4000, 0], [7000, 3000], 200); // b의 왼쪽 벽이 a의 오른쪽 벽과 겹친다
+    expect(detectRooms([...a, ...b])).toHaveLength(2);
+  });
   test('detectRooms keeps user props by centroid', () => {
     const ws = rectWalls([0, 0], [4000, 3000], 200);
     const first = detectRooms(ws);

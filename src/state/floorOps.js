@@ -1,6 +1,7 @@
 import { activeFloor } from './schema.js';
 import { detectRooms } from '../geom/rooms.js';
 import { transformWalls } from '../geom/walls.js';
+import { eq } from '../geom/vec.js';
 
 const reroom = f => { f.rooms = detectRooms(f.walls, f.rooms); };
 
@@ -8,7 +9,12 @@ export function setWalls(store, walls, opts = {}) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = walls; reroom(f); }, opts);
 }
 export function addWalls(store, walls) {
-  return store.dispatch(d => { const f = activeFloor(d); f.walls.push(...walls); reroom(f); });
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    const same = (w, x) => (eq(x.a, w.a) && eq(x.b, w.b)) || (eq(x.a, w.b) && eq(x.b, w.a));
+    for (const w of walls) if (!f.walls.some(x => same(w, x))) f.walls.push(w); // 겹치는 벽은 추가하지 않는다
+    reroom(f);
+  });
 }
 export function deleteWall(store, id) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => w.id !== id); reroom(f); });

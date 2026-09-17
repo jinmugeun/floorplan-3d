@@ -31,6 +31,13 @@ test('deleteRoom removes its unshared walls', () => {
   deleteRoom(s, activeFloor(s.get()).rooms[0].id);
   expect(activeFloor(s.get()).walls).toHaveLength(0);
 });
+test('addWalls skips a wall coincident with an existing wall', () => {
+  const s = setup();
+  addWalls(s, rectWalls([4000, 0], [7000, 3000], 200));
+  const f = activeFloor(s.get());
+  expect(f.walls).toHaveLength(7);
+  expect(f.rooms).toHaveLength(2);
+});
 test('transformFloor flips walls and rerooms', () => {
   const s = setup();
   transformFloor(s, p => [-p[0], p[1]]);
