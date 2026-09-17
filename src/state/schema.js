@@ -99,6 +99,8 @@ function normalizeFloor(f, index) {
   const base = createFloor(`Floor ${index + 1}`);
   const src = obj(f);
   const walls = arr(src.walls).map(normalizeWall);
+  const items = arr(src.items).map(normalizeItem);
+  const itemIds = new Set(items.map(i => i.id));
   const rooms = arr(src.rooms).filter(r => r && typeof r === 'object').map(r => ({
     ...r, points: arr(r.points).map(p => pair(p)), wallIds: arr(r.wallIds),
     seats: Math.floor(num(r.seats, 0, 0, 999)), matchWallHeight: !!r.matchWallHeight,
@@ -109,8 +111,9 @@ function normalizeFloor(f, index) {
     id: str(src.id, base.id), name: str(src.name, base.name), height: num(src.height, base.height, 2000, 8000),
     slab: num(src.slab, base.slab, 0, 1000),
     walls, rooms: detectRooms(walls, rooms), // 면적 등 파생값을 항상 숫자로 다시 계산한다
-    items: arr(src.items).map(normalizeItem), ducts: arr(src.ducts), guides: arr(src.guides),
-    groups: arr(src.groups).filter(g => g && Array.isArray(g.itemIds)).map(g => ({ id: str(g.id, uid('g')), itemIds: g.itemIds.filter(x => typeof x === 'string') })),
+    items, ducts: arr(src.ducts), guides: arr(src.guides),
+    // 그룹은 실제로 있는 아이템만 가리키고, 2개 미만이면 그룹이 아니다.
+    groups: arr(src.groups).filter(g => g && Array.isArray(g.itemIds)).map(g => ({ id: str(g.id, uid('g')), itemIds: g.itemIds.filter(x => typeof x === 'string' && itemIds.has(x)) })).filter(g => g.itemIds.length >= 2),
     measures: arr(src.measures).filter(m => m && typeof m === 'object' && Array.isArray(m.a) && Array.isArray(m.b)).map(m => ({ id: str(m.id, uid('m')), a: pair(m.a), b: pair(m.b) })),
   };
 }

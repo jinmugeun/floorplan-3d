@@ -106,3 +106,23 @@ describe('아이템 스키마와 액션', () => {
     expect(it.rot).toBeCloseTo(0.5);
   });
 });
+
+test('normalizeProject drops group members that do not exist and groups smaller than two', async () => {
+  const { normalizeProject } = await import('../src/state/schema.js');
+  const p = createEmptyProject();
+  p.floors[0].items = [{ id: 'a', pos: [0.5, 0.25], size: [500, 400, 700] }, { id: 'b', pos: [1000, 0], size: [500, 400, 700] }];
+  p.floors[0].groups = [{ id: 'g1', itemIds: ['a', 'b', 'ghost'] }, { id: 'g2', itemIds: ['a', 'ghost'] }, { id: 'g3', itemIds: [] }];
+  const n = normalizeProject(JSON.parse(JSON.stringify(p)));
+  expect(n.floors[0].groups).toEqual([{ id: 'g1', itemIds: ['a', 'b'] }]);
+});
+
+test('duplicateItems forwards opts so it can sit inside a transaction', () => {
+  const s = createStore(createEmptyProject());
+  const id = addItem(s, createItem(productById('sofa-3'), { pos: [100.5, 200.25] }));
+  s.beginTransaction();
+  duplicateItems(s, [id], { delta: [300, 0] }, { record: false });
+  s.endTransaction();
+  expect(activeFloor(s.get()).items).toHaveLength(2);
+  s.undo();
+  expect(activeFloor(s.get()).items).toHaveLength(1); // 트랜잭션 하나 = undo 한 단계
+});

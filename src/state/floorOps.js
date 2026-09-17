@@ -239,8 +239,8 @@ export function deleteItems(store, ids, opts = {}) {
   }, opts);
 }
 // 새 id를 먼저 만들어 돌려준다(dispatch는 상태를 복제하므로 안에서 만든 id를 밖에서 알 수 없다).
-export function duplicateItems(store, ids, { delta = [0, 0] } = {}) {
+export function duplicateItems(store, ids, { delta = [0, 0] } = {}, opts) {
   const copies = itemsOf(store.get(), ids).map(i => normalizeItem({ ...i, id: uid('i'), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] }));
-  store.dispatch(d => { activeFloor(d).items.push(...copies.map(c => structuredClone(c))); });
+  store.dispatch(d => { activeFloor(d).items.push(...copies.map(c => structuredClone(c))); }, opts);
   return copies.map(c => c.id);
 }
