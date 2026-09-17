@@ -74,7 +74,7 @@ export function applyNumber(store, sel, name, v) {
 export function createPropsPanel(container, store, ui, { deleteSelection = () => {} } = {}) {
   function render() {
     const active = document.activeElement;
-    if (active?.type === 'color' && container.contains(active)) return; // 색 선택기를 쓰는 중에는 다시 그리지 않는다(입력이 끊긴다)
+    if (colorTx && active?.type === 'color' && container.contains(active)) return; // 색을 끌고 있는 동안만 다시 그리지 않는다(입력이 끊긴다)
     renderBody();
     const details = container.querySelector('details');
     if (details) details.addEventListener('toggle', () => { detailsOpen = details.open; });
@@ -155,6 +155,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (sel?.type === 'room') updateRoom(store, sel.id, { [name]: value }, opts);
   };
   let colorTx = false; // 열려 있는 색 드래그 트랜잭션
+  // 선택기가 change 없이 닫히면(취소·요소 제거) 열린 트랜잭션을 여기서 닫고 미뤄 둔 다시 그리기를 한다.
+  const onFocusOut = ev => { if (ev.target?.type === 'color' && colorTx) { store.endTransaction(); colorTx = false; render(); } };
   const onInput = ev => {
     const el = ev.target;
     if (el.type !== 'color' || !el.name) return;
@@ -209,8 +211,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
     if (ev.target.name === 'delete' && ui.get().selection) deleteSelection();
   };
-  container.addEventListener('change', onChange); container.addEventListener('input', onInput); container.addEventListener('click', onClick);
+  container.addEventListener('change', onChange); container.addEventListener('input', onInput); container.addEventListener('click', onClick); container.addEventListener('focusout', onFocusOut);
   const unsubs = [store.subscribe(render), ui.subscribe(render)];
   render();
-  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('change', onChange); container.removeEventListener('input', onInput); container.removeEventListener('click', onClick); } };
+  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('change', onChange); container.removeEventListener('input', onInput); container.removeEventListener('click', onClick); container.removeEventListener('focusout', onFocusOut); } };
 }

@@ -1,7 +1,6 @@
 import { KEYMAP } from './keymap.js';
 import { esc } from '../util/html.js';
 
-
 function keymapRows() {
   const groups = [...new Set(KEYMAP.map(e => e.group))];
   return groups.map(g => KEYMAP.filter(e => e.group === g)

@@ -288,3 +288,19 @@ test('applyNumber, lenField, withUnit and readLen work standalone', () => {
   input.value = 'nope';
   expect(readLen(input, 'ftin')).toBeNull();
 });
+
+test('a colour drag abandoned without change closes its transaction on focusout', () => {
+  document.body.innerHTML = '';
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const el = document.createElement('div'); document.body.appendChild(el); createPropsPanel(el, store, ui);
+  const w = activeFloor(store.get()).walls[0];
+  ui.set({ selection: { type: 'wall', id: w.id } });
+  const input = el.querySelector('input[name="colorOut"]');
+  input.focus();
+  input.value = '#123456'; input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.blur(); input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  expect(activeFloor(store.get()).walls[0].colorOut).toBe('#123456');
+  store.undo(); // 트랜잭션이 focusout에서 닫혔으므로 한 번의 undo로 되돌아간다
+  expect(activeFloor(store.get()).walls[0].colorOut).toBe(w.colorOut);
+});

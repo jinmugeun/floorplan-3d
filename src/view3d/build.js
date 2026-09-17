@@ -40,7 +40,7 @@ function edgeWall(room, walls, i) {
 // 3D 씬을 다시 만들어야 하는지 가리는 서명. buildFloorGroup이 읽는 값만 담는다:
 // 여기 없는 값(sun, cameraPreset, projection, v3 …)이 바뀌어도 씬을 다시 만들지 않는다.
 export function sceneSignature(state) {
-  const f = activeFloor(state);
+  const f = activeFloor(state) ?? { walls: [], rooms: [] }; // 활성 층이 없어도 구독자가 예외를 던지지 않게
   const v = state.view ?? {};
   return JSON.stringify([f.walls, f.rooms, state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity]);
 }

@@ -161,3 +161,13 @@ test('length option labels carry the active unit and the lock button says what a
   expect(store.get().background.locked).toBe(false);
   expect(root.querySelector('#btnBgLock').textContent).toBe('잠금');
 });
+
+test('switching units re-renders the option bar label', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  shell.setOptionBar({ name: 'wall', opts: { thickness: 200, snap: true } });
+  expect(root.querySelector('#optionBar').textContent).toContain('두께 (mm)');
+  root.querySelector('[data-units="ftin"]').click();
+  expect(root.querySelector('#optionBar').textContent).toContain('두께 (ft·in)');
+});

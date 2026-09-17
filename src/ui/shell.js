@@ -154,8 +154,11 @@ export function createShell(root, { store, ui }) {
     if (pop.isOpen() && popKind === 'view') refreshPopover();
     strip.hidden = !store.get().background || s.mode !== '2d'; // 모드가 바뀌면 이미지 세팅 스트립도 따라간다
   });
+  let lastUnits = null;
   const syncTop = s => {
     q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo();
+    const u = s.units ?? 'mm';
+    if (u !== lastUnits) { lastUnits = u; if (currentTool) setOptionBar(currentTool); } // 단위가 바뀌면 옵션 바 라벨도 다시 그린다(바뀔 때만: 타이핑 중 입력을 지우지 않게)
     if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
     root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
     q('#btnLock').classList.toggle('on', !!s.view.lockPlan);
