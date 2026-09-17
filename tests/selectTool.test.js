@@ -58,6 +58,17 @@ test('a finished drag survives the next plain click and stays one undo step', ()
   expect(store.canUndo()).toBe(false);
 });
 
+test('ctrl+z during a drag cancels the drag instead of undoing history', () => {
+  const { store, t } = setup();
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  t.onPointerDown([2000, 0]); t.onPointerMove([2000, -600]);
+  expect(t.onKey({ key: 'z', ctrlKey: true })).toBe(true);
+  t.onPointerUp([2000, -600]);
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(0);
+  expect(activeFloor(store.get()).walls).toHaveLength(4); // setup()의 벽은 그대로
+  expect(t.onKey({ key: 'z', ctrlKey: true })).toBe(false); // 드래그가 없으면 소비하지 않는다
+});
+
 test('escape during a drag reverts the movement', () => {
   const { store, t } = setup();
   const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);

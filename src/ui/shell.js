@@ -80,6 +80,7 @@ export function createShell(root, { store, ui }) {
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
     els.banner.hidden = !s.fpPick; if (s.fpPick) els.banner.textContent = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소';
   });
-  store.subscribe(s => { q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo(); if (q('#projectName').value !== s.name) q('#projectName').value = s.name; });
+  const syncTop = s => { q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo(); if (q('#projectName').value !== s.name) q('#projectName').value = s.name; };
+  store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, toast };
 }

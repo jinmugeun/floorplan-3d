@@ -44,6 +44,7 @@ export function createSelectTool({ store, ui, view }) {
         if (drag) { store.cancelTransaction(); drag = null; } // 드래그 중 Esc는 이동을 되돌린다
         ui.set({ selection: null, splitWall: false }); return true;
       }
+      if (ev.ctrlKey && ev.key.toLowerCase() === 'z' && drag) { store.cancelTransaction(); drag = null; return true; } // 드래그 중 undo는 드래그 취소로
       return false;
     },
     draw(ctx, v) {

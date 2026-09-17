@@ -9,6 +9,7 @@ import { createWallTool } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { createShell } from './ui/shell.js';
+import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
 
@@ -51,15 +52,11 @@ document.getElementById('btnRedo').addEventListener('click', () => store.redo())
 document.getElementById('btnFit').addEventListener('click', () => view.fit());
 document.getElementById('projectName').addEventListener('change', ev => store.dispatch(d => { d.name = ev.target.value; }));
 
-window.addEventListener('keydown', ev => {
-  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target.tagName)) return;
-  if (ev.ctrlKey && ev.key.toLowerCase() === 'z') { ev.preventDefault(); ev.shiftKey ? store.redo() : store.undo(); return; }
-  if (view.tool?.onKey?.(ev)) { view.requestRender(); return; }
-  const k = ev.key.toLowerCase();
-  if (k === 'f') setTool('room'); else if (k === 'l') setTool('wall'); else if (k === 'd') setTool('delete'); else if (k === 'b') openBackgroundDialog({ store });
-  else if (k === 'escape') { if (ui.get().fpPick) ui.set({ fpPick: false }); setTool('select'); }
-  else if (['1', '2', '3', '4'].includes(k)) setMode({ 1: '2d', 2: 'plan', 3: 'iso', 4: 'fp' }[k]);
-  else if (k === 'delete' || k === 'backspace') { const s = ui.get().selection; if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); } if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); } }
-});
+function deleteSelection() {
+  const s = ui.get().selection;
+  if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); }
+  if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); }
+}
+window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection }));
 setTool('select'); view.fit(); minimap.fit(500);
 window.__app = { store, ui, view, view3d };
