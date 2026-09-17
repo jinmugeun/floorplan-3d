@@ -1,0 +1,45 @@
+import { KEYMAP } from './keymap.js';
+
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function keymapRows() {
+  const groups = [...new Set(KEYMAP.map(e => e.group))];
+  return groups.map(g => KEYMAP.filter(e => e.group === g)
+    .map((e, i) => `<tr><th scope="row">${i === 0 ? esc(g) : ''}</th><td>${esc(e.label)}</td><td>${e.keys.map(k => `<kbd>${esc(k)}</kbd>`).join(' ')}</td></tr>`).join('')).join('');
+}
+
+export function openSettingsDialog({ store, onClose = () => {} }) {
+  const s = store.get().settings;
+  const root = document.createElement('div');
+  root.className = 'modal';
+  root.innerHTML = `<div class="modal-card">
+    <header><h2>설정</h2><button type="button" name="close" aria-label="닫기">✕</button></header>
+    <div class="tabs"><button type="button" data-tab="general" class="on">일반</button><button type="button" data-tab="keys">단축키</button></div>
+    <section id="tabGeneral">
+      <label class="field"><span>언어</span><select name="language" disabled><option value="ko" selected>한국어</option></select></label>
+      <label class="field"><span>배경</span><input type="color" name="background" value="${esc(s.background)}"></label>
+      <label class="check"><input type="checkbox" name="pyeong" ${s.pyeong ? 'checked' : ''}> 평 면적 표기</label>
+      <label class="check"><input type="checkbox" name="showUnit" ${s.showUnit ? 'checked' : ''}> 치수 단위 표시</label>
+      <p class="hint">자동 저장: 5분 간격으로 브라우저에 저장됩니다.</p>
+    </section>
+    <section id="tabKeys" hidden>
+      <table id="keymapTable"><thead><tr><th>구분</th><th>기능</th><th>키</th></tr></thead><tbody>${keymapRows()}</tbody></table>
+    </section>
+  </div>`;
+  document.body.appendChild(root);
+  const q = sel => root.querySelector(sel);
+  const close = () => { root.remove(); onClose(); };
+  q('[name="close"]').onclick = close;
+  root.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+    root.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b));
+    q('#tabGeneral').hidden = b.dataset.tab !== 'general';
+    q('#tabKeys').hidden = b.dataset.tab !== 'keys';
+  }));
+  // 설정은 프로젝트에 저장하지만 되돌릴 단계는 만들지 않는다.
+  root.addEventListener('change', ev => {
+    const el = ev.target, name = el.name;
+    if (!['pyeong', 'showUnit', 'background'].includes(name)) return;
+    store.dispatch(d => { d.settings[name] = el.type === 'checkbox' ? el.checked : el.value; }, { record: false });
+  });
+  return { close };
+}

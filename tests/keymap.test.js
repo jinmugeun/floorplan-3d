@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { test, expect, vi } from 'vitest';
-import { createKeyHandler } from '../src/ui/keymap.js';
+import { createKeyHandler, KEYMAP } from '../src/ui/keymap.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
@@ -79,4 +79,31 @@ test('Delete calls deleteSelection', () => {
   const key = (key, extra = {}) => h({ key, target: document.body, preventDefault() {}, ...extra });
   key('Delete');
   expect(deleteSelection).toHaveBeenCalledTimes(1);
+});
+
+test('KEYMAP is a complete, well-formed table', () => {
+  expect(KEYMAP.length).toBeGreaterThanOrEqual(20);
+  for (const e of KEYMAP) {
+    expect(typeof e.group).toBe('string');
+    expect(typeof e.label).toBe('string');
+    expect(Array.isArray(e.keys) && e.keys.length > 0).toBe(true);
+  }
+  const labels = KEYMAP.map(e => e.label);
+  expect(labels).toContain('벽 그리기');
+  expect(labels).toContain('전체 선택');
+  expect(labels).toContain('설정');
+  expect(KEYMAP.find(e => e.label === '벽 그리기').keys).toEqual(['L']);
+  expect(KEYMAP.some(e => e.keys.includes('Shift+클릭') && e.action === null)).toBe(true);
+  expect(new Set(KEYMAP.map(e => e.group)).size).toBeGreaterThanOrEqual(4);
+});
+
+test('new actions route: Ctrl+A selects all, Ctrl+comma opens settings, +/- zoom, 0 fits', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn(), fit: vi.fn() };
+  const calls = { selectAll: 0, settings: 0, zoomIn: 0, zoomOut: 0, fit: 0 };
+  const h = createKeyHandler({ store, ui, view, setTool: vi.fn(), setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn(),
+    selectAll: () => calls.selectAll++, openSettings: () => calls.settings++, zoomIn: () => calls.zoomIn++, zoomOut: () => calls.zoomOut++, fit: () => calls.fit++ });
+  const key = (k, extra = {}) => h({ key: k, target: document.body, preventDefault() {}, ...extra });
+  key('a', { ctrlKey: true }); key(',', { ctrlKey: true }); key('+'); key('-'); key('0');
+  expect(calls).toEqual({ selectAll: 1, settings: 1, zoomIn: 1, zoomOut: 1, fit: 1 });
 });

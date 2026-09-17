@@ -13,7 +13,7 @@ export function createShell(root, { store, ui }) {
     <header id="topbar">
       <div class="group"><button id="btnUndo" aria-label="실행 취소">↶</button><button id="btnRedo" aria-label="다시 실행">↷</button></div>
       <div class="group"><input id="projectName" aria-label="프로젝트 이름" value="${esc(store.get().name)}"><span id="savedAt" class="muted">저장 이력 없음</span></div>
-      <div class="group"><button id="btnCapture" data-action="capture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
+      <div class="group"><button id="btnSettings" aria-label="설정">설정</button><button id="btnCapture" data-action="capture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
     </header>
     <nav id="rail" aria-label="작업 영역">
       <button data-panel="draw" class="on"><span>도면 그리기</span></button>

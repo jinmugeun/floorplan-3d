@@ -79,6 +79,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
+    ctx.fillStyle = state.settings?.background ?? '#f3f4f6'; ctx.fillRect(0, 0, w, h);
     const solo = ui.get().soloRoom ?? null;
     const soloRoom = solo ? f.rooms.find(r => r.id === solo) : null;
     const soloWalls = soloRoom ? new Set(soloRoom.wallIds) : null;

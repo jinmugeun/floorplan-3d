@@ -16,6 +16,7 @@ import { createShell } from './ui/shell.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
+import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
 
@@ -82,6 +83,9 @@ const zoom = factor => (ui.get().mode === '2d' ? view.zoomBy(factor) : view3d.zo
 document.getElementById('btnZoomIn').addEventListener('click', () => zoom(1.25));
 document.getElementById('btnZoomOut').addEventListener('click', () => zoom(1 / 1.25));
 document.getElementById('projectName').addEventListener('change', ev => store.dispatch(d => { d.name = ev.target.value; }));
+const selectAll = () => { const ids = activeFloor(store.get()).walls.map(w => w.id); ui.set({ selection: ids.length ? { type: 'multi', kind: 'wall', ids } : null }); };
+const openSettings = () => openSettingsDialog({ store });
+document.getElementById('btnSettings').addEventListener('click', openSettings);
 
 function deleteSelection() {
   const s = ui.get().selection;
@@ -125,6 +129,6 @@ canvasWrap.addEventListener('drop', async ev => {
   }
 });
 
-window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click() }));
+window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: () => view.fit() }));
 setTool('select'); view.fit(); minimap.fit(500);
 if (import.meta.env.DEV) window.__app = { store, ui, view, view3d }; // 브라우저 검증용, 개발 빌드에서만
