@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
-import { itemCorners, itemAABB, toLocal, pointInItem, wallAxis, placeOnWall, nearestWallPlacement, normDeg } from '../src/geom/items.js';
+import { itemCorners, itemAABB, toLocal, pointInItem, wallAxis, placeOnWall, nearestWallPlacement, normDeg, snapItemPos } from '../src/geom/items.js';
 import { pointInPolygon } from '../src/geom/rooms.js';
-import { makeWall } from '../src/geom/walls.js';
+import { makeWall, rectWalls } from '../src/geom/walls.js';
 
 const item = (patch = {}) => ({ id: 'i1', pos: [0, 0], z: 0, rot: 0, size: [1200, 600, 700], attach: 'floor', ...patch });
 
@@ -77,5 +77,32 @@ describe('아이템 기하', () => {
     expect(other.wallId).toBe(walls[1].id);
     expect(other.side).toBe(-1);
     expect(other.rot).toBe(180);   // 아래쪽 벽의 안쪽 면을 보도록 180° 돌아간다
+  });
+});
+
+describe('아이템 스냅', () => {
+  test('뒷면이 벽 안쪽 면에 붙는다(소수 좌표)', () => {
+    const walls = rectWalls([0, 0], [4000, 3000], 200);
+    const it = item({ pos: [2000, 480.5], size: [1000, 600, 700] });
+    const r = snapItemPos(it, { walls, items: [] });
+    expect(r.pos[1]).toBeCloseTo(400);   // AABB 위 모서리 180.5 → 벽 안쪽 면 100
+    expect(r.pos[0]).toBeCloseTo(2000);
+    expect(r.guides).toEqual([{ type: 'h', y: 100 }]);
+  });
+
+  test('다른 아이템의 중심선에 맞고 노란 가이드를 돌려준다', () => {
+    const other = item({ id: 'o', pos: [2000, 2000], size: [800, 400, 700] });
+    const it = item({ pos: [1990.4, 1000], size: [1000, 600, 700] });
+    const r = snapItemPos(it, { walls: [], items: [other] });
+    expect(r.pos[0]).toBeCloseTo(2000);
+    expect(r.guides).toEqual([{ type: 'v', x: 2000 }]);
+  });
+
+  test('150mm보다 멀면 스냅하지 않는다', () => {
+    const walls = rectWalls([0, 0], [4000, 3000], 200);
+    const it = item({ pos: [2000, 1500.25], size: [1000, 600, 700] });
+    const r = snapItemPos(it, { walls, items: [] });
+    expect(r.pos).toEqual([2000, 1500.25]);
+    expect(r.guides).toEqual([]);
   });
 });

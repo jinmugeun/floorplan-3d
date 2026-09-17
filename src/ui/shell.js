@@ -136,12 +136,14 @@ export function createShell(root, { store, ui }) {
       if (k === 'direction') return `<label>${label} <select name="${k}"><option value="v" ${v === 'v' ? 'selected' : ''}>세로</option><option value="h" ${v === 'h' ? 'selected' : ''}>가로</option></select></label>`;
       return `<label>${label} <input type="text" name="${k}" value="${v}"></label>`;
     }).join('') : '';
-    if (hint) { const span = document.createElement('span'); span.className = 'hint'; span.textContent = hint; els.optionBar.appendChild(span); }
+    if (hint) { const span = document.createElement('span'); span.className = 'hint'; span.dataset.action = 'hintCancel'; span.textContent = hint; els.optionBar.appendChild(span); }
   }
   els.optionBar.addEventListener('change', ev => {
     const el = ev.target, k = el.name; if (!currentTool || !k) return;
     currentTool.opts[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
   });
+  // 안내 문구를 누르면 도구가 스스로 취소한다(배치 도구의 "메시지를 누르면 취소").
+  els.optionBar.addEventListener('click', ev => { if (ev.target.dataset.action === 'hintCancel') currentTool?.onHintClick?.(); });
 
   ui.subscribe(s => {
     root.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === s.tool));

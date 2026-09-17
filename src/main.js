@@ -11,6 +11,7 @@ import { createWallTool, WALL_TOOL_DEFAULTS } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
 import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.js';
 import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
+import { createPlaceTool } from './view2d/tools/placeTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
@@ -34,7 +35,8 @@ const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.se
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 createPropsPanel(shell.els.props, store, ui, { deleteSelection });
-const library = createLibraryPanel(shell.els.library, { store, ui, onPick: p => { console.info('pick', p.id); } }); // 배치 연결은 Task 5에서
+function replaceProductOf() {} // Task 11에서 채운다
+const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
 store.subscribe(s => {
   const u = ui.get();
@@ -62,6 +64,7 @@ function createDeleteTool() {
 }
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS } };
+let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
   select: () => createSelectTool({ store, ui, view, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
   room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
@@ -69,8 +72,11 @@ const tools = {
   delete: createDeleteTool,
   guide: () => createGuideTool({ store, view, opts: toolOpts.guide }),
   measure: () => createMeasureTool({ store, opts: toolOpts.measure }),
+  place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select') }),
 };
 function setTool(name) { const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
+// 라이브러리에서 제품을 고르면 배치 도구를 켠다(오늘의집과 같은 동작: 한 번 배치하면 선택 도구로 돌아간다).
+function startPlace(product) { pendingProduct = product; setTool('place'); }
 function setMode(mode, opts) {
   if (mode === 'fp') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ fpPick: true, mode: '2d' }); return; }
   ui.set({ mode, fpPick: false });

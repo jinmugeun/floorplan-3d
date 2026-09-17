@@ -65,3 +65,35 @@ export function nearestWallPlacement(walls, p, size, maxDist = WALL_ATTACH_DIST,
   }
   return best;
 }
+
+// 아이템을 벽면(뒷면 맞춤)과 다른 아이템의 모서리·중심선에 맞춘다.
+// 축에 평행한 벽만 후보로 삼는다(비스듬한 벽에는 벽 부착 경로가 따로 있다).
+// 회전한 아이템은 AABB 기준으로 맞춘다.
+export function snapItemPos(item, { walls = [], items = [], tol = ITEM_SNAP_TOL } = {}) {
+  const box = itemAABB(item);
+  const vs = [], hs = [];
+  for (const w of walls) {
+    const h = w.thickness / 2;
+    if (Math.abs(w.a[0] - w.b[0]) < 1) vs.push(w.a[0] - h, w.a[0] + h);
+    if (Math.abs(w.a[1] - w.b[1]) < 1) hs.push(w.a[1] - h, w.a[1] + h);
+  }
+  for (const o of items) {
+    const b = itemAABB(o);
+    vs.push(b.min[0], b.max[0], (b.min[0] + b.max[0]) / 2);
+    hs.push(b.min[1], b.max[1], (b.min[1] + b.max[1]) / 2);
+  }
+  const pick = (lines, axis) => {
+    const edges = [box.min[axis], box.max[axis], (box.min[axis] + box.max[axis]) / 2];
+    let best = null;
+    for (const line of lines) for (const e of edges) {
+      const d = line - e;
+      if (Math.abs(d) <= tol && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, line };
+    }
+    return best;
+  };
+  const bx = pick(vs, 0), by = pick(hs, 1);
+  const guides = [];
+  if (bx) guides.push({ type: 'v', x: bx.line });
+  if (by) guides.push({ type: 'h', y: by.line });
+  return { pos: [item.pos[0] + (bx ? bx.d : 0), item.pos[1] + (by ? by.d : 0)], guides };
+}
