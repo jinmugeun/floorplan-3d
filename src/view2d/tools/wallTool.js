@@ -3,7 +3,7 @@ import { addWalls } from '../../state/floorOps.js';
 import { makeWall, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
-import { fmtLen } from '../../util/units.js';
+import { fmtLen, parseLen } from '../../util/units.js';
 
 export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
 
@@ -35,10 +35,14 @@ export function createWallTool({ store, onDone = () => {}, opts: given = null })
     onKey(ev) {
       if (ev.key === 'Escape') return finish(); // 그리던 벽이 없으면 소비하지 않는다
       if (!last()) return false;
-      if (/^[0-9]$/.test(ev.key)) { typed += ev.key; return true; }
+      if (/^[0-9.'" ]$/.test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
       if (ev.key === 'Enter') {
-        if (typed) { const d = norm(sub(cursor, last())); const e = add(last(), mul(d, Number(typed))); if (addSegment(last(), e)) points.push(e); typed = ''; }
+        if (typed) {
+          const len = parseLen(typed, store.get().units);
+          if (len != null && len > 0) { const d = norm(sub(cursor, last())); const e = add(last(), mul(d, len)); if (addSegment(last(), e)) points.push(e); typed = ''; }
+          // 파싱 실패(null) 또는 0 이하면 Enter를 무시한다 — typed는 그대로 두고 사용자가 고칠 수 있게 한다.
+        }
         else finish();
         return true;
       }

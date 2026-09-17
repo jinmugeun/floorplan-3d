@@ -34,6 +34,28 @@ test('typed length adds a wall along current direction', () => {
   expect(w.b).toEqual([2500, 0]);
 });
 
+test('typed length in ftin units parses feet/inches', () => {
+  const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  const t = createWallTool({ store, onDone() {} });
+  t.onPointerDown([0, 0]); t.onPointerMove([1000, 0]);
+  for (const c of "10'") t.onKey(key(c));
+  t.onKey(key('Enter'));
+  const w = activeFloor(store.get()).walls[0];
+  const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+  expect(len).toBeCloseTo(3048, 1);
+});
+
+test('typed length in mm commits fractional values', () => {
+  const store = createStore(createEmptyProject());
+  const t = createWallTool({ store, onDone() {} });
+  t.onPointerDown([0, 0]); t.onPointerMove([1000, 0]);
+  for (const c of '3400.5') t.onKey(key(c));
+  t.onKey(key('Enter'));
+  const w = activeFloor(store.get()).walls[0];
+  expect(w.b[0]).toBeCloseTo(3400.5, 1);
+});
+
 test('each wall is one undo step', () => {
   const store = createStore(createEmptyProject());
   const t = createWallTool({ store, onDone() {} });

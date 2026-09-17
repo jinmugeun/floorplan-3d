@@ -49,6 +49,21 @@ test('second click snaps to existing endpoints', () => {
   expect(f.walls.some(w => w.a[1] === 3000 && w.b[1] === 3000 && Math.max(w.a[0], w.b[0]) === 7000)).toBe(true);
 });
 
+test('typed dimensions in ftin units parse feet/inches', () => {
+  const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  const t = createRoomTool({ store, onDone() {} });
+  t.onPointerDown([0, 0]); t.onPointerMove([1000, 1000]);
+  for (const c of "12' 6\"") t.onKey(key(c));
+  t.onKey(key('Tab'));
+  for (const c of "8'") t.onKey(key(c));
+  t.onKey(key('Enter'));
+  const f = activeFloor(store.get());
+  const xs = f.walls.flatMap(w => [w.a[0], w.b[0]]), ys = f.walls.flatMap(w => [w.a[1], w.b[1]]);
+  expect(Math.max(...xs)).toBeCloseTo(3810, 1);
+  expect(Math.max(...ys)).toBeCloseTo(2438.4, 1);
+});
+
 test('a given opts object is used and exposed so option edits persist across tool switches', () => {
   const store = createStore(createEmptyProject());
   const opts = { thickness: 100, snap: true };

@@ -2,7 +2,7 @@ import { activeFloor } from '../../state/schema.js';
 import { addWalls } from '../../state/floorOps.js';
 import { rectWalls, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
-import { fmtLen } from '../../util/units.js';
+import { fmtLen, parseLen } from '../../util/units.js';
 
 export const ROOM_TOOL_DEFAULTS = { thickness: 200, snap: true };
 
@@ -13,9 +13,10 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
   const reset = () => { start = null; cur = null; typed = { w: '', h: '', field: 'w' }; };
   const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, walls: f.walls, snap: opts.snap }).point; };
   const dims = () => {
+    const units = store.get().units;
     const sx = Math.sign(cur[0] - start[0]) || 1, sy = Math.sign(cur[1] - start[1]) || 1;
-    const w = typed.w ? Number(typed.w) : Math.abs(cur[0] - start[0]);
-    const h = typed.h ? Number(typed.h) : Math.abs(cur[1] - start[1]);
+    const w = typed.w ? (parseLen(typed.w, units) ?? 0) : Math.abs(cur[0] - start[0]);
+    const h = typed.h ? (parseLen(typed.h, units) ?? 0) : Math.abs(cur[1] - start[1]);
     return { w, h, end: [start[0] + sx * w, start[1] + sy * h] };
   };
   const commit = end => {
@@ -32,7 +33,7 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
       // 그리던 사각형이 있을 때만 Esc를 소비한다. 없으면 앱이 선택 도구로 돌아가게 둔다.
       if (ev.key === 'Escape') { const had = !!start; reset(); return had; }
       if (!start) return false;
-      if (/^[0-9]$/.test(ev.key)) { typed[typed.field] += ev.key; return true; }
+      if (/^[0-9.'" ]$/.test(ev.key)) { typed[typed.field] += ev.key; return true; }
       if (ev.key === 'Backspace') { typed[typed.field] = typed[typed.field].slice(0, -1); return true; }
       if (ev.key === 'Tab') { ev.preventDefault(); typed.field = typed.field === 'w' ? 'h' : 'w'; return true; }
       if (ev.key === 'Enter') { commit(dims().end); return true; }
