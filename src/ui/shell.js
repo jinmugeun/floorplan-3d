@@ -1,6 +1,6 @@
 import { toast } from './toast.js';
 
-const LABELS = { reference: '기준선', thickness: '두께 (mm)', snap: '스냅 모드', ortho: '직교 모드' };
+const LABELS = { reference: '기준선', thickness: '두께 (mm)', snap: '스냅 모드', ortho: '직교 모드', direction: '방향' };
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
 
 export function createShell(root, { store, ui }) {
@@ -24,6 +24,9 @@ export function createShell(root, { store, ui }) {
         <button data-tool="delete">삭제 <kbd>D</kbd></button>
         <h3>도면 반전 / 회전</h3>
         <div class="row"><button data-action="flipH">좌우 반전</button><button data-action="flipV">상하 반전</button><button data-action="rotL">↺ 90°</button><button data-action="rotR">↻ 90°</button></div>
+        <h3>보조선 그리기</h3>
+        <button data-tool="guide">보조선 <kbd>E</kbd></button>
+        <button data-tool="measure">측정 <kbd>M</kbd></button>
         <h3>일반</h3>
         <button data-tool="select">선택 <kbd>Esc</kbd></button>
       </section>
@@ -66,6 +69,7 @@ export function createShell(root, { store, ui }) {
       if (typeof v === 'boolean') return `<label><input type="checkbox" name="${k}" ${v ? 'checked' : ''}> ${label}</label>`;
       if (typeof v === 'number') return `<label>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
       if (k === 'reference') return `<label>${label} <select name="${k}">${REF.map(([val, l]) => `<option value="${val}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
+      if (k === 'direction') return `<label>${label} <select name="${k}"><option value="v" ${v === 'v' ? 'selected' : ''}>세로</option><option value="h" ${v === 'h' ? 'selected' : ''}>가로</option></select></label>`;
       return `<label>${label} <input type="text" name="${k}" value="${v}"></label>`;
     }).join('');
   }

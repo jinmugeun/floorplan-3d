@@ -17,8 +17,8 @@ function setup(toolConsumes = false) {
 test('a consuming tool blocks app keys; otherwise app keys route', () => {
   const a = setup(true); a.key('f'); a.key('z', { ctrlKey: true });
   expect(a.calls.setTool).toEqual([]); expect(a.view.requestRender).toHaveBeenCalledTimes(2);
-  const b = setup(false); b.key('f'); b.key('l'); b.key('d'); b.key('b'); b.key('2'); b.key('4'); b.key('Delete'); b.key('s', { ctrlKey: true });
-  expect(b.calls.setTool).toEqual(['room', 'wall', 'delete']); expect(b.calls.bg).toBe(1);
+  const b = setup(false); b.key('f'); b.key('l'); b.key('d'); b.key('e'); b.key('m'); b.key('b'); b.key('2'); b.key('4'); b.key('Delete'); b.key('s', { ctrlKey: true });
+  expect(b.calls.setTool).toEqual(['room', 'wall', 'delete', 'guide', 'measure']); expect(b.calls.bg).toBe(1);
   expect(b.calls.setMode).toEqual(['plan', 'fp']); expect(b.calls.del).toBe(1); expect(b.calls.save).toBe(1);
 });
 

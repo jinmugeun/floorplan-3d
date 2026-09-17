@@ -7,6 +7,8 @@ import { createView2D } from './view2d/view2d.js';
 import { createRoomTool } from './view2d/tools/roomTool.js';
 import { createWallTool } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
+import { createGuideTool } from './view2d/tools/guideTool.js';
+import { createMeasureTool } from './view2d/tools/measureTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { createShell } from './ui/shell.js';
 import { createKeyHandler } from './ui/keymap.js';
@@ -30,6 +32,8 @@ const tools = {
   room: () => createRoomTool({ store, onDone: () => setTool('select') }),
   wall: () => createWallTool({ store, onDone: () => setTool('select') }),
   delete: createDeleteTool,
+  guide: () => createGuideTool({ store, view }),
+  measure: () => createMeasureTool({ store }),
 };
 function setTool(name) { const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
 function setMode(mode, opts) {

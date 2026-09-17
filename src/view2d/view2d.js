@@ -78,6 +78,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
       if (state.view.labels && labels) { const c = centroid(r.points); if (r.name) label(r.name, [c[0], c[1] - 250], { size: 13, color: COLORS.dim }); label(`${r.area.toFixed(1)}m²`, c); }
     }
+    if (!readonly) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
     for (const wl of f.walls) poly(wallPolygon(wl, f.walls), sel?.type === 'wall' && sel.id === wl.id ? COLORS.wallSel : COLORS.wall, null);
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
     if (tool && !readonly) tool.draw(ctx, api);

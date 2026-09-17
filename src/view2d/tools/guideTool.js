@@ -1,0 +1,28 @@
+import { activeFloor } from '../../state/schema.js';
+import { uid } from '../../state/schema.js';
+
+export function createGuideTool({ store, view }) {
+  const opts = { direction: 'v' };
+  let typed = '', lastId = null;
+  const px = n => n / view.camera.scale;
+  return {
+    name: 'guide', opts,
+    onPointerDown(p) {
+      const f = activeFloor(store.get());
+      const hit = f.guides.find(g => (g.type === 'v' ? Math.abs(g.pos - p[0]) : Math.abs(g.pos - p[1])) <= px(6));
+      if (hit) { store.dispatch(d => { const fl = activeFloor(d); fl.guides = fl.guides.filter(g => g.id !== hit.id); }); lastId = null; return; }
+      const g = { id: uid('g'), type: opts.direction, pos: Math.round(opts.direction === 'v' ? p[0] : p[1]) };
+      store.dispatch(d => { activeFloor(d).guides.push(g); }); lastId = g.id; typed = '';
+    },
+    onPointerMove() {}, onPointerUp() {},
+    onKey(ev) {
+      if (ev.key === 'Escape') { typed = ''; lastId = null; return false; }
+      if (/^[0-9-]$/.test(ev.key)) { typed += ev.key; return true; }
+      if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
+      if (ev.key === 'Enter' && typed && lastId) { const pos = Number(typed); store.dispatch(d => { const g = activeFloor(d).guides.find(x => x.id === lastId); if (g) g.pos = pos; }); typed = ''; return true; }
+      return false;
+    },
+    draw(ctx, v) { if (typed) v.label(`${typed}|`, v.toWorld([ctx.canvas.clientWidth / 2, 40]), { bg: '#fff', color: v.COLORS.dim }); },
+    cancel() { typed = ''; lastId = null; },
+  };
+}
