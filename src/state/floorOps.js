@@ -101,7 +101,8 @@ export function deleteFloor(store, index) {
   return store.dispatch(d => {
     if (d.floors.length <= 1 || !d.floors[index]) return; // 마지막 층은 남긴다
     d.floors.splice(index, 1);
-    d.activeFloor = Math.min(d.activeFloor, d.floors.length - 1);
+    // 활성 층보다 앞의 층을 지우면 활성 층은 한 칸 앞으로 당겨진다. 활성 층 자체를 지우면 범위 안으로 잘라 준다.
+    d.activeFloor = index < d.activeFloor ? d.activeFloor - 1 : Math.min(d.activeFloor, d.floors.length - 1);
   });
 }
 // 실면적(net) = 방 폴리곤 면적 합. 실면적+내외벽(gross) = 거기에 벽 바닥면적을 더한 값. 단위 m².

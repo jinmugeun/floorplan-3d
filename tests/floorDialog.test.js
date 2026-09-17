@@ -43,3 +43,18 @@ test('an empty name is rejected and close leaves the project alone', () => {
   dlg.close();
   expect(store.get().floors).toHaveLength(1);
 });
+
+test('Enter submits and Escape closes the dialog without changes', () => {
+  const store = createStore(createEmptyProject());
+  openFloorDialog({ store, mode: 'add' });
+  let modal = document.querySelector('.modal');
+  modal.querySelector('[name="floorName"]').value = '지하';
+  modal.querySelector('[name="floorName"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(document.querySelector('.modal')).toBeNull();
+  expect(store.get().floors.map(f => f.name)).toEqual(['Floor 1', '지하']);
+  openFloorDialog({ store, mode: 'add' });
+  modal = document.querySelector('.modal');
+  modal.querySelector('[name="floorName"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(document.querySelector('.modal')).toBeNull();
+  expect(store.get().floors).toHaveLength(2);
+});

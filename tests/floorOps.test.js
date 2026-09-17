@@ -172,3 +172,18 @@ test('totalArea sums room areas, and gross adds the wall footprints', () => {
   // 소수 좌표: 길이 4000 x 두께 200 = 0.8 m²
   expect(totalArea({ rooms: [{ area: 1.5 }], walls: [{ a: [0.5, 0.25], b: [4000.5, 0.25], thickness: 200 }] }, 'gross')).toBeCloseTo(1.5 + 0.8, 3);
 });
+
+test('deleting a floor before the active one keeps the same floor active', () => {
+  const s = setup();
+  addFloor(s, { name: 'F1', copy: 'none' });
+  addFloor(s, { name: 'F2', copy: 'none' });
+  setActiveFloor(s, 1); // F1 활성
+  deleteFloor(s, 0);    // 앞의 Floor 1 삭제
+  expect(s.get().floors.map(f => f.name)).toEqual(['F1', 'F2']);
+  expect(s.get().floors[s.get().activeFloor].name).toBe('F1');
+  deleteFloor(s, 1);    // 뒤의 F2 삭제 → 활성 인덱스 그대로
+  expect(s.get().floors[s.get().activeFloor].name).toBe('F1');
+  s.undo(); s.undo();
+  expect(s.get().floors).toHaveLength(3);
+  expect(s.get().floors[s.get().activeFloor].name).toBe('F1');
+});

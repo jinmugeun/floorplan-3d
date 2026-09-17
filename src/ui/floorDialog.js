@@ -26,6 +26,8 @@ export function openFloorDialog({ store, mode = 'add', index = null, onClose = (
     else addFloor(store, { name, copy: root.querySelector('[name="copy"]:checked').value });
     close();
   };
+  // Enter로 확정, Esc로 닫기(폼 없이 만든 대화상자라 직접 처리한다)
+  root.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); q('submit').click(); } else if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   q('floorName').focus();
   return { close };
 }
