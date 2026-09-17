@@ -38,3 +38,17 @@ test('the shortcut tab renders every KEYMAP row grouped and read-only', () => {
   expect(modal.querySelector('#keymapTable input')).toBeNull(); // 읽기 전용
   expect(modal.querySelector('#tabGeneral').hidden).toBe(true);
 });
+
+test('Escape closes the dialog without leaking to the page, and a second open reuses the first', () => {
+  document.body.innerHTML = '';
+  const store = createStore(createEmptyProject());
+  const leaked = [];
+  window.addEventListener('keydown', ev => leaked.push(ev.key));
+  openSettingsDialog({ store });
+  openSettingsDialog({ store }); // 두 번 열어도 하나만 있다
+  expect(document.querySelectorAll('.modal.settings')).toHaveLength(1);
+  const modal = document.querySelector('.modal.settings');
+  modal.querySelector('[name="close"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(document.querySelector('.modal.settings')).toBeNull();
+  expect(leaked).toEqual([]); // stopPropagation으로 window까지 가지 않는다
+});

@@ -9,9 +9,11 @@ function keymapRows() {
 }
 
 export function openSettingsDialog({ store, onClose = () => {} }) {
+  const existing = document.querySelector('.modal.settings');
+  if (existing) { existing.querySelector('[name="close"]')?.focus(); return { close: () => existing.remove() }; } // 두 번 열지 않는다
   const s = store.get().settings;
   const root = document.createElement('div');
-  root.className = 'modal';
+  root.className = 'modal settings';
   root.innerHTML = `<div class="modal-card">
     <header><h2>설정</h2><button type="button" name="close" aria-label="닫기">✕</button></header>
     <div class="tabs"><button type="button" data-tab="general" class="on">일반</button><button type="button" data-tab="keys">단축키</button></div>
@@ -30,6 +32,9 @@ export function openSettingsDialog({ store, onClose = () => {} }) {
   const q = sel => root.querySelector(sel);
   const close = () => { root.remove(); onClose(); };
   q('[name="close"]').onclick = close;
+  // Esc는 대화상자만 닫고 전역 단축키(도구 전환 등)까지 내려가지 않는다.
+  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
+  q('[name="close"]').focus();
   root.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
     root.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b));
     q('#tabGeneral').hidden = b.dataset.tab !== 'general';
