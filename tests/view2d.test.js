@@ -48,3 +48,18 @@ test('pointer events are delegated to the tool in world coords', () => {
   const [pt] = tool.onPointerDown.mock.calls[0];
   expect(pt[0]).toBeCloseTo(v.camera.cx); expect(pt[1]).toBeCloseTo(v.camera.cy);
 });
+
+test('readonly view ignores wheel and pointer input, and destroy stops store updates', () => {
+  const store = createStore(createEmptyProject());
+  const canvas = makeCanvas();
+  const v = createView2D(canvas, store, createUiState(), { readonly: true });
+  const before = { ...v.camera };
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { clientX: 100, clientY: 100, button: 0, bubbles: true }));
+  canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 300, clientY: 300, bubbles: true }));
+  expect(v.camera).toEqual(before);
+  v.destroy();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200)); // readonly 뷰가 살아 있었다면 fit()으로 카메라가 바뀐다
+  expect(v.camera).toEqual(before);
+});

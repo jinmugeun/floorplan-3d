@@ -4,7 +4,7 @@ import { roomInnerPolygon, centroid } from '../geom/rooms.js';
 
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
-export function createView2D(canvas, store, ui, { readonly = false } = {}) {
+export function createView2D(canvas, store, ui, { readonly = false, labels = true } = {}) {
   const ctx = canvas.getContext('2d');
   const camera = { cx: 4000, cy: 3000, scale: 0.08 };
   let tool = null, dirty = true, raf = 0, panning = null, dpr = 1;
@@ -41,7 +41,7 @@ export function createView2D(canvas, store, ui, { readonly = false } = {}) {
   function drawGrid() {
     const [w, h] = size(); const [x0, y0] = toWorld([0, 0]); const [x1, y1] = toWorld([w, h]);
     for (const [step, color] of [[200, COLORS.grid2], [1000, COLORS.grid]]) {
-      if (step * camera.scale < 6) continue;
+      if (step === 200 && step * camera.scale < 6) continue; // 보조 격자만 숨긴다
       ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
       for (let x = Math.floor(x0 / step) * step; x <= x1; x += step) { const sx = Math.round(toScreen([x, 0])[0]) + 0.5; ctx.moveTo(sx, 0); ctx.lineTo(sx, h); }
       for (let y = Math.floor(y0 / step) * step; y <= y1; y += step) { const sy = Math.round(toScreen([0, y])[1]) + 0.5; ctx.moveTo(0, sy); ctx.lineTo(w, sy); }
@@ -76,7 +76,7 @@ export function createView2D(canvas, store, ui, { readonly = false } = {}) {
     if (state.view.grid && !readonly) drawGrid();
     for (const r of f.rooms) {
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
-      if (state.view.labels && !readonly) { const c = centroid(r.points); if (r.name) label(r.name, [c[0], c[1] - 250], { size: 13, color: COLORS.dim }); label(`${r.area.toFixed(1)}m²`, c); }
+      if (state.view.labels && labels) { const c = centroid(r.points); if (r.name) label(r.name, [c[0], c[1] - 250], { size: 13, color: COLORS.dim }); label(`${r.area.toFixed(1)}m²`, c); }
     }
     for (const wl of f.walls) poly(wallPolygon(wl, f.walls), sel?.type === 'wall' && sel.id === wl.id ? COLORS.wallSel : COLORS.wall, null);
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
@@ -97,8 +97,8 @@ export function createView2D(canvas, store, ui, { readonly = false } = {}) {
     if (panning) { camera.cx = panning.cx - (s[0] - panning.s[0]) / camera.scale; camera.cy = panning.cy - (s[1] - panning.s[1]) / camera.scale; requestRender(); return; }
     if (tool) { tool.onPointerMove(toWorld(s), ev); requestRender(); }
   };
-  const onUp = ev => { if (panning) { panning = null; return; } if (tool) { tool.onPointerUp(toWorld(pos(ev)), ev); requestRender(); } };
-  const onWheel = ev => { ev.preventDefault(); zoomAt(pos(ev), ev.deltaY < 0 ? 1.15 : 1 / 1.15); };
+  const onUp = ev => { if (readonly) return; if (panning) { panning = null; return; } if (tool) { tool.onPointerUp(toWorld(pos(ev)), ev); requestRender(); } };
+  const onWheel = ev => { ev.preventDefault(); if (readonly) return; zoomAt(pos(ev), ev.deltaY < 0 ? 1.15 : 1 / 1.15); };
   const onMenu = ev => ev.preventDefault();
   canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', onUp); canvas.addEventListener('wheel', onWheel, { passive: false }); canvas.addEventListener('contextmenu', onMenu);
@@ -108,7 +108,7 @@ export function createView2D(canvas, store, ui, { readonly = false } = {}) {
   const api = { camera, toScreen, toWorld, fit, zoomAt, requestRender, label, poly, COLORS,
     get tool() { return tool; },
     setTool(t) { tool?.cancel?.(); tool = t; requestRender(); },
-    destroy() { unsubs.forEach(u => u()); window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); } };
+    destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); } };
   requestRender();
   return api;
 }
