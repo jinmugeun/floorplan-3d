@@ -59,14 +59,14 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
   }
 }
 
-export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = null, labels = true } = {}) {
+export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = null, labels = true, dim = null } = {}) {
   const selected = new Set(sel?.type === 'item' ? [sel.id] : sel?.type === 'multi' && sel.kind === 'item' ? sel.ids : []);
   for (const item of floor.items) {
     if (!itemVisible(item, flags)) continue;
     const bad = collisions?.has(item.id);
     const on = selected.has(item.id);
     const outline = bad ? ITEM_COLORS.locked : on ? (item.locked ? ITEM_COLORS.locked : ITEM_COLORS.sel) : null;
-    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels });
+    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, alpha: dim ? dim(item) : 1 });
   }
 }
 

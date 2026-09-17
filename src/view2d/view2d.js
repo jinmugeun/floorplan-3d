@@ -1,6 +1,6 @@
 import { activeFloor } from '../state/schema.js';
 import { wallPolygon, endpoints, wallLength } from '../geom/walls.js';
-import { roomInnerPolygon, centroid } from '../geom/rooms.js';
+import { roomInnerPolygon, centroid, pointInPolygon } from '../geom/rooms.js';
 import { fmtLen, fmtArea } from '../util/units.js';
 import { dist } from '../geom/vec.js';
 import { drawItems } from './items2d.js';
@@ -112,7 +112,8 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       if (len * camera.scale < 40) continue;
       label(fmtLen(len, units, { unit: showUnit }), [(wl.a[0] + wl.b[0]) / 2, (wl.a[1] + wl.b[1]) / 2], { size: 11 });
     }
-    drawItems(ctx, api, f, { sel, flags: v2, collisions: null, labels: labels && !readonly });
+    // 단일 공간 모드에서는 그 방 밖의 아이템도 방·벽처럼 흐리게 그린다
+    drawItems(ctx, api, f, { sel, flags: v2, collisions: null, labels: labels && !readonly, dim: soloRoom ? it => (pointInPolygon(it.pos, soloRoom.points) ? 1 : 0.25) : null });
     if (!readonly && v2.guides) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
     if (v2.measures) for (const m of f.measures) {
       const s0 = toScreen(m.a), s1 = toScreen(m.b);

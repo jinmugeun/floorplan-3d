@@ -80,3 +80,17 @@ describe('2D 아이템 렌더링', () => {
     expect(b.calls.filter(c => c[0] === 'arc')).toHaveLength(0);       // 잠긴 아이템은 회전 불가
   });
 });
+
+test('drawItems dims items outside the solo room through the dim callback', () => {
+  const calls = [];
+  const ctx = new Proxy({}, { get: (_, k) => (...a) => { calls.push([k, ...a]); return 0; }, set: (t, k, v) => { calls.push(['set', k, v]); return true; } });
+  const view = { toScreen: p => [p[0] * 0.1, p[1] * 0.1], camera: { scale: 0.1 } };
+  const floor = { items: [
+    { id: 'in', kind: 'product', productId: 'sofa-3', pos: [1000.5, 1000.25], z: 0, rot: 0, size: [1800, 900, 800], attach: 'floor', flipH: false, flipV: false, hidden: false, locked: false },
+    { id: 'out', kind: 'product', productId: 'sofa-3', pos: [9000, 9000], z: 0, rot: 0, size: [1800, 900, 800], attach: 'floor', flipH: false, flipV: false, hidden: false, locked: false },
+  ] };
+  drawItems(ctx, view, floor, { dim: it => (it.id === 'in' ? 1 : 0.25) });
+  const alphas = calls.filter(c => c[0] === 'set' && c[1] === 'globalAlpha').map(c => c[2]);
+  expect(alphas).toContain(0.25);
+  expect(alphas).toContain(1);
+});

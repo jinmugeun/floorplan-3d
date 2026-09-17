@@ -36,7 +36,7 @@ export function createPlaceTool({ store, ui, view, product, onDone = () => {} })
       const item = { ...ghost.item, pos: [Math.round(ghost.item.pos[0]), Math.round(ghost.item.pos[1])] };
       addItem(store, item);
       ui.set({ selection: { type: 'item', id: item.id } });
-      onDone();
+      onDone(item.id); // 인터페이스대로 새 아이템 id를 넘긴다(취소 경로는 인자 없음)
     },
     onPointerUp() {},
     onKey(ev) { if (ev.key === 'Escape') { onDone(); return true; } return false; },
