@@ -97,7 +97,7 @@ function createDeleteTool() {
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS } };
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
-  select: () => createSelectTool({ store, ui, view, itemActions, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
+  select: () => createSelectTool({ store, ui, view, itemActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
   room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
   wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
   delete: createDeleteTool,
