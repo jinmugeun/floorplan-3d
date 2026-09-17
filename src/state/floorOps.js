@@ -1,9 +1,10 @@
 import { activeFloor } from './schema.js';
 import { detectRooms } from '../geom/rooms.js';
 import { transformWalls } from '../geom/walls.js';
+import { normalizeWalls } from '../geom/normalize.js';
 import { eq } from '../geom/vec.js';
 
-const reroom = f => { f.rooms = detectRooms(f.walls, f.rooms); };
+const reroom = f => { f.walls = normalizeWalls(f.walls); f.rooms = detectRooms(f.walls, f.rooms); };
 
 export function setWalls(store, walls, opts = {}) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = walls; reroom(f); }, opts);

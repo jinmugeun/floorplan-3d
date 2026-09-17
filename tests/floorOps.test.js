@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
-import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
+import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
 import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
@@ -79,4 +79,27 @@ test('selectionStillValid checks the selected wall/room still exists on the acti
 });
 test('selectionStillValid returns true when there is no active floor', () => {
   expect(selectionStillValid({ floors: [], activeFloor: 0 }, { type: 'wall', id: 'x' })).toBe(true);
+});
+test('addWalls joins walls: a divider across a room makes two rooms', () => {
+  const s = setup();
+  addWalls(s, [makeWall({ a: [2000, 0], b: [2000, 3000] })]);
+  const f = activeFloor(s.get());
+  expect(f.rooms).toHaveLength(2);
+  expect(f.walls).toHaveLength(7); // 위·아래 벽이 각각 둘로 나뉘고 가운데 벽 하나
+});
+test('adjacent rooms of different depth share one wall piece', () => {
+  const s = setup();
+  addWalls(s, rectWalls([4000, 0], [7000, 2000], 200));
+  const f = activeFloor(s.get());
+  expect(f.rooms).toHaveLength(2);
+  expect(f.walls.filter(w => w.a[0] === 4000 && w.b[0] === 4000)).toHaveLength(2); // 공유선이 두 조각, 중복 없음
+});
+test('moving a wall onto another wall joins them', () => {
+  const s = setup();
+  addWalls(s, [makeWall({ a: [6000, 500], b: [6000, 2500] })]);
+  const f = activeFloor(s.get());
+  const lone = f.walls.find(w => w.a[0] === 6000);
+  setWalls(s, moveWallParallel(f.walls, lone.id, [-2000, 0]));
+  const g = activeFloor(s.get());
+  expect(g.walls.filter(w => w.a[0] === 4000 && w.b[0] === 4000)).toHaveLength(3); // 오른쪽 벽이 3조각
 });
