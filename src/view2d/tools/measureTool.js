@@ -8,7 +8,7 @@ export const MEASURE_TOOL_DEFAULTS = { snap: true };
 export function createMeasureTool({ store, opts: given = null }) {
   const opts = given ?? { ...MEASURE_TOOL_DEFAULTS };
   let a = null, b = null, cur = null;
-  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, snap: opts.snap }).point; };
+  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, walls: f.walls, snap: opts.snap }).point; };
   return {
     name: 'measure', opts,
     onPointerDown(p) { const s = snap(p); if (!a || b) { a = s; b = null; } else b = s; },

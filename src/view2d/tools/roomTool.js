@@ -10,7 +10,7 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
   const opts = given ?? { ...ROOM_TOOL_DEFAULTS };
   let start = null, cur = null, typed = { w: '', h: '', field: 'w' };
   const reset = () => { start = null; cur = null; typed = { w: '', h: '', field: 'w' }; };
-  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, snap: opts.snap }).point; };
+  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, walls: f.walls, snap: opts.snap }).point; };
   const dims = () => {
     const sx = Math.sign(cur[0] - start[0]) || 1, sy = Math.sign(cur[1] - start[1]) || 1;
     const w = typed.w ? Number(typed.w) : Math.abs(cur[0] - start[0]);

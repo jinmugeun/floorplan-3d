@@ -11,7 +11,7 @@ export function createWallTool({ store, onDone = () => {}, opts: given = null })
   let points = [], cursor = null, guides = [], typed = '';
   const reset = () => { points = []; cursor = null; guides = []; typed = ''; };
   const last = () => points[points.length - 1] ?? null;
-  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls).concat(points), guides: f.guides, anchor: last(), ortho: opts.ortho, snap: opts.snap }); };
+  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls).concat(points), guides: f.guides, walls: f.walls, anchor: last(), ortho: opts.ortho, snap: opts.snap }); };
   const addSegment = (a, b) => {
     if (dist(a, b) < 10) return false;
     let s = a, e = b;
