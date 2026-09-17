@@ -144,6 +144,15 @@ test('the image strip is only shown in 2D mode', () => {
   expect(strip.hidden).toBe(false);
 });
 
+test('bottom bar has the 2D projection select with seven options', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const sel = root.querySelector('#viewPreset');
+  expect(sel).not.toBeNull();
+  expect(sel.getAttribute('aria-label')).toBe('2D 투영 뷰');
+  expect(sel.querySelectorAll('option')).toHaveLength(7); // — + 6종
+});
+
 test('length option labels carry the active unit and the lock button says what a click does', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
   const store = createStore(createEmptyProject());

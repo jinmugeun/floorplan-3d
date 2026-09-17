@@ -33,16 +33,9 @@ const shell = createShell(document.getElementById('app'), { store, ui });
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 const menu = createContextMenu(document.body);
 const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender() }); // 태스크 5의 onCameraChange를 유지한다
-const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
-minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
-view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
-function replaceProductOf(itemIds, product) { if (itemIds?.length) { replaceProduct(store, itemIds, product); shell.toast('제품을 교체했습니다'); } }
-const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
-createLayersPanel(shell.els.layers, { store, ui });
-
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
 const selectItems = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids } });
-// 컨텍스트 메뉴(itemMenu.js)·속성 패널·단축키가 부르는 아이템 동작 묶음.
+// 컨텍스트 메뉴(itemMenu.js)·속성 패널·단축키·3D 피커가 부르는 아이템 동작 묶음. view3d보다 먼저 선언한다(view3d 생성에 넘긴다).
 const itemActions = {
   ids: selectedItemIds,
   mirror: axis => mirrorItems(store, selectedItemIds(), axis),
@@ -68,6 +61,12 @@ const itemActions = {
     openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(`${made.length}개 복사했습니다`); } });
   },
 };
+const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions });
+minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
+view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
+function replaceProductOf(itemIds, product) { if (itemIds?.length) { replaceProduct(store, itemIds, product); shell.toast('제품을 교체했습니다'); } }
+const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
+createLayersPanel(shell.els.layers, { store, ui });
 createPropsPanel(shell.els.props, store, ui, { deleteSelection, itemActions });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
 store.subscribe(s => {
@@ -134,6 +133,11 @@ document.getElementById('btnFit').addEventListener('click', fitView);
 const zoom = factor => activeView().zoomBy(factor);
 document.getElementById('btnZoomIn').addEventListener('click', () => zoom(1.25));
 document.getElementById('btnZoomOut').addEventListener('click', () => zoom(1 / 1.25));
+document.getElementById('viewPreset')?.addEventListener('change', ev => {
+  if (!ev.target.value) { view3d.clearOrthoView(); return; }
+  if (ui.get().mode === '2d') setMode('iso');
+  view3d.setOrthoView(ev.target.value);
+});
 document.getElementById('projectName').addEventListener('change', ev => store.dispatch(d => { d.name = ev.target.value; }));
 const selectAll = () => { const ids = activeFloor(store.get()).walls.map(w => w.id); ui.set({ selection: ids.length ? { type: 'multi', kind: 'wall', ids } : null }); };
 const openSettings = () => openSettingsDialog({ store });
