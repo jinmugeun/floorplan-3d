@@ -62,18 +62,21 @@ const restored = loadAutosave();
 if (restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?')) store.replace(restored);
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
+
+async function loadFile(file) {
+  if (!file) return; // 파일 선택 취소
+  try { store.replace(parseProject(await readTextFile(file))); view.fit(); shell.toast('불러왔습니다'); }
+  catch (e) { shell.toast(e.message); }
+}
+
 document.getElementById('btnLoad').addEventListener('click', () => {
   const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json';
-  i.onchange = async () => {
-    if (!i.files[0]) return;
-    try { store.replace(parseProject(await readTextFile(i.files[0]))); view.fit(); shell.toast('불러왔습니다'); }
-    catch (e) { shell.toast(e.message); }
-  };
+  i.onchange = () => loadFile(i.files[0]);
   i.click();
 });
 document.getElementById('btnCapture').addEventListener('click', async () => {
-  const url = ui.get().mode === '2d' ? await capture2D(store, ui) : view3d.capture();
-  const a = document.createElement('a'); a.href = url; a.download = filenameFor(store.get()).replace('.json', '.png'); a.click();
+  try { const url = ui.get().mode === '2d' ? await capture2D(store, ui) : view3d.capture(); const a = document.createElement('a'); a.href = url; a.download = filenameFor(store.get()).replace('.json', '.png'); a.click(); }
+  catch (e) { shell.toast(e.message); }
 });
 
 const canvasWrap = document.getElementById('canvasWrap');
@@ -83,8 +86,7 @@ canvasWrap.addEventListener('drop', async ev => {
   const file = ev.dataTransfer.files[0];
   if (!file) return;
   if (file.type === 'application/json' || /\.json$/i.test(file.name)) {
-    try { store.replace(parseProject(await readTextFile(file))); view.fit(); shell.toast('불러왔습니다'); }
-    catch (e) { shell.toast(e.message); }
+    loadFile(file);
   } else if (/^image\//.test(file.type)) {
     openBackgroundDialog({ store });
   }

@@ -24,5 +24,9 @@ export function capture2D(store, ui, width = 2000) {
   const c = document.createElement('canvas'); c.width = width; c.height = Math.round(width * 0.7);
   Object.defineProperty(c, 'clientWidth', { value: c.width }); Object.defineProperty(c, 'clientHeight', { value: c.height });
   const v = createView2D(c, store, ui, { readonly: true }); v.fit(500);
-  return new Promise(res => requestAnimationFrame(() => requestAnimationFrame(() => { const url = c.toDataURL('image/png'); v.destroy(); res(url); })));
+  return new Promise((res, rej) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    try { res(c.toDataURL('image/png')); }
+    catch (e) { rej(new Error('캡처에 실패했습니다: ' + e.message)); } // 예: 외부 이미지로 오염된 캔버스
+    finally { v.destroy(); }
+  })));
 }
