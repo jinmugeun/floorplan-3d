@@ -156,6 +156,12 @@ test('with the plan locked, clicks still select but drags and vertex edits do no
   expect(locked).toBe(2);
   t.onPointerDown([1000, 1500]); t.onPointerMove([1300, 1500]); t.onPointerUp([1300, 1500]); // 방
   expect(activeFloor(store.get()).walls).toHaveLength(4);
+  // 다중 선택 드래그도 잠금에 막힌다
+  const left = activeFloor(store.get()).walls.find(w => w.a[0] === 0 && w.b[0] === 0);
+  ui.set({ selection: { type: 'multi', kind: 'wall', ids: [top.id, left.id] } });
+  t.onPointerDown([2000, 0], {}); t.onPointerMove([2000, -700], {}); t.onPointerUp([2000, -700], {});
+  expect(activeFloor(store.get()).walls.find(w => w.id === top.id).a[1]).toBe(0);
+  expect(locked).toBeGreaterThanOrEqual(3);
   expect(store.canUndo()).toBe(true);
   store.undo();
   expect(activeFloor(store.get()).walls).toHaveLength(0); // 남은 기록은 벽 생성 하나뿐

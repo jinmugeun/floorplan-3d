@@ -191,6 +191,10 @@ test('multi selection shows the count, edits height for all and delegates deleti
   h.value = '2600'; h.dispatchEvent(new Event('change', { bubbles: true }));
   const f = activeFloor(store.get());
   for (const w of f.walls) expect(w.height).toBe(ids.includes(w.id) ? 2600 : 2300);
+  store.undo(); // 여러 벽의 높이 변경은 한 단계다
+  expect(activeFloor(store.get()).walls.every(w => w.height === 2300)).toBe(true);
+  store.redo();
+  expect(activeFloor(store.get()).walls.filter(w => w.height === 2600)).toHaveLength(2);
   el.querySelector('button[name="delete"]').click();
   expect(calls).toEqual(['del']);
 });
