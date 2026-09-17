@@ -81,3 +81,18 @@ test('room fills become translucent while a background image is showing', async 
   expect(alphas).toContain(0.35); // 배경이 보이면 바닥은 35%
   v.destroy();
 });
+
+test('pointercancel ends the drag like pointerup', () => {
+  const store = createStore(createEmptyProject());
+  const canvas = makeCanvas();
+  const v = createView2D(canvas, store, createUiState());
+  const tool = { name: 't', opts: {}, onPointerDown: vi.fn(), onPointerMove: vi.fn(), onPointerUp: vi.fn(), onKey: () => false, draw() {}, cancel() {} };
+  v.setTool(tool);
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { clientX: 400, clientY: 300, button: 0, bubbles: true }));
+  canvas.dispatchEvent(new MouseEvent('pointercancel', { clientX: 400, clientY: 300, bubbles: true })); // 캔버스 밖에서 놓거나 브라우저가 포인터를 가져간 경우
+  expect(tool.onPointerUp).toHaveBeenCalledTimes(1);
+  v.destroy();
+  canvas.dispatchEvent(new MouseEvent('pointercancel', { clientX: 400, clientY: 300, bubbles: true }));
+  expect(tool.onPointerUp).toHaveBeenCalledTimes(1); // destroy 후에는 듣지 않는다
+});
