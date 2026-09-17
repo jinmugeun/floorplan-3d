@@ -36,6 +36,11 @@ describe('normalizeProject / migrate', () => {
     expect(bg.opacity).toBe(1); expect(bg.width).toBe(10); expect(bg.scale).toBe(1); expect(bg.offset).toEqual([1, 2]);
     expect(bg.visible).toBe(true); expect(bg.locked).toBe(true);
   });
+  test('view flags are coerced to numbers/booleans and clamped', () => {
+    const p = migrate({ version: 1, view: { wallOpacity: 'abc', grid: 0 } });
+    expect(p.view.wallOpacity).toBe(1);
+    expect(p.view.grid).toBe(false);
+  });
   test('a valid project round-trips unchanged in substance', () => {
     const p = createEmptyProject('그대로');
     const q = normalizeProject(structuredClone(p));

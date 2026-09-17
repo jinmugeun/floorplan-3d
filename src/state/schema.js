@@ -82,7 +82,22 @@ export function normalizeProject(p) {
     floors,
     activeFloor: Number.isInteger(active) && active >= 0 && active < floors.length ? active : 0,
     camera: { ...def.camera, ...obj(src.camera) },
-    view: { ...def.view, ...obj(src.view) },
+    view: normalizeView(src.view, def.view),
+  };
+}
+
+function normalizeView(v, defView) {
+  const src = obj(v);
+  const merged = { ...defView, ...src };
+  return {
+    ...merged,
+    wallOpacity: num(src.wallOpacity, defView.wallOpacity, 0, 1),
+    grid: src.grid === undefined ? defView.grid : !!src.grid,
+    labels: src.labels === undefined ? defView.labels : !!src.labels,
+    dimensions: src.dimensions === undefined ? defView.dimensions : !!src.dimensions,
+    cutaway: src.cutaway === undefined ? defView.cutaway : !!src.cutaway,
+    background: src.background === undefined ? defView.background : !!src.background,
+    collision: src.collision === undefined ? defView.collision : !!src.collision,
   };
 }
 

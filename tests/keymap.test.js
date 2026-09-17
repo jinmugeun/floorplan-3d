@@ -44,6 +44,14 @@ test('modified letters (ctrl/meta/alt) are left to the browser', () => {
   expect(a.calls.setTool).toEqual([]); expect(a.calls.del).toBe(0);
 });
 
+test('Ctrl+digit is not forwarded to the active tool, but Ctrl+Z is', () => {
+  const a = setup(false);
+  a.key('1', { ctrlKey: true });
+  expect(a.view.tool.onKey).not.toHaveBeenCalled();
+  a.key('z', { ctrlKey: true });
+  expect(a.view.tool.onKey).toHaveBeenCalledTimes(1);
+});
+
 test('in first-person mode tool letters and Delete are ignored but Escape and 1-4 still work', () => {
   const a = setup(); a.ui.set({ mode: 'fp' });
   a.key('d'); a.key('e'); a.key('f'); a.key('l'); a.key('m'); a.key('b'); a.key('Delete');

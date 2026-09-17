@@ -109,12 +109,21 @@ describe('rooms', () => {
     expect(again[0].id).toBe(prev.id);
     expect(again[0].name).toBe('식당');
   });
-  test('detectRooms keeps user props by centroid', () => {
+  test('detectRooms keeps user props when wall ids overlap', () => {
     const ws = rectWalls([0, 0], [4000, 3000], 200);
     const first = detectRooms(ws);
     first[0].name = '가열조리실';
     const again = detectRooms(moveWallParallel(ws, ws[0].id, [0, -100]), first);
     expect(again[0].name).toBe('가열조리실');
+    expect(again[0].id).toBe(first[0].id);
+  });
+  test('detectRooms falls back to centroid matching when no wall ids overlap', () => {
+    const ws = rectWalls([0, 0], [4000, 3000], 200);
+    const first = detectRooms(ws);
+    first[0].name = '식당';
+    first[0].wallIds = ['nope'];
+    const again = detectRooms(ws, first);
+    expect(again[0].name).toBe('식당');
     expect(again[0].id).toBe(first[0].id);
   });
 });

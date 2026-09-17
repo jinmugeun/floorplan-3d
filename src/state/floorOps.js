@@ -53,6 +53,7 @@ export function transformFloor(store, fn) {
 export function selectionStillValid(state, selection) {
   if (!selection) return true;
   const f = activeFloor(state);
+  if (!f) return true; // 활성 층을 찾지 못해도 구독이 절대 예외를 던지면 안 된다
   if (selection.type === 'wall') return f.walls.some(w => w.id === selection.id);
   if (selection.type === 'room') return f.rooms.some(r => r.id === selection.id);
   return true;

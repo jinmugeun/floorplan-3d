@@ -77,3 +77,6 @@ test('selectionStillValid checks the selected wall/room still exists on the acti
   expect(selectionStillValid(s.get(), { type: 'wall', id: f.walls[0].id })).toBe(false);
   expect(selectionStillValid(s.get(), { type: 'room', id: f.rooms[0].id })).toBe(false);
 });
+test('selectionStillValid returns true when there is no active floor', () => {
+  expect(selectionStillValid({ floors: [], activeFloor: 0 }, { type: 'wall', id: 'x' })).toBe(true);
+});

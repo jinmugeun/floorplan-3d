@@ -26,9 +26,10 @@ export function loadAutosave(key = 'kvp.autosave') {
 }
 // 배경 이미지가 있으면 캡처 전에 로드를 기다린다(실패해도 캡처는 진행).
 const waitForImage = src => new Promise(res => { const img = new Image(); img.onload = img.onerror = () => res(); img.src = src; });
+const withTimeout = (p, ms) => Promise.race([p, new Promise(res => setTimeout(res, ms))]); // 이미지가 멈춰도 캡처가 영원히 막히지 않게 한다
 export async function capture2D(store, _ui, width = 2000) {
   const bg = store.get().background;
-  if (bg?.src) await waitForImage(bg.src);
+  if (bg?.src) await withTimeout(waitForImage(bg.src), 3000);
   const c = document.createElement('canvas'); c.width = width; c.height = Math.round(width * 0.7);
   Object.defineProperty(c, 'clientWidth', { value: c.width }); Object.defineProperty(c, 'clientHeight', { value: c.height });
   const v = createView2D(c, store, createUiState(), { readonly: true }); v.fit(500); // 새 ui 상태: 선택 강조가 캡처에 남지 않는다

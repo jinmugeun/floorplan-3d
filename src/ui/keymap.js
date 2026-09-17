@@ -1,8 +1,10 @@
 export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, save = null }) {
   return ev => {
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target?.tagName)) return;
-    if (view.tool?.onKey?.(ev)) { view.requestRender(); return; } // 도구가 먼저
     const k = ev.key.toLowerCase();
+    const modified = ev.ctrlKey || ev.metaKey || ev.altKey;
+    const isUndoKey = ev.ctrlKey && k === 'z';
+    if ((!modified || isUndoKey) && view.tool?.onKey?.(ev)) { view.requestRender(); return; } // 도구가 먼저(단, 조합키 중에는 Ctrl+Z만 도구에 전달)
     if (ev.ctrlKey && k === 'z') { ev.preventDefault(); ev.shiftKey ? store.redo() : store.undo(); return; }
     if (ev.ctrlKey && k === 's') { ev.preventDefault(); if (save) save(); return; }
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return; // 나머지 조합키(Ctrl+F, Ctrl+L, Ctrl+D…)는 브라우저에 맡긴다
