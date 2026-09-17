@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeItem, createItem, normalizeProject } from '../src/state/schema.js';
-import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds } from '../src/state/floorOps.js';
+import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from '../src/state/floorOps.js';
 import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 
@@ -245,5 +245,73 @@ describe('아이템 편집 동작', () => {
     expect(activeFloor(s.get()).items[3].pos).toEqual([1200, 1200]);
     expect(sameProductIds(activeFloor(s.get()), 'chair-dining')).toHaveLength(3);
     expect(pasteItems(s, [], {})).toEqual([]);
+  });
+});
+
+describe('그룹·배열·상대이동', () => {
+  test('그룹화는 2개 이상일 때만 만들고 겹치는 그룹을 합친다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [0, 0] }));
+    const b = addItem(s, createItem(productById('chair-dining'), { pos: [500, 0] }));
+    const c = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 0] }));
+    groupItems(s, [a]);
+    expect(activeFloor(s.get()).groups).toHaveLength(0);
+    groupItems(s, [a, b]);
+    expect(activeFloor(s.get()).groups).toHaveLength(1);
+    groupItems(s, [b, c]);
+    expect(activeFloor(s.get()).groups).toHaveLength(1); // 기존 그룹을 대체
+    ungroupItems(s, [c]);
+    expect(activeFloor(s.get()).groups).toHaveLength(0);
+  });
+
+  test('아이템을 지우면 그룹에서도 빠지고 1개만 남으면 그룹이 사라진다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [0, 0] }));
+    const b = addItem(s, createItem(productById('chair-dining'), { pos: [500, 0] }));
+    groupItems(s, [a, b]);
+    deleteItems(s, [b]);
+    expect(activeFloor(s.get()).groups).toHaveLength(0);
+  });
+
+  test('상대이동은 옮기거나 복사한다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('sofa-3'), { pos: [1000.5, 1000] }));
+    relativeMove(s, [a], { dx: 300, dy: -200 });
+    expect(activeFloor(s.get()).items[0].pos).toEqual([1300.5, 800]);
+    const ids = relativeMove(s, [a], { dx: 100, dy: 0, copy: true });
+    expect(activeFloor(s.get()).items).toHaveLength(2);
+    expect(ids[0]).not.toBe(a);
+    expect(activeFloor(s.get()).items[1].pos).toEqual([1400.5, 800]);
+  });
+
+  test('배열 복사는 원본을 남기고 사본을 만든다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
+    const lin = arrayCopy(s, [a], 'linear', { dx: 500, dy: 0, count: 3 });
+    expect(lin).toHaveLength(3);
+    expect(activeFloor(s.get()).items.map(i => i.pos[0])).toEqual([1000, 1500, 2000, 2500]);
+    s.undo();
+    const cir = arrayCopy(s, [a], 'circular', { center: [1000, 0], angle: 90, count: 1 });
+    expect(cir).toHaveLength(1);
+    const copy = activeFloor(s.get()).items[1];
+    expect(copy.pos[0]).toBeCloseTo(0);
+    expect(copy.pos[1]).toBeCloseTo(0);
+    expect(copy.rot).toBe(90);
+    s.undo();
+    const rot = arrayCopy(s, [a], 'rotate', { angle: 45, count: 2 });
+    expect(rot).toHaveLength(2);
+    expect(activeFloor(s.get()).items.slice(1).map(i => [i.pos[0], i.rot])).toEqual([[1000, 45], [1000, 90]]);
+  });
+
+  test('정렬은 선택한 아이템을 한 단계로 맞춘다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
+    const b = addItem(s, createItem(productById('chair-dining'), { pos: [2000, 1500] }));
+    alignSelection(s, [a, b], 'v', 'center');
+    const ys = activeFloor(s.get()).items.map(i => i.pos[1]);
+    expect(ys[0]).toBeCloseTo(1250);
+    expect(ys[1]).toBeCloseTo(1250);
+    s.undo();
+    expect(activeFloor(s.get()).items.map(i => i.pos[1])).toEqual([1000, 1500]);
   });
 });

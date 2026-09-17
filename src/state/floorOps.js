@@ -7,6 +7,8 @@ import { wallAxis, placeOnWall, isEmbed } from '../geom/items.js';
 
 // mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds는 300줄을 넘어 itemOps.js로 나눴다.
 export * from './itemOps.js';
+// groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy는 300줄을 넘어 arrangeOps.js로 나눴다.
+export * from './arrangeOps.js';
 
 const reroom = f => { f.walls = normalizeWalls(f.walls); f.rooms = detectRooms(f.walls, f.rooms); };
 // 벽이 움직이거나 사라졌을 때 그 벽에 붙은 아이템을 다시 앉힌다. reroom이 도는 곳마다 함께 돈다.

@@ -90,7 +90,8 @@ export function applyNumber(store, sel, name, v) {
 }
 
 // deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
-export function createPropsPanel(container, store, ui, { deleteSelection = () => {} } = {}) {
+// itemActions: main.js의 아이템 동작 묶음(정렬·그룹화·그룹 해제는 여기서 부른다).
+export function createPropsPanel(container, store, ui, { deleteSelection = () => {}, itemActions = {} } = {}) {
   function render() {
     const active = document.activeElement;
     if (colorTx && active?.type === 'color' && container.contains(active)) return; // 색을 끌고 있는 동안만 다시 그리지 않는다(입력이 끊긴다)
@@ -160,8 +161,15 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
       return;
     }
-    if (sel.type === 'multi' && sel.kind === 'item') { // Task 12가 정렬·그룹 패널로 바꾼다. 지금은 개수와 삭제만.
-      container.innerHTML = `<h2>여러 제품 선택</h2><p class="hint">선택된 제품 ${sel.ids.length}개</p><button type="button" name="delete" class="danger">선택 삭제</button>`;
+    if (sel.type === 'multi' && sel.kind === 'item') {
+      container.innerHTML = `<h2>제품 ${sel.ids.length}개 선택</h2>
+        <h3>정렬</h3>
+        <div class="row"><button type="button" name="alignVStart">위</button><button type="button" name="alignVCenter">중간</button><button type="button" name="alignVEnd">아래</button></div>
+        <div class="row"><button type="button" name="alignHStart">왼</button><button type="button" name="alignHCenter">가운데</button><button type="button" name="alignHEnd">오른</button></div>
+        <h3>그룹</h3>
+        <button type="button" name="group">그룹화 <kbd>Ctrl+G</kbd></button>
+        <button type="button" name="ungroup">그룹 해제 <kbd>Ctrl+Shift+G</kbd></button>
+        <button type="button" name="delete" class="danger">선택 삭제</button>`;
       return;
     }
     if (sel.type === 'multi' && sel.kind === 'wall') {
@@ -263,7 +271,11 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       if (window.confirm(`"${p.floors[p.activeFloor].name}" 층을 삭제할까요?`)) deleteFloor(store, p.activeFloor);
       return;
     }
-    if (ev.target.name === 'delete' && ui.get().selection) deleteSelection();
+    if (ev.target.name === 'delete' && ui.get().selection) { deleteSelection(); return; }
+    const m = /^align([VH])(Start|Center|End)$/.exec(ev.target.name ?? '');
+    if (m) { itemActions.align?.(m[1] === 'V' ? 'v' : 'h', m[2].toLowerCase()); return; }
+    if (ev.target.name === 'group') { itemActions.group?.(); return; }
+    if (ev.target.name === 'ungroup') { itemActions.ungroup?.(); return; }
   };
   container.addEventListener('change', onChange); container.addEventListener('input', onInput); container.addEventListener('click', onClick); container.addEventListener('focusout', onFocusOut);
   const unsubs = [store.subscribe(render), ui.subscribe(render)];

@@ -47,6 +47,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 #props details { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; } #props summary { cursor: pointer; font-size: 11px; color: var(--muted); letter-spacing: .06em; }
 #props .row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px; } #props .row button { padding: 6px 8px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
 .modal-card.narrow { width: min(380px, 94vw); } .modal-card fieldset { border: 1px solid var(--line); border-radius: 4px; } .modal .error { color: var(--exhaust); }
+.modal-card.narrow .toolbar { justify-content: flex-end; } .modal-body .field { margin-bottom: 10px; }
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 8px 0 12px; } .tabs button { padding: 6px 12px; border: 0; background: none; font: inherit; cursor: pointer; color: var(--muted); } .tabs button.on { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
 #keymapTable { width: 100%; border-collapse: collapse; } #keymapTable th, #keymapTable td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); font-weight: 400; } #keymapTable thead th { color: var(--muted); font-size: 11px; }
 #props input[type=color] { width: 100%; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: #fff; }

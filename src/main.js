@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { deleteWall, deleteWalls, deleteRoom, deleteItems, transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds } from './state/floorOps.js';
+import { deleteWall, deleteWalls, deleteRoom, deleteItems, transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
 import { hitWall } from './geom/walls.js';
 import { pointInPolygon } from './geom/rooms.js';
 import { createView2D } from './view2d/view2d.js';
@@ -18,6 +18,7 @@ import { createShell } from './ui/shell.js';
 import { createLibraryPanel } from './ui/libraryPanel.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
+import { openRelativeMoveDialog, openArrayDialog } from './ui/itemDialogs.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
@@ -34,13 +35,12 @@ const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange:
 const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
-createPropsPanel(shell.els.props, store, ui, { deleteSelection });
 function replaceProductOf(itemIds, product) { if (itemIds?.length) { replaceProduct(store, itemIds, product); shell.toast('제품을 교체했습니다'); } }
 const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
 
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
 const selectItems = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids } });
-// 컨텍스트 메뉴(itemMenu.js)와 단축키가 부르는 아이템 동작 묶음. group/ungroup/relativeMove/arrayCopy/align은 Task 12에서 채운다.
+// 컨텍스트 메뉴(itemMenu.js)·속성 패널·단축키가 부르는 아이템 동작 묶음.
 const itemActions = {
   ids: selectedItemIds,
   mirror: axis => mirrorItems(store, selectedItemIds(), axis),
@@ -54,8 +54,19 @@ const itemActions = {
   },
   toggleHidden: () => setItemFlag(store, selectedItemIds(), 'hidden'),
   toggleLocked: () => setItemFlag(store, selectedItemIds(), 'locked'),
-  group: () => {}, ungroup: () => {}, relativeMove: () => {}, arrayCopy: () => {}, align: () => {}, // Task 12에서 채운다
+  group: () => groupItems(store, selectedItemIds()),
+  ungroup: () => ungroupItems(store, selectedItemIds()),
+  align: (axis, mode) => alignSelection(store, selectedItemIds(), axis, mode),
+  relativeMove: () => {
+    const ids = selectedItemIds(); if (!ids.length) return;
+    openRelativeMoveDialog({ onApply: v => selectItems(relativeMove(store, ids, v)) });
+  },
+  arrayCopy: kind => {
+    const ids = selectedItemIds(); if (!ids.length) return;
+    openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(`${made.length}개 복사했습니다`); } });
+  },
 };
+createPropsPanel(shell.els.props, store, ui, { deleteSelection, itemActions });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
 store.subscribe(s => {
   const u = ui.get();

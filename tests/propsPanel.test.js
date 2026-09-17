@@ -387,7 +387,8 @@ test('a multi-item selection shows a count panel and never routes edits to walls
   ui.set({ selection: { type: 'item', id: a } });
   expect(el.querySelector('input[name="w"]')).not.toBeNull();
   ui.set({ selection: { type: 'multi', kind: 'item', ids: [a, b] } });
-  expect(el.textContent).toContain('선택된 제품 2개');
+  // Task 12가 스텁을 정렬·그룹 패널로 바꾸며 문구도 "제품 N개 선택"으로 맞췄다(브리프 Step 6의 실제 패널 마크업과 통일).
+  expect(el.textContent).toContain('제품 2개 선택');
   expect(el.querySelector('input[name="w"]')).toBeNull(); // 이전 아이템 패널이 남지 않는다
   const undoBefore = store.canUndo();
   const { applyNumber } = await import('../src/ui/propsPanel.js');
@@ -406,4 +407,24 @@ test('a wall-attached item ignores 각도 edits and keeps its wall direction', a
   const { applyNumber } = await import('../src/ui/propsPanel.js');
   applyNumber(store, { type: 'item', id }, 'rot', 90);
   expect(activeFloor(store.get()).items.find(i => i.id === id).rot).toBe(0);
+});
+
+test('multi selection panel aligns, groups and deletes', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const a = addItem(store, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
+  const b = addItem(store, createItem(productById('chair-dining'), { pos: [2000, 1500] }));
+  const calls = [];
+  const itemActions = new Proxy({}, { get: (_, k) => (...args) => calls.push([k, ...args]) });
+  const el = document.createElement('div'); createPropsPanel(el, store, ui, { itemActions });
+  ui.set({ selection: { type: 'multi', kind: 'item', ids: [a, b] } });
+  expect(el.textContent).toContain('제품 2개 선택');
+  el.querySelector('button[name="alignVStart"]').click();
+  el.querySelector('button[name="alignHCenter"]').click();
+  el.querySelector('button[name="group"]').click();
+  el.querySelector('button[name="ungroup"]').click();
+  expect(calls).toEqual([['align', 'v', 'start'], ['align', 'h', 'center'], ['group'], ['ungroup']]);
 });
