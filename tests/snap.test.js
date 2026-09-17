@@ -48,3 +48,9 @@ test('ortho locked axis with a parallel wall does not throw and stays finite', (
   expect(Number.isFinite(r.point[1])).toBe(true);
   expect(r.point).toEqual([2000, 0]);
 });
+test('with ortho, a nearer parallel wall does not hide a valid intersection on another wall', () => {
+  const A = { a: [3000, -1000], b: [3000, 1000] };
+  const C = { a: [2000, 50], b: [4000, 50] };
+  const r = snapPoint([2900, 20], { walls: [C, A], tol: 150, anchor: [0, 0], ortho: true });
+  expect(r.point).toEqual([3000, 0]); expect(r.hit).toBe('wall');
+});

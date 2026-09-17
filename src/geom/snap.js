@@ -47,21 +47,28 @@ export function snapPoint(p, { points = [], tol = 150, anchor = null, ortho = fa
   const yLocked = ortho && anchor && point[1] === anchor[1];
   const xLocked = ortho && anchor && point[0] === anchor[0];
   if (walls.length) {
-    let nearestWall = null, nearestD = Infinity;
-    for (const w of walls) {
-      const d = dist(point, footOnSegment(point, w.a, w.b));
-      if (d < nearestD) { nearestD = d; nearestWall = w; }
-    }
-    if (nearestWall) {
-      let wallPoint = null;
-      if (yLocked || xLocked) {
-        const inter = lockedAxisIntersection(nearestWall.a, nearestWall.b, yLocked, xLocked, anchor);
-        if (inter && dist(point, inter) <= tol) wallPoint = inter;
-      } else if (nearestD <= tol) {
-        wallPoint = footOnSegment(point, nearestWall.a, nearestWall.b);
+    let wallPoint = null;
+    if (yLocked || xLocked) {
+      // 축이 잠긴 경우, 평행한 벽이 수직 거리 상 더 가깝다는 이유로
+      // 유효한 교점을 가진 다른 벽을 가리지 않도록 모든 벽의 교점을 검사해
+      // point에 가장 가까운 유효한 교점을 고른다.
+      let bestInter = null, bestInterD = Infinity;
+      for (const w of walls) {
+        const inter = lockedAxisIntersection(w.a, w.b, yLocked, xLocked, anchor);
+        if (!inter) continue;
+        const d = dist(point, inter);
+        if (d < bestInterD) { bestInterD = d; bestInter = inter; }
       }
-      if (wallPoint) return { point: [wallPoint[0], wallPoint[1]], guides: [], hit: 'wall' };
+      if (bestInter && bestInterD <= tol) wallPoint = bestInter;
+    } else {
+      let nearestWall = null, nearestD = Infinity;
+      for (const w of walls) {
+        const d = dist(point, footOnSegment(point, w.a, w.b));
+        if (d < nearestD) { nearestD = d; nearestWall = w; }
+      }
+      if (nearestWall && nearestD <= tol) wallPoint = footOnSegment(point, nearestWall.a, nearestWall.b);
     }
+    if (wallPoint) return { point: [wallPoint[0], wallPoint[1]], guides: [], hit: 'wall' };
   }
   const vx = xLocked ? null : points.find(q => Math.abs(q[0] - point[0]) <= tol);
   const hy = yLocked ? null : points.find(q => Math.abs(q[1] - point[1]) <= tol);
