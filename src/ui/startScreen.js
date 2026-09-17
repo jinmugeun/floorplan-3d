@@ -8,6 +8,7 @@ const CARDS = [
 export function openStartScreen({ store, onEmpty = () => {}, onUpload = () => {}, onSample = () => {} }) {
   const root = document.createElement('div');
   root.id = 'startScreen';
+  root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', '시작하기');
   root.innerHTML = `<div class="start-card-row">
     <h1>주방 환기 3D 플래너</h1>
     <div class="start-cards">${CARDS.map(c => `<button type="button" class="start-card" data-start="${c.key}"><b>${c.title}</b><span>${c.desc}</span></button>`).join('')}</div>
@@ -21,5 +22,8 @@ export function openStartScreen({ store, onEmpty = () => {}, onUpload = () => {}
     close();
     handlers[b.dataset.start]?.();
   });
+  // Esc = 빈 프로젝트로 시작(다른 대화상자와 같은 규칙). 첫 카드에 포커스를 두어 키보드만으로도 고를 수 있게 한다.
+  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); onEmpty(); } });
+  root.querySelector('[data-start="empty"]')?.focus();
   return { close };
 }

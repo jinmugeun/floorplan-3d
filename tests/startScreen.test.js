@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { test, expect, vi } from 'vitest';
+import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { openStartScreen } from '../src/ui/startScreen.js';
@@ -27,4 +27,17 @@ test('the sample card actually fills the store when wired to loadSample', async 
   openStartScreen({ store, onSample: () => loadSample(store) });
   document.querySelector('[data-start="sample"]').click();
   expect(activeFloor(store.get()).rooms).toHaveLength(11);
+});
+
+test('Escape starts an empty project and the first card has focus', () => {
+  document.body.innerHTML = '';
+  const store = createStore(createEmptyProject());
+  const calls = [];
+  openStartScreen({ store, onEmpty: () => calls.push('empty') });
+  const overlay = document.querySelector('#startScreen');
+  expect(document.activeElement).toBe(overlay.querySelector('[data-start="empty"]'));
+  expect(overlay.getAttribute('role')).toBe('dialog');
+  overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(document.querySelector('#startScreen')).toBeNull();
+  expect(calls).toEqual(['empty']);
 });
