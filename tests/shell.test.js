@@ -130,3 +130,16 @@ test('the image strip appears with a background and drives opacity, visibility a
   expect(store.get().background.locked).toBe(true);
   expect(store.canUndo()).toBe(false); // 표시 설정은 되돌릴 단계가 아니다
 });
+
+test('the image strip is only shown in 2D mode', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  createShell(root, { store, ui });
+  store.dispatch(d => { d.background = { src: 'data:,', width: 10, height: 10, scale: 1, offset: [0.5, 0.25], opacity: 0.5, visible: true, locked: true }; }, { record: false });
+  const strip = root.querySelector('#imageStrip');
+  expect(strip.hidden).toBe(false);
+  ui.set({ mode: 'iso' });
+  expect(strip.hidden).toBe(true);
+  ui.set({ mode: '2d' });
+  expect(strip.hidden).toBe(false);
+});

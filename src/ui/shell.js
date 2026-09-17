@@ -149,6 +149,7 @@ export function createShell(root, { store, ui }) {
     else if (s.soloRoom) { els.banner.hidden = false; els.banner.innerHTML = '단일 공간 모드 <button type="button" id="btnExitSolo">도면 전체 보기</button>'; q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); }
     else { els.banner.hidden = true; els.banner.innerHTML = ''; }
     if (pop.isOpen() && popKind === 'view') refreshPopover();
+    strip.hidden = !store.get().background || s.mode !== '2d'; // 모드가 바뀌면 이미지 세팅 스트립도 따라간다
   });
   const syncTop = s => {
     q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo();
@@ -156,7 +157,7 @@ export function createShell(root, { store, ui }) {
     root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
     q('#btnLock').classList.toggle('on', !!s.view.lockPlan);
     const bg = s.background;
-    strip.hidden = !bg;
+    strip.hidden = !bg || ui.get().mode !== '2d'; // 이미지 세팅은 2D에서만
     if (bg) {
       strip.querySelector('[name="stripOpacity"]').value = String(bg.opacity);
       strip.querySelector('[name="stripVisible"]').checked = !!bg.visible;

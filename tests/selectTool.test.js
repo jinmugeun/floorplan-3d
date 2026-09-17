@@ -277,3 +277,14 @@ test('the plan lock also freezes an unlocked background', () => {
   expect(locked).toBe(1);
   expect(store.canUndo()).toBe(false);
 });
+
+test('a drag outside the unlocked background rect does not move it and clears the selection', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  store.dispatch(d => { d.background = { src: 'data:,', width: 100, height: 80, scale: 10, offset: [0, 0], opacity: 0.5, visible: true, locked: false }; }, { record: false });
+  ui.set({ selection: { type: 'wall', id: 'x' } });
+  const t = createSelectTool({ store, ui, view: fakeView });
+  t.onPointerDown([1500.5, 900.25]); t.onPointerMove([2000, 1200]); t.onPointerUp([2000, 1200]); // 배경(1000x800) 바깥
+  expect(store.get().background.offset).toEqual([0, 0]);
+  expect(ui.get().selection).toBeNull();
+  expect(store.canUndo()).toBe(false);
+});
