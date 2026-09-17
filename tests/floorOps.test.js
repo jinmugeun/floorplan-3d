@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls } from '../src/state/floorOps.js';
+import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -65,4 +65,15 @@ test('setWalls with a wall moved 600 mm in one step keeps room identity and name
   const f = activeFloor(s.get());
   expect(f.rooms[0].id).toBe(r.id);
   expect(f.rooms[0].name).toBe('식당');
+});
+test('selectionStillValid checks the selected wall/room still exists on the active floor', () => {
+  const s = setup();
+  const f = activeFloor(s.get());
+  expect(selectionStillValid(s.get(), null)).toBe(true);
+  expect(selectionStillValid(s.get(), { type: 'wall', id: f.walls[0].id })).toBe(true);
+  expect(selectionStillValid(s.get(), { type: 'room', id: f.rooms[0].id })).toBe(true);
+  expect(selectionStillValid(s.get(), { type: 'wall', id: 'nope' })).toBe(false);
+  s.undo(); // 벽이 사라진다
+  expect(selectionStillValid(s.get(), { type: 'wall', id: f.walls[0].id })).toBe(false);
+  expect(selectionStillValid(s.get(), { type: 'room', id: f.rooms[0].id })).toBe(false);
 });

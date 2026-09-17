@@ -49,3 +49,11 @@ export function transformFloor(store, fn) {
     reroom(f);
   });
 }
+// ui.selection이 가리키는 객체가 아직 활성 층에 있는지(undo/redo/방 재검출로 사라졌을 수 있다).
+export function selectionStillValid(state, selection) {
+  if (!selection) return true;
+  const f = activeFloor(state);
+  if (selection.type === 'wall') return f.walls.some(w => w.id === selection.id);
+  if (selection.type === 'room') return f.rooms.some(r => r.id === selection.id);
+  return true;
+}

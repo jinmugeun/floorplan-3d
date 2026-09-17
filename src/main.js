@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { deleteWall, deleteRoom, transformFloor } from './state/floorOps.js';
+import { deleteWall, deleteRoom, transformFloor, selectionStillValid } from './state/floorOps.js';
 import { hitWall } from './geom/walls.js';
 import { createView2D } from './view2d/view2d.js';
 import { createRoomTool, ROOM_TOOL_DEFAULTS } from './view2d/tools/roomTool.js';
@@ -23,6 +23,8 @@ const view = createView2D(shell.els.canvas2d, store, ui);
 const minimap = createView2D(shell.els.minimap, store, ui, { readonly: true, labels: false });
 const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
 createPropsPanel(shell.els.props, store, ui);
+// undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다
+store.subscribe(s => { if (!selectionStillValid(s, ui.get().selection)) ui.set({ selection: null }); });
 
 function createDeleteTool() {
   return { name: 'delete', opts: {}, onPointerDown(p) { const w = hitWall(activeFloor(store.get()).walls, p, 6 / view.camera.scale); if (w) deleteWall(store, w.id); }, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {} };
