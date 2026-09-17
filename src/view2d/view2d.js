@@ -74,8 +74,12 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
     drawBackground(state);
     if (state.view.grid && !readonly) drawGrid();
+    // 배경 도면이 보일 때는 바닥을 반투명하게 그려서 도면을 따라 그릴 수 있게 한다.
+    const tracing = !!(state.background && state.background.visible && state.view.background);
     for (const r of f.rooms) {
+      ctx.globalAlpha = tracing ? 0.35 : 1;
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
+      ctx.globalAlpha = 1;
       if (state.view.labels && labels) { const c = centroid(r.points); if (r.name) label(r.name, [c[0], c[1] - 250], { size: 13, color: COLORS.dim }); label(`${r.area.toFixed(1)}m²`, c); }
     }
     if (!readonly) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }

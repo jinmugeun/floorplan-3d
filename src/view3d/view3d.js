@@ -5,6 +5,7 @@ import { activeFloor } from '../state/schema.js';
 import { buildFloorGroup, disposeGroup, toThree } from './build.js';
 import { hiddenWallIds } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
+import { cameraDistance } from './fit.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -32,7 +33,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     if (keys.has('KeyA')) fp.moveRight(-v); if (keys.has('KeyD')) fp.moveRight(v);
     if (keys.has('KeyQ')) camera.position.y -= v; if (keys.has('KeyE')) camera.position.y += v;
   }
-  const center = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return [4000, 3000]; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]; };
+  const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000 }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) }; };
+  const center = () => bounds().center;
   function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); }
   function resize() { const w = container.clientWidth || 1, h = container.clientHeight || 1; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   function setMode(m, opts = {}) {
@@ -49,8 +51,9 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     if (fp.isLocked) fp.unlock(); // 1/2/3 키로 fp를 떠날 때도 포인터 락을 반드시 해제한다
     group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = false; });
     const c = center(), t = toThree([c[0], c[1], 0]); controls.target.copy(t);
-    if (m === 'plan') { camera.position.set(t.x, 40, t.z + 0.01); controls.minPolarAngle = 0; controls.maxPolarAngle = 0.05; }
-    else { const r = 25, el = THREE.MathUtils.degToRad(35), az = THREE.MathUtils.degToRad(47); camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az)); controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI / 2 - 0.02; }
+    const r = cameraDistance(bounds().extent); // 도면 크기에 맞춘 카메라 거리(m)
+    if (m === 'plan') { camera.position.set(t.x, r * 1.6, t.z + 0.01); controls.minPolarAngle = 0; controls.maxPolarAngle = 0.05; }
+    else { const el = THREE.MathUtils.degToRad(35), az = THREE.MathUtils.degToRad(47); camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az)); controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI / 2 - 0.02; }
     controls.update(); requestRender();
   }
   function applyCutaway() {
