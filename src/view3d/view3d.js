@@ -10,7 +10,7 @@ import { sunPosition } from './sun.js';
 import { headingDeg, toWorldXY } from './camera.js';
 import { orthoViewParams, createItemPicker } from './pick3d.js';
 
-export function createView3D(container, store, ui, { onExitFp = () => {}, openMenu = () => {}, itemActions = {} } = {}) {
+export function createView3D(container, store, ui, { onExitFp = () => {}, openMenu = () => {}, itemActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
@@ -40,7 +40,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   }
   const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000 }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) }; };
   const center = () => bounds().center;
-  let ortho2 = null, useOrtho = false;
+  let ortho2 = null, useOrtho = false, orthoName = null;
   // 2D 투영(정면/배면/좌/우/평면/저면): 도면을 도면처럼 고정된 직교 카메라로 본다.
   function setOrthoView(name) {
     const b = bounds(), w = container.clientWidth || 1, h = container.clientHeight || 1;
@@ -50,16 +50,26 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
     ortho2.position.set(...p.pos); ortho2.up.set(...p.up);
     ortho2.lookAt(new THREE.Vector3(...p.target));
     ortho2.updateProjectionMatrix();
-    useOrtho = true; controls.enabled = false;      // 고정 뷰(도면처럼 본다)
+    useOrtho = true; orthoName = name; controls.enabled = false;  // 고정 뷰(도면처럼 본다)
+    picker.detach();                                // 편집할 수 없는 고정 뷰이므로 기즈모도 떼어 둔다
+    onOrthoView(name);
     requestRender();
   }
-  function clearOrthoView() { useOrtho = false; controls.enabled = mode !== 'fp'; requestRender(); }
-  function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); if (!picker.isDragging()) picker.attach(ui.get().selection); }
+  function clearOrthoView() {
+    useOrtho = false; orthoName = null; controls.enabled = mode !== 'fp';
+    picker.attach(ui.get().selection);               // 투영에서 빠져나오면 선택한 아이템에 기즈모를 다시 붙인다
+    onOrthoView(null);
+    requestRender();
+  }
+  // rebuild가 picker를 읽으므로 picker를 먼저 만든다(TDZ).
+  const picker = createItemPicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), controls, scene, store, ui, getGroup: () => group, getMode: () => mode, requestRender, openMenu, itemActions });
+  function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); if (mode === 'fp' || useOrtho) picker.detach(); else if (!picker.isDragging()) picker.attach(ui.get().selection); }
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
     renderer.setSize(w, h);
     persp.aspect = w / h; persp.updateProjectionMatrix();
     if (camera === ortho) frustum();
+    if (useOrtho && orthoName) setOrthoView(orthoName); // 2D 투영의 절두체는 화면 비율을 따른다
   }
   // 직교 카메라의 절두체를 원근 카메라와 같은 화각으로 맞춘다(전환 때 크기가 튀지 않게).
   function frustum() {
@@ -130,7 +140,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   // 하단 바 "화면 맞추기"(키 0)의 3D 쪽 동작. 모드는 바꾸지 않는다.
   function fit() { if (mode === 'fp') return; resize(); frameScene(); }
   function setMode(m, opts = {}) {
-    if (useOrtho) { useOrtho = false; controls.enabled = true; } // 모드 버튼을 누르면 투영에서 빠져나온다
+    if (useOrtho) { useOrtho = false; orthoName = null; controls.enabled = true; onOrthoView(null); } // 모드 버튼을 누르면 투영에서 빠져나온다(하단 바 선택도 비운다)
     resize(); // 숨겨져 있다가 보이는 경우 크기를 다시 맞춘다
     mode = m;
     if (m === 'fp') {
@@ -179,7 +189,11 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
       fpStep(t); group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; }); renderer.render(scene, useOrtho ? ortho2 : camera);
       raf = requestAnimationFrame(frame); return;
     }
-    controls.update(); applyCutaway(); applySolo(); renderer.render(scene, useOrtho ? ortho2 : camera);
+    controls.update();
+    // 2D 투영은 정면·평면 도면이다: 궤도 카메라 기준의 컷어웨이로 벽을 지우면 도면이 비어 보인다.
+    if (useOrtho) group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; });
+    else applyCutaway();
+    applySolo(); renderer.render(scene, useOrtho ? ortho2 : camera);
   }
   function requestRender() { if (!raf) raf = requestAnimationFrame(frame); }
   controls.addEventListener('change', requestRender);
@@ -199,13 +213,12 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
     if (sig !== lastSig) { lastSig = sig; rebuild(); }
     applyViewSettings(); requestRender();
   });
-  const picker = createItemPicker({ renderer, camera, controls, scene, store, ui, getGroup: () => group, requestRender, openMenu, itemActions });
   const unsubUi = ui.subscribe(s => {
-    if (mode === 'fp') picker.detach();
+    if (mode === 'fp' || useOrtho) picker.detach();
     else if (!picker.isDragging()) picker.attach(s.selection);   // 기즈모 드래그 중에는 붙이지 않는다
     requestRender();
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, getCameraInfo, setTarget, requestRender, setOrthoView, clearOrthoView, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, getCameraInfo, setTarget, requestRender, setOrthoView, clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

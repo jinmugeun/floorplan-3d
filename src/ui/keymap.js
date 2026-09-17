@@ -59,7 +59,8 @@ function itemCombo(ev, k, a) {
     return false;
   }
   if (ev.ctrlKey || ev.metaKey) {
-    if (k === 'v') { a.paste?.(); return true; }
+    // 붙여넣기는 선택이 없어도 되지만 클립보드가 비면 브라우저에 맡긴다(아무것도 안 하고 키를 삼키지 않게).
+    if (k === 'v') { if (!(a.canPaste?.() ?? false)) return false; a.paste?.(); return true; }
     if (!has) return false;
     if (k === 'c') { a.copy?.(); return true; }
     if (k === 'h') { a.toggleHidden?.(); return true; }

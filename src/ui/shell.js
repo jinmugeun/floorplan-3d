@@ -10,7 +10,7 @@ const LEN_OPTS = new Set(['thickness']);
 const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
 
-export function createShell(root, { store, ui }) {
+export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
   root.innerHTML = `
   <div id="layout">
     <header id="topbar">
@@ -65,6 +65,7 @@ export function createShell(root, { store, ui }) {
       <div class="seg"><button id="btnLock">도면 잠금</button><button data-action="capture">스크린 캡쳐</button></div>
       <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit">화면 맞추기</button></div>
       <div class="seg"><label class="muted">2D 투영 <select id="viewPreset" aria-label="2D 투영 뷰"><option value="">—</option><option value="front">정면</option><option value="back">배면</option><option value="left">좌측</option><option value="right">우측</option><option value="top">평면</option><option value="bottom">저면</option></select></label></div>
+      <div class="seg"><button id="btnGizmoMode" aria-label="3D 기즈모 모드" hidden>이동</button></div>
       <div class="seg" id="unitSeg"><button data-units="mm" class="on">mm</button><button data-units="ftin">ft·in</button></div>
     </footer>
   </div>`;
@@ -85,6 +86,11 @@ export function createShell(root, { store, ui }) {
   root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => showPanel(b.dataset.panel)));
   root.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => store.dispatch(d => { d.units = b.dataset.units; }, { record: false })));
   q('#btnLock').addEventListener('click', () => store.dispatch(d => { d.view.lockPlan = !d.view.lockPlan; }, { record: false }));
+  // 3D 기즈모 모드 토글(이동 ↔ 회전). R은 1인칭이 쓰므로 단축키 없이 버튼으로만 바꾼다.
+  let gizmoMode = 'translate';
+  const syncGizmoBtn = () => { const b = q('#btnGizmoMode'); b.textContent = gizmoMode === 'rotate' ? '회전' : '이동'; b.classList.toggle('on', gizmoMode === 'rotate'); };
+  q('#btnGizmoMode').addEventListener('click', () => { gizmoMode = gizmoMode === 'rotate' ? 'translate' : 'rotate'; syncGizmoBtn(); onGizmoMode(gizmoMode); });
+  syncGizmoBtn();
 
   const pop = createPopover(root);
   let popKind = null;
@@ -153,6 +159,8 @@ export function createShell(root, { store, ui }) {
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
     const is3d = s.mode !== '2d';
     q('#btnCam').hidden = !is3d; q('#btnSun').hidden = !is3d;
+    // 기즈모 모드 토글은 3D에서 아이템 하나를 골랐을 때만 쓸 일이 있다(1인칭에는 기즈모가 없다).
+    q('#btnGizmoMode').hidden = !(is3d && s.mode !== 'fp' && s.selection?.type === 'item');
     if (!is3d && (popKind === 'cam' || popKind === 'sun')) pop.close();
     if (s.fpPick) { els.banner.hidden = false; els.banner.innerHTML = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소'; }
     else if (s.soloRoom) { els.banner.hidden = false; els.banner.innerHTML = '단일 공간 모드 <button type="button" id="btnExitSolo">도면 전체 보기</button>'; q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); }

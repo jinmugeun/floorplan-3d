@@ -3,8 +3,9 @@ import { test, expect, vi } from 'vitest';
 import { createKeyHandler, KEYMAP, TABLE, FP_ALLOWED, PREVENT, tokenOf } from '../src/ui/keymap.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject, activeFloor } from '../src/state/schema.js';
-import { addWalls } from '../src/state/floorOps.js';
+import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
+import { addWalls, pasteItems } from '../src/state/floorOps.js';
+import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 
@@ -193,13 +194,17 @@ test('a key consumed by the tool also has its browser default prevented', () => 
   expect(prevented).toBe(1);
 });
 
-function setupItems() {
+function setupItems({ ids = ['i1'], canPaste = true } = {}) {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   const calls = [];
-  const itemActions = new Proxy({ ids: () => ['i1'] }, { get: (t, k) => (k === 'ids' ? t.ids : (...args) => calls.push([k, ...args])) });
+  const base = { ids: () => ids, canPaste: () => canPaste };
+  const itemActions = new Proxy(base, { get: (t, k) => (t[k] ?? ((...args) => calls.push([k, ...args]))) });
   const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn() };
   const h = createKeyHandler({ store, ui, view, setTool: vi.fn(), setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn(), itemActions });
-  const key = (k, extra = {}) => h({ key: k, target: document.body, preventDefault() {}, ...extra });
+  const key = (k, extra = {}) => {
+    const ev = { key: k, target: document.body, prevented: 0, preventDefault() { this.prevented++; }, ...extra };
+    h(ev); return ev;
+  };
   return { ui, calls, key, view };
 }
 
@@ -237,4 +242,49 @@ test('KEYMAP lists the product shortcuts', async () => {
   const keys = rows.map(r => r.keys).join(' ');
   for (const k of ['Alt+H', 'Alt+V', 'Alt+R', 'Alt+A', 'Alt+C', 'Alt+X', 'Ctrl+C', 'Ctrl+V', 'Ctrl+H', 'Ctrl+L', 'Ctrl+G', 'Q']) expect(keys).toContain(k);
   expect(keys).toContain('방향키');
+});
+
+// 선택이 없으면 아이템 조합키를 브라우저에 그대로 넘긴다(Ctrl+C로 텍스트 복사 등을 막지 않게).
+test('선택이 없으면 Alt+H / Ctrl+C / Ctrl+H / Ctrl+G를 삼키지 않는다', () => {
+  const a = setupItems({ ids: [], canPaste: false });
+  for (const [k, mod] of [['h', { altKey: true }], ['v', { altKey: true }], ['r', { altKey: true }], ['c', { ctrlKey: true }], ['h', { ctrlKey: true }], ['g', { ctrlKey: true }], ['l', { ctrlKey: true }]]) {
+    expect(a.key(k, mod).prevented).toBe(0);
+  }
+  expect(a.calls).toEqual([]);
+});
+
+test('선택이 없어도 클립보드가 차 있으면 Ctrl+V는 붙여넣는다', () => {
+  const a = setupItems({ ids: [], canPaste: true });
+  const ev = a.key('v', { ctrlKey: true });
+  expect(ev.prevented).toBe(1);
+  expect(a.calls).toEqual([['paste']]);
+});
+
+test('빈 클립보드의 Ctrl+V는 아무것도 하지 않고 키를 삼키지도 않는다', () => {
+  const a = setupItems({ ids: ['i1'], canPaste: false });
+  const ev = a.key('v', { ctrlKey: true });
+  expect(ev.prevented).toBe(0);
+  expect(a.calls).toEqual([]);
+});
+
+test('벽을 고른 Ctrl+C는 삼키지 않는다(복사는 아이템 동작이다)', () => {
+  const a = setupItems({ ids: [] }); // 벽 선택은 아이템 id를 내지 않는다
+  a.ui.set({ selection: { type: 'wall', id: 'w1' } });
+  const ev = a.key('c', { ctrlKey: true });
+  expect(ev.prevented).toBe(0);
+  expect(a.calls).toEqual([]);
+});
+
+// main.js의 itemActions.paste와 같은 구성: 붙여넣은 것이 없으면 선택을 건드리지 않는다.
+test('붙여넣기가 아무것도 만들지 않으면 선택은 그대로다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const selectItems = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids } });
+  const paste = () => { const made = pasteItems(store, ui.get().clipboard ?? [], { delta: [200, 200] }); if (made.length) selectItems(made); };
+  ui.set({ selection: { type: 'wall', id: 'w1' } });
+  paste();
+  expect(ui.get().selection).toEqual({ type: 'wall', id: 'w1' });
+  ui.set({ clipboard: [createItem(productById('sofa-3'), { pos: [0, 0] })] });
+  paste();
+  expect(ui.get().selection.type).toBe('item');
 });

@@ -180,3 +180,28 @@ test('switching units re-renders the option bar label', () => {
   root.querySelector('[data-units="ftin"]').click();
   expect(root.querySelector('#optionBar').textContent).toContain('두께 (ft·in)');
 });
+
+test('기즈모 모드 버튼은 3D에서 아이템을 골랐을 때만 보이고 이동/회전을 뒤집는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState(); const modes = [];
+  createShell(root, { store: createStore(createEmptyProject()), ui, onGizmoMode: m => modes.push(m) });
+  const btn = root.querySelector('#btnGizmoMode');
+  expect(btn.hidden).toBe(true);
+  ui.set({ selection: { type: 'item', id: 'i1' } });
+  expect(btn.hidden).toBe(true);           // 2D에서는 기즈모가 없다
+  ui.set({ mode: 'iso' });
+  expect(btn.hidden).toBe(false);
+  expect(btn.textContent).toBe('이동');
+  btn.click();
+  expect(modes).toEqual(['rotate']);
+  expect(btn.textContent).toBe('회전');
+  btn.click();
+  expect(modes).toEqual(['rotate', 'translate']);
+  expect(btn.textContent).toBe('이동');
+  ui.set({ mode: 'fp' });
+  expect(btn.hidden).toBe(true);           // 1인칭에도 기즈모가 없다
+  ui.set({ mode: 'iso', selection: { type: 'multi', kind: 'item', ids: ['i1', 'i2'] } });
+  expect(btn.hidden).toBe(true);           // 기즈모는 한 개를 고른 때만 붙는다
+  ui.set({ selection: null });
+  expect(btn.hidden).toBe(true);
+});

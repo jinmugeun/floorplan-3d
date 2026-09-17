@@ -29,7 +29,8 @@ import { serializeProject, parseProject, downloadText, readTextFile, startAutosa
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
-const shell = createShell(document.getElementById('app'), { store, ui });
+const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m) });
+const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D 투영 선택(view3d가 상태를 되돌려 준다)
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 const menu = createContextMenu(document.body);
 const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender() }); // 태스크 5의 onCameraChange를 유지한다
@@ -41,7 +42,8 @@ const itemActions = {
   mirror: axis => mirrorItems(store, selectedItemIds(), axis),
   replace: () => { library.setMode('replace', { itemIds: selectedItemIds() }); shell.showPanel('products'); },
   copy: () => { ui.set({ clipboard: itemsOf(store.get(), selectedItemIds()).map(i => structuredClone(i)) }); shell.toast('복사했습니다'); },
-  paste: () => selectItems(pasteItems(store, ui.get().clipboard ?? [], { delta: [200, 200] })),
+  canPaste: () => (ui.get().clipboard?.length ?? 0) > 0,
+  paste: () => { const made = pasteItems(store, ui.get().clipboard ?? [], { delta: [200, 200] }); if (made.length) selectItems(made); }, // 붙여넣을 것이 없으면 선택을 건드리지 않는다
   remove: () => deleteSelection(),
   selectSame: () => {
     const it = itemsOf(store.get(), selectedItemIds())[0];
@@ -61,7 +63,7 @@ const itemActions = {
     openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(`${made.length}개 복사했습니다`); } });
   },
 };
-const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions });
+const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions, onOrthoView: name => { if (viewPreset) viewPreset.value = name ?? ''; } });
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 function replaceProductOf(itemIds, product) { if (itemIds?.length) { replaceProduct(store, itemIds, product); shell.toast('제품을 교체했습니다'); } }
@@ -112,7 +114,7 @@ function setMode(mode, opts) {
   if (mode === 'fp') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ fpPick: true, mode: '2d' }); return; }
   ui.set({ mode, fpPick: false });
   if (mode !== '2d') view3d.setMode(mode, opts);
-  else { if (view3d.getMode() === 'fp') view3d.setMode('iso'); view.requestRender(); } // 2D로 갈 때 fp(포인터 락, 렌더 루프)를 끝낸다
+  else { if (view3d.getMode() === 'fp') view3d.setMode('iso'); view3d.clearOrthoView(); view.requestRender(); } // 2D로 갈 때 fp(포인터 락, 렌더 루프)와 2D 투영을 끝낸다
 }
 const canvas2d = shell.els.canvas2d;
 canvas2d.addEventListener('pointerdown', ev => { if (ui.get().fpPick && ev.button === 0) { const at = view.toWorld([ev.offsetX, ev.offsetY]); ui.set({ mode: 'fp', fpPick: false }); view3d.setMode('fp', { at }); ev.stopImmediatePropagation(); } }, true);
@@ -133,10 +135,11 @@ document.getElementById('btnFit').addEventListener('click', fitView);
 const zoom = factor => activeView().zoomBy(factor);
 document.getElementById('btnZoomIn').addEventListener('click', () => zoom(1.25));
 document.getElementById('btnZoomOut').addEventListener('click', () => zoom(1 / 1.25));
-document.getElementById('viewPreset')?.addEventListener('change', ev => {
-  if (!ev.target.value) { view3d.clearOrthoView(); return; }
+viewPreset?.addEventListener('change', ev => {
+  const name = ev.target.value; // 먼저 읽는다: setMode가 onOrthoView(null)로 선택을 비운다
+  if (!name) { view3d.clearOrthoView(); return; }
   if (ui.get().mode === '2d') setMode('iso');
-  view3d.setOrthoView(ev.target.value);
+  view3d.setOrthoView(name);
 });
 document.getElementById('projectName').addEventListener('change', ev => store.dispatch(d => { d.name = ev.target.value; }));
 const selectAll = () => { const ids = activeFloor(store.get()).walls.map(w => w.id); ui.set({ selection: ids.length ? { type: 'multi', kind: 'wall', ids } : null }); };
