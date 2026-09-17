@@ -6,7 +6,7 @@ export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], [
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const field = (label, inner) => `<label class="field"><span>${label}</span>${inner}</label>`;
-const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
+const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${Number(value) || 0}" min="${min}" max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
 // 숫자 입력: 비어 있거나 숫자가 아니면 null, 범위를 벗어나면 min/max로 잘라 준다.
 function numValue(el) {
   if (el.value.trim() === '') return null;

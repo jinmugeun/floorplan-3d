@@ -50,3 +50,10 @@ test('room name with quotes is escaped in the panel markup', () => {
   expect(again.value).toBe('a" onfocus="x');
   expect(again.hasAttribute('onfocus')).toBe(false);
 });
+
+test('number fields render 0 for non-numeric values instead of raw text', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  store.dispatch(d => { activeFloor(d).height = 'abc'; });
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  expect(el.querySelector('input[name="floorHeight"]').value).toBe('0');
+});
