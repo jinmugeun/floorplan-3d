@@ -1,5 +1,5 @@
 export function createUiState() {
-  let state = { tool: 'select', mode: '2d', selection: null, hover: null, focusField: null, soloRoom: null };
+  let state = { tool: 'select', mode: '2d', selection: null, hover: null, focusField: null, soloRoom: null, clipboard: [] };
   const subs = new Set();
   return {
     get: () => state,

@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { deleteWall, deleteWalls, deleteRoom, deleteItems, transformFloor, pruneSelection, pruneSolo } from './state/floorOps.js';
+import { deleteWall, deleteWalls, deleteRoom, deleteItems, transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds } from './state/floorOps.js';
 import { hitWall } from './geom/walls.js';
 import { pointInPolygon } from './geom/rooms.js';
 import { createView2D } from './view2d/view2d.js';
@@ -35,8 +35,27 @@ const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.se
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 createPropsPanel(shell.els.props, store, ui, { deleteSelection });
-function replaceProductOf() {} // Task 11에서 채운다
+function replaceProductOf(itemIds, product) { if (itemIds?.length) { replaceProduct(store, itemIds, product); shell.toast('제품을 교체했습니다'); } }
 const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
+
+const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
+const selectItems = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids } });
+// 컨텍스트 메뉴(itemMenu.js)와 단축키가 부르는 아이템 동작 묶음. group/ungroup/relativeMove/arrayCopy/align은 Task 12에서 채운다.
+const itemActions = {
+  ids: selectedItemIds,
+  mirror: axis => mirrorItems(store, selectedItemIds(), axis),
+  replace: () => { library.setMode('replace', { itemIds: selectedItemIds() }); shell.showPanel('products'); },
+  copy: () => { ui.set({ clipboard: itemsOf(store.get(), selectedItemIds()).map(i => structuredClone(i)) }); shell.toast('복사했습니다'); },
+  paste: () => selectItems(pasteItems(store, ui.get().clipboard ?? [], { delta: [200, 200] })),
+  remove: () => deleteSelection(),
+  selectSame: () => {
+    const it = itemsOf(store.get(), selectedItemIds())[0];
+    if (it) selectItems(sameProductIds(activeFloor(store.get()), it.productId));
+  },
+  toggleHidden: () => setItemFlag(store, selectedItemIds(), 'hidden'),
+  toggleLocked: () => setItemFlag(store, selectedItemIds(), 'locked'),
+  group: () => {}, ungroup: () => {}, relativeMove: () => {}, arrayCopy: () => {}, align: () => {}, // Task 12에서 채운다
+};
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
 store.subscribe(s => {
   const u = ui.get();
@@ -66,7 +85,7 @@ function createDeleteTool() {
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS } };
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
-  select: () => createSelectTool({ store, ui, view, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
+  select: () => createSelectTool({ store, ui, view, itemActions, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
   room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
   wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
   delete: createDeleteTool,

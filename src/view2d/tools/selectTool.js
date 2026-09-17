@@ -6,6 +6,7 @@ import { eq, sub, add, dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
 import { createItemDragger } from './itemDrag.js';
 import { drawItemSelection, ITEM_COLORS } from '../items2d.js';
+import { itemMenuItems } from '../../ui/itemMenu.js';
 
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
@@ -161,6 +162,8 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     },
     onContextMenu(p) {
       const f = floor();
+      const it = items.pick(p);
+      if (it) { const cur = selIds(); const ids = expandGroups(f, cur.includes(it.id) ? cur : [it.id]); setItemSelection(ids); return itemMenuItems({ store, ui, ids, itemActions }); }
       const w = hitWall(f.walls, p, px(6));
       // 우클릭은 먼저 대상을 선택한다(다중 선택에 이미 든 벽이면 다중 선택을 유지한다).
       const sel = ui.get().selection;

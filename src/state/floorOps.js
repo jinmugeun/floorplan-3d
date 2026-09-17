@@ -5,6 +5,9 @@ import { normalizeWalls } from '../geom/normalize.js';
 import { dist, eq, dot } from '../geom/vec.js';
 import { wallAxis, placeOnWall, isEmbed } from '../geom/items.js';
 
+// mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds는 300줄을 넘어 itemOps.js로 나눴다.
+export * from './itemOps.js';
+
 const reroom = f => { f.walls = normalizeWalls(f.walls); f.rooms = detectRooms(f.walls, f.rooms); };
 // 벽이 움직이거나 사라졌을 때 그 벽에 붙은 아이템을 다시 앉힌다. reroom이 도는 곳마다 함께 돈다.
 // 벽을 지우면 wallId만 비우고 아이템은 남긴다(사용자가 만든 물건을 소리 없이 없애지 않는다).

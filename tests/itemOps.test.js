@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeItem, createItem, normalizeProject } from '../src/state/schema.js';
-import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems } from '../src/state/floorOps.js';
+import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds } from '../src/state/floorOps.js';
 import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 
@@ -176,5 +176,74 @@ describe('재부착은 reroom이 도는 모든 액션 뒤에 돈다', () => {
     expect(s.get()).toBe(before); // dispatch 자체가 일어나지 않았다
     nudgeItems(s, [id], [10, 0]);
     expect(activeFloor(s.get()).items.find(x => x.id === id).t).toBeGreaterThan(0.5);
+  });
+});
+
+describe('아이템 편집 동작', () => {
+  test('좌우 반전은 flipH를 토글하고 여러 개면 위치도 반사한다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
+    mirrorItems(s, [a], 'h');
+    expect(activeFloor(s.get()).items[0].flipH).toBe(true);
+    expect(activeFloor(s.get()).items[0].pos).toEqual([1000, 1000]); // 하나면 제자리
+    const b = addItem(s, createItem(productById('chair-dining'), { pos: [2000.5, 1000] }));
+    mirrorItems(s, [a, b], 'h');
+    const [x, y] = activeFloor(s.get()).items.map(i => i.pos[0]);
+    expect(x).toBeCloseTo(2000.5);
+    expect(y).toBeCloseTo(1000);
+    expect(activeFloor(s.get()).items[0].flipH).toBe(false); // 다시 토글
+  });
+
+  test('상하 반전은 flipV와 y를 반사한다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 500] }));
+    const b = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 1500] }));
+    mirrorItems(s, [a, b], 'v');
+    expect(activeFloor(s.get()).items.map(i => i.pos[1])).toEqual([1500, 500]);
+    expect(activeFloor(s.get()).items.every(i => i.flipV)).toBe(true);
+  });
+
+  test('setItemFlag는 토글과 지정 둘 다 된다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('sofa-3'), { pos: [0, 0] }));
+    setItemFlag(s, [a], 'hidden');
+    expect(activeFloor(s.get()).items[0].hidden).toBe(true);
+    setItemFlag(s, [a], 'hidden', false);
+    expect(activeFloor(s.get()).items[0].hidden).toBe(false);
+    setItemFlag(s, [a], 'locked', true);
+    expect(activeFloor(s.get()).items[0].locked).toBe(true);
+  });
+
+  test('제품 교체는 위치를 지키고 벽 부착은 벽에 다시 맞춘다', () => {
+    const s = setup();
+    const f = activeFloor(s.get());
+    const top = f.walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+    const a = addItem(s, createItem(productById('sofa-3'), { pos: [2000.5, 1500.25], rot: 90 }));
+    replaceProduct(s, [a], productById('bed-queen'));
+    const it = activeFloor(s.get()).items[0];
+    expect(it.productId).toBe('bed-queen');
+    expect(it.size).toEqual([1500, 2000, 600]);
+    expect(it.pos).toEqual([2000.5, 1500.25]);
+    expect(it.rot).toBe(90);
+    const b = addItem(s, createItem(productById('hood-wall'), { wallId: top.id, t: 0.5, side: 1, pos: [2000, 350] }));
+    replaceProduct(s, [b], productById('cabinet-upper'));   // 깊이 350 → 벽면에서 175
+    const w = activeFloor(s.get()).items[1];
+    expect(w.size).toEqual([900, 350, 700]);
+    expect(w.pos).toEqual([2000, 275]);
+    expect(w.z).toBe(1500);
+  });
+
+  test('붙여넣기는 스냅샷을 옮겨 새 id로 넣고 같은 제품 선택은 같은 productId를 모은다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
+    addItem(s, createItem(productById('chair-dining'), { pos: [2000, 1000] }));
+    addItem(s, createItem(productById('sofa-3'), { pos: [3000, 1000] }));
+    const snaps = itemsOf(s.get(), [a]).map(i => structuredClone(i));
+    const ids = pasteItems(s, snaps, { delta: [200, 200] });
+    expect(ids).toHaveLength(1);
+    expect(activeFloor(s.get()).items).toHaveLength(4);
+    expect(activeFloor(s.get()).items[3].pos).toEqual([1200, 1200]);
+    expect(sameProductIds(activeFloor(s.get()), 'chair-dining')).toHaveLength(3);
+    expect(pasteItems(s, [], {})).toEqual([]);
   });
 });

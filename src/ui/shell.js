@@ -77,10 +77,11 @@ export function createShell(root, { store, ui }) {
   });
   q('#btnBgLock').addEventListener('click', () => store.dispatch(d => { if (d.background) d.background.locked = !d.background.locked; }, { record: false }));
 
-  root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => {
-    root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x === b));
-    root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== b.dataset.panel);
-  }));
+  function showPanel(name) {
+    root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
+    root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== name);
+  }
+  root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => showPanel(b.dataset.panel)));
   root.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => store.dispatch(d => { d.units = b.dataset.units; }, { record: false })));
   q('#btnLock').addEventListener('click', () => store.dispatch(d => { d.view.lockPlan = !d.view.lockPlan; }, { record: false }));
 
@@ -176,5 +177,5 @@ export function createShell(root, { store, ui }) {
     }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, toast, popover: pop, refreshPopover };
+  return { els, setOptionBar, showPanel, toast, popover: pop, refreshPopover };
 }
