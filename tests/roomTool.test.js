@@ -72,3 +72,17 @@ test('a given opts object is used and exposed so option edits persist across too
   t.onPointerDown([0, 0]); t.onPointerMove([4000, 3000]); t.onPointerDown([4000, 3000]);
   expect(activeFloor(store.get()).walls.every(w => w.thickness === 100)).toBe(true);
 });
+
+test('in mm mode feet/inch characters are ignored while typing dimensions', () => {
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store, onDone() {} });
+  t.onPointerDown([0, 0]);
+  expect(t.onKey(key("'"))).toBe(false);
+  expect(t.onKey(key('"'))).toBe(false);
+  expect(t.onKey(key(' '))).toBe(false);
+  for (const c of '1500') t.onKey(key(c));
+  expect(t.getPreview().typed.w).toBe('1500');
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  expect(t.onKey(key("'"))).toBe(true); // ft·in에서는 받는다
+  expect(t.getPreview().typed.w).toBe("1500'");
+});

@@ -126,6 +126,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
   let pressed = false; // pointerdown 이후 onUp이 한 번만 실행되도록(pointerup 뒤에 lostpointercapture가 또 온다)
   const onDown = ev => {
     if (readonly) { if (onPick && ev.button === 0) { picking = true; canvas.setPointerCapture?.(ev.pointerId); onPick(toWorld(pos(ev))); } return; }
+    if (ev.button === 2 && tool?.onContextMenu) return; // 우클릭 메뉴가 있는 도구에서는 오른쪽 버튼이 패닝을 시작하지 않는다
     pressed = true;
     canvas.setPointerCapture?.(ev.pointerId); // 캔버스 밖에서 놓아도 pointerup/pointercancel을 받는다
     if (ev.button === 1 || ev.button === 2 || (ev.button === 0 && !tool)) { panning = { s: pos(ev), cx: camera.cx, cy: camera.cy }; return; }

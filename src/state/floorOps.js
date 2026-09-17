@@ -71,8 +71,8 @@ export function setRoomWallHeight(store, roomId, height, opts) {
 }
 // 기하에 영향이 없는 벽 필드(height, colorIn, colorOut …)를 고칠 때 쓴다. reroom을 부르지 않는다.
 // 끝점 이동과 두께 변경만 updateWall(= reroom 포함)을 쓴다.
-export function updateWallProps(store, id, patch) {
-  return store.dispatch(d => { const w = activeFloor(d).walls.find(x => x.id === id); if (w) Object.assign(w, patch); });
+export function updateWallProps(store, id, patch, opts) {
+  return store.dispatch(d => { const w = activeFloor(d).walls.find(x => x.id === id); if (w) Object.assign(w, patch); }, opts);
 }
 export function transformFloor(store, fn) {
   return store.dispatch(d => {
@@ -117,10 +117,17 @@ export function duplicateRoom(store, roomId) {
   });
 }
 
+// 기본 층 이름은 아직 쓰이지 않는 가장 작은 Floor N이다("Floor 2"가 이미 있으면 Floor 3).
+function defaultFloorName(floors) {
+  const used = new Set(floors.map(f => f.name));
+  let n = 1;
+  while (used.has(`Floor ${n}`)) n += 1;
+  return `Floor ${n}`;
+}
 export function addFloor(store, { name = null, copy = 'none' } = {}) {
   return store.dispatch(d => {
     const base = activeFloor(d);
-    const f = createFloor(name && name.trim() ? name.trim() : `Floor ${d.floors.length + 1}`);
+    const f = createFloor(name && name.trim() ? name.trim() : defaultFloorName(d.floors));
     f.height = base?.height ?? f.height;
     f.slab = base?.slab ?? 0;
     if (copy !== 'none' && base) {
@@ -162,6 +169,14 @@ export function totalArea(floor, areaMode = 'net') {
   if (areaMode !== 'gross') return net;
   const walls = (floor.walls ?? []).reduce((s, w) => s + wallLength(w) * w.thickness, 0) / 1e6;
   return net + walls;
+}
+
+// ui.soloRoom이 가리키는 방이 아직 활성 층에 있는지. 없으면 null(단일 공간 모드를 끈다).
+export function pruneSolo(state, soloRoom) {
+  if (!soloRoom) return null;
+  const f = activeFloor(state);
+  if (!f) return soloRoom; // 활성 층을 못 찾아도 예외를 던지지 않는다
+  return f.rooms.some(r => r.id === soloRoom) ? soloRoom : null;
 }
 
 // ui.selection이 가리키는 객체가 아직 활성 층에 있는지(undo/redo/방 재검출로 사라졌을 수 있다).

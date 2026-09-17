@@ -163,7 +163,8 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
       if (sel.type === 'wall') {
         const w = f.walls.find(x => x.id === sel.id); if (!w) return;
         const others = f.walls.filter(x => x.id !== w.id);
-        for (const q of [w.a, w.b]) { const n = others.find(x => eq(x.a, q) || eq(x.b, q)); v.label(fmtLen(dist(w.a, w.b), v.units, { unit: v.showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { bg: '#fff', color: v.COLORS.dim }); if (!n) { const s = v.toScreen(q); ctx.fillStyle = v.COLORS.guide; ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); } }
+        const showLen = !store.get().view?.v2?.dims; // 보기 옵션 "치수"가 켜져 있으면 뷰가 이미 그린다(라벨 두 장 방지)
+        for (const q of [w.a, w.b]) { const n = others.find(x => eq(x.a, q) || eq(x.b, q)); if (showLen) v.label(fmtLen(dist(w.a, w.b), v.units, { unit: v.showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { bg: '#fff', color: v.COLORS.dim }); if (!n) { const s = v.toScreen(q); ctx.fillStyle = v.COLORS.guide; ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); } }
       }
     },
     cancel() { if (drag) { store.cancelTransaction(); drag = null; } },

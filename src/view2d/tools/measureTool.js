@@ -23,6 +23,7 @@ export function createMeasureTool({ store, opts: given = null }) {
       if (!a || b) { a = s; b = null; return; }
       b = s;
       addMeasure(store, { id: uid('m'), a, b }); // 도구를 떠나도 남는다(보기 옵션 "측정선"으로 표시/숨김)
+      a = b = null; // 다음 클릭은 새 측정이다(기존 측정선 위를 누르면 지우기로 이어진다)
     },
     onPointerMove(p) { cur = snap(p); }, onPointerUp() {},
     onKey(ev) { if (ev.key === 'Escape') { const had = !!a; a = b = null; return had; } return false; },

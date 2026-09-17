@@ -188,3 +188,22 @@ test('right click asks the tool for items and opens the given menu', () => {
   expect(opened).toHaveLength(1); // onContextMenu가 없는 도구는 메뉴를 열지 않는다
   v.destroy();
 });
+
+test('right click does not start panning when the tool has a context menu', () => {
+  const store = createStore(createEmptyProject());
+  const canvas = makeCanvas();
+  const v = createView2D(canvas, store, createUiState(), { menu: { open() {}, close() {}, isOpen: () => false } });
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  const base = { name: 't', opts: {}, onPointerDown() {}, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {} };
+  v.setTool({ ...base, onContextMenu: () => [{ label: 'A', onSelect() {} }] });
+  const before = { ...v.camera };
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { clientX: 400, clientY: 300, button: 2, bubbles: true }));
+  canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 500, clientY: 360, bubbles: true }));
+  expect(v.camera).toEqual(before); // 우클릭은 메뉴 전용
+  canvas.dispatchEvent(new MouseEvent('pointerup', { clientX: 500, clientY: 360, bubbles: true }));
+  v.setTool({ ...base }); // 우클릭 메뉴가 없는 도구는 예전처럼 패닝한다
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { clientX: 400, clientY: 300, button: 2, bubbles: true }));
+  canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 500, clientY: 360, bubbles: true }));
+  expect(v.camera.cx).not.toBe(before.cx);
+  v.destroy();
+});

@@ -1,10 +1,10 @@
 import { test, expect, vi } from 'vitest';
-import { rectWalls } from '../src/geom/walls.js';
+import { rectWalls, makeWall } from "../src/geom/walls.js";
 import { detectRooms } from '../src/geom/rooms.js';
 import { buildFloorGroup, disposeGroup, sceneSignature, TRANSPARENT_OPACITY } from '../src/view3d/build.js';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
-import { addWalls } from '../src/state/floorOps.js';
+import { addWalls, addFloor, setActiveFloor } from "../src/state/floorOps.js";
 
 function floor() { const walls = rectWalls([0, 0], [4000, 3000], 200); return { walls, rooms: detectRooms(walls), height: 2300 }; }
 
@@ -80,13 +80,19 @@ test('each room gets inner wall faces painted with colorIn', () => {
   expect(white.children.find(c => c.name === 'wallFace').material.color.getHex()).toBe(0xffffff);
 });
 
-test('only the active floor is built', () => {
-  const walls1 = rectWalls([0, 0], [4000, 3000], 200);
-  const walls2 = rectWalls([0, 0], [2000, 2000], 200);
-  const project = { floors: [{ walls: walls1, rooms: detectRooms(walls1), height: 2300 }, { walls: walls2, rooms: detectRooms(walls2), height: 2300 }], activeFloor: 1 };
-  const g = buildFloorGroup(project.floors[project.activeFloor], { wallOpacity: 1 });
-  expect(g.children.filter(c => c.name === 'wall')).toHaveLength(4);
+test('the group is built from the store active floor, not the first one', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  addFloor(store, { copy: 'none' });
+  addWalls(store, rectWalls([0, 0], [2000, 2000], 200).concat(makeWall({ a: [0, 0], b: [0, -1500], thickness: 200 })));
+  expect(store.get().activeFloor).toBe(1);
+  const g = buildFloorGroup(activeFloor(store.get()), store.get().view); // view3d가 쓰는 것과 같은 helper
+  expect(g.children.filter(c => c.name === 'wall')).toHaveLength(5); // 2층은 벽 5개(1층은 4개)
   expect(g.children.filter(c => c.name === 'floor')).toHaveLength(1);
+  setActiveFloor(store, 0);
+  const first = buildFloorGroup(activeFloor(store.get()), store.get().view);
+  expect(first.children.filter(c => c.name === 'wall')).toHaveLength(4);
+  expect(sceneSignature(store.get())).not.toBe(sceneSignature({ ...store.get(), activeFloor: 1 })); // 층을 바꾸면 씬을 다시 만든다
 });
 
 test('wall tops follow the wall opacity (both the slider and transparent mode)', () => {

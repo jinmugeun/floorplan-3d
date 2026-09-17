@@ -3,6 +3,9 @@ export const M2_PER_PYEONG = 3.3058;
 const MM_PER_INCH = 25.4;
 const round1 = n => Math.round(n * 10) / 10;
 
+// 도구에서 치수를 타이핑할 때 받아들이는 글자: mm는 숫자와 소수점만, ft·in은 따옴표와 빈칸까지.
+export const typedChar = units => (units === 'ftin' ? /^[0-9.'" ]$/ : /^[0-9.]$/);
+
 export function fmtLen(mm, units = 'mm', { unit = false } = {}) {
   const n = Number(mm), v = Number.isFinite(n) ? n : 0;
   if (units !== 'ftin') return unit ? `${Math.round(v)} mm` : `${Math.round(v)}`;

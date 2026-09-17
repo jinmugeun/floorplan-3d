@@ -1,6 +1,6 @@
 import { addFloor, renameFloor } from '../state/floorOps.js';
+import { esc } from '../util/html.js';
 
-const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const COPY_OPTIONS = [['none', '없음'], ['plan', '도면만'], ['all', '전체']];
 
 export function openFloorDialog({ store, mode = 'add', index = null, onClose = () => {} }) {

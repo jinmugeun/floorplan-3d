@@ -1,10 +1,13 @@
+import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 
-const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-const LABELS = { reference: '기준선', thickness: '두께 (mm)', snap: '스냅 모드', ortho: '직교 모드', direction: '방향' };
+const LABELS = { reference: '기준선', thickness: '두께', snap: '스냅 모드', ortho: '직교 모드', direction: '방향' };
+// 길이 옵션은 라벨에 현재 단위를 붙인다. 입력값은 아직 mm 숫자 그대로다(ft·in 입력란은 2B에서).
+const LEN_OPTS = new Set(['thickness']);
+const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
 
 export function createShell(root, { store, ui }) {
@@ -124,7 +127,7 @@ export function createShell(root, { store, ui }) {
     if (!hasOpts && !hint) { els.optionBar.hidden = true; els.optionBar.innerHTML = ''; return; }
     els.optionBar.hidden = false;
     els.optionBar.innerHTML = hasOpts ? Object.entries(tool.opts).map(([k, v]) => {
-      const label = LABELS[k] ?? k;
+      const label = `${LABELS[k] ?? k}${LEN_OPTS.has(k) ? ` (${unitLabel(store.get().units ?? 'mm')})` : ''}`;
       if (typeof v === 'boolean') return `<label><input type="checkbox" name="${k}" ${v ? 'checked' : ''}> ${label}</label>`;
       if (typeof v === 'number') return `<label>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
       if (k === 'reference') return `<label>${label} <select name="${k}">${REF.map(([val, l]) => `<option value="${val}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
@@ -162,7 +165,7 @@ export function createShell(root, { store, ui }) {
       strip.querySelector('[name="stripOpacity"]').value = String(bg.opacity);
       strip.querySelector('[name="stripVisible"]').checked = !!bg.visible;
       q('#btnBgLock').classList.toggle('on', !!bg.locked);
-      q('#btnBgLock').textContent = bg.locked ? '잠금' : '잠금 해제됨';
+      q('#btnBgLock').textContent = bg.locked ? '잠금 해제' : '잠금'; // 버튼은 누르면 일어나는 일을 말한다
     }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다

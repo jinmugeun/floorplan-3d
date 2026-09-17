@@ -51,3 +51,27 @@ test('the outside click that closes the popover does not reach the canvas undern
   expect(hits).toHaveBeenCalledTimes(1);
   pop.destroy();
 });
+
+test('the closing click keeps its default action outside the canvas, so an input still focuses', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const wrap = document.createElement('main'); wrap.id = 'canvasWrap'; document.body.appendChild(wrap);
+  const canvas = document.createElement('canvas'); wrap.appendChild(canvas);
+  const input = document.createElement('input'); document.body.appendChild(input);
+  const pop = createPopover(root);
+
+  pop.open(anchorAt(), '<b>x</b>');
+  const onInput = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+  input.dispatchEvent(onInput);
+  expect(pop.isOpen()).toBe(false);
+  expect(onInput.defaultPrevented).toBe(false); // 기본 동작이 살아 있어야 입력란이 포커스를 받는다
+  input.focus();
+  expect(document.activeElement).toBe(input);
+
+  pop.open(anchorAt(), '<b>x</b>');
+  const onCanvas = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+  canvas.dispatchEvent(onCanvas);
+  expect(pop.isOpen()).toBe(false);
+  expect(onCanvas.defaultPrevented).toBe(true); // 캔버스 위에서는 클릭이 도면에 닿지 않게 막는다
+  pop.destroy();
+  wrap.remove(); input.remove();
+});

@@ -63,10 +63,11 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
     if (action.startsWith('mode:')) setMode(action.slice(5));
   };
   return ev => {
+    if (ev.isComposing || ev.keyCode === 229) return; // 한글 입력 조합 중인 키는 단축키가 아니다
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target?.tagName)) return;
     const token = tokenOf(ev);
     const modified = ev.ctrlKey || ev.metaKey || ev.altKey;
-    const isUndoKey = token === 'ctrl+z';
+    const isUndoKey = token === 'ctrl+z' || token === 'ctrl+shift+z'; // 다시 실행도 드래그 취소로 도구에 먼저 준다
     if ((!modified || isUndoKey) && view.tool?.onKey?.(ev)) { view.requestRender(); return; } // 도구가 먼저(조합키 중에는 Ctrl+Z만 전달)
     const action = TABLE.get(token);
     if (!action) return; // 표에 없는 키(Ctrl+F 등)는 브라우저에 맡긴다

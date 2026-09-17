@@ -149,3 +149,22 @@ test('Escape clears fpPick even while a wall is selected', () => {
   expect(a.ui.get().fpPick).toBe(false);
   expect(a.setTool).toHaveBeenCalledWith('select');
 });
+
+test('Ctrl+Shift+Z also reaches the tool first so a drag can be cancelled', () => {
+  const a = setup(true); // 도구가 소비한다
+  a.key('z', { ctrlKey: true, shiftKey: true });
+  expect(a.view.tool.onKey).toHaveBeenCalledTimes(1);
+  expect(a.store.canRedo()).toBe(false); // 도구가 소비했으므로 redo는 실행되지 않는다
+  const b = setup(false);
+  b.store.dispatch(d => { d.name = 'x'; });
+  b.key('z', { ctrlKey: true }); b.key('z', { ctrlKey: true, shiftKey: true });
+  expect(b.store.get().name).toBe('x'); // 소비하지 않으면 그대로 redo까지 간다
+});
+
+test('keys composed by the IME are ignored', () => {
+  const a = setup(false);
+  a.key('f', { isComposing: true });
+  a.key('ㄷ', { keyCode: 229 });
+  expect(a.calls.setTool).toEqual([]);
+  expect(a.view.tool.onKey).not.toHaveBeenCalled();
+});

@@ -5,7 +5,13 @@ export function createPopover(root) {
   root.appendChild(el);
   let onClose = () => {};
   // 팝오버를 닫는 바깥 클릭은 캔버스까지 내려가지 않는다(닫으려던 클릭이 벽을 그리거나 팬을 시작하지 않게).
-  const onDocDown = ev => { if (!el.hidden && !el.contains(ev.target) && !ev.target.closest?.('[data-popover]')) { ev.stopPropagation(); ev.preventDefault(); close(); } };
+  // 캔버스 위의 클릭만 기본 동작까지 막는다: 팝오버를 닫으려는 클릭이 다른 입력란의 포커스를 빼앗지 않게.
+  const onDocDown = ev => {
+    if (el.hidden || el.contains(ev.target) || ev.target.closest?.('[data-popover]')) return;
+    ev.stopPropagation();
+    if (ev.target.tagName === 'CANVAS' || ev.target.closest?.('#canvasWrap')) ev.preventDefault();
+    close();
+  };
   const onKey = ev => { if (ev.key === 'Escape' && !el.hidden) { ev.stopPropagation(); close(); } };
   const onScroll = () => close();
   document.addEventListener('pointerdown', onDocDown, true);

@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom } from '../src/state/floorOps.js';
+import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -250,4 +250,28 @@ test('duplicateRoom copies the room one width to the east and keeps its properti
   expect(copy.area).toBeCloseTo(r.area, 6);
   s.undo();
   expect(activeFloor(s.get()).rooms).toHaveLength(1);
+});
+
+test('pruneSolo drops a solo room that no longer exists', () => {
+  const s = createStore(createEmptyProject());
+  addWalls(s, rectWalls([0, 0], [4000, 3000], 200));
+  const room = activeFloor(s.get()).rooms[0];
+  expect(pruneSolo(s.get(), room.id)).toBe(room.id);
+  expect(pruneSolo(s.get(), null)).toBeNull();
+  deleteRoom(s, room.id);
+  expect(pruneSolo(s.get(), room.id)).toBeNull();
+});
+
+test('addFloor picks the smallest unused default name', () => {
+  const s = createStore(createEmptyProject());
+  addFloor(s, { copy: 'none' });                 // Floor 1 이 있으므로 Floor 2
+  expect(s.get().floors.map(f => f.name)).toEqual(['Floor 1', 'Floor 2']);
+  renameFloor(s, 1, 'Floor 3');
+  addFloor(s, { copy: 'none' });                 // Floor 3 은 이미 쓰였다 → Floor 2
+  expect(s.get().floors.map(f => f.name)).toEqual(['Floor 1', 'Floor 3', 'Floor 2']);
+  addFloor(s, { copy: 'none' });
+  expect(s.get().floors.map(f => f.name)).toEqual(['Floor 1', 'Floor 3', 'Floor 2', 'Floor 4']);
+  deleteFloor(s, 0);
+  addFloor(s, { copy: 'none' });                 // 앞의 Floor 1 이 비었으므로 다시 Floor 1
+  expect(s.get().floors.map(f => f.name)).toEqual(['Floor 3', 'Floor 2', 'Floor 4', 'Floor 1']);
 });

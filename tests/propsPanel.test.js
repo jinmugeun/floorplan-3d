@@ -229,3 +229,39 @@ test('the background block toggles lock without adding undo steps', () => {
   expect(store.get().background).toBeNull();
   expect(store.canUndo()).toBe(true); // 배경 제거만 되돌릴 수 있다
 });
+
+test('a colour picker drag is one undo step and does not re-render the panel mid-drag', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  const wall = activeFloor(store.get()).walls[0];
+  ui.set({ selection: { type: 'wall', id: wall.id } });
+  const before = activeFloor(store.get()).walls.find(w => w.id === wall.id).colorOut;
+  const node = el.querySelector('input[name="colorOut"]');
+  node.focus();
+  for (const v of ['#111111', '#222222', '#333333']) { node.value = v; node.dispatchEvent(new Event('input', { bubbles: true })); }
+  expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).colorOut).toBe('#333333'); // 미리보기는 즉시
+  expect(el.querySelector('input[name="colorOut"]')).toBe(node); // 드래그 중에는 패널을 다시 그리지 않는다
+  node.dispatchEvent(new Event('change', { bubbles: true }));
+  node.blur();
+  store.undo();
+  expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).colorOut).toBe(before); // 한 단계로 되돌아간다
+  store.redo();
+  expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).colorOut).toBe('#333333');
+});
+
+test('the 상세 설정 details keeps its open state across re-renders', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  const details = el.querySelector('details');
+  expect(details.open).toBe(true);
+  details.open = false; details.dispatchEvent(new Event('toggle'));
+  store.dispatch(d => { d.name = 'x'; }, { record: false }); // 패널을 다시 그린다
+  expect(el.querySelector('details').open).toBe(false);
+  const again = el.querySelector('details');
+  again.open = true; again.dispatchEvent(new Event('toggle'));
+  store.dispatch(d => { d.name = 'y'; }, { record: false });
+  expect(el.querySelector('details').open).toBe(true);
+});

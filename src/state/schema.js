@@ -110,8 +110,7 @@ export function normalizeProject(p) {
 // 배경 색은 CSS 색 문자열만 허용한다(#rgb ~ #rrggbbaa). 그 밖의 값은 기본값으로 되돌린다.
 function normalizeSettings(s) {
   const src = obj(s);
-  const bg = typeof src.background === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(src.background) ? src.background : DEFAULT_SETTINGS.background;
-  return { pyeong: !!src.pyeong, showUnit: !!src.showUnit, background: bg };
+  return { pyeong: !!src.pyeong, showUnit: !!src.showUnit, background: color(src.background, DEFAULT_SETTINGS.background) };
 }
 
 const wrap360 = v => ((v % 360) + 360) % 360;

@@ -288,3 +288,17 @@ test('a drag outside the unlocked background rect does not move it and clears th
   expect(ui.get().selection).toBeNull();
   expect(store.canUndo()).toBe(false);
 });
+
+test('the selected wall length label is left to the view when 치수 is on', () => {
+  const { store, ui, t } = setup();
+  const wall = activeFloor(store.get()).walls[0];
+  ui.set({ selection: { type: 'wall', id: wall.id } });
+  const ctx = new Proxy({}, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+  const labels = [];
+  const v = { toScreen: p => p, COLORS: {}, units: 'mm', showUnit: false, label: text => labels.push(text) };
+  t.draw(ctx, v);
+  expect(labels).toEqual([]); // v2.dims 기본값이 true → 뷰가 이미 라벨을 그린다
+  store.dispatch(d => { d.view.v2.dims = false; }, { record: false });
+  t.draw(ctx, v);
+  expect(labels.length).toBeGreaterThan(0);
+});

@@ -143,3 +143,21 @@ test('the image strip is only shown in 2D mode', () => {
   ui.set({ mode: '2d' });
   expect(strip.hidden).toBe(false);
 });
+
+test('length option labels carry the active unit and the lock button says what a click does', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  const shell = createShell(root, { store, ui: createUiState() });
+  const tool = { name: 'wall', opts: { thickness: 200, snap: true } };
+  shell.setOptionBar(tool);
+  expect(root.querySelector('#optionBar').textContent).toContain('두께 (mm)');
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  shell.setOptionBar(tool); // 옵션 바는 도구를 다시 세울 때 그려진다
+  expect(root.querySelector('#optionBar').textContent).toContain('두께 (ft·in)');
+  expect(root.querySelector('#optionBar').textContent).not.toContain('두께 (mm)');
+  store.dispatch(d => { d.background = { src: 'data:,', width: 10, height: 10, scale: 1, offset: [0, 0], opacity: 0.5, visible: true, locked: true }; }, { record: false });
+  expect(root.querySelector('#btnBgLock').textContent).toBe('잠금 해제'); // 잠긴 상태 → 누르면 풀린다
+  root.querySelector('#btnBgLock').click();
+  expect(store.get().background.locked).toBe(false);
+  expect(root.querySelector('#btnBgLock').textContent).toBe('잠금');
+});

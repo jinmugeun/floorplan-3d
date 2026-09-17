@@ -3,11 +3,14 @@ import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFlo
 import { wallLength } from '../geom/walls.js';
 import { fmtLen, parseLen, fmtArea } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
+import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 
-export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
+// 상세 설정 <details>의 열림 상태는 패널을 다시 그려도 유지된다.
+let detailsOpen = true;
 
-const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export const ROOM_TYPES =[['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
+
 const field = (label, inner) => `<label class="field"><span>${label}</span>${inner}</label>`;
 const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${Number(value) || 0}" min="${min}" max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
 // 숫자 입력: 비어 있거나 숫자가 아니면 null, 범위를 벗어나면 min/max로 잘라 준다.
@@ -36,7 +39,11 @@ const colorField = (label, name, value) => field(label, `<input type="color" nam
 // deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
 export function createPropsPanel(container, store, ui, { deleteSelection = () => {} } = {}) {
   function render() {
+    const active = document.activeElement;
+    if (active?.type === 'color' && container.contains(active)) return; // 색 선택기를 쓰는 중에는 다시 그리지 않는다(입력이 끊긴다)
     renderBody();
+    const details = container.querySelector('details');
+    if (details) details.addEventListener('toggle', () => { detailsOpen = details.open; });
     const wanted = ui.get().focusField;
     if (!wanted) return;
     ui.set({ focusField: null });                          // 한 번만. 이 set이 renderBody를 다시 돌린다
@@ -52,7 +59,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <div class="row"><button type="button" name="floorAdd">층 추가하기</button><button type="button" name="floorRename">이름 변경</button></div>
         <button type="button" name="floorDelete" class="danger">층 삭제</button>
         ${lenField(withUnit('층 높이', units, showUnit), 'floorHeight', f.height, 2000, 8000, false, units, 10)}
-        <details open><summary>상세 설정</summary>
+        <details ${detailsOpen ? 'open' : ''}><summary>상세 설정</summary>
           ${field('실면적 기준', `<select name="areaMode"><option value="net" ${p.areaMode !== 'gross' ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option></select>`)}
           ${field('총면적', `<output name="totalArea">${fmtArea(totalArea(f, p.areaMode), { pyeong })}</output>`)}
           ${lenField(withUnit('슬래브 두께', units, showUnit), 'slab', f.slab ?? 0, 0, 1000, false, units)}
@@ -140,6 +147,18 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       store.endTransaction();
     }
   }
+  // 색: 기하 불변 → reroom 없음. opts는 트랜잭션 안에서 { record: false }로 넘어온다.
+  const applyColor = (sel, name, value, opts) => {
+    if (sel?.type === 'wall') updateWallProps(store, sel.id, { [name]: value }, opts);
+    if (sel?.type === 'room') updateRoom(store, sel.id, { [name]: value }, opts);
+  };
+  let colorTx = false; // 열려 있는 색 드래그 트랜잭션
+  const onInput = ev => {
+    const el = ev.target;
+    if (el.type !== 'color' || !el.name) return;
+    if (!colorTx) { store.beginTransaction(); colorTx = true; } // 드래그 시작 상태를 되돌림 지점으로 잡는다
+    applyColor(ui.get().selection, el.name, el.value, { record: false });
+  };
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }
@@ -159,8 +178,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       applyNumber(sel, name, v); return;
     }
     if (el.type === 'color') {
-      if (sel?.type === 'wall') updateWallProps(store, sel.id, { [name]: el.value }); // 색도 기하 불변 → reroom 없음
-      if (sel?.type === 'room') updateRoom(store, sel.id, { [name]: el.value });
+      // 선택기 드래그(input) 중에는 { record: false }로 미리 보여 주고, change에서 트랜잭션을 한 단계로 닫는다.
+      if (colorTx) { applyColor(sel, name, el.value, { record: false }); store.endTransaction(); colorTx = false; }
+      else applyColor(sel, name, el.value);
       return;
     }
     if (sel?.type === 'room') {
@@ -187,8 +207,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
     if (ev.target.name === 'delete' && ui.get().selection) deleteSelection();
   };
-  container.addEventListener('change', onChange); container.addEventListener('click', onClick);
+  container.addEventListener('change', onChange); container.addEventListener('input', onInput); container.addEventListener('click', onClick);
   const unsubs = [store.subscribe(render), ui.subscribe(render)];
   render();
-  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('change', onChange); container.removeEventListener('click', onClick); } };
+  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('change', onChange); container.removeEventListener('input', onInput); container.removeEventListener('click', onClick); } };
 }

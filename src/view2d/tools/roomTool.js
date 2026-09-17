@@ -2,7 +2,7 @@ import { activeFloor } from '../../state/schema.js';
 import { addWalls } from '../../state/floorOps.js';
 import { rectWalls, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
-import { fmtLen, parseLen } from '../../util/units.js';
+import { fmtLen, parseLen, typedChar } from '../../util/units.js';
 
 export const ROOM_TOOL_DEFAULTS = { thickness: 200, snap: true };
 
@@ -33,7 +33,7 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
       // 그리던 사각형이 있을 때만 Esc를 소비한다. 없으면 앱이 선택 도구로 돌아가게 둔다.
       if (ev.key === 'Escape') { const had = !!start; reset(); return had; }
       if (!start) return false;
-      if (/^[0-9.'" ]$/.test(ev.key)) { typed[typed.field] += ev.key; return true; }
+      if (typedChar(store.get().units).test(ev.key)) { typed[typed.field] += ev.key; return true; }
       if (ev.key === 'Backspace') { typed[typed.field] = typed[typed.field].slice(0, -1); return true; }
       if (ev.key === 'Tab') { ev.preventDefault(); typed.field = typed.field === 'w' ? 'h' : 'w'; return true; }
       if (ev.key === 'Enter') { commit(dims().end); return true; }

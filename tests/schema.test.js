@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { migrate, normalizeProject, activeFloor, createEmptyProject, SCHEMA_VERSION } from '../src/state/schema.js';
+import { migrate, normalizeProject, activeFloor, createEmptyProject, SCHEMA_VERSION, DEFAULT_SETTINGS } from '../src/state/schema.js';
 import { rectWalls } from '../src/geom/walls.js';
 
 describe('normalizeProject / migrate', () => {
@@ -93,4 +93,12 @@ describe('normalizeProject / migrate', () => {
     expect(p.areaMode).toBe('gross');
     expect(migrate({ version: 1, areaMode: 'nope' }).areaMode).toBe('net');
   });
+});
+
+test('settings.background accepts only hex colours', () => {
+  expect(normalizeProject({ settings: { background: '#abc' } }).settings.background).toBe('#abc');
+  expect(normalizeProject({ settings: { background: '#11223344' } }).settings.background).toBe('#11223344');
+  for (const bad of ['red', 'javascript:1', '#12', 42, null]) {
+    expect(normalizeProject({ settings: { background: bad } }).settings.background).toBe(DEFAULT_SETTINGS.background);
+  }
 });

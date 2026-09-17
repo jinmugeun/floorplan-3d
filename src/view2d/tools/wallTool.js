@@ -3,7 +3,7 @@ import { addWalls } from '../../state/floorOps.js';
 import { makeWall, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
-import { fmtLen, parseLen } from '../../util/units.js';
+import { fmtLen, parseLen, typedChar } from '../../util/units.js';
 
 export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
 
@@ -35,7 +35,7 @@ export function createWallTool({ store, onDone = () => {}, opts: given = null })
     onKey(ev) {
       if (ev.key === 'Escape') return finish(); // 그리던 벽이 없으면 소비하지 않는다
       if (!last()) return false;
-      if (/^[0-9.'" ]$/.test(ev.key)) { typed += ev.key; return true; }
+      if (typedChar(store.get().units).test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
       if (ev.key === 'Enter') {
         if (typed) {

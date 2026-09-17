@@ -8,10 +8,11 @@ export function openBackgroundDialog({ store, onClose = () => {} }) {
     <header><h2>도면 이미지 업로드</h2><button type="button" name="close" aria-label="닫기">✕</button></header>
     <div class="modal-body">
       <p class="step" data-step="1">① 이미지를 고르고 방향을 맞춘 뒤, 도면의 네 모서리를 <b>좌상 → 우상 → 우하 → 좌하</b> 순서로 클릭하세요. 정면에서 찍은 스캔이면 "보정 생략"을 누르세요.</p>
-      <p class="step" data-step="crop" hidden>①' 사용할 영역을 드래그로 지정하세요. 도면 전체를 쓰려면 "전체 사용"을 누르세요.</p>
+      <p class="step" data-step="crop" hidden>①' 사용할 영역을 드래그로 지정하고 필요하면 방향을 맞추세요. 도면 전체를 쓰려면 "전체 사용"을 누르세요.</p>
       <p class="step" data-step="2" hidden>② 도면 위 치수를 아는 두 점을 클릭하고 실제 거리를 입력하세요.</p>
       <p class="error" name="error" hidden></p>
-      <div class="toolbar" data-step="1"><input type="file" name="file" accept="image/png,image/jpeg"><button type="button" name="rotL">↺ 회전</button><button type="button" name="rotR">↻ 회전</button><button type="button" name="flipH">좌우 반전</button><button type="button" name="flipV">상하 반전</button><button type="button" name="skip">보정 생략</button></div>
+      <div class="toolbar" data-step="1"><input type="file" name="file" accept="image/png,image/jpeg"><button type="button" name="skip">보정 생략</button></div>
+      <div class="toolbar" data-step="orient" hidden><button type="button" name="rotL">↺ 회전</button><button type="button" name="rotR">↻ 회전</button><button type="button" name="flipH">좌우 반전</button><button type="button" name="flipV">상하 반전</button></div>
       <div class="toolbar" data-step="crop" hidden><button type="button" name="cropApply" disabled>영역 적용</button><button type="button" name="cropAll">전체 사용</button></div>
       <canvas name="preview" width="900" height="600"></canvas>
       <div class="toolbar" data-step="2" hidden><label>실제 거리 <input type="number" name="mm" min="1" step="1" placeholder="mm"></label><button type="button" name="apply" disabled>적용</button></div>
@@ -34,8 +35,12 @@ export function openBackgroundDialog({ store, onClose = () => {} }) {
     if (marks.length >= 2 && step === '2') { ctx.beginPath(); ctx.moveTo(marks[0][0] * k, marks[0][1] * k); ctx.lineTo(marks[1][0] * k, marks[1][1] * k); ctx.stroke(); }
     if (step === '1' && corners.length === 4) { ctx.beginPath(); corners.forEach((p, i) => (i ? ctx.lineTo(p[0] * k, p[1] * k) : ctx.moveTo(p[0] * k, p[1] * k))); ctx.closePath(); ctx.stroke(); }
   };
-  const show = s => { step = s; for (const key of ['1', 'crop', '2']) root.querySelectorAll(`[data-step="${key}"]`).forEach(e => { e.hidden = key !== s; }); draw(); };
-  const toCrop = () => show('crop');
+  const show = s => {
+    step = s;
+    for (const key of ['1', 'crop', '2']) root.querySelectorAll(`[data-step="${key}"]`).forEach(e => { e.hidden = key !== s; });
+    root.querySelector('[data-step="orient"]').hidden = !(s === '1' || s === 'crop'); // 회전/반전은 영역 지정과 보정 단계 모두에서 쓴다
+    draw();
+  };
   const toStep2 = () => show('2');
   const imgPoint = ev => { const r = cv.getBoundingClientRect(); const img = step === '2' ? rect : src; const k = Math.min(cv.width / img.width, cv.height / img.height); return [(ev.clientX - r.left) * (cv.width / r.width) / k, (ev.clientY - r.top) * (cv.height / r.height) / k]; };
 
@@ -88,5 +93,7 @@ export function openBackgroundDialog({ store, onClose = () => {} }) {
   const close = () => { root.remove(); onClose(); };
   q('close').onclick = close;
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
+  show('1'); // 단계 표시를 show()가 한 곳에서 정한다(회전/반전 툴바 포함)
+  q('file').focus(); // 대화상자가 포커스를 가져와야 Escape 처리가 걸린다
   return { close };
 }

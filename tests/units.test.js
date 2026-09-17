@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { fmtLen, parseLen, fmtArea, M2_PER_PYEONG } from '../src/util/units.js';
+import { esc } from '../src/util/html.js';
 
 describe('fmtLen', () => {
   test('mm mode rounds and optionally appends the unit', () => {
@@ -52,4 +53,12 @@ describe('fmtArea', () => {
     expect(fmtArea('x')).toBe('0.0 m²');
     expect(M2_PER_PYEONG).toBe(3.3058);
   });
+});
+
+test('esc escapes the characters that break HTML attributes and text', () => {
+  expect(esc('<img src=x>')).toBe('&lt;img src=x&gt;');
+  expect(esc('a" onfocus="y')).toBe('a&quot; onfocus=&quot;y');
+  expect(esc('a & b')).toBe('a &amp; b');
+  expect(esc(null)).toBe('');
+  expect(esc(12.5)).toBe('12.5');
 });

@@ -1,3 +1,4 @@
+import { esc } from '../util/html.js';
 // 우클릭 메뉴. 항목은 호출한 쪽(도구)이 만든다: { label, shortcut?, danger?, disabled?, title?, onSelect } 또는 'sep'.
 export function createContextMenu(root) {
   let el = null, items = [], focus = -1;
@@ -37,7 +38,7 @@ export function createContextMenu(root) {
     el.className = 'ctx-menu';
     el.innerHTML = list.map((it, i) => (it === 'sep'
       ? '<div class="ctx-sep"></div>'
-      : `<button type="button" class="ctx-item ${it.danger ? 'danger' : ''}" data-i="${i}" ${it.disabled ? 'disabled' : ''} ${it.title ? `title="${it.title}"` : ''}><span>${it.label}</span>${it.shortcut ? `<kbd>${it.shortcut}</kbd>` : ''}</button>`)).join('');
+      : `<button type="button" class="ctx-item ${it.danger ? 'danger' : ''}" data-i="${i}" ${it.disabled ? 'disabled' : ''} ${it.title ? `title="${esc(it.title)}"` : ''}><span>${esc(it.label)}</span>${it.shortcut ? `<kbd>${esc(it.shortcut)}</kbd>` : ''}</button>`)).join('');
     root.appendChild(el);
     const w = el.offsetWidth || 190, h = el.offsetHeight || 40 + list.length * 28;
     const vw = window.innerWidth || 1280, vh = window.innerHeight || 800;

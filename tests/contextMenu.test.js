@@ -69,3 +69,17 @@ test('the outside click that closes the menu does not reach the element undernea
   canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
   expect(hits).toHaveBeenCalledTimes(1); // 닫힌 뒤에는 정상 전달
 });
+
+test('item text is not interpreted as HTML', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const menu = createContextMenu(root);
+  menu.open(10, 10, [{ label: '<img src=x onerror="window.__pwned=1">', shortcut: '<b>x</b>', title: 'a" onmouseover="y', onSelect: () => {} }]);
+  const item = root.querySelector('.ctx-item');
+  expect(root.querySelector('.ctx-item img')).toBeNull();
+  expect(root.querySelector('.ctx-item b')).toBeNull();
+  expect(item.querySelector('span').textContent).toBe('<img src=x onerror="window.__pwned=1">');
+  expect(item.title).toBe('a" onmouseover="y');
+  expect(item.hasAttribute('onmouseover')).toBe(false);
+  expect(window.__pwned).toBeUndefined();
+  menu.close();
+});

@@ -107,3 +107,16 @@ test('a given opts object is used and exposed', () => {
   t.onPointerDown([3000, 200]);
   expect(activeFloor(store.get()).walls[0].thickness).toBe(120);
 });
+
+test('in mm mode feet/inch characters are ignored while typing a length', () => {
+  const store = createStore(createEmptyProject());
+  const t = createWallTool({ store, onDone() {} });
+  t.onPointerDown([0, 0]);
+  expect(t.onKey(key("'"))).toBe(false);
+  expect(t.onKey(key('"'))).toBe(false);
+  for (const c of '2500') t.onKey(key(c));
+  expect(t.getPreview().typed).toBe('2500');
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  expect(t.onKey(key("'"))).toBe(true);
+  expect(t.getPreview().typed).toBe("2500'");
+});

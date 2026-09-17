@@ -1,6 +1,6 @@
 import { KEYMAP } from './keymap.js';
+import { esc } from '../util/html.js';
 
-const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 function keymapRows() {
   const groups = [...new Set(KEYMAP.map(e => e.group))];

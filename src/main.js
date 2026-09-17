@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { deleteWall, deleteWalls, deleteRoom, transformFloor, pruneSelection } from './state/floorOps.js';
+import { deleteWall, deleteWalls, deleteRoom, transformFloor, pruneSelection, pruneSolo } from './state/floorOps.js';
 import { hitWall } from './geom/walls.js';
 import { pointInPolygon } from './geom/rooms.js';
 import { createView2D } from './view2d/view2d.js';
@@ -12,6 +12,7 @@ import { createSelectTool } from './view2d/tools/selectTool.js';
 import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.js';
 import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
 import { createView3D } from './view3d/view3d.js';
+import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
@@ -33,7 +34,13 @@ minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 createPropsPanel(shell.els.props, store, ui, { deleteSelection });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
-store.subscribe(s => { const cur = ui.get().selection; const next = pruneSelection(s, cur); if (next !== cur) ui.set({ selection: next }); });
+store.subscribe(s => {
+  const u = ui.get();
+  const next = pruneSelection(s, u.selection);
+  if (next !== u.selection) ui.set({ selection: next });
+  const solo = pruneSolo(s, u.soloRoom); // 단일 공간 모드의 방이 사라지면 모드도 끈다
+  if (solo !== u.soloRoom) ui.set({ soloRoom: solo });
+});
 
 function createDeleteTool() {
   return {
@@ -80,8 +87,11 @@ document.querySelector('[data-action="rotL"]').addEventListener('click', () => t
 document.querySelector('[data-action="rotR"]').addEventListener('click', () => transformFloor(store, p => [-p[1], p[0]]));
 document.getElementById('btnUndo').addEventListener('click', () => store.undo());
 document.getElementById('btnRedo').addEventListener('click', () => store.redo());
-document.getElementById('btnFit').addEventListener('click', () => view.fit());
-const zoom = factor => (ui.get().mode === '2d' ? view.zoomBy(factor) : view3d.zoomBy(factor));
+// 줌·화면 맞추기는 현재 모드의 뷰가 받는다(2D 도면 / 3D 카메라).
+const activeView = () => viewForMode(ui.get().mode, view, view3d);
+const fitView = () => activeView().fit();
+document.getElementById('btnFit').addEventListener('click', fitView);
+const zoom = factor => activeView().zoomBy(factor);
 document.getElementById('btnZoomIn').addEventListener('click', () => zoom(1.25));
 document.getElementById('btnZoomOut').addEventListener('click', () => zoom(1 / 1.25));
 document.getElementById('projectName').addEventListener('change', ev => store.dispatch(d => { d.name = ev.target.value; }));
@@ -141,6 +151,6 @@ canvasWrap.addEventListener('drop', async ev => {
   }
 });
 
-window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: () => view.fit() }));
+window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView }));
 setTool('select'); view.fit(); minimap.fit(500);
 if (import.meta.env.DEV) window.__app = { store, ui, view, view3d }; // 브라우저 검증용, 개발 빌드에서만

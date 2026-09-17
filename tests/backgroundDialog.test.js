@@ -99,3 +99,23 @@ test('four corner clicks rectify the image and the two-point scale step still wr
   expect(store.get().background.scale).toBeGreaterThan(0);
   expect(document.querySelector('.modal')).toBeNull();
 });
+
+test('the dialog takes focus and the 회전/반전 toolbar is reachable in both the crop and the rectify step', async () => {
+  const store = createStore(createEmptyProject());
+  const dlg = openBackgroundDialog({ store });
+  const modal = document.querySelector('.modal');
+  expect(document.activeElement).toBe(modal.querySelector('[name="file"]')); // Escape 처리가 걸리도록 포커스를 가져온다
+  const orient = modal.querySelector('[data-step="orient"]');
+  expect(orient.querySelector('[name="rotL"]')).not.toBeNull();
+  expect(orient.hidden).toBe(false); // ① 방향 맞추기
+  const input = modal.querySelector('[name="file"]');
+  const png = new File([new Uint8Array(8)], 'plan.png', { type: 'image/png' });
+  Object.defineProperty(input, 'files', { value: [png], configurable: true });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(modal.querySelector('[data-step="crop"]').hidden).toBe(false));
+  expect(orient.hidden).toBe(false); // ①' 영역 지정 중에도 회전/반전을 쓸 수 있다
+  modal.querySelector('[name="skip"]').click(); // 보정 생략 → ② 축척
+  expect(modal.querySelector('[data-step="2"]').hidden).toBe(false);
+  expect(orient.hidden).toBe(true); // 축척 단계에서는 사라진다
+  dlg.close();
+});
