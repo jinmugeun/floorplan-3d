@@ -47,6 +47,8 @@ export function buildFloorGroup(floor, view) {
       ce.rotation.x = Math.PI / 2; ce.position.y = M(r.floorOffset + r.height); ce.name = 'ceiling'; ce.userData.roomId = r.id; ce.visible = false; g.add(ce);
     }
     // 방 안쪽에서 보이는 벽면 색(colorIn). 내부 폴리곤보다 5 mm 더 들여 z-파이팅을 피한다.
+    // 한 벽은 메시 하나다: colorOut은 벽 본체 전체(바깥면·개구부 단면), colorIn은 그 벽을 소유한 모든 방의
+    // 안쪽 면에 같은 색으로 칠해진다. 방마다 다른 내벽 색은 2C(마감재)가 벽면을 방별로 나눌 때 가능해진다.
     const faces = roomInnerPolygon(r, floor.walls, 5);
     faces.forEach((p, i) => {
       const q = faces[(i + 1) % faces.length];

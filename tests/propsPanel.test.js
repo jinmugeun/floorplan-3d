@@ -160,6 +160,11 @@ test('room panel edits seats, floor/ceiling colours, and 공간 높이 맞추기
   h.value = '2800'; h.dispatchEvent(new Event('change', { bubbles: true }));
   expect(activeFloor(store.get()).rooms[0].height).toBe(2800);
   expect(activeFloor(store.get()).walls.every(w => w.height === 2800)).toBe(true); // 벽도 따라간다
+  store.undo(); // 방 높이 + 벽 높이는 한 단계로 묶여야 한다
+  expect(activeFloor(store.get()).rooms[0].height).toBe(2300);
+  expect(activeFloor(store.get()).walls.every(w => w.height === 2300)).toBe(true);
+  store.redo();
+  expect(activeFloor(store.get()).walls.every(w => w.height === 2800)).toBe(true);
   const again = el.querySelector('input[name="matchWallHeight"]');
   again.checked = false; again.dispatchEvent(new Event('change', { bubbles: true }));
   const h2 = el.querySelector('input[name="height"]');
