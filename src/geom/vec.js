@@ -1,0 +1,11 @@
+export const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+export const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+export const mul = (a, k) => [a[0] * k, a[1] * k];
+export const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+export const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
+export const len = a => Math.hypot(a[0], a[1]);
+export const dist = (a, b) => len(sub(a, b));
+export const norm = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l]; };
+export const perp = a => [-a[1], a[0]];
+export const eq = (a, b, tol = 1) => Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol;
+export const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
