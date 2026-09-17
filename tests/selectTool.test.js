@@ -224,6 +224,7 @@ test('context menu items depend on what is under the cursor', () => {
   const { store, ui, t } = setup();
   const f = activeFloor(store.get());
   const wallItems = t.onContextMenu([2000, 0], { shiftKey: false });
+  expect(ui.get().selection).toEqual({ type: 'wall', id: f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id }); // 우클릭이 먼저 선택한다
   expect(wallItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', 'sep', '삭제']);
   expect(wallItems[1].disabled).toBe(true);
   expect(wallItems[1].title).toBe('미지원');
@@ -234,6 +235,7 @@ test('context menu items depend on what is under the cursor', () => {
   expect(ui.get().focusField).toBe('colorOut');
 
   const roomItems = t.onContextMenu([2000, 1500], {});
+  expect(ui.get().selection).toEqual({ type: 'room', id: f.rooms[0].id }); // 방도 우클릭 즉시 선택된다
   expect(roomItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(['방 복사', '마감재 복사', '재질 교체', '단일 공간 모드', 'sep', '삭제']);
   expect(roomItems[1].disabled).toBe(true);
   roomItems[0].onSelect();

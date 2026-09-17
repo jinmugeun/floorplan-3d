@@ -12,7 +12,8 @@ export function createContextMenu(root) {
     document.removeEventListener('keydown', onKey, true);
     window.removeEventListener('scroll', close, true);
   }
-  const onDocDown = ev => { if (el && !el.contains(ev.target)) close(); };
+  // 메뉴를 닫는 바깥 클릭은 캔버스까지 내려가지 않는다(팝오버와 같은 규칙).
+  const onDocDown = ev => { if (el && !el.contains(ev.target)) { ev.stopPropagation(); ev.preventDefault(); close(); } };
   function move(step) {
     const bs = buttons();
     if (!bs.length) return;

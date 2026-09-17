@@ -55,3 +55,17 @@ test('a menu opened near the right/bottom edge is pulled back into the viewport'
   menu.close();
   expect(root.querySelector('.ctx-menu')).toBeNull();
 });
+
+test('the outside click that closes the menu does not reach the element underneath', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const canvas = document.createElement('canvas'); document.body.appendChild(canvas);
+  const hits = vi.fn(); canvas.addEventListener('pointerdown', hits);
+  const menu = createContextMenu(root);
+  menu.open(100.5, 80.25, [{ label: '삭제', onSelect: () => {} }]);
+  expect(menu.isOpen()).toBe(true);
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+  expect(menu.isOpen()).toBe(false);
+  expect(hits).not.toHaveBeenCalled();
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+  expect(hits).toHaveBeenCalledTimes(1); // 닫힌 뒤에는 정상 전달
+});

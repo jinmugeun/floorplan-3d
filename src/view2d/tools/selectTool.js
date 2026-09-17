@@ -102,6 +102,9 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
     onContextMenu(p) {
       const f = floor();
       const w = hitWall(f.walls, p, px(6));
+      // 우클릭은 먼저 대상을 선택한다(다중 선택에 이미 든 벽이면 다중 선택을 유지한다).
+      const sel = ui.get().selection;
+      if (w && !(sel?.type === 'multi' && sel.ids.includes(w.id))) ui.set({ selection: { type: 'wall', id: w.id } });
       if (w) return [
         { label: '벽 나누기', onSelect: () => { ui.set({ selection: { type: 'wall', id: w.id }, splitWall: true }); } },
         { label: '곡선벽 전환', disabled: true, title: '미지원' },
@@ -110,6 +113,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
         { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => deleteWall(store, w.id) },
       ];
       const r = f.rooms.find(x => pointInPolygon(p, x.points));
+      if (r) ui.set({ selection: { type: 'room', id: r.id } });
       if (r) return [
         { label: '방 복사', shortcut: 'Ctrl+C', onSelect: () => duplicateRoom(store, r.id) },
         { label: '마감재 복사', disabled: true, title: '미지원' },
