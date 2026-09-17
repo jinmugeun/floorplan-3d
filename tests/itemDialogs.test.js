@@ -51,3 +51,17 @@ describe('아이템 대화상자', () => {
     expect(got).toEqual([{ angle: 180, count: 100 }]);
   });
 });
+
+test('Enter는 적용, Esc는 취소다', () => {
+  const got = [];
+  openRelativeMoveDialog({ onApply: v => got.push(v) });
+  set('dx', '120.5');
+  q('[name="dx"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(got).toHaveLength(1);
+  expect(got[0].dx).toBe(120.5);
+  expect(q('.modal')).toBeNull();
+  openRelativeMoveDialog({ onApply: v => got.push(v) });
+  q('[name="dx"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(q('.modal')).toBeNull();
+  expect(got).toHaveLength(1);
+});

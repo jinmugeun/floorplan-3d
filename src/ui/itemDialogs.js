@@ -20,7 +20,7 @@ function openDialog(kind, body, collect, { onApply = () => {}, onClose = () => {
   const close = () => { root.remove(); onClose(); };
   root.querySelector('[name="close"]').onclick = close;
   root.querySelector('[name="apply"]').onclick = () => { onApply(collect(root)); close(); };
-  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
+  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } else if (ev.key === 'Enter') { ev.preventDefault(); root.querySelector('[name="apply"]').click(); } }); // Enter로 확정, Esc로 닫기
   root.querySelector('input')?.focus();
   return { close };
 }
