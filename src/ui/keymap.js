@@ -25,6 +25,16 @@ export const KEYMAP = [
   { group: '선택', label: '영역 선택', keys: ['Shift+드래그'], action: null },
   { group: '일인칭', label: '이동', keys: ['W A S D'], action: null },
   { group: '일인칭', label: '높이', keys: ['Q E'], action: null },
+  { group: '제품', label: '이동 10mm / 100mm', keys: ['방향키', 'Shift+방향키'], action: null },
+  { group: '제품', label: '90° 회전', keys: ['Q'], action: null },
+  { group: '제품', label: '스냅 임시 해제', keys: ['Ctrl+드래그'], action: null },
+  { group: '제품', label: '좌우 반전', keys: ['Alt+H'], action: null },
+  { group: '제품', label: '상하 반전', keys: ['Alt+V'], action: null },
+  { group: '제품', label: '상대이동', keys: ['Alt+R'], action: null },
+  { group: '제품', label: '직선 / 원형 / 회전 배열 복사', keys: ['Alt+A', 'Alt+C', 'Alt+X'], action: null },
+  { group: '제품', label: '복사 / 붙여넣기', keys: ['Ctrl+C', 'Ctrl+V'], action: null },
+  { group: '제품', label: '숨김 / 잠금', keys: ['Ctrl+H', 'Ctrl+L'], action: null },
+  { group: '제품', label: '그룹 / 해제', keys: ['Ctrl+G', 'Ctrl+Shift+G'], action: null },
 ];
 
 const norm = k => k.trim().toLowerCase().replace(/\s+/g, '');
@@ -34,6 +44,31 @@ for (const e of KEYMAP) if (e.action) for (const k of e.keys) TABLE.set(norm(k),
 export const FP_ALLOWED = new Set(['escape', 'mode:2d', 'mode:plan', 'mode:iso', 'mode:fp']);
 export const PREVENT = new Set(['undo', 'redo', 'save', 'selectAll', 'settings']);
 
+// 아이템 조합키. 선택이 없으면(붙여넣기만 예외) 브라우저에 맡긴다.
+// 2A의 KEYMAP/TABLE은 Alt 조합을 담지 않으므로(그 자리를 2B에 비워 뒀다) 여기서만 처리한다.
+function itemCombo(ev, k, a) {
+  const has = ((a.ids?.() ?? []).length) > 0;
+  if (ev.altKey && !ev.ctrlKey && !ev.metaKey) {
+    if (!has) return false;
+    if (k === 'h') { a.mirror?.('h'); return true; }
+    if (k === 'v') { a.mirror?.('v'); return true; }
+    if (k === 'r') { a.relativeMove?.(); return true; }
+    if (k === 'a') { a.arrayCopy?.('linear'); return true; }
+    if (k === 'c') { a.arrayCopy?.('circular'); return true; }
+    if (k === 'x') { a.arrayCopy?.('rotate'); return true; }
+    return false;
+  }
+  if (ev.ctrlKey || ev.metaKey) {
+    if (k === 'v') { a.paste?.(); return true; }
+    if (!has) return false;
+    if (k === 'c') { a.copy?.(); return true; }
+    if (k === 'h') { a.toggleHidden?.(); return true; }
+    if (k === 'l') { a.toggleLocked?.(); return true; }
+    if (k === 'g') { ev.shiftKey ? a.ungroup?.() : a.group?.(); return true; }
+  }
+  return false;
+}
+
 export function tokenOf(ev) {
   const raw = ev.key.toLowerCase();
   const k = raw === 'escape' ? 'esc' : raw === ' ' ? 'space' : raw;
@@ -41,7 +76,7 @@ export function tokenOf(ev) {
   return `${ctrl ? 'ctrl+' : ''}${ctrl && ev.shiftKey ? 'shift+' : ''}${k}`;
 }
 
-export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null, selectAll = () => {}, openSettings = () => {}, zoomIn = () => {}, zoomOut = () => {}, fit = () => {} }) {
+export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null, selectAll = () => {}, openSettings = () => {}, zoomIn = () => {}, zoomOut = () => {}, fit = () => {}, itemActions = {} }) {
   const run = action => {
     if (action === 'escape') {
       const u = ui.get();
@@ -68,7 +103,10 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
     const token = tokenOf(ev);
     const modified = ev.ctrlKey || ev.metaKey || ev.altKey;
     const isUndoKey = token === 'ctrl+z' || token === 'ctrl+shift+z'; // 다시 실행도 드래그 취소로 도구에 먼저 준다
-    if ((!modified || isUndoKey) && view.tool?.onKey?.(ev)) { ev.preventDefault(); view.requestRender(); return; } // 도구가 먼저(조합키 중에는 Ctrl+Z만 전달). 도구가 먹은 키는 브라우저 기본 동작(방향키 스크롤 등)도 막는다
+    const fp = ui.get().mode === 'fp';
+    const k = ev.key.toLowerCase();
+    if (!fp && (!modified || isUndoKey) && view.tool?.onKey?.(ev)) { ev.preventDefault(); view.requestRender(); return; } // 도구가 먼저(조합키 중에는 Ctrl+Z만 전달). 도구가 먹은 키는 브라우저 기본 동작(방향키 스크롤 등)도 막는다. 1인칭에서는 도구에 키를 주지 않는다
+    if (!fp && itemCombo(ev, k, itemActions)) { ev.preventDefault(); return; }
     const action = TABLE.get(token);
     if (!action) return; // 표에 없는 키(Ctrl+F 등)는 브라우저에 맡긴다
     if (ev.altKey) return; // Alt 조합은 2B의 제품 단축키가 쓸 자리다

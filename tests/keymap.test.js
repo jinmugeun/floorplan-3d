@@ -192,3 +192,49 @@ test('a key consumed by the tool also has its browser default prevented', () => 
   h({ key: 'ArrowLeft', preventDefault: () => { prevented++; }, target: { tagName: 'BODY' } }); // 도구가 안 먹는 키는 표에도 없어 그대로 둔다
   expect(prevented).toBe(1);
 });
+
+function setupItems() {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const calls = [];
+  const itemActions = new Proxy({ ids: () => ['i1'] }, { get: (t, k) => (k === 'ids' ? t.ids : (...args) => calls.push([k, ...args])) });
+  const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn() };
+  const h = createKeyHandler({ store, ui, view, setTool: vi.fn(), setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn(), itemActions });
+  const key = (k, extra = {}) => h({ key: k, target: document.body, preventDefault() {}, ...extra });
+  return { ui, calls, key, view };
+}
+
+test('alt/ctrl item shortcuts route to itemActions', () => {
+  const { calls, key } = setupItems();
+  key('h', { altKey: true }); key('v', { altKey: true }); key('r', { altKey: true });
+  key('a', { altKey: true }); key('c', { altKey: true }); key('x', { altKey: true });
+  key('c', { ctrlKey: true }); key('v', { ctrlKey: true });
+  key('h', { ctrlKey: true }); key('l', { ctrlKey: true });
+  key('g', { ctrlKey: true }); key('g', { ctrlKey: true, shiftKey: true });
+  expect(calls).toEqual([
+    ['mirror', 'h'], ['mirror', 'v'], ['relativeMove'],
+    ['arrayCopy', 'linear'], ['arrayCopy', 'circular'], ['arrayCopy', 'rotate'],
+    ['copy'], ['paste'], ['toggleHidden'], ['toggleLocked'], ['group'], ['ungroup'],
+  ]);
+});
+
+test('item shortcuts are ignored in first-person mode and the tool gets no keys there', () => {
+  const { ui, calls, key, view } = setupItems();
+  ui.set({ mode: 'fp' });
+  key('h', { altKey: true }); key('c', { ctrlKey: true }); key('q'); key('ArrowRight');
+  expect(calls).toEqual([]);
+  expect(view.tool.onKey).not.toHaveBeenCalled();
+});
+
+test('ctrl+z and ctrl+s are handled before item shortcuts', () => {
+  const { calls, key } = setupItems();
+  key('z', { ctrlKey: true }); key('s', { ctrlKey: true });
+  expect(calls).toEqual([]); // 되돌리기·저장은 아이템 동작으로 새지 않는다
+});
+
+test('KEYMAP lists the product shortcuts', async () => {
+  const { KEYMAP } = await import('../src/ui/keymap.js');
+  const rows = KEYMAP.filter(r => r.group === '제품');
+  const keys = rows.map(r => r.keys).join(' ');
+  for (const k of ['Alt+H', 'Alt+V', 'Alt+R', 'Alt+A', 'Alt+C', 'Alt+X', 'Ctrl+C', 'Ctrl+V', 'Ctrl+H', 'Ctrl+L', 'Ctrl+G', 'Q']) expect(keys).toContain(k);
+  expect(keys).toContain('방향키');
+});
