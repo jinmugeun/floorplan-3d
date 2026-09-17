@@ -27,7 +27,7 @@ export function addWalls(store, walls) {
     const f = activeFloor(d);
     const same = (w, x) => (eq(x.a, w.a) && eq(x.b, w.b)) || (eq(x.a, w.b) && eq(x.b, w.a));
     for (const w of walls) if (!f.walls.some(x => same(w, x))) f.walls.push(w); // 겹치는 벽은 추가하지 않는다
-    reroom(f);
+    reroom(f); reattach(f);
   });
 }
 export function deleteWall(store, id) {
@@ -35,7 +35,7 @@ export function deleteWall(store, id) {
 }
 export function deleteWalls(store, ids, opts) {
   const kill = new Set(ids);
-  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => !kill.has(w.id)); reroom(f); }, opts);
+  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => !kill.has(w.id)); reroom(f); reattach(f); }, opts);
 }
 export function deleteRoom(store, id) {
   return store.dispatch(d => {
@@ -71,7 +71,7 @@ export function setWallLength(store, id, mm, opts) {
     if (!w || !(mm > 0)) return;
     const dir = wallDir(w); // b를 방향 그대로 옮긴다: a와 각도는 그대로 두고 길이만 바꾼다
     w.b = [w.a[0] + dir[0] * mm, w.a[1] + dir[1] * mm];
-    reroom(f);
+    reroom(f); reattach(f);
   }, opts);
 }
 // 높이는 기하(방 폴리곤·면적)를 바꾸지 않으므로 reroom을 부르지 않는다.
@@ -126,7 +126,7 @@ export function duplicateRoom(store, roomId, opts) {
     const copies = f.walls.filter(w => r.wallIds.includes(w.id)).map(w => ({ ...w, id: uid('w'), a: [w.a[0] + dx, w.a[1]], b: [w.b[0] + dx, w.b[1]] }));
     const src = { ...r };
     f.walls = [...f.walls, ...copies];
-    reroom(f);
+    reroom(f); reattach(f);
     const c = centroid(r.points.map(p => [p[0] + dx, p[1]]));
     const copy = f.rooms.find(x => x.id !== roomId && pointInPolygon(c, x.points));
     if (copy) for (const k of ROOM_PROPS) if (src[k] !== undefined) copy[k] = src[k];
@@ -250,7 +250,8 @@ export function nudgeItems(store, ids, delta, opts = {}) {
     }
     return { id: it.id, patch: { pos: [it.pos[0] + delta[0], it.pos[1] + delta[1]] } };
   });
-  return patches.length ? updateItems(store, patches, opts) : store.get();
+  const changed = patches.filter(p => { const it = f.items.find(x => x.id === p.id); return !it || Object.keys(p.patch).some(k => JSON.stringify(p.patch[k]) !== JSON.stringify(it[k])); }); // 벽에 수직인 방향키처럼 아무것도 안 바뀌면 되돌림 단계를 만들지 않는다
+  return changed.length ? updateItems(store, changed, opts) : store.get();
 }
 export function updateItem(store, id, patch, opts = {}) { return updateItems(store, [{ id, patch }], opts); }
 export function updateItems(store, patches, opts = {}) {

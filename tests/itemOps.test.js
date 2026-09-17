@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeItem, createItem, normalizeProject } from '../src/state/schema.js';
-import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall } from '../src/state/floorOps.js';
+import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems } from '../src/state/floorOps.js';
 import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 
@@ -147,5 +147,34 @@ describe('벽 부착 아이템 재부착', () => {
     const it = activeFloor(s.get()).items.find(x => x.id === id);
     expect(it).toBeTruthy();
     expect(it.wallId).toBeNull();
+  });
+});
+
+describe('재부착은 reroom이 도는 모든 액션 뒤에 돈다', () => {
+  test('벽 길이를 줄이면 문이 새 길이 기준 같은 t에 다시 앉는다', () => {
+    const s = setup();
+    const top = activeFloor(s.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+    const id = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000.5, 0] }));
+    setWallLength(s, top.id, 2000);
+    const it = activeFloor(s.get()).items.find(x => x.id === id);
+    expect(it.t).toBeCloseTo(0.5);
+    expect(Math.abs(it.pos[0] - 1000)).toBeLessThanOrEqual(1);
+  });
+  test('여러 벽을 한 번에 지우면 부착이 풀린다', () => {
+    const s = setup();
+    const top = activeFloor(s.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+    const id = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }));
+    deleteWalls(s, [top.id]);
+    expect(activeFloor(s.get()).items.find(x => x.id === id).wallId).toBeNull();
+  });
+  test('벽에 수직인 방향키는 아무것도 바꾸지 않아 되돌림 단계도 없다', () => {
+    const s = setup();
+    const top = activeFloor(s.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+    const id = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }));
+    const before = s.get();
+    nudgeItems(s, [id], [0, 10]);
+    expect(s.get()).toBe(before); // dispatch 자체가 일어나지 않았다
+    nudgeItems(s, [id], [10, 0]);
+    expect(activeFloor(s.get()).items.find(x => x.id === id).t).toBeGreaterThan(0.5);
   });
 });

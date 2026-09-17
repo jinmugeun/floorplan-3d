@@ -55,7 +55,7 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
       const hit = nearestWallPlacement(f.walls, p, primary.size, WALL_ATTACH_DIST, { embed: isEmbed(primary) });
       moved = [hit
         ? { ...primary, pos: hit.pos, rot: hit.rot, wallId: hit.wallId, t: hit.t, side: hit.side }
-        : { ...primary, pos: add(primary.pos, d) }];
+        : { ...primary, pos: add(primary.pos, d), wallId: null, t: 0 }]; // 벽 범위를 벗어나면 부착을 푼다(3D 개구부가 옛 자리에 남지 않게)
       drag.guides = [];
     } else {
       moved = drag.base.map(b => ({ ...b, pos: add(b.pos, d) }));

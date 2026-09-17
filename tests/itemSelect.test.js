@@ -181,3 +181,13 @@ describe('아이템 회전·크기 드래그', () => {
     expect(item(store, ids[1]).rot).toBe(0);
   });
 });
+
+test('벽 범위 밖으로 끌어낸 문은 부착이 풀린다', () => {
+  const { store, ids, t } = setup([['door-swing-900', { wallId: null, pos: [2000.5, 0] }]]);
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  store.dispatch(d => { const it = activeFloor(d).items[0]; it.wallId = top.id; it.t = 0.5; it.pos = [2000, 0]; });
+  t.onPointerDown([2000, 0], {}); t.onPointerMove([2000, 1500.25], { ctrlKey: true }); t.onPointerUp([2000, 1500.25], {});
+  const it = item(store, ids[0]);
+  expect(it.wallId).toBeNull();
+  expect(it.pos[1]).toBeGreaterThan(1000);
+});
