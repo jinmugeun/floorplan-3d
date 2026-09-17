@@ -122,3 +122,32 @@ export function wallGaps(box, walls) {
   }
   return out;
 }
+
+// 핸들 index(0 = 좌상, 시계 방향)가 잡는 로컬 축 방향. 0은 그 축을 건드리지 않는다는 뜻.
+const HANDLE_AXIS = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]];
+
+// 핸들을 worldPoint로 끌었을 때의 새 크기와 중심. 반대쪽 변·코너는 제자리에 남는다.
+export function scaleFromHandle(item, index, worldPoint, { keepRatio = false, min = 10, max = 5000 } = {}) {
+  const [ax, ay] = HANDLE_AXIS[((index % 8) + 8) % 8];
+  const l = toLocal(worldPoint, item);
+  const [w, d] = item.size;
+  const clamp = v => Math.max(min, Math.min(max, v));
+  let nw = ax ? clamp(Math.abs(l[0] + (ax * w) / 2)) : w;
+  let nd = ay ? clamp(Math.abs(l[1] + (ay * d) / 2)) : d;
+  if (keepRatio) {
+    const k = ax && ay ? Math.max(nw / w, nd / d) : ax ? nw / w : nd / d;
+    nw = clamp(w * k); nd = clamp(d * k);
+  }
+  const cx = ax ? (ax * (nw - w)) / 2 : 0;
+  const cy = ay ? (ay * (nd - d)) / 2 : 0;
+  const c = Math.cos(RAD(item.rot)), s = Math.sin(RAD(item.rot));
+  return { size: [nw, nd, item.size[2]], pos: [item.pos[0] + cx * c - cy * s, item.pos[1] + cx * s + cy * c] };
+}
+
+// 회전 핸들은 로컬 아래쪽(+90°)에 있으므로 커서 각도에서 90°를 뺀다. snapDeg = 0이면 자유 회전.
+export function rotateToPoint(item, worldPoint, { snapDeg = 15 } = {}) {
+  const v = sub(worldPoint, item.pos);
+  if (!v[0] && !v[1]) return normDeg(item.rot);
+  const raw = normDeg(DEG(Math.atan2(v[1], v[0])) - 90);
+  return snapDeg ? normDeg(Math.round(raw / snapDeg) * snapDeg) : raw;
+}

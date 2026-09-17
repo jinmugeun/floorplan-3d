@@ -1,13 +1,16 @@
 import { activeFloor } from '../state/schema.js';
-import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFloor, deleteFloor, totalArea, setWallLength, setRoomWallHeight, updateWallProps } from '../state/floorOps.js';
+import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFloor, deleteFloor, totalArea, setWallLength, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
 import { wallLength } from '../geom/walls.js';
 import { fmtLen, parseLen, fmtArea } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
+import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 
 // 상세 설정 <details>의 열림 상태는 패널을 다시 그려도 유지된다.
 let detailsOpen = true;
+// 아이템 크기 패널의 "비율 유지" 체크박스 상태. applyNumber(모듈 최상위 함수)도 읽어야 해서 모듈 스코프에 둔다.
+let keepRatio = false;
 
 export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
 
@@ -41,6 +44,21 @@ export function applyNumber(store, sel, name, v) {
   if (!sel) {
     if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = v; });
     if (name === 'slab') updateFloor(store, store.get().activeFloor ?? 0, { slab: v });
+    return;
+  }
+  if (sel.type === 'item') {
+    const it = activeFloor(store.get()).items.find(x => x.id === sel.id); if (!it) return;
+    if (name === 'w' || name === 'd' || name === 'h') {
+      const i = { w: 0, d: 1, h: 2 }[name];
+      const size = [...it.size];
+      if (keepRatio) { const k = v / size[i]; size[0] = Math.min(5000, Math.max(10, size[0] * k)); size[1] = Math.min(5000, Math.max(10, size[1] * k)); size[2] = Math.min(5000, Math.max(10, size[2] * k)); }
+      size[i] = v;
+      resizeItem(store, sel.id, size.map(x => Math.round(x)));
+      return;
+    }
+    if (name === 'posX') updateItem(store, sel.id, { pos: [v, it.pos[1]] });
+    else if (name === 'posY') updateItem(store, sel.id, { pos: [it.pos[0], v] });
+    else updateItem(store, sel.id, { [name]: v });   // z, rot
     return;
   }
   if (sel.type === 'wall') {
@@ -105,6 +123,27 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       if (bg) container.insertAdjacentHTML('beforeend', `<h2>배경 이미지</h2>${field('투명도', `<input type="range" name="bgOpacity" min="0" max="1" step="0.05" value="${bg.opacity}">`)}<label class="check"><input type="checkbox" name="bgVisible" ${bg.visible ? 'checked' : ''}> 표시</label><label class="check"><input type="checkbox" name="bgLocked" ${bg.locked ? 'checked' : ''}> 잠금</label><button type="button" name="bgRemove">배경 제거</button>`);
       return;
     }
+    if (sel.type === 'item') {
+      const it = f.items.find(x => x.id === sel.id); if (!it) { container.innerHTML = ''; return; }
+      const p = productById(it.productId);
+      container.innerHTML = `<h2>제품 상세 정보</h2>
+        <p class="muted">${esc(it.name || p?.name || '제품')} · ${esc(it.code || p?.code || '')}</p>
+        ${field('크기 (W×D×H)', `<output>${fmtSize(it.size)}</output>`)}
+        ${p?.price ? field('가격', `<output>${p.price.toLocaleString('ko-KR')}원</output>`) : ''}
+        ${field('부착 타입', `<output>${ATTACH_LABELS[it.attach]}</output>`)}
+        ${field('색상', `<input type="color" name="color" value="${esc(it.color)}">`)}
+        ${lenField(withUnit('너비', units, showUnit), 'w', it.size[0], 10, 5000, false, units)}
+        ${lenField(withUnit('깊이', units, showUnit), 'd', it.size[1], 10, 5000, false, units)}
+        ${lenField(withUnit('높이', units, showUnit), 'h', it.size[2], 10, 5000, false, units)}
+        <label class="check"><input type="checkbox" name="keepRatio" ${keepRatio ? 'checked' : ''}> 크기 비율 유지</label>
+        <button type="button" name="resetSize">수치 초기화</button>
+        ${lenField(withUnit('바닥으로부터의 높이', units, showUnit), 'z', it.z, -1000, 8000, false, units)}
+        ${field('각도 (°)', num('rot', it.rot, 0, 360, 1))}
+        ${lenField(withUnit('위치 X', units, showUnit), 'posX', it.pos[0], -1e6, 1e6, false, units)}
+        ${lenField(withUnit('위치 Y', units, showUnit), 'posY', it.pos[1], -1e6, 1e6, false, units)}
+        <button type="button" name="delete" class="danger">제품 삭제</button>`;
+      return;
+    }
     if (sel.type === 'wall') {
       const w = f.walls.find(x => x.id === sel.id); if (!w) { container.innerHTML = ''; return; }
       const len = wallLength(w);
@@ -120,7 +159,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
       return;
     }
-    if (sel.type === 'multi') {
+    if (sel.type === 'multi' && sel.kind === 'wall') {
       const picked = f.walls.filter(w => sel.ids.includes(w.id));
       const h = picked[0]?.height ?? 2300, t = picked[0]?.thickness ?? 200;
       container.innerHTML = `<h2>여러 벽 선택</h2>
@@ -147,6 +186,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${colorField('천장 색', 'ceilingColor', r.ceilingColor)}
         <label class="check"><input type="checkbox" name="hideCeiling" ${r.hideCeiling ? 'checked' : ''}> 천장 감추기</label>
         <button type="button" name="delete" class="danger">방 삭제</button>`;
+      return;
     }
   }
   // 색: 기하 불변 → reroom 없음. opts는 트랜잭션 안에서 { record: false }로 넘어온다.
@@ -171,6 +211,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (name === 'floorSelect') { setActiveFloor(store, Number(el.value)); return; }
     if (name === 'areaMode') { store.dispatch(d => { d.areaMode = el.value; }, { record: false }); return; }
     if (name === 'wallOpacity' || name === 'floorOpacity') { store.dispatch(d => { d.view[name] = Number(el.value); }, { record: false }); return; }
+    if (name === 'keepRatio') { keepRatio = el.checked; return; }
+    if (name === 'color' && sel?.type === 'item') { updateItem(store, sel.id, { color: el.value }); return; }
     if (el.dataset.len) {
       const v = readLen(el, store.get().units ?? 'mm');
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
@@ -200,6 +242,13 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   };
   const onClick = ev => {
     if (ev.target.name === 'split') { ui.set({ splitWall: true }); return; }
+    if (ev.target.name === 'resetSize') {
+      const sel = ui.get().selection;
+      const it = activeFloor(store.get()).items.find(x => x.id === sel?.id);
+      const p = it && productById(it.productId);
+      if (p) resizeItem(store, it.id, [...p.size]);
+      return;
+    }
     if (ev.target.name === 'bgRemove') { store.dispatch(d => { d.background = null; }); return; }
     if (ev.target.name === 'floorAdd') { openFloorDialog({ store, mode: 'add' }); return; }
     if (ev.target.name === 'floorRename') { openFloorDialog({ store, mode: 'rename', index: store.get().activeFloor ?? 0 }); return; }

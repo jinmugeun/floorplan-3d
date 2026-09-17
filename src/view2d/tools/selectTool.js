@@ -1,5 +1,5 @@
 import { activeFloor } from '../../state/schema.js';
-import { setWalls, deleteWall, deleteRoom, duplicateRoom, expandGroups, nudgeItems } from '../../state/floorOps.js';
+import { setWalls, deleteWall, deleteRoom, duplicateRoom, expandGroups, nudgeItems, rotateItems } from '../../state/floorOps.js';
 import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall, wallPolygon, nodeKey } from '../../geom/walls.js';
 import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
@@ -49,6 +49,10 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         drag = { kind: 'box', startP: p, cur: p }; // Shift+드래그: 영역 선택
         return;
       }
+      // 선택된 아이템이 하나면 크기·회전 핸들을 먼저 본다
+      const one = selIds().length === 1 ? f.items.find(x => x.id === selIds()[0]) : null;
+      const h = one && items.handleHit(one, p);
+      if (h) { items.start(h.kind, [one.id], p, h.kind === 'scale' ? { index: h.index } : {}); return; }
       // 아이템이 벽·방보다 먼저 잡힌다. 도면 잠금은 아이템 편집을 막지 않는다(locked() 가드보다 앞).
       const it = items.pick(p);
       if (it) {
@@ -152,6 +156,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         nudgeItems(store, ids, [ARROWS[ev.key][0] * k, ARROWS[ev.key][1] * k]);
         return true;
       }
+      if (ev.key.toLowerCase() === 'q' && ids.length && !ev.ctrlKey && !ev.altKey) { rotateItems(store, ids, 90); return true; }
       return false;
     },
     onContextMenu(p) {

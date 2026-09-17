@@ -1,7 +1,7 @@
 import { activeFloor } from '../../state/schema.js';
 import { updateItems, itemsOf } from '../../state/floorOps.js';
 import { sub, add, dist } from '../../geom/vec.js';
-import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST } from '../../geom/items.js';
+import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, HANDLE_HIT_PX } from '../items2d.js';
 
 // 아이템 드래그 한 묶음. selectTool은 "무엇을 잡았나"만 판단하고 나머지를 여기로 넘긴다.
@@ -82,8 +82,20 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
 
   function apply(p, ev) {
     if (!drag) return;
+    if (drag.kind === 'rotate') {
+      const rot = rotateToPoint(drag.base[0], p, { snapDeg: ev?.ctrlKey ? 0 : 15 });
+      drag.moved = true;
+      updateItems(store, [{ id: drag.ids[0], patch: { rot } }], { record: false });
+      return;
+    }
+    if (drag.kind === 'scale') {
+      const r = scaleFromHandle(drag.base[0], drag.index, p, { keepRatio: !!ev?.shiftKey });
+      drag.moved = true;
+      updateItems(store, [{ id: drag.ids[0], patch: { size: [Math.round(r.size[0]), Math.round(r.size[1]), r.size[2]], pos: [Math.round(r.pos[0]), Math.round(r.pos[1])] } }], { record: false });
+      return;
+    }
     if (drag.kind === 'items') move(p, ev);
-    // Task 9가 여기에 'scale'·'rotate' 분기를, Task 10이 move() 끝에 충돌 경고를 덧붙인다.
+    // Task 10이 move() 끝에 충돌 경고를 덧붙인다.
   }
   function finish() {
     if (!drag) return false;

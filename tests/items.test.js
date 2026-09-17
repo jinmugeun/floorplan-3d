@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { itemCorners, itemAABB, toLocal, pointInItem, wallAxis, placeOnWall, nearestWallPlacement, normDeg, snapItemPos, wallGaps, isEmbed } from '../src/geom/items.js';
+import { itemCorners, itemAABB, toLocal, pointInItem, wallAxis, placeOnWall, nearestWallPlacement, normDeg, snapItemPos, wallGaps, isEmbed, scaleFromHandle, rotateToPoint } from '../src/geom/items.js';
 import { pointInPolygon } from '../src/geom/rooms.js';
 import { makeWall, rectWalls } from '../src/geom/walls.js';
 
@@ -129,5 +129,55 @@ describe('벽까지 거리', () => {
     expect(isEmbed({ kind: 'window' })).toBe(true);
     expect(isEmbed({ kind: 'opening' })).toBe(true);
     expect(isEmbed({ kind: 'product' })).toBe(false);
+  });
+});
+
+describe('아이템 크기·회전 계산', () => {
+  test('오른쪽 변 핸들(3)은 왼쪽 변을 고정한 채 너비만 늘린다', () => {
+    const it = item({ pos: [1000, 1000], size: [1200, 600, 700] });
+    const r = scaleFromHandle(it, 3, [2000, 1000]);
+    expect(r.size).toEqual([1600, 600, 700]);
+    expect(r.pos[0]).toBeCloseTo(1200);   // 왼쪽 변 400은 그대로, 중심이 오른쪽으로
+    expect(r.pos[1]).toBeCloseTo(1000);
+  });
+
+  test('코너 핸들(4)은 두 축을 함께 바꾸고 소수 좌표도 유지한다', () => {
+    const it = item({ pos: [0, 0], size: [1000, 500, 700] });
+    const r = scaleFromHandle(it, 4, [750.5, 375.25]);
+    expect(r.size[0]).toBeCloseTo(1250.5);
+    expect(r.size[1]).toBeCloseTo(625.25);
+    expect(r.pos[0]).toBeCloseTo(125.25);
+    expect(r.pos[1]).toBeCloseTo(62.625);
+  });
+
+  test('Shift(비율 유지)는 코너에서 두 축을 같은 비율로 키운다', () => {
+    const it = item({ pos: [0, 0], size: [1000, 500, 700] });
+    const r = scaleFromHandle(it, 4, [750, 250], { keepRatio: true });
+    expect(r.size[0]).toBeCloseTo(1250);   // 너비 비율 1.25가 더 크므로 그 비율을 쓴다
+    expect(r.size[1]).toBeCloseTo(625);
+    expect(r.size[0] / r.size[1]).toBeCloseTo(2);
+  });
+
+  test('크기는 10~5000으로 잘린다', () => {
+    const it = item({ pos: [0, 0], size: [1000, 500, 700] });
+    expect(scaleFromHandle(it, 3, [-9000, 0]).size[0]).toBe(5000);
+    // 왼쪽 고정 변(-500)을 5mm 넘겨 끌면(-495) 너비 후보가 5 → 최소 10으로 잘린다.
+    expect(scaleFromHandle(it, 3, [-495, 0]).size[0]).toBe(10);
+  });
+
+  test('회전한 아이템의 핸들 드래그는 로컬 축으로 계산된다', () => {
+    const it = item({ pos: [0, 0], size: [1000, 500, 700], rot: 90 });
+    const r = scaleFromHandle(it, 3, [0, 750]); // rot 90이면 로컬 +x가 월드 +y
+    expect(r.size[0]).toBeCloseTo(1250);
+    expect(r.pos[1]).toBeCloseTo(125);
+  });
+
+  test('rotateToPoint는 아래쪽 핸들이 커서를 향하게 하고 15°로 스냅한다', () => {
+    const it = item({ pos: [0, 0] });
+    expect(rotateToPoint(it, [0, 1000])).toBe(0);
+    expect(rotateToPoint(it, [1000, 0])).toBe(270);
+    expect(rotateToPoint(it, [1000.5, 1000.5])).toBe(315);
+    expect(rotateToPoint(it, [100, 1000])).toBe(0);           // 약 5.7° → 0°로 스냅
+    expect(rotateToPoint(it, [100, 1000], { snapDeg: 0 })).toBeCloseTo(354.29, 1);
   });
 });

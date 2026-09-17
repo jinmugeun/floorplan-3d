@@ -140,3 +140,44 @@ describe('아이템 선택과 이동', () => {
     expect(item(store, ids[0]).pos).toEqual([2000, 1800]);
   });
 });
+
+describe('아이템 회전·크기 드래그', () => {
+  test('코너 핸들을 잡으면 크기가 바뀌고 Shift는 비율을 유지한다', () => {
+    const { store, ui, t, ids } = setup([['dining-4', { pos: [1000, 1000] }]]); // 1200×800
+    ui.set({ selection: { type: 'item', id: ids[0] } });
+    t.onPointerDown([1600, 1400], {});            // 우하 코너
+    expect(t.getDrag().kind).toBe('scale');
+    t.onPointerMove([1900, 1700], {});
+    t.onPointerUp([1900, 1700], {});
+    const it = item(store, ids[0]);
+    expect(it.size[0]).toBe(1500);   // 코너를 +300, +300 끌었다
+    expect(it.size[1]).toBe(1100);
+    store.undo();
+    expect(item(store, ids[0]).size).toEqual([1200, 800, 750]);
+  });
+
+  test('회전 핸들을 잡으면 15°씩 돌고 Ctrl로 자유 회전한다', () => {
+    const { store, ui, t, ids } = setup([['dining-4', { pos: [1000, 1000] }]]);
+    ui.set({ selection: { type: 'item', id: ids[0] } });
+    t.onPointerDown([1000, 1400 + 260], {});      // 회전 핸들(ROT_OFFSET_PX 26 / scale 0.1)
+    expect(t.getDrag().kind).toBe('rotate');
+    t.onPointerMove([1100, 1400], {});
+    t.onPointerUp([1100, 1400], {});
+    expect(item(store, ids[0]).rot % 15).toBe(0);
+    expect(item(store, ids[0]).rot).not.toBe(0);
+  });
+
+  test('Q는 90°씩 돌리고 벽 부착 아이템은 돌지 않는다', () => {
+    const { store, ui, t, ids, floor } = setup([['sofa-3', { pos: [2000, 1500] }], ['door-swing-900', { pos: [2000, 0] }]]);
+    ui.set({ selection: { type: 'item', id: ids[0] } });
+    expect(t.onKey({ key: 'q' })).toBe(true);
+    expect(item(store, ids[0]).rot).toBe(90);
+    t.onKey({ key: 'q' });
+    expect(item(store, ids[0]).rot).toBe(180);
+    const top = floor().walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+    store.dispatch(d => { const it = activeFloor(d).items[1]; it.wallId = top.id; it.t = 0.5; });
+    ui.set({ selection: { type: 'item', id: ids[1] } });
+    t.onKey({ key: 'q' });
+    expect(item(store, ids[1]).rot).toBe(0);
+  });
+});

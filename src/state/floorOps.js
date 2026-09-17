@@ -270,6 +270,27 @@ export function deleteItems(store, ids, opts = {}) {
     f.groups = (f.groups ?? []).map(g => ({ ...g, itemIds: g.itemIds.filter(x => !set.has(x)) })).filter(g => g.itemIds.length > 1);
   }, opts);
 }
+// 제자리 회전. 벽 부착 아이템은 벽 방향에 고정이라 돌리지 않고(명세 8.5), 잠긴 아이템도 건드리지 않는다.
+export function rotateItems(store, ids, deltaDeg, opts = {}) {
+  const patches = itemsOf(store.get(), ids)
+    .filter(it => !it.locked && !(it.attach === 'wall' && it.wallId))
+    .map(it => ({ id: it.id, patch: { rot: it.rot + deltaDeg } }));
+  return patches.length ? updateItems(store, patches, opts) : store.get();
+}
+// 크기 변경. 벽 부착이면 벽에 다시 맞춘다(두께가 바뀌면 벽면에서 떨어지기 때문). 잠긴 아이템은 그대로 둔다.
+export function resizeItem(store, id, size, opts = {}) {
+  const f = activeFloor(store.get());
+  const it = f.items.find(x => x.id === id);
+  if (!it || it.locked) return store.get();
+  const patch = { size };
+  const w = it.attach === 'wall' && it.wallId ? f.walls.find(x => x.id === it.wallId) : null;
+  if (w) {
+    const r = placeOnWall(w, it.t, it.side, size, { embed: isEmbed(it) });
+    patch.pos = [Math.round(r.pos[0]), Math.round(r.pos[1])];
+    patch.rot = r.rot;
+  }
+  return updateItem(store, id, patch, opts);
+}
 // 새 id를 먼저 만들어 돌려준다(dispatch는 상태를 복제하므로 안에서 만든 id를 밖에서 알 수 없다).
 export function duplicateItems(store, ids, { delta = [0, 0] } = {}, opts) {
   const copies = itemsOf(store.get(), ids).map(i => normalizeItem({ ...i, id: uid('i'), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] }));

@@ -304,3 +304,73 @@ test('a colour drag abandoned without change closes its transaction on focusout'
   store.undo(); // 트랜잭션이 focusout에서 닫혔으므로 한 번의 undo로 되돌아간다
   expect(activeFloor(store.get()).walls[0].colorOut).toBe(w.colorOut);
 });
+
+test('item panel edits size, height, angle and position', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const id = addItem(store, createItem(productById('dining-4'), { pos: [2000, 1500] }));
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'item', id } });
+  expect(el.textContent).toContain('제품 상세 정보');
+  expect(el.textContent).toContain('4인 식탁');
+  expect(el.textContent).toContain('TB-D04');
+  expect(el.textContent).toContain('바닥에 서있는 제품');
+  const it = () => activeFloor(store.get()).items[0];
+  const set = (name, value) => { const f = el.querySelector(`[name="${name}"]`); f.value = value; f.dispatchEvent(new Event('change', { bubbles: true })); };
+  set('w', '1500');
+  expect(it().size).toEqual([1500, 800, 750]);
+  set('w', '99999');                                  // 범위 밖은 5000으로 잘린다
+  expect(it().size[0]).toBe(5000);
+  set('w', '1200');
+  // 체크박스는 다시 그려질 때 새 엘리먼트가 되므로 그때그때 다시 찾는다
+  const check = v => { const c = el.querySelector('input[name="keepRatio"]'); c.checked = v; c.dispatchEvent(new Event('change', { bubbles: true })); };
+  check(true);
+  set('w', '2400');
+  expect(it().size).toEqual([2400, 1600, 1500]);       // 비율 유지: 모든 축 × 2
+  check(false);
+  el.querySelector('button[name="resetSize"]').click();
+  expect(it().size).toEqual([1200, 800, 750]);
+  set('z', '900');
+  expect(it().z).toBe(900);
+  set('rot', '90');
+  expect(it().rot).toBe(90);
+  set('posX', '1234.5');
+  expect(it().pos[0]).toBe(1234.5);
+});
+
+test('item panel reads ft·in lengths through readLen', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  const id = addItem(store, createItem(productById('dining-4'), { pos: [2000, 1500] }));
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'item', id } });
+  const w = el.querySelector('input[name="w"]');
+  expect(w.type).toBe('text');              // ft·in 모드는 텍스트 입력
+  expect(w.dataset.len).toBe('1');
+  w.value = "4'"; w.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).items[0].size[0]).toBe(1219);   // 4 ft = 1219.2mm → 반올림
+});
+
+test('wall item keeps sitting on its wall when resized', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const f = activeFloor(store.get());
+  const top = f.walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const id = addItem(store, createItem(productById('hood-wall'), { wallId: top.id, t: 0.5, side: 1, pos: [2000, 350] }));
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'item', id } });
+  const d = el.querySelector('input[name="d"]');
+  d.value = '700'; d.dispatchEvent(new Event('change', { bubbles: true }));
+  const it = activeFloor(store.get()).items[0];
+  expect(it.size[1]).toBe(700);
+  expect(it.pos).toEqual([2000, 450]); // 벽 두께 절반 100 + 깊이 절반 350
+});
