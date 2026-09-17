@@ -25,3 +25,10 @@ test('disposeGroup disposes every geometry and only per-mesh materials', () => {
   expect(geoSpies.every(s => s.mock.calls.length === 1)).toBe(true);
   for (const [m, s] of matSpies) expect(s.mock.calls.length).toBe(m.userData.perMesh ? 1 : 0);
 });
+
+test('wall material is transparent only when wallOpacity < 1', () => {
+  const opaque = buildFloorGroup(floor(), { wallOpacity: 1 }).children.filter(c => c.name === 'wall');
+  expect(opaque.every(c => c.material.transparent === false && c.material.opacity === 1)).toBe(true);
+  const seeThrough = buildFloorGroup(floor(), { wallOpacity: 0.4 }).children.filter(c => c.name === 'wall');
+  expect(seeThrough.every(c => c.material.transparent === true && c.material.opacity === 0.4)).toBe(true);
+});

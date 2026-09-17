@@ -6,7 +6,7 @@ const M = v => v / 1000;
 export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
 const MAT = {
   // 벽 재질은 벽마다 새로 만든다(불투명도가 개별). perMesh 표시가 있는 재질만 dispose 대상이다.
-  wall: () => { const m = new THREE.MeshStandardMaterial({ color: 0xe9e6e0, roughness: 0.9, transparent: true }); m.userData.perMesh = true; return m; },
+  wall: () => { const m = new THREE.MeshStandardMaterial({ color: 0xe9e6e0, roughness: 0.9 }); m.userData.perMesh = true; return m; },
   wallTop: new THREE.MeshStandardMaterial({ color: 0x3a4351, roughness: 1, side: THREE.DoubleSide }),
   floor: new THREE.MeshStandardMaterial({ color: 0xc9a77a, roughness: 1, side: THREE.DoubleSide }),
   ceiling: new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 1 }),
@@ -30,7 +30,8 @@ export function buildFloorGroup(floor, view) {
     const geo = new THREE.ExtrudeGeometry(shapeFrom(wallPolygon(w, floor.walls)), { depth: M(w.height), bevelEnabled: false });
     geo.rotateX(Math.PI / 2); geo.translate(0, M(w.height), 0);
     const mesh = new THREE.Mesh(geo, MAT.wall());
-    mesh.material.opacity = view.wallOpacity ?? 1; mesh.name = 'wall'; mesh.userData.wallId = w.id; mesh.castShadow = true; mesh.receiveShadow = true;
+    const opacity = view.wallOpacity ?? 1; mesh.material.opacity = opacity; mesh.material.transparent = opacity < 1; // 불투명 벽은 투명 정렬 패스를 타지 않게 한다
+    mesh.name = 'wall'; mesh.userData.wallId = w.id; mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
     const top = new THREE.Mesh(new THREE.ShapeGeometry(shapeFrom(wallPolygon(w, floor.walls))), MAT.wallTop);
     top.rotation.x = Math.PI / 2; top.position.y = M(w.height) + 0.002; top.name = 'wallTop'; top.userData.wallId = w.id; g.add(top);

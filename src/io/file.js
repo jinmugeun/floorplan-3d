@@ -1,4 +1,5 @@
 import { migrate } from '../state/schema.js';
+import { createUiState } from '../state/uistate.js';
 import { createView2D } from '../view2d/view2d.js';
 
 export const serializeProject = state => JSON.stringify(state);
@@ -19,11 +20,18 @@ export function startAutosave(store, { key = 'kvp.autosave', intervalMs = 300000
   const onUnload = () => save(); window.addEventListener('beforeunload', onUnload);
   return { stop() { clearInterval(timer); unsub(); window.removeEventListener('beforeunload', onUnload); }, saveNow: save };
 }
-export function loadAutosave(key = 'kvp.autosave') { const t = localStorage.getItem(key); if (!t) return null; try { return parseProject(t); } catch { return null; } }
-export function capture2D(store, ui, width = 2000) {
+export function loadAutosave(key = 'kvp.autosave') {
+  try { const t = localStorage.getItem(key); return t ? parseProject(t) : null; } // localStorage 접근 자체가 막혀 있을 수도 있다
+  catch { return null; }
+}
+// 배경 이미지가 있으면 캡처 전에 로드를 기다린다(실패해도 캡처는 진행).
+const waitForImage = src => new Promise(res => { const img = new Image(); img.onload = img.onerror = () => res(); img.src = src; });
+export async function capture2D(store, _ui, width = 2000) {
+  const bg = store.get().background;
+  if (bg?.src) await waitForImage(bg.src);
   const c = document.createElement('canvas'); c.width = width; c.height = Math.round(width * 0.7);
   Object.defineProperty(c, 'clientWidth', { value: c.width }); Object.defineProperty(c, 'clientHeight', { value: c.height });
-  const v = createView2D(c, store, ui, { readonly: true }); v.fit(500);
+  const v = createView2D(c, store, createUiState(), { readonly: true }); v.fit(500); // 새 ui 상태: 선택 강조가 캡처에 남지 않는다
   return new Promise((res, rej) => requestAnimationFrame(() => requestAnimationFrame(() => {
     try { res(c.toDataURL('image/png')); }
     catch (e) { rej(new Error('캡처에 실패했습니다: ' + e.message)); } // 예: 외부 이미지로 오염된 캔버스

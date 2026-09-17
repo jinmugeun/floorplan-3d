@@ -22,7 +22,7 @@ const shell = createShell(document.getElementById('app'), { store, ui });
 const view = createView2D(shell.els.canvas2d, store, ui);
 const minimap = createView2D(shell.els.minimap, store, ui, { readonly: true, labels: false });
 const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
-createPropsPanel(shell.els.props, store, ui);
+createPropsPanel(shell.els.props, store, ui, { deleteSelection });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다
 store.subscribe(s => { if (!selectionStillValid(s, ui.get().selection)) ui.set({ selection: null }); });
 
@@ -46,8 +46,8 @@ function setMode(mode, opts) {
   if (mode !== '2d') view3d.setMode(mode, opts);
   else { if (view3d.getMode() === 'fp') view3d.setMode('iso'); view.requestRender(); } // 2D로 갈 때 fp(포인터 락, 렌더 루프)를 끝낸다
 }
-const originalDown = shell.els.canvas2d;
-originalDown.addEventListener('pointerdown', ev => { if (ui.get().fpPick && ev.button === 0) { const at = view.toWorld([ev.offsetX, ev.offsetY]); ui.set({ mode: 'fp', fpPick: false }); view3d.setMode('fp', { at }); ev.stopImmediatePropagation(); } }, true);
+const canvas2d = shell.els.canvas2d;
+canvas2d.addEventListener('pointerdown', ev => { if (ui.get().fpPick && ev.button === 0) { const at = view.toWorld([ev.offsetX, ev.offsetY]); ui.set({ mode: 'fp', fpPick: false }); view3d.setMode('fp', { at }); ev.stopImmediatePropagation(); } }, true);
 
 document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
@@ -67,7 +67,7 @@ function deleteSelection() {
   if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); }
 }
 const restored = loadAutosave();
-if (restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?')) store.replace(restored);
+if (restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?')) store.replace(restored, { record: false }); // 복원은 되돌릴 단계가 아니다
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
 
@@ -102,4 +102,4 @@ canvasWrap.addEventListener('drop', async ev => {
 
 window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, save: () => document.getElementById('btnSave').click() }));
 setTool('select'); view.fit(); minimap.fit(500);
-window.__app = { store, ui, view, view3d };
+if (import.meta.env.DEV) window.__app = { store, ui, view, view3d }; // 브라우저 검증용, 개발 빌드에서만

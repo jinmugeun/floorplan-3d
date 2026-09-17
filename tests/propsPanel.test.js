@@ -57,3 +57,17 @@ test('number fields render 0 for non-numeric values instead of raw text', () => 
   const el = document.createElement('div'); createPropsPanel(el, store, ui);
   expect(el.querySelector('input[name="floorHeight"]').value).toBe('0');
 });
+
+test('delete buttons delegate to the app-supplied deleteSelection', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const calls = [];
+  const el = document.createElement('div'); createPropsPanel(el, store, ui, { deleteSelection: () => calls.push(ui.get().selection.type) });
+  const f = activeFloor(store.get());
+  ui.set({ selection: { type: 'wall', id: f.walls[0].id } });
+  el.querySelector('button[name="delete"]').click();
+  ui.set({ selection: { type: 'room', id: f.rooms[0].id } });
+  el.querySelector('button[name="delete"]').click();
+  expect(calls).toEqual(['wall', 'room']);
+  expect(activeFloor(store.get()).walls).toHaveLength(4); // 패널 자체는 아무것도 지우지 않는다
+});

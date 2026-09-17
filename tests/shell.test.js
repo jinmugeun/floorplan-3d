@@ -18,3 +18,15 @@ test('shell renders regions and option bar reflects tool opts', () => {
   sel.value = 'inner'; sel.dispatchEvent(new Event('change', { bubbles: true }));
   expect(tool.opts.reference).toBe('inner');
 });
+
+test('project name is not interpreted as HTML and view checkboxes follow the loaded project', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject('<img src=x onerror="window.__pwned=1">'));
+  createShell(root, { store, ui: createUiState() });
+  expect(root.querySelector('#projectName').value).toBe('<img src=x onerror="window.__pwned=1">');
+  expect(root.querySelector('#topbar img')).toBeNull();
+  const grid = root.querySelector('input[data-view="grid"]'), labels = root.querySelector('input[data-view="labels"]');
+  expect(grid.checked).toBe(true);
+  store.replace({ ...store.get(), view: { ...store.get().view, grid: false, labels: false } }, { record: false }); // 불러온 프로젝트의 보기 설정
+  expect(grid.checked).toBe(false); expect(labels.checked).toBe(false);
+});

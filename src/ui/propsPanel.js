@@ -1,5 +1,5 @@
 import { activeFloor } from '../state/schema.js';
-import { updateWall, updateRoom, setRoomWallThickness, deleteWall, deleteRoom } from '../state/floorOps.js';
+import { updateWall, updateRoom, setRoomWallThickness } from '../state/floorOps.js';
 import { wallLength } from '../geom/walls.js';
 
 export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
@@ -15,7 +15,8 @@ function numValue(el) {
   return Math.min(max, Math.max(min, v));
 }
 
-export function createPropsPanel(container, store, ui) {
+// deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
+export function createPropsPanel(container, store, ui, { deleteSelection = () => {} } = {}) {
   function render() {
     const sel = ui.get().selection, f = activeFloor(store.get());
     if (!sel) {
@@ -68,10 +69,7 @@ export function createPropsPanel(container, store, ui) {
   const onClick = ev => {
     if (ev.target.name === 'split') { ui.set({ splitWall: true }); return; }
     if (ev.target.name === 'bgRemove') { store.dispatch(d => { d.background = null; }); return; }
-    if (ev.target.name !== 'delete') return;
-    const sel = ui.get().selection; if (!sel) return;
-    if (sel.type === 'wall') { deleteWall(store, sel.id); ui.set({ selection: null }); }
-    if (sel.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, sel.id); ui.set({ selection: null }); }
+    if (ev.target.name === 'delete' && ui.get().selection) deleteSelection();
   };
   container.addEventListener('change', onChange); container.addEventListener('click', onClick);
   const unsubs = [store.subscribe(render), ui.subscribe(render)];

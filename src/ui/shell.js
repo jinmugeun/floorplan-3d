@@ -1,5 +1,7 @@
 import { toast } from './toast.js';
 
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 const LABELS = { reference: '기준선', thickness: '두께 (mm)', snap: '스냅 모드', ortho: '직교 모드', direction: '방향' };
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
 
@@ -8,7 +10,7 @@ export function createShell(root, { store, ui }) {
   <div id="layout">
     <header id="topbar">
       <div class="group"><button id="btnUndo" aria-label="실행 취소">↶</button><button id="btnRedo" aria-label="다시 실행">↷</button></div>
-      <div class="group"><input id="projectName" aria-label="프로젝트 이름" value="${store.get().name}"><span id="savedAt" class="muted">저장 이력 없음</span></div>
+      <div class="group"><input id="projectName" aria-label="프로젝트 이름" value="${esc(store.get().name)}"><span id="savedAt" class="muted">저장 이력 없음</span></div>
       <div class="group"><button id="btnCapture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
     </header>
     <nav id="rail" aria-label="작업 영역">
@@ -84,7 +86,11 @@ export function createShell(root, { store, ui }) {
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
     els.banner.hidden = !s.fpPick; if (s.fpPick) els.banner.textContent = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소';
   });
-  const syncTop = s => { q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo(); if (q('#projectName').value !== s.name) q('#projectName').value = s.name; };
+  const syncTop = s => {
+    q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo();
+    if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
+    root.querySelectorAll('[data-view]').forEach(cb => { cb.checked = !!s.view[cb.dataset.view]; }); // 불러온 프로젝트의 보기 설정을 반영한다
+  };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, toast };
 }

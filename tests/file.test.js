@@ -25,3 +25,11 @@ test('autosave writes to localStorage after interval', () => {
   auto.stop(); vi.useRealTimers();
 });
 test('filenameFor', () => { expect(filenameFor({ name: '강당중' })).toMatch(/^강당중_\d{8}-\d{4}\.json$/); });
+test('loadAutosave returns null when localStorage is unavailable or holds garbage', () => {
+  const orig = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
+  expect(loadAutosave('k')).toBeNull();
+  Object.defineProperty(window, 'localStorage', orig);
+  localStorage.setItem('bad', '{"version":42}');
+  expect(loadAutosave('bad')).toBeNull();
+});
