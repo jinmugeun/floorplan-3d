@@ -22,3 +22,15 @@ export function flipCanvas(c, horizontal) {
   const ctx = o.getContext('2d'); ctx.translate(horizontal ? c.width : 0, horizontal ? 0 : c.height); ctx.scale(horizontal ? -1 : 1, horizontal ? 1 : -1); ctx.drawImage(c, 0, 0);
   return o;
 }
+// 영역 자르기: 사각형을 원본 안으로 잘라 내고(시작점·끝점 모두) 최소 1px을 보장한다.
+export function cropCanvas(c, [x, y, w, h]) {
+  const x0 = Math.max(0, Math.min(c.width, Math.round(x)));
+  const y0 = Math.max(0, Math.min(c.height, Math.round(y)));
+  const x1 = Math.max(x0, Math.min(c.width, Math.round(x + w)));
+  const y1 = Math.max(y0, Math.min(c.height, Math.round(y + h)));
+  const sw = Math.max(1, x1 - x0), sh = Math.max(1, y1 - y0);
+  const o = document.createElement('canvas');
+  o.width = sw; o.height = sh;
+  o.getContext('2d').drawImage(c, x0, y0, sw, sh, 0, 0, sw, sh);
+  return o;
+}
