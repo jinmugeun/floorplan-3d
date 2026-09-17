@@ -24,10 +24,17 @@ app.replaceChildren(canvas, c3d);
 addWalls(store, rectWalls([0, 0], [7892, 5464], 200));
 const view = createView2D(canvas, store, ui);
 view.fit();
-const view3d = createView3D(c3d, store, ui);
+const view3d = createView3D(c3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }) });
 function syncMode() { const is2d = ui.get().mode === '2d'; canvas.hidden = !is2d; c3d.hidden = is2d; }
 ui.subscribe(syncMode);
 syncMode();
+canvas.addEventListener('pointerdown', ev => {
+  if (!ui.get().fpPick || ev.button !== 0) return;
+  ev.stopImmediatePropagation();
+  const at = view.toWorld([ev.offsetX, ev.offsetY]);
+  ui.set({ mode: 'fp', fpPick: false });
+  view3d.setMode('fp', { at });
+}, true);
 const props = document.createElement('div');
 props.id = 'props';
 props.style.cssText = 'position:fixed;right:0;top:0;width:300px;height:100%;background:#fff;padding:16px;overflow:auto;';
@@ -42,11 +49,12 @@ window.addEventListener('keydown', ev => {
   if (view.tool?.onKey?.(ev)) { view.requestRender(); return; }
   if (ev.key === 'f' || ev.key === 'F') setTool('room');
   if (ev.key === 'l' || ev.key === 'L') setTool('wall');
-  if (ev.key === 'Escape') setTool('select');
+  if (ev.key === 'Escape') { setTool('select'); if (ui.get().fpPick) ui.set({ fpPick: false }); }
   if (ev.key === 'b' || ev.key === 'B') openBackgroundDialog({ store });
   if (ev.key === '1') ui.set({ mode: '2d' });
   if (ev.key === '2') { ui.set({ mode: 'plan' }); view3d.setMode('plan'); }
   if (ev.key === '3') { ui.set({ mode: 'iso' }); view3d.setMode('iso'); }
+  if (ev.key === '4') { ui.set({ fpPick: true, mode: '2d' }); console.log('1인칭으로 확인할 위치를 클릭해주세요'); }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
     const sel = ui.get().selection;
     if (sel?.type === 'wall') { deleteWall(store, sel.id); ui.set({ selection: null }); }
