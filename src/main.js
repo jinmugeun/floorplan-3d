@@ -12,6 +12,7 @@ import { createShell } from './ui/shell.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
+import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -57,6 +58,38 @@ function deleteSelection() {
   if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); }
   if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); }
 }
-window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection }));
+const restored = loadAutosave();
+if (restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?')) store.replace(restored);
+const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
+document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
+document.getElementById('btnLoad').addEventListener('click', () => {
+  const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json';
+  i.onchange = async () => {
+    if (!i.files[0]) return;
+    try { store.replace(parseProject(await readTextFile(i.files[0]))); view.fit(); shell.toast('불러왔습니다'); }
+    catch (e) { shell.toast(e.message); }
+  };
+  i.click();
+});
+document.getElementById('btnCapture').addEventListener('click', async () => {
+  const url = ui.get().mode === '2d' ? await capture2D(store, ui) : view3d.capture();
+  const a = document.createElement('a'); a.href = url; a.download = filenameFor(store.get()).replace('.json', '.png'); a.click();
+});
+
+const canvasWrap = document.getElementById('canvasWrap');
+canvasWrap.addEventListener('dragover', ev => ev.preventDefault());
+canvasWrap.addEventListener('drop', async ev => {
+  ev.preventDefault();
+  const file = ev.dataTransfer.files[0];
+  if (!file) return;
+  if (file.type === 'application/json' || /\.json$/i.test(file.name)) {
+    try { store.replace(parseProject(await readTextFile(file))); view.fit(); shell.toast('불러왔습니다'); }
+    catch (e) { shell.toast(e.message); }
+  } else if (/^image\//.test(file.type)) {
+    openBackgroundDialog({ store });
+  }
+});
+
+window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, save: () => document.getElementById('btnSave').click() }));
 setTool('select'); view.fit(); minimap.fit(500);
 window.__app = { store, ui, view, view3d };
