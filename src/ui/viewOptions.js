@@ -23,3 +23,29 @@ export function viewPopoverHtml(view, mode) {
     ${cb('data-view', 'hiddenLine', '은선 색상', view.hiddenLine)}
     <h4>성능 모드</h4><div class="pop-row">${sel('perfMode', PERF_MODES, view.perfMode)}</div>`;
 }
+
+// [최소, 기본, 최대]
+const CAMERA_RANGE = { elevation: [0, 35, 89], azimuth: [0, 47, 359], fov: [15, 60, 120] };
+const CAMERA_LABEL = { elevation: '카메라 고도', azimuth: '방위각', fov: '시야각' };
+// [최소, 기본, 최대, 간격, 접미사]
+const SUN_RANGE = { month: [1, 6, 12, 1, '월'], hour: [0, 12, 23, 1, '시'], intensity: [0, 0.8, 2, 0.05, ''], azimuth: [0, 180, 359, 1, '°'], ambient: [0, 0.6, 2, 0.05, ''] };
+const SUN_LABEL = { month: '월', hour: '시간', intensity: '강도', azimuth: '방위각', ambient: '환경광 강도' };
+
+const slider = (path, label, value, min, max, step, suffix, preset) =>
+  `<div class="pop-row"><span>${label}</span><input type="range" data-view="${path}" min="${min}" max="${max}" step="${step}" value="${value}"><output data-suffix="${suffix}">${value}${suffix}</output>${
+    preset === null ? '' : `<button type="button" data-preset="${path}:${min}">최소</button><button type="button" data-preset="${path}:${preset}">기본</button><button type="button" data-preset="${path}:${max}">최대</button>`
+  }</div>`;
+
+export function cameraPopoverHtml(view) {
+  const rows = Object.entries(CAMERA_RANGE)
+    .map(([k, [mn, df, mx]]) => slider(`cameraPreset.${k}`, CAMERA_LABEL[k], view.cameraPreset[k], mn, mx, 1, '°', df))
+    .join('');
+  return `<h4>카메라 설정</h4><div class="pop-row"><span>타입</span>${sel('projection', [['perspective', '원근'], ['ortho', '직교']], view.projection)}</div>${rows}`;
+}
+
+export function sunPopoverHtml(view) {
+  const rows = Object.entries(SUN_RANGE)
+    .map(([k, [mn, , mx, step, suffix]]) => slider(`sun.${k}`, SUN_LABEL[k], view.sun[k], mn, mx, step, suffix, null))
+    .join('');
+  return `<h4>햇빛</h4>${rows}<p class="hint">고도는 월·시간에서 계산하고, 방위각은 직접 정합니다.</p>`;
+}

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { V2_OPTIONS, V3_OPTIONS, DISPLAY_MODES, PERF_MODES, viewPopoverHtml } from '../src/ui/viewOptions.js';
+import { V2_OPTIONS, V3_OPTIONS, DISPLAY_MODES, PERF_MODES, viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from '../src/ui/viewOptions.js';
 import { DEFAULT_VIEW } from '../src/state/schema.js';
 
 test('option lists cover every schema flag with Korean labels', () => {
@@ -29,4 +29,24 @@ test('2D popover lists v2 flags only; 3D popover adds display, hidden line and p
 test('unchecked flags render without the checked attribute', () => {
   const html = viewPopoverHtml({ ...DEFAULT_VIEW, v2: { ...DEFAULT_VIEW.v2, grid: false } }, '2d');
   expect(html).toContain('<input type="checkbox" data-v2="grid" >');
+});
+
+test('camera popover has a projection select, three sliders and min/default/max buttons', () => {
+  const html = cameraPopoverHtml(DEFAULT_VIEW);
+  expect(html).toContain('data-view="projection"');
+  expect(html).toContain('원근'); expect(html).toContain('직교');
+  for (const [path, min, def, max] of [['cameraPreset.elevation', 0, 35, 89], ['cameraPreset.azimuth', 0, 47, 359], ['cameraPreset.fov', 15, 60, 120]]) {
+    expect(html).toContain(`data-view="${path}"`);
+    expect(html).toContain(`data-preset="${path}:${min}"`);
+    expect(html).toContain(`data-preset="${path}:${def}"`);
+    expect(html).toContain(`data-preset="${path}:${max}"`);
+  }
+  expect(html).toContain('카메라 고도'); expect(html).toContain('방위각'); expect(html).toContain('시야각');
+});
+
+test('sun popover exposes month, hour, intensity, azimuth and ambient', () => {
+  const html = sunPopoverHtml(DEFAULT_VIEW);
+  for (const k of ['sun.month', 'sun.hour', 'sun.intensity', 'sun.azimuth', 'sun.ambient']) expect(html).toContain(`data-view="${k}"`);
+  expect(html).toContain('월'); expect(html).toContain('시간'); expect(html).toContain('강도'); expect(html).toContain('환경광');
+  expect(html).toContain('value="6"'); // 기본 월
 });

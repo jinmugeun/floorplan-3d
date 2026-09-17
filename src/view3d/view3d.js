@@ -6,17 +6,20 @@ import { buildFloorGroup, disposeGroup, toThree } from './build.js';
 import { hiddenWallIds } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
 import { cameraDistance } from './fit.js';
+import { sunPosition } from './sun.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef1f4);
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
+  const persp = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
+  const ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, -500, 1000);
+  let camera = persp;
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.1; controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   // three r155+ 는 물리 광량 단위를 쓰므로 예전 값(0.9/0.8)으로는 장면이 어둡다.
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.6));
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.6); scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-12, 30, -18); sun.castShadow = true; scene.add(sun);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xdfe4e9 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.005; ground.receiveShadow = true; scene.add(ground);
 
@@ -36,11 +39,53 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
   const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000 }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) }; };
   const center = () => bounds().center;
   function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); }
-  function resize() { const w = container.clientWidth || 1, h = container.clientHeight || 1; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  function resize() {
+    const w = container.clientWidth || 1, h = container.clientHeight || 1;
+    renderer.setSize(w, h);
+    persp.aspect = w / h; persp.updateProjectionMatrix();
+    if (camera === ortho) frustum();
+  }
+  // 직교 카메라의 절두체를 원근 카메라와 같은 화각으로 맞춘다(전환 때 크기가 튀지 않게).
+  function frustum() {
+    const dist = camera.position.distanceTo(controls.target) || 10;
+    const fov = store.get().view.cameraPreset.fov;
+    const h = Math.tan(THREE.MathUtils.degToRad(fov) / 2) * dist;
+    const w = (h * (container.clientWidth || 1)) / (container.clientHeight || 1);
+    ortho.left = -w; ortho.right = w; ortho.top = h; ortho.bottom = -h; ortho.updateProjectionMatrix();
+  }
+  function setProjection(kind) {
+    const next = kind === 'ortho' ? ortho : persp;
+    if (next === camera) return;
+    next.position.copy(camera.position); next.up.copy(camera.up);
+    camera = next;
+    controls.object = camera; // OrbitControls는 매 update()에서 this.object를 다시 읽으므로 재대입이 통한다
+    if (camera === ortho) frustum();
+    else { camera.aspect = (container.clientWidth || 1) / (container.clientHeight || 1); camera.fov = store.get().view.cameraPreset.fov; camera.updateProjectionMatrix(); }
+    camera.lookAt(controls.target); controls.update(); requestRender();
+  }
+  function applyCameraPreset({ elevation = 35, azimuth = 47, fov = 60 } = {}) {
+    const t = controls.target;
+    const r = camera.position.distanceTo(t) || cameraDistance(bounds().extent);
+    const el = THREE.MathUtils.degToRad(elevation), az = THREE.MathUtils.degToRad(azimuth);
+    camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), t.y + r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az));
+    if (camera.isPerspectiveCamera) { camera.fov = fov; camera.updateProjectionMatrix(); } else frustum();
+    controls.update(); requestRender();
+  }
+  // three r155+ 는 물리 광량 단위다. 기존 값(방향광 2.4, 환경광 2.6)이 기본 강도 0.8 / 환경광 0.6에
+  // 대응하도록 3배 / 4.33배로 환산한다.
+  function applySun(s = {}) {
+    const p = sunPosition(s);
+    sun.position.set(p[0], p[1], p[2]);
+    sun.intensity = (s.intensity ?? 0.8) * 3;
+    hemi.intensity = (s.ambient ?? 0.6) * 4.33;
+    requestRender();
+  }
   function setMode(m, opts = {}) {
     resize(); // 숨겨져 있다가 보이는 경우 크기를 다시 맞춘다
     mode = m;
     if (m === 'fp') {
+      setProjection('perspective'); // 1인칭은 원근 카메라 전용(PointerLockControls가 persp에 묶여 있다)
+      store.dispatch(d => { d.view.projection = 'perspective'; }, { record: false });
       controls.enabled = false; const at = opts.at ?? center();
       camera.position.copy(toThree([at[0], at[1], 1500])); camera.lookAt(toThree([at[0], at[1] - 1000, 1500]));
       window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); fp.lock();
@@ -53,7 +98,13 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
     const c = center(), t = toThree([c[0], c[1], 0]); controls.target.copy(t);
     const r = cameraDistance(bounds().extent); // 도면 크기에 맞춘 카메라 거리(m)
     if (m === 'plan') { camera.position.set(t.x, r * 1.6, t.z + 0.01); controls.minPolarAngle = 0; controls.maxPolarAngle = 0.05; }
-    else { const el = THREE.MathUtils.degToRad(35), az = THREE.MathUtils.degToRad(47); camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az)); controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI / 2 - 0.02; }
+    else {
+      const { elevation, azimuth, fov } = store.get().view.cameraPreset;
+      const el = THREE.MathUtils.degToRad(elevation), az = THREE.MathUtils.degToRad(azimuth);
+      camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), t.y + r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az));
+      if (camera.isPerspectiveCamera) { camera.fov = fov; camera.updateProjectionMatrix(); } else frustum();
+      controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    }
     controls.update(); requestRender();
   }
   function applyCutaway() {
@@ -73,8 +124,17 @@ export function createView3D(container, store, ui, { onExitFp = () => {} } = {})
   }
   function requestRender() { if (!raf) raf = requestAnimationFrame(frame); }
   controls.addEventListener('change', requestRender);
-  const unsub = store.subscribe(() => { rebuild(); requestRender(); });
+  let lastPreset = null, lastSun = null;
+  function applyViewSettings() {
+    const v = store.get().view;
+    setProjection(v.projection);
+    const ps = JSON.stringify(v.cameraPreset);
+    if (ps !== lastPreset) { lastPreset = ps; applyCameraPreset(v.cameraPreset); } // 값이 실제로 바뀐 경우에만: 궤도 드래그를 되돌리지 않는다
+    const ss = JSON.stringify(v.sun);
+    if (ss !== lastSun) { lastSun = ss; applySun(v.sun); }
+  }
+  const unsub = store.subscribe(() => { rebuild(); applyViewSettings(); requestRender(); });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
-  rebuild(); resize(); setMode('iso');
-  return { renderer, camera, scene, controls, setMode, getMode: () => mode, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  rebuild(); resize(); setMode('iso'); applyViewSettings();
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, requestRender, capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

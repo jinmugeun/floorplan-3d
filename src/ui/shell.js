@@ -1,6 +1,6 @@
 import { toast } from './toast.js';
 import { createPopover } from './popover.js';
-import { viewPopoverHtml } from './viewOptions.js';
+import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -50,7 +50,7 @@ export function createShell(root, { store, ui }) {
     <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
     <footer id="bottombar">
       <div class="seg"><button data-mode="2d" class="on">2D</button><button data-mode="plan">평면 <kbd>2</kbd></button><button data-mode="iso">3D <kbd>3</kbd></button><button data-mode="fp">1인칭 <kbd>4</kbd></button></div>
-      <div class="seg"><button id="btnView" data-popover="view">보기</button></div>
+      <div class="seg"><button id="btnView" data-popover="view">보기</button><button id="btnCam" data-popover="cam" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" hidden>햇빛</button></div>
       <div class="seg"><button id="btnFit">화면 맞추기</button></div>
       <div class="seg" id="unitSeg"><button data-units="mm" class="on">mm</button><button data-units="ftin">ft·in</button></div>
     </footer>
@@ -66,7 +66,13 @@ export function createShell(root, { store, ui }) {
 
   const pop = createPopover(root);
   let popKind = null;
-  const popHtml = kind => (kind === 'view' ? viewPopoverHtml(store.get().view, ui.get().mode === '2d' ? '2d' : '3d') : '');
+  const popHtml = kind => {
+    const v = store.get().view;
+    if (kind === 'view') return viewPopoverHtml(v, ui.get().mode === '2d' ? '2d' : '3d');
+    if (kind === 'cam') return cameraPopoverHtml(v);
+    if (kind === 'sun') return sunPopoverHtml(v);
+    return '';
+  };
   function openPopover(kind, anchor) {
     if (pop.isOpen() && popKind === kind) { pop.close(); popKind = null; return; }
     popKind = kind;
@@ -86,7 +92,13 @@ export function createShell(root, { store, ui }) {
     }, { record: false });
     const out = el.parentElement?.querySelector('output'); if (out) out.textContent = `${el.value}${out.dataset.suffix ?? ''}`;
   }
-  function onPopoverClick() {} // 태스크 3에서 최소/기본/최대 버튼을 붙인다
+  function onPopoverClick(ev) {
+    const spec = ev.target?.dataset?.preset;
+    if (!spec) return;
+    const [key, value] = spec.split(':');
+    store.dispatch(d => { setPath(d.view, key, Number(value)); }, { record: false });
+    refreshPopover(); // 슬라이더 위치를 새 값으로 다시 그린다
+  }
   root.querySelectorAll('[data-popover]').forEach(b => b.addEventListener('click', () => openPopover(b.dataset.popover, b)));
 
   let currentTool = null;
@@ -115,6 +127,9 @@ export function createShell(root, { store, ui }) {
     root.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === s.tool));
     root.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === s.mode));
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
+    const is3d = s.mode !== '2d';
+    q('#btnCam').hidden = !is3d; q('#btnSun').hidden = !is3d;
+    if (!is3d && (popKind === 'cam' || popKind === 'sun')) pop.close();
     els.banner.hidden = !s.fpPick; if (s.fpPick) els.banner.textContent = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소';
     if (pop.isOpen() && popKind === 'view') refreshPopover();
   });

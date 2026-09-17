@@ -72,3 +72,25 @@ test('the bottom bar unit toggle writes project.units and follows the loaded pro
   store.replace({ ...store.get(), units: 'mm' }, { record: false });
   expect(root.querySelector('[data-units="mm"]').classList.contains('on')).toBe(true);
 });
+
+test('camera and sun buttons appear only in 3D and their sliders and preset buttons write the view', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  createShell(root, { store, ui });
+  expect(root.querySelector('#btnCam').hidden).toBe(true);
+  expect(root.querySelector('#btnSun').hidden).toBe(true);
+  ui.set({ mode: 'iso' });
+  expect(root.querySelector('#btnCam').hidden).toBe(false);
+  root.querySelector('#btnCam').click();
+  const elev = document.querySelector('.popover input[data-view="cameraPreset.elevation"]');
+  elev.value = '12'; elev.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(store.get().view.cameraPreset.elevation).toBe(12);
+  document.querySelector('.popover [data-preset="cameraPreset.elevation:89"]').click();
+  expect(store.get().view.cameraPreset.elevation).toBe(89);
+  expect(document.querySelector('.popover input[data-view="cameraPreset.elevation"]').value).toBe('89'); // 다시 그려진다
+  root.querySelector('#btnSun').click();
+  const hour = document.querySelector('.popover input[data-view="sun.hour"]');
+  hour.value = '17'; hour.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(store.get().view.sun.hour).toBe(17);
+  expect(store.canUndo()).toBe(false);
+});
