@@ -1,6 +1,7 @@
 import { activeFloor } from '../state/schema.js';
 import { wallPolygon, endpoints } from '../geom/walls.js';
 import { roomInnerPolygon, centroid } from '../geom/rooms.js';
+import { fmtLen, fmtArea } from '../util/units.js';
 
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
@@ -72,6 +73,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
+    const units = state.units ?? 'mm', pyeong = !!state.settings?.pyeong, showUnit = !!state.settings?.showUnit;
     drawBackground(state);
     if (state.view.grid && !readonly) drawGrid();
     // 배경 도면이 보일 때는 바닥을 반투명하게 그려서 도면을 따라 그릴 수 있게 한다.
@@ -80,7 +82,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       ctx.globalAlpha = tracing ? 0.35 : 1;
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
       ctx.globalAlpha = 1;
-      if (state.view.labels && labels) { const c = centroid(r.points); if (r.name) label(r.name, [c[0], c[1] - 250], { size: 13, color: COLORS.dim }); label(`${r.area.toFixed(1)}m²`, c); }
+      if (state.view.labels && labels) { const c = centroid(r.points); if (r.name) label(r.name, [c[0], c[1] - 250], { size: 13, color: COLORS.dim }); label(fmtArea(r.area, { pyeong }), c); }
     }
     if (!readonly) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
     for (const wl of f.walls) poly(wallPolygon(wl, f.walls), sel?.type === 'wall' && sel.id === wl.id ? COLORS.wallSel : COLORS.wall, null);
@@ -120,7 +122,9 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
   const unsubs = [store.subscribe(() => { if (readonly) fit(500); else requestRender(); }), ui.subscribe(requestRender)];
   const onResize = () => requestRender(); window.addEventListener('resize', onResize);
 
-  const api = { camera, toScreen, toWorld, fit, zoomAt, requestRender, label, poly, COLORS,
+  const api = { camera, toScreen, toWorld, fit, zoomAt, requestRender, label, poly, COLORS, fmtLen, fmtArea,
+    get units() { return store.get().units ?? 'mm'; },
+    get showUnit() { return !!store.get().settings?.showUnit; },
     get tool() { return tool; },
     setTool(t) { tool?.cancel?.(); tool = t; requestRender(); },
     destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); } };

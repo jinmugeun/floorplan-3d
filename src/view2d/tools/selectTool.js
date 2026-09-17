@@ -3,6 +3,7 @@ import { setWalls } from '../../state/floorOps.js';
 import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall } from '../../geom/walls.js';
 import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
+import { fmtLen } from '../../util/units.js';
 
 export function createSelectTool({ store, ui, view }) {
   let drag = null; // { kind, id|point, startP, base, moved }
@@ -64,7 +65,7 @@ export function createSelectTool({ store, ui, view }) {
       if (sel.type === 'wall') {
         const w = f.walls.find(x => x.id === sel.id); if (!w) return;
         const others = f.walls.filter(x => x.id !== w.id);
-        for (const q of [w.a, w.b]) { const n = others.find(x => eq(x.a, q) || eq(x.b, q)); v.label(`${Math.round(dist(w.a, w.b))}`, [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { bg: '#fff', color: v.COLORS.dim }); if (!n) { const s = v.toScreen(q); ctx.fillStyle = v.COLORS.guide; ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); } }
+        for (const q of [w.a, w.b]) { const n = others.find(x => eq(x.a, q) || eq(x.b, q)); v.label(fmtLen(dist(w.a, w.b), v.units, { unit: v.showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { bg: '#fff', color: v.COLORS.dim }); if (!n) { const s = v.toScreen(q); ctx.fillStyle = v.COLORS.guide; ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); } }
       }
     },
     cancel() { if (drag) { store.cancelTransaction(); drag = null; } },

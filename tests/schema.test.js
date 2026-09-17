@@ -46,4 +46,12 @@ describe('normalizeProject / migrate', () => {
     const q = normalizeProject(structuredClone(p));
     expect(q.name).toBe('그대로'); expect(q.floors[0].id).toBe(p.floors[0].id); expect(q.view).toEqual(p.view);
   });
+  test('units accepts only mm or ftin, and settings/areaMode get defaults', () => {
+    expect(migrate({ version: 1, units: 'ftin' }).units).toBe('ftin');
+    expect(migrate({ version: 1, units: '척' }).units).toBe('mm');
+    const p = migrate({ version: 1, settings: { pyeong: 1, background: 'javascript:x' }, areaMode: 'gross' });
+    expect(p.settings).toEqual({ pyeong: true, showUnit: false, background: '#f3f4f6' });
+    expect(p.areaMode).toBe('gross');
+    expect(migrate({ version: 1, areaMode: 'nope' }).areaMode).toBe('net');
+  });
 });

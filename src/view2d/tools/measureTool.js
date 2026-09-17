@@ -2,6 +2,7 @@ import { activeFloor } from '../../state/schema.js';
 import { endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
 import { dist } from '../../geom/vec.js';
+import { fmtLen } from '../../util/units.js';
 
 export const MEASURE_TOOL_DEFAULTS = { snap: true };
 
@@ -18,7 +19,7 @@ export function createMeasureTool({ store, opts: given = null }) {
       const end = b ?? cur; if (!a || !end) return;
       const s0 = v.toScreen(a), s1 = v.toScreen(end);
       ctx.strokeStyle = v.COLORS.guide; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.stroke(); ctx.lineWidth = 1;
-      v.label(`${Math.round(dist(a, end))} mm`, [(a[0] + end[0]) / 2, (a[1] + end[1]) / 2], { bg: '#fff', color: v.COLORS.dim });
+      v.label(fmtLen(dist(a, end), v.units, { unit: true }), [(a[0] + end[0]) / 2, (a[1] + end[1]) / 2], { bg: '#fff', color: v.COLORS.dim });
     },
     cancel() { a = b = cur = null; },
   };

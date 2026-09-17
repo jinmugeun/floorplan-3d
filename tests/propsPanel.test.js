@@ -71,3 +71,20 @@ test('delete buttons delegate to the app-supplied deleteSelection', () => {
   expect(calls).toEqual(['wall', 'room']);
   expect(activeFloor(store.get()).walls).toHaveLength(4); // 패널 자체는 아무것도 지우지 않는다
 });
+
+test('in ftin mode length fields render and parse feet/inches', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200)); // 소수 좌표
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  const wall = activeFloor(store.get()).walls[0];
+  ui.set({ selection: { type: 'wall', id: wall.id } });
+  const th = el.querySelector('input[name="thickness"]');
+  expect(th.type).toBe('text');
+  expect(th.value).toBe(`7.9"`);
+  th.value = `1' 0"`; th.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).thickness).toBe(305);
+  const len = el.querySelector('input[name="length"]');
+  expect(len.readOnly).toBe(true);
+  expect(len.value).toBe(`13' 1.5"`); // 4000.5 mm → 반올림 4001 mm → 157.52"
+});

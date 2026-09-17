@@ -45,3 +45,15 @@ test('project name is not interpreted as HTML and view checkboxes follow the loa
   store.replace({ ...store.get(), view: { ...store.get().view, grid: false, labels: false } }, { record: false }); // 불러온 프로젝트의 보기 설정
   expect(grid.checked).toBe(false); expect(labels.checked).toBe(false);
 });
+
+test('the bottom bar unit toggle writes project.units and follows the loaded project', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  createShell(root, { store, ui: createUiState() });
+  root.querySelector('[data-units="ftin"]').click();
+  expect(store.get().units).toBe('ftin');
+  expect(root.querySelector('[data-units="ftin"]').classList.contains('on')).toBe(true);
+  expect(store.canUndo()).toBe(false); // 단위 전환은 되돌릴 단계가 아니다
+  store.replace({ ...store.get(), units: 'mm' }, { record: false });
+  expect(root.querySelector('[data-units="mm"]').classList.contains('on')).toBe(true);
+});

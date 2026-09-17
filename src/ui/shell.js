@@ -49,7 +49,8 @@ export function createShell(root, { store, ui }) {
     <footer id="bottombar">
       <div class="seg"><button data-mode="2d" class="on">2D</button><button data-mode="plan">평면 <kbd>2</kbd></button><button data-mode="iso">3D <kbd>3</kbd></button><button data-mode="fp">1인칭 <kbd>4</kbd></button></div>
       <div class="seg"><label><input type="checkbox" data-view="grid" checked> 격자</label><label><input type="checkbox" data-view="labels" checked> 라벨</label><label><input type="checkbox" data-view="background" checked> 배경</label><label><input type="checkbox" data-view="cutaway" checked> 벽 컷어웨이</label></div>
-      <div class="seg"><button id="btnFit">화면 맞추기</button><span class="muted">mm</span></div>
+      <div class="seg"><button id="btnFit">화면 맞추기</button></div>
+      <div class="seg" id="unitSeg"><button data-units="mm" class="on">mm</button><button data-units="ftin">ft·in</button></div>
     </footer>
   </div>`;
   const q = s => root.querySelector(s);
@@ -60,6 +61,7 @@ export function createShell(root, { store, ui }) {
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== b.dataset.panel);
   }));
   root.querySelectorAll('[data-view]').forEach(cb => cb.addEventListener('change', () => store.dispatch(d => { d.view[cb.dataset.view] = cb.checked; }, { record: false })));
+  root.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => store.dispatch(d => { d.units = b.dataset.units; }, { record: false })));
 
   let currentTool = null;
   function setOptionBar(tool) {
@@ -93,6 +95,7 @@ export function createShell(root, { store, ui }) {
     q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo();
     if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
     root.querySelectorAll('[data-view]').forEach(cb => { cb.checked = !!s.view[cb.dataset.view]; }); // 불러온 프로젝트의 보기 설정을 반영한다
+    root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, toast };

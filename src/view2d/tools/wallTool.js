@@ -3,6 +3,7 @@ import { addWalls } from '../../state/floorOps.js';
 import { makeWall, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
+import { fmtLen } from '../../util/units.js';
 
 export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
 
@@ -51,7 +52,7 @@ export function createWallTool({ store, onDone = () => {}, opts: given = null })
       ctx.strokeStyle = view.COLORS.wallSel; ctx.lineWidth = Math.max(2, opts.thickness * view.camera.scale); ctx.globalAlpha = 0.5;
       ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
       const mid = [(last()[0] + cursor[0]) / 2, (last()[1] + cursor[1]) / 2];
-      view.label(typed ? `${typed}|` : `${Math.round(dist(last(), cursor))}`, mid, { bg: '#fff', color: view.COLORS.dim });
+      view.label(typed ? `${typed}|` : fmtLen(dist(last(), cursor), view.units ?? 'mm'), mid, { bg: '#fff', color: view.COLORS.dim });
     },
     cancel() { reset(); },
   };

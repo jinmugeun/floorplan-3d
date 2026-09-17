@@ -3,6 +3,7 @@ import { detectRooms } from '../geom/rooms.js';
 
 let counter = 0;
 export const SCHEMA_VERSION = 1;
+export const DEFAULT_SETTINGS = { pyeong: false, showUnit: false, background: '#f3f4f6' };
 
 export function uid(prefix = 'id') {
   counter += 1;
@@ -18,6 +19,8 @@ export function createEmptyProject(name = '새 프로젝트') {
     version: SCHEMA_VERSION,
     name,
     units: 'mm',
+    areaMode: 'net',
+    settings: { ...DEFAULT_SETTINGS },
     background: null,
     floors: [createFloor()],
     activeFloor: 0,
@@ -77,13 +80,22 @@ export function normalizeProject(p) {
     ...src,
     version: SCHEMA_VERSION,
     name: str(src.name, def.name),
-    units: 'mm',
+    units: src.units === 'ftin' ? 'ftin' : 'mm',
+    areaMode: src.areaMode === 'gross' ? 'gross' : 'net',
+    settings: normalizeSettings(src.settings),
     background: normalizeBackground(src.background),
     floors,
     activeFloor: Number.isInteger(active) && active >= 0 && active < floors.length ? active : 0,
     camera: { ...def.camera, ...obj(src.camera) },
     view: normalizeView(src.view, def.view),
   };
+}
+
+// 배경 색은 CSS 색 문자열만 허용한다(#rgb ~ #rrggbbaa). 그 밖의 값은 기본값으로 되돌린다.
+function normalizeSettings(s) {
+  const src = obj(s);
+  const bg = typeof src.background === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(src.background) ? src.background : DEFAULT_SETTINGS.background;
+  return { pyeong: !!src.pyeong, showUnit: !!src.showUnit, background: bg };
 }
 
 function normalizeView(v, defView) {

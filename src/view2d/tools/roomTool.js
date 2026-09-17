@@ -2,6 +2,7 @@ import { activeFloor } from '../../state/schema.js';
 import { addWalls } from '../../state/floorOps.js';
 import { rectWalls, endpoints } from '../../geom/walls.js';
 import { snapPoint } from '../../geom/snap.js';
+import { fmtLen } from '../../util/units.js';
 
 export const ROOM_TOOL_DEFAULTS = { thickness: 200, snap: true };
 
@@ -42,7 +43,7 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
       const pv = this.getPreview(); if (!pv) return;
       const [x0, y0] = pv.start, [x1, y1] = pv.end;
       view.poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], 'rgba(31,95,208,0.10)', view.COLORS.wallSel, 2);
-      const wLabel = `${Math.round(pv.w)}${pv.typed.field === 'w' ? '|' : ''}`, hLabel = `${Math.round(pv.h)}${pv.typed.field === 'h' ? '|' : ''}`;
+      const wLabel = `${fmtLen(pv.w, view.units ?? 'mm')}${pv.typed.field === 'w' ? '|' : ''}`, hLabel = `${fmtLen(pv.h, view.units ?? 'mm')}${pv.typed.field === 'h' ? '|' : ''}`;
       view.label(wLabel, [(x0 + x1) / 2, y0], { bg: '#fff', color: view.COLORS.dim });
       view.label(hLabel, [x1, (y0 + y1) / 2], { bg: '#fff', color: view.COLORS.dim });
     },
