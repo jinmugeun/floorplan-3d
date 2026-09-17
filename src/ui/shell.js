@@ -46,6 +46,12 @@ export function createShell(root, { store, ui }) {
       <div id="c3d" hidden></div>
       <div id="optionBar" hidden></div>
       <div id="banner" hidden></div>
+      <div id="imageStrip" hidden>
+        <span class="muted">이미지 세팅</span>
+        <label>투명도 <input type="range" name="stripOpacity" min="0" max="1" step="0.05"></label>
+        <label><input type="checkbox" name="stripVisible"> 표시</label>
+        <button type="button" id="btnBgLock" aria-label="배경 도면 잠금">잠금</button>
+      </div>
     </main>
     <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
     <footer id="bottombar">
@@ -58,6 +64,13 @@ export function createShell(root, { store, ui }) {
   </div>`;
   const q = s => root.querySelector(s);
   const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layerList: q('#layerList') };
+  const strip = q('#imageStrip');
+  strip.addEventListener('change', ev => {
+    const el = ev.target;
+    if (el.name === 'stripOpacity') store.dispatch(d => { if (d.background) d.background.opacity = Number(el.value); }, { record: false });
+    if (el.name === 'stripVisible') store.dispatch(d => { if (d.background) d.background.visible = el.checked; }, { record: false });
+  });
+  q('#btnBgLock').addEventListener('click', () => store.dispatch(d => { if (d.background) d.background.locked = !d.background.locked; }, { record: false }));
 
   root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => {
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x === b));
@@ -142,6 +155,14 @@ export function createShell(root, { store, ui }) {
     if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
     root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
     q('#btnLock').classList.toggle('on', !!s.view.lockPlan);
+    const bg = s.background;
+    strip.hidden = !bg;
+    if (bg) {
+      strip.querySelector('[name="stripOpacity"]').value = String(bg.opacity);
+      strip.querySelector('[name="stripVisible"]').checked = !!bg.visible;
+      q('#btnBgLock').classList.toggle('on', !!bg.locked);
+      q('#btnBgLock').textContent = bg.locked ? '잠금' : '잠금 해제됨';
+    }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, toast, popover: pop, refreshPopover };

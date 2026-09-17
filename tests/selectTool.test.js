@@ -249,3 +249,31 @@ test('context menu items depend on what is under the cursor', () => {
   expect(ui.get().selection.type).toBe('multi');
   expect(ui.get().selection.ids).toHaveLength(activeFloor(store.get()).walls.length);
 });
+
+test('an unlocked background moves with an empty-canvas drag; a locked one does not', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  store.dispatch(d => { d.background = { src: 'data:,', width: 100, height: 80, scale: 10, offset: [0, 0], opacity: 0.5, visible: true, locked: true }; }, { record: false });
+  const t = createSelectTool({ store, ui, view: fakeView });
+  t.onPointerDown([500, 500]); t.onPointerMove([1500.5, 900.25]); t.onPointerUp([1500.5, 900.25]); // 소수 좌표
+  expect(store.get().background.offset).toEqual([0, 0]);
+  store.dispatch(d => { d.background.locked = false; }, { record: false });
+  t.onPointerDown([500, 500]); t.onPointerMove([1500.5, 900.25]); t.onPointerUp([1500.5, 900.25]);
+  expect(store.get().background.offset[0]).toBeCloseTo(1000.5, 6);
+  expect(store.get().background.offset[1]).toBeCloseTo(400.25, 6);
+  store.undo();
+  expect(store.get().background.offset).toEqual([0, 0]); // 드래그는 한 단계
+});
+
+test('the plan lock also freezes an unlocked background', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  store.dispatch(d => {
+    d.background = { src: 'data:,', width: 100, height: 80, scale: 10, offset: [0.5, 0.25], opacity: 0.5, visible: true, locked: false };
+    d.view.lockPlan = true;
+  }, { record: false });
+  let locked = 0;
+  const t = createSelectTool({ store, ui, view: fakeView, onLocked: () => { locked++; } });
+  t.onPointerDown([500, 500]); t.onPointerMove([1500.5, 900.25]); t.onPointerUp([1500.5, 900.25]); // 소수 좌표
+  expect(store.get().background.offset).toEqual([0.5, 0.25]); // 도면 잠금이 이긴다
+  expect(locked).toBe(1);
+  expect(store.canUndo()).toBe(false);
+});

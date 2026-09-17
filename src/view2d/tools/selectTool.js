@@ -64,10 +64,25 @@ export function createSelectTool({ store, ui, view, onLocked = () => {} }) {
         drag = { kind: 'room', id: r.id, wallIds: r.wallIds, startP: p, base: f.walls, pts, attached };
         store.beginTransaction(); return;
       }
+      const bg = store.get().background;
+      if (bg && bg.visible && !bg.locked && inBox(p, [bg.offset[0], bg.offset[1], bg.offset[0] + bg.width * bg.scale, bg.offset[1] + bg.height * bg.scale])) { // 잠금이 풀린 배경은 빈 곳 드래그로 옮긴다
+        ui.set({ selection: null });
+        if (locked()) { onLocked(); drag = null; return; } // 도면 잠금이 배경 이동도 막는다
+        drag = { kind: 'bg', startP: p, base: [...bg.offset] };
+        store.beginTransaction();
+        return;
+      }
       ui.set({ selection: null }); drag = null;
     },
     onPointerMove(p) {
       if (!drag) return;
+      if (drag.kind === 'bg') {
+        const d = sub(p, drag.startP);
+        if (Math.abs(d[0]) < 1 && Math.abs(d[1]) < 1) return;
+        drag.moved = true;
+        store.dispatch(s => { s.background.offset = [drag.base[0] + d[0], drag.base[1] + d[1]]; }, { record: false });
+        return;
+      }
       if (drag.kind === 'box') { drag.cur = p; return; }
       const d = sub(p, drag.startP); if (Math.abs(d[0]) < 1 && Math.abs(d[1]) < 1) return;
       let walls = drag.base;

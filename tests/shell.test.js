@@ -107,3 +107,26 @@ test('the bottom bar has zoom, lock and capture controls and the lock button fol
   expect(root.querySelector('#btnLock').classList.contains('on')).toBe(true);
   expect(store.canUndo()).toBe(false);
 });
+
+test('the image strip appears with a background and drives opacity, visibility and the lock', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  createShell(root, { store, ui: createUiState() });
+  expect(root.querySelector('#imageStrip').hidden).toBe(true);
+  store.dispatch(d => { d.background = { src: 'data:,', width: 10, height: 10, scale: 1, offset: [0, 0], opacity: 0.5, visible: true, locked: true }; }, { record: false });
+  const strip = root.querySelector('#imageStrip');
+  expect(strip.hidden).toBe(false);
+  expect(strip.textContent).toContain('이미지 세팅');
+  const op = strip.querySelector('[name="stripOpacity"]');
+  op.value = '0.25'; op.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().background.opacity).toBe(0.25);
+  const vis = strip.querySelector('[name="stripVisible"]');
+  vis.checked = false; vis.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().background.visible).toBe(false);
+  root.querySelector('#btnBgLock').click();
+  expect(store.get().background.locked).toBe(false); // 잠금 해제가 된다
+  expect(root.querySelector('#btnBgLock').classList.contains('on')).toBe(false);
+  root.querySelector('#btnBgLock').click();
+  expect(store.get().background.locked).toBe(true);
+  expect(store.canUndo()).toBe(false); // 표시 설정은 되돌릴 단계가 아니다
+});

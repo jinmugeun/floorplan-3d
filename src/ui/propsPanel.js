@@ -61,7 +61,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         </details>
         <p class="hint">객체를 클릭하면 상세 정보가 표시됩니다.</p>`;
       const bg = store.get().background;
-      if (bg) container.insertAdjacentHTML('beforeend', `<h2>배경 이미지</h2>${field('투명도', `<input type="range" name="bgOpacity" min="0" max="1" step="0.05" value="${bg.opacity}">`)}<label class="check"><input type="checkbox" name="bgVisible" ${bg.visible ? 'checked' : ''}> 표시</label><button type="button" name="bgRemove">배경 제거</button>`);
+      if (bg) container.insertAdjacentHTML('beforeend', `<h2>배경 이미지</h2>${field('투명도', `<input type="range" name="bgOpacity" min="0" max="1" step="0.05" value="${bg.opacity}">`)}<label class="check"><input type="checkbox" name="bgVisible" ${bg.visible ? 'checked' : ''}> 표시</label><label class="check"><input type="checkbox" name="bgLocked" ${bg.locked ? 'checked' : ''}> 잠금</label><button type="button" name="bgRemove">배경 제거</button>`);
       return;
     }
     if (sel.type === 'wall') {
@@ -142,8 +142,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   }
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
-    if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }); return; }
-    if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }); return; }
+    if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }
+    if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }, { record: false }); return; }
+    if (name === 'bgLocked') { store.dispatch(d => { d.background.locked = el.checked; }, { record: false }); return; }
     if (name === 'floorSelect') { setActiveFloor(store, Number(el.value)); return; }
     if (name === 'areaMode') { store.dispatch(d => { d.areaMode = el.value; }, { record: false }); return; }
     if (name === 'wallOpacity' || name === 'floorOpacity') { store.dispatch(d => { d.view[name] = Number(el.value); }, { record: false }); return; }

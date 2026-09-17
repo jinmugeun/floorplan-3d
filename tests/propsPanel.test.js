@@ -209,3 +209,23 @@ test('focusField moves focus to that input exactly once', () => {
   expect(document.activeElement.name).toBe('colorOut');
   expect(ui.get().focusField).toBeNull();
 });
+
+test('the background block toggles lock without adding undo steps', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  store.dispatch(d => { d.background = { src: 'data:,', width: 100, height: 80, scale: 10, offset: [0.5, 0.25], opacity: 0.5, visible: true, locked: true }; }, { record: false });
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  const lock = el.querySelector('input[name="bgLocked"]');
+  expect(lock.checked).toBe(true);
+  lock.checked = false; lock.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().background.locked).toBe(false);
+  const op = el.querySelector('input[name="bgOpacity"]'); // 패널이 다시 그려졌으므로 다시 찾는다
+  op.value = '0.2'; op.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().background.opacity).toBe(0.2);
+  const vis = el.querySelector('input[name="bgVisible"]');
+  vis.checked = false; vis.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().background.visible).toBe(false);
+  expect(store.canUndo()).toBe(false); // 투명도·표시·잠금은 모두 record: false
+  el.querySelector('button[name="bgRemove"]').click();
+  expect(store.get().background).toBeNull();
+  expect(store.canUndo()).toBe(true); // 배경 제거만 되돌릴 수 있다
+});

@@ -19,6 +19,8 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #optionBar input[type=number] { width: 70px; }
 #banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 8px 14px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
 #banner button { margin-left: 10px; padding: 3px 8px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
+#imageStrip { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 14px; align-items: center; padding: 6px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+#imageStrip input[type=range] { width: 110px; } #btnBgLock { padding: 4px 10px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; } #btnBgLock.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .ctx-menu { position: fixed; z-index: 60; min-width: 190px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px; }
 .ctx-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; width: 100%; padding: 6px 10px; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; border-radius: 4px; }
 .ctx-item:hover:not(:disabled), .ctx-item:focus-visible { background: #e6eefb; } .ctx-item:disabled { color: var(--muted); cursor: default; } .ctx-item.danger { color: var(--exhaust); border: 0; margin: 0; }
