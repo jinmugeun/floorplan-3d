@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { activeFloor } from '../state/schema.js';
-import { wallPolygon, wallLength } from '../geom/walls.js';
+import { wallPolygon } from '../geom/walls.js';
 import { roomInnerPolygon } from '../geom/rooms.js';
 import { add, mul, eq } from '../geom/vec.js';
 import { openingsOnWall, wallPieces } from '../geom/openings.js';
@@ -13,7 +13,8 @@ export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
 const COLOR = { wall: 0xe9e6e0, wallTop: 0x3a4351, floor: 0xc9a77a, ceiling: 0xf4f4f2, edge: 0x2b3440, foot: 0x3a4351 };
 export const TRANSPARENT_OPACITY = { wall: 0.3, floor: 0.6, ceiling: 0.6 };
 // 재질은 메시마다 새로 만든다(불투명도·색이 벽/방마다 다르다). perMesh 표시가 있는 재질만 dispose 대상이다.
-function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize = null } = {}) {
+// worldUv: uv가 월드 미터인 지오메트리(ShapeGeometry·ExtrudeGeometry)는 면 크기 대신 미터당 반복 수를 쓴다.
+function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize = null, worldUv = false } = {}) {
   const display = view.display ?? 'normal';
   const base = display === 'white' ? 0xffffff : (color ?? COLOR[kind]);
   const twoSided = kind === 'floor' || kind === 'wallTop';
@@ -26,13 +27,8 @@ function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize
   m.depthWrite = opacity >= 1; // 반투명 면이 깊이 버퍼를 쓰면 뒤 벽과 z-fighting이 난다
   m.userData.perMesh = true;
   // 마감재 지정이 있으면 무늬 텍스처를 붙인다(렌더 우선순위 region > mat > color).
-  if (assignment && faceSize) applyAssignment(m, assignment, faceSize, { display });
+  if (assignment && (faceSize || worldUv)) applyAssignment(m, assignment, faceSize, { display, worldUv });
   return m;
-}
-// 폴리곤을 감싸는 사각형 크기(mm). 바닥·천장 무늬의 반복 횟수를 여기서 구한다.
-function polySize(pts) {
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  return [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
 }
 const lineMaterial = color => { const m = new THREE.LineBasicMaterial({ color }); m.userData.perMesh = true; return m; };
 const hex = (css, fallback) => (typeof css === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(css) ? new THREE.Color(css).getHex() : fallback);
@@ -67,6 +63,7 @@ function addRegionMeshes(g, w, view) {
       const u0 = rg.kind === 'band' ? 0 : rg.u0, u1 = rg.kind === 'band' ? len : rg.u1;
       const width = u1 - u0, height = rg.z1 - rg.z0;
       if (!(width > 0) || !(height > 0)) continue;
+      if (!rg.mat) continue;                        // 재질 없는 영역은 벽면을 불투명 회색 판으로 덮지 않는다
       const mat = surfaceMaterial('wall', view, null, { assignment: rg.mat, faceSize: [width, height] });
       mat.side = THREE.DoubleSide;
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(M(width), M(height)), mat);
@@ -85,12 +82,12 @@ export function buildFloorGroup(floor, view) {
   for (const r of floor.rooms) {
     const inner = roomInnerPolygon(r, floor.walls);
     const shape = shapeFrom(inner);
-    const roomSize = polySize(inner);
-    const fl = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('floor', view, hex(r.floorColor, null), { assignment: r.floorMat, faceSize: roomSize }));
+    // ShapeGeometry는 정점 좌표(미터)를 그대로 uv로 쓴다 → worldUv. 방 크기와 무관하게 무늬 한 칸이 같은 크기로 나온다.
+    const fl = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('floor', view, hex(r.floorColor, null), { assignment: r.floorMat, worldUv: true }));
     fl.rotation.x = Math.PI / 2; fl.position.y = M(r.floorOffset); fl.name = 'floor'; fl.userData.roomId = r.id; fl.receiveShadow = true;
     g.add(fl);
     if (!r.hideCeiling) {
-      const ce = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('ceiling', view, hex(r.ceilingColor, null), { assignment: r.ceilingMat, faceSize: roomSize }));
+      const ce = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('ceiling', view, hex(r.ceilingColor, null), { assignment: r.ceilingMat, worldUv: true }));
       ce.rotation.x = Math.PI / 2; ce.position.y = M(r.floorOffset + r.height); ce.name = 'ceiling'; ce.userData.roomId = r.id; ce.visible = false; g.add(ce);
     }
     // 방 안쪽에서 보이는 벽면 색(colorIn). 내부 폴리곤보다 5 mm 더 들여 z-파이팅을 피한다.
@@ -107,6 +104,8 @@ export function buildFloorGroup(floor, view) {
         M(p[0]), y0, M(p[1]), M(q[0]), y0, M(q[1]), M(q[0]), y1, M(q[1]), M(p[0]), y1, M(p[1]),
       ], 3));
       geo.setIndex([0, 1, 2, 0, 2, 3]);
+      // 정점 순서가 p@y0 → q@y0 → q@y1 → p@y1이라 uv는 면을 0~1로 덮는다. uv가 없으면 map이 (0,0) 텍셀 한 점으로만 칠해진다.
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
       geo.computeVertexNormals();
       const faceW = Math.hypot(q[0] - p[0], q[1] - p[1]);
       const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: w.matIn, faceSize: [faceW, Math.min(r.height, w.height)] }));
@@ -121,9 +120,9 @@ export function buildFloorGroup(floor, view) {
     const openings = openingsOnWall(floor.items, w);
     // 벽 본체 메시 하나(및 hiddenLine이면 그 엣지)를 그룹에 넣는다. 개구부가 있는 벽은 이 함수를
     // 조각마다 부른다 — 모두 같은 name: 'wall' / userData.wallId라 컷어웨이가 그대로 동작한다.
-    const bodySize = [wallLength(w), w.height];
-    const addWallMesh = (geo, pos = null, rotY = 0) => {
-      const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null), { assignment: w.matOut, faceSize: bodySize }));
+    // faceSize를 주면 0~1 uv(BoxGeometry 조각), 안 주면 월드 uv(ExtrudeGeometry 본체)로 반복을 정한다.
+    const addWallMesh = (geo, pos = null, rotY = 0, faceSize = null) => {
+      const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null), { assignment: w.matOut, faceSize, worldUv: !faceSize }));
       if (pos) mesh.position.copy(pos);
       mesh.rotation.y = rotY;
       mesh.name = 'wall'; mesh.userData.wallId = w.id; mesh.castShadow = true; mesh.receiveShadow = true;
@@ -147,10 +146,12 @@ export function buildFloorGroup(floor, view) {
       for (const pc of wallPieces(w, openings, { start, end })) {
         const geo = new THREE.BoxGeometry(M(pc.u1 - pc.u0), M(pc.z1 - pc.z0), M(w.thickness));
         const c = add(w.a, mul(dir, (pc.u0 + pc.u1) / 2));
-        addWallMesh(geo, toThree([c[0], c[1], (pc.z0 + pc.z1) / 2]), -RAD(rot));
+        // BoxGeometry는 면마다 uv가 0~1이라 조각 크기로 반복을 잡는다(벽 전체 길이를 쓰면 조각마다 무늬 크기가 달라진다).
+        addWallMesh(geo, toThree([c[0], c[1], (pc.z0 + pc.z1) / 2]), -RAD(rot), [pc.u1 - pc.u0, pc.z1 - pc.z0]);
       }
     }
-    const top = new THREE.Mesh(new THREE.ShapeGeometry(shapeFrom(poly)), surfaceMaterial('wallTop', view, null, { assignment: w.matOut, faceSize: [wallLength(w), w.thickness] }));
+    // 벽 윗면도 월드 uv(shape의 x/y)라 벽이 회전해 있어도 미터당 반복 수로 잡아야 크기가 맞는다.
+    const top = new THREE.Mesh(new THREE.ShapeGeometry(shapeFrom(poly)), surfaceMaterial('wallTop', view, null, { assignment: w.matOut, worldUv: true }));
     top.rotation.x = Math.PI / 2; top.position.y = M(w.height) + 0.002; top.name = 'wallTop'; top.userData.wallId = w.id; g.add(top);
     // 컷어웨이로 감춘 벽이 바닥에 남기는 밑동 윤곽(명세 9.3.2). 기본은 숨김, view3d가 필요할 때 켠다.
     const foot = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(poly.map(p => new THREE.Vector3(M(p[0]), 0.004, M(p[1])))), lineMaterial(COLOR.foot));

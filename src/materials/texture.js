@@ -13,6 +13,8 @@ const cache = new Map();
 export function clearTextureCache() { for (const t of cache.values()) t?.dispose?.(); cache.clear(); }
 
 // 재질 하나의 텍스처(무늬 한 칸). 같은 id는 한 장만 만들어 캐시한다.
+// 캐시 키는 id뿐이다 — 같은 id를 다른 makeCanvas로 다시 불러도 먼저 만든 텍스처가 돌아온다
+// (makeCanvas는 document가 없는 node 테스트용 주입이라 한 세션에 한 종류만 쓴다. 바꾸려면 clearTextureCache).
 export function materialTexture(id, { makeCanvas = null } = {}) {
   const m = materialById(id);
   if (!m) return null;
@@ -31,15 +33,19 @@ export function materialTexture(id, { makeCanvas = null } = {}) {
   return tex;
 }
 
-// 면 크기(mm) ÷ 무늬 한 칸 크기(mm) = 반복 횟수. 0 나누기를 막고 최소 0.05를 준다.
-export function faceRepeat(material, faceSizeMm) {
-  const [fw, fh] = Array.isArray(faceSizeMm) ? faceSizeMm : [1000, 1000];
+// 반복 횟수 = 면 크기(mm) ÷ 무늬 한 칸 크기(mm). 0 나누기를 막고 최소 0.05를 준다.
+// worldUv: uv가 0~1이 아니라 "월드 미터"인 지오메트리(ShapeGeometry·ExtrudeGeometry는 정점 좌표를 그대로
+// uv로 쓴다)는 uv에 이미 면 크기가 들어 있다. 그래서 repeat은 면 크기와 무관한 "미터당 반복 수" = 1000 / scale(mm)이고,
+// 실제 반복 수 = uv 범위(m) × repeat = 면 크기(mm) / scale(mm)로 0~1 uv와 같은 결과가 된다.
+export function faceRepeat(material, faceSizeMm, { worldUv = false } = {}) {
   const [sw, sh] = material?.scale ?? [1000, 1000];
+  if (worldUv) return [Math.max(0.05, 1000 / (sw || 1000)), Math.max(0.05, 1000 / (sh || 1000))];
+  const [fw, fh] = Array.isArray(faceSizeMm) ? faceSizeMm : [1000, 1000];
   return [Math.max(0.05, Math.abs(Number(fw) || 0) / (sw || 1000)), Math.max(0.05, Math.abs(Number(fh) || 0) / (sh || 1000))];
 }
 
 // three 재질 하나에 지정을 반영한다. 지정이 없거나 화이트 단색 모드면 map을 붙이지 않는다.
-export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null } = {}) {
+export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false } = {}) {
   if (!threeMaterial) return threeMaterial;
   threeMaterial.map = null;
   if (!assignment || display === 'white') return threeMaterial;
@@ -51,8 +57,9 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   const t = tex.clone();
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
-  const [rx, ry] = faceRepeat(m, faceSizeMm);
+  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv });
   t.repeat.set(rx, ry);
+  // offset은 repeat을 곱한 뒤 더해지는 텍스처 공간 값이라 두 uv 모드에서 같은 식(offset mm ÷ 무늬 한 칸 mm)을 쓴다.
   t.offset.set((Number(assignment.offset?.[0]) || 0) / (m.scale[0] || 1000), (Number(assignment.offset?.[1]) || 0) / (m.scale[1] || 1000));
   t.center.set(0.5, 0.5);
   t.rotation = ((Number(assignment.angle) || 0) * Math.PI) / 180;
@@ -60,7 +67,6 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   t.needsUpdate = true;
   threeMaterial.map = t;
   threeMaterial.color.set('#ffffff');             // 무늬 색이 그대로 보이게 바탕을 흰색으로
-  threeMaterial.userData.perMesh = true;
-  threeMaterial.needsUpdate = true;
+  threeMaterial.needsUpdate = true;               // perMesh 표시는 재질을 만든 쪽(build.js)이 찍는다
   return threeMaterial;
 }

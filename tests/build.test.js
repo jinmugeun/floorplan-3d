@@ -1,16 +1,37 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeAll, afterAll } from 'vitest';
 import { rectWalls, makeWall } from "../src/geom/walls.js";
 import { detectRooms } from '../src/geom/rooms.js';
 import { buildFloorGroup, disposeGroup, sceneSignature, TRANSPARENT_OPACITY } from '../src/view3d/build.js';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addFloor, setActiveFloor } from "../src/state/floorOps.js";
-import { beforeAll, afterAll } from 'vitest';
 import { setCanvasFactory, clearTextureCache, materialTexture, faceRepeat, applyAssignment, TEX_PX } from '../src/materials/texture.js';
 import { materialById } from '../src/materials/catalog.js';
 import * as THREE from 'three';
 
 function floor() { const walls = rectWalls([0, 0], [4000, 3000], 200); return { walls, rooms: detectRooms(walls), height: 2300 }; }
+
+// node 환경에는 document가 없다. drawPattern이 부르는 메서드만 가진 가짜 캔버스를 파일 전체에 깔아 둔다.
+function fakeCanvas() {
+  const ctx = { fillStyle: '', strokeStyle: '', lineWidth: 1, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {} };
+  return { width: 0, height: 0, getContext: () => ctx };
+}
+beforeAll(() => setCanvasFactory(fakeCanvas));
+afterAll(() => { clearTextureCache(); setCanvasFactory(null); });
+
+const assign = (id, patch = {}) => ({ id, offset: [0, 0], angle: 0, ...patch });
+
+// 지오메트리의 uv가 실제로 덮는 범위. 무늬가 몇 번 반복되는지는 (이 범위 × repeat)이라 이것 없이는 검증이 안 된다.
+function uvSpan(geo) {
+  const uv = geo.attributes.uv;
+  if (!uv) return null;
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+  for (let i = 0; i < uv.count; i++) {
+    u0 = Math.min(u0, uv.getX(i)); u1 = Math.max(u1, uv.getX(i));
+    v0 = Math.min(v0, uv.getY(i)); v1 = Math.max(v1, uv.getY(i));
+  }
+  return [u1 - u0, v1 - v0];
+}
 
 test('buildFloorGroup makes one mesh per wall and wall top, one floor and a hidden ceiling', () => {
   const g = buildFloorGroup(floor(), { wallOpacity: 1 });
@@ -150,16 +171,6 @@ test('sceneSignature changes when a v3 item-visibility flag changes but not for 
   expect(c).not.toBe(a);
 });
 
-// node 환경에는 document가 없다. drawPattern이 부르는 메서드만 가진 가짜 캔버스를 쓴다.
-function fakeCanvas() {
-  const ctx = { fillStyle: '', strokeStyle: '', lineWidth: 1, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {} };
-  return { width: 0, height: 0, getContext: () => ctx };
-}
-beforeAll(() => setCanvasFactory(fakeCanvas));
-afterAll(() => { clearTextureCache(); setCanvasFactory(null); });
-
-const assign = (id, patch = {}) => ({ id, offset: [0, 0], angle: 0, ...patch });
-
 test('materialTexture는 id마다 한 장을 캐시하고 반복·색공간을 세팅한다', () => {
   const t = materialTexture('wood-oak');
   expect(t).toBeTruthy();
@@ -180,6 +191,19 @@ test('faceRepeat은 면 크기를 무늬 크기로 나눈다(소수 크기)', ()
   expect(faceRepeat(null, [1000, 1000])).toEqual([1, 1]);
 });
 
+test('faceRepeat worldUv는 면 크기를 무시하고 미터당 반복 수를 준다', () => {
+  const tile = materialById('tile-white-300');
+  const [rx, ry] = faceRepeat(tile, [4000, 3000], { worldUv: true });
+  expect(rx).toBeCloseTo(1000 / 300, 9);
+  expect(ry).toBeCloseTo(1000 / 300, 9);
+  // uv가 미터라 4 m × 3 m 바닥에서는 uv 범위 × repeat = 13.33 × 10칸이 된다(= 4000/300 × 3000/300).
+  expect(4 * rx).toBeCloseTo(4000 / 300, 6);
+  expect(3 * ry).toBeCloseTo(10, 6);
+  // 면이 커져도 repeat은 그대로다 — 0~1 uv 모드와 달리 무늬 한 칸 크기가 면 크기에 끌려다니지 않는다.
+  expect(faceRepeat(tile, [40000, 30000], { worldUv: true })).toEqual([rx, ry]);
+  expect(faceRepeat(materialById('wood-oak'), null, { worldUv: true })[1]).toBeCloseTo(1000 / 190, 9);
+});
+
 test('applyAssignment는 map·repeat·offset·rotation을 세팅하고 화이트 모드에서는 붙이지 않는다', () => {
   const m = new THREE.MeshStandardMaterial();
   applyAssignment(m, assign('tile-white-300', { offset: [150, 75.5], angle: 90 }), [3000, 2400]);
@@ -198,6 +222,17 @@ test('applyAssignment는 map·repeat·offset·rotation을 세팅하고 화이트
   expect(none.map).toBeNull();
 });
 
+test('applyAssignment worldUv는 repeat만 미터당으로 바꾸고 offset·각도는 그대로 둔다', () => {
+  const m = new THREE.MeshStandardMaterial();
+  applyAssignment(m, assign('wood-oak', { offset: [600.5, 95], angle: 30 }), [4000, 3000], { worldUv: true });
+  expect(m.map.repeat.x).toBeCloseTo(1000 / 1200, 9);   // 오크 마루 scale [1200, 190]
+  expect(m.map.repeat.y).toBeCloseTo(1000 / 190, 9);
+  expect(m.map.offset.x).toBeCloseTo(600.5 / 1200, 9);  // offset은 repeat 뒤에 더해지는 텍스처 공간 값이라 식이 같다
+  expect(m.map.offset.y).toBeCloseTo(95 / 190, 9);
+  expect(m.map.rotation).toBeCloseTo(Math.PI / 6, 9);
+  expect(m.userData.perMesh).toBeUndefined();           // perMesh는 재질을 만든 쪽이 찍는다
+});
+
 test('벽 본체는 matOut, 방 안쪽 면은 matIn 텍스처를 쓴다(소수 길이)', () => {
   const walls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200)
     .map(w => ({ ...w, matIn: assign('paint-navy'), matOut: assign('brick-red') }));
@@ -207,17 +242,78 @@ test('벽 본체는 matOut, 방 안쪽 면은 matIn 텍스처를 쓴다(소수 �
   expect(body.material.map).toBeTruthy();
   expect(face.material.map).toBeTruthy();
   expect(body.material.map.uuid).not.toBe(face.material.map.uuid); // 면마다 복제한다(반복·오프셋이 다르다)
-  const top = walls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);
-  const topBody = g.children.find(c => c.name === 'wall' && c.userData.wallId === top.id);
-  expect(topBody.material.map.repeat.x).toBeCloseTo(4000 / 230, 3);  // 벽 길이 4000 / 적벽돌 230
+  // 벽 본체는 ExtrudeGeometry = 월드 uv(미터)라 repeat이 미터당 반복 수여야 벽돌이 230 × 60 mm로 나온다.
+  expect(body.geometry.type).toBe('ExtrudeGeometry');
+  expect(body.material.map.repeat.x).toBeCloseTo(1000 / 230, 9);
+  expect(body.material.map.repeat.y).toBeCloseTo(1000 / 60, 9);
+  // 방 안쪽 면은 직접 만든 쿼드다: uv가 없으면 무늬가 (0,0) 텍셀 한 점으로 뭉개진다.
+  const faceUv = face.geometry.attributes.uv;
+  expect(faceUv).toBeTruthy();
+  expect(faceUv.count).toBe(4);
+  expect(faceUv.itemSize).toBe(2);
+  expect([...faceUv.array]).toEqual([0, 0, 1, 0, 1, 1, 0, 1]);  // 면을 정확히 한 번 덮는다
+  expect(uvSpan(face.geometry)).toEqual([1, 1]);
+  // 0~1 uv이므로 반복 수 = 면 크기 ÷ 무늬 크기. 페인트는 scale [1000, 1000]이라 높이 2300 → 2.3회.
+  expect(face.material.map.repeat.y).toBeCloseTo(2300 / 1000, 9);
 });
 
-test('바닥·천장은 방 재질을 쓰고, 지정이 없으면 색만 쓴다', () => {
-  const walls = rectWalls([0, 0], [4000, 3000], 200);
-  const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('wood-oak'), ceilingMat: null, hideCeiling: false }));
+test('바닥·천장은 방 재질을 쓰고 월드 uv 반복(미터당)을 쓴다', () => {
+  // 벽 두께 200, 외곽 4200 × 3200 → 방 안쪽 바닥이 정확히 4000 × 3000 mm.
+  const walls = rectWalls([0, 0], [4200, 3200], 200);
+  const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('tile-white-300'), ceilingMat: null, hideCeiling: false }));
   const g = buildFloorGroup({ walls, rooms, height: 2300 }, { wallOpacity: 1 });
-  expect(g.children.find(c => c.name === 'floor').material.map).toBeTruthy();
-  expect(g.children.find(c => c.name === 'ceiling').material.map).toBeNull();
+  const fl = g.children.find(c => c.name === 'floor');
+  expect(fl.material.map).toBeTruthy();
+  expect(g.children.find(c => c.name === 'ceiling').material.map).toBeNull(); // 지정이 없으면 색만
+  // ShapeGeometry는 정점(미터)을 그대로 uv로 쓴다 → uv 범위가 곧 방 크기다.
+  const [su, sv] = uvSpan(fl.geometry);
+  expect(su).toBeCloseTo(4, 6);
+  expect(sv).toBeCloseTo(3, 6);
+  expect(fl.material.map.repeat.x).toBeCloseTo(1000 / 300, 9);
+  expect(fl.material.map.repeat.y).toBeCloseTo(1000 / 300, 9);
+  // 화면에 보이는 타일 수 = uv 범위 × repeat. 300 mm 타일이면 13.33 × 10장이어야 한다.
+  expect(su * fl.material.map.repeat.x).toBeCloseTo(40 / 3, 6);
+  expect(sv * fl.material.map.repeat.y).toBeCloseTo(10, 6);
+});
+
+test('월드 uv 면은 방이 커져도 무늬 한 칸 크기가 같다(타일 수만 늘어난다)', () => {
+  const build = (wmm, hmm) => {
+    const walls = rectWalls([0, 0], [wmm + 200, hmm + 200], 200);
+    const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('tile-white-300'), hideCeiling: true }));
+    return buildFloorGroup({ walls, rooms, height: 2300 }, { wallOpacity: 1 }).children.find(c => c.name === 'floor');
+  };
+  const small = build(2000, 2000), big = build(6000.5, 4000);
+  expect(big.material.map.repeat.x).toBeCloseTo(small.material.map.repeat.x, 9); // 반복 배율은 면 크기와 무관
+  expect(uvSpan(small.geometry)[0] * small.material.map.repeat.x).toBeCloseTo(2000 / 300, 6);
+  // 소수 크기: 방 폴리곤이 0.5 mm 단위로 정리되므로 타일 0.01장 안에서만 맞춘다.
+  expect(uvSpan(big.geometry)[0] * big.material.map.repeat.x).toBeCloseTo(6000.5 / 300, 2);
+});
+
+test('개구부가 있는 벽 조각은 조각마다 제 크기로 반복한다', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const walls = rectWalls([0, 0], [4000, 3000], 200).map(w => ({ ...w, matOut: assign('brick-red') }));
+  const target = walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const items = [createItem(productById('door-swing-900'), { wallId: target.id, t: 0.5, pos: [2000, 0] })];
+  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), items, height: 2300 }, { wallOpacity: 1, v3: {} });
+  const pieces = g.children.filter(c => c.name === 'wall' && c.userData.wallId === target.id);
+  expect(pieces).toHaveLength(3);
+  expect(pieces.every(c => c.geometry.type === 'BoxGeometry')).toBe(true);
+  // BoxGeometry는 면마다 uv가 0~1이라 조각 크기(m) × 1000 / 230 이 그 조각의 벽돌 수다.
+  for (const p of pieces) {
+    expect(uvSpan(p.geometry)).toEqual([1, 1]);
+    const { width, height } = p.geometry.parameters;
+    expect(p.material.map.repeat.x).toBeCloseTo((width * 1000) / 230, 6);
+    expect(p.material.map.repeat.y).toBeCloseTo((height * 1000) / 60, 6);
+  }
+  // 조각마다 값이 달라야 한다 — 벽 전체 크기를 공유하면 인방(문 위 200 mm)에 벽돌 38줄이 들어간다.
+  const lintel = pieces.find(p => p.geometry.parameters.height < 0.5);
+  expect(lintel.material.map.repeat.y).toBeCloseTo((lintel.geometry.parameters.height * 1000) / 60, 6);
+  expect(lintel.material.map.repeat.y).toBeLessThan(5);
+  const side = pieces.find(p => p.geometry.parameters.height > 2);
+  expect(side.material.map.repeat.y).toBeCloseTo(2300 / 60, 6);
+  expect(side.material.map.repeat.x).not.toBeCloseTo(lintel.material.map.repeat.x, 3);
+  disposeGroup(g);
 });
 
 test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들고 있다', () => {
@@ -241,6 +337,27 @@ test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들�
   expect(rect.geometry.parameters.width).toBeCloseTo(1.0, 6);   // 1500.5 - 500.5
   // 벽 면(두께 200의 절반)에서 2mm 앞: 아래 벽(y = 0)은 법선이 남(+y) → three z
   expect(Math.abs(rect.position.z)).toBeCloseTo(0.102, 6);
+  // PlaneGeometry는 uv가 0~1이라 반복 수 = 영역 크기 ÷ 무늬 크기 그대로다.
+  expect(uvSpan(band.geometry)).toEqual([1, 1]);
+  expect(band.material.map.repeat.x).toBeCloseTo(4000 / 300, 6);   // 4000 mm 띠 / 300 타일
+  expect(band.material.map.repeat.y).toBeCloseTo(1200 / 300, 6);
+  expect(rect.material.map.repeat.x).toBeCloseTo(1000 / 230, 6);   // 1500.5 - 500.5 = 1000 / 적벽돌 230
+  expect(rect.material.map.repeat.y).toBeCloseTo(600 / 60, 6);
+  disposeGroup(g);
+});
+
+test('재질이 없는 영역은 평면을 만들지 않는다', () => {
+  const walls = rectWalls([0, 0], [4000, 3000], 200);
+  walls[0].regions = {
+    in: [{ id: 'rg1', kind: 'rect', u0: 0, u1: 1000, z0: 0, z1: 1000, mat: null },
+         { id: 'rg2', kind: 'rect', u0: 1200.5, u1: 2200.5, z0: 0, z1: 1000, mat: assign('brick-red') }],
+    out: [{ id: 'rg3', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 900 }],   // mat 키 자체가 없는 옛 데이터
+  };
+  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), height: 2300 }, { wallOpacity: 1 });
+  const regions = g.children.filter(c => c.name === 'wallRegion');
+  expect(regions).toHaveLength(1);                     // 재질 있는 rg2 하나만
+  expect(regions[0].userData.regionId).toBe('rg2');
+  expect(regions[0].material.map).toBeTruthy();
   disposeGroup(g);
 });
 
