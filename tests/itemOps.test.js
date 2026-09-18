@@ -446,3 +446,17 @@ describe('그룹·배열·상대이동', () => {
     expect(activeFloor(s.get()).items.map(i => i.pos[1])).toEqual([1000, 1500]);
   });
 });
+
+// 회귀 방지 테스트(M-31): 2B의 replaceProduct가 이미 벽 재부착을 하므로 red 단계 없이 통과한다.
+test('제품 교체가 벽 부착 제품을 벽에 다시 앉힌다', () => {
+  const s = setup();
+  const w = activeFloor(s.get()).walls.find(x => x.a[1] === 0 && x.b[1] === 0);
+  const id = addItem(s, createItem(productById('window-slide-1200'), { wallId: w.id, t: 0.5, pos: [2000, 0], side: 1 }));
+  replaceProduct(s, [id], productById('window-slide-1800'));
+  const it = activeFloor(s.get()).items[0];
+  expect(it.size).toEqual([1800, 40, 1200]);
+  expect(it.wallId).toBe(w.id);
+  expect(it.t).toBe(0.5);
+  expect(it.pos).toEqual([2000, 0]);   // 개구부는 벽 두께 안에 박힌다(embed)
+  expect(it.rot).toBe(0);
+});

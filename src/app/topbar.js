@@ -4,6 +4,16 @@ import { openGalleryDialog } from '../ui/galleryDialog.js';
 import { openEstimateDialog } from '../ui/estimateDialog.js';
 import { openSpecDialog } from '../ui/specDialog.js';
 
+// 벽도 배경 도면도 없으면 잃을 것이 없는 프로젝트다(시작 화면을 바로 띄워도 된다).
+export const projectIsEmpty = p => ((p?.floors ?? []).every(f => !f.walls.length) && !p?.background);
+
+// 나가기·시작 화면 전환 앞의 확인. 묻기 전에 자동 저장본을 최신으로 만들어 "남습니다"를 사실로 만든다.
+export function confirmLeave(project, { saveNow = () => {}, confirm = (...a) => window.confirm(...a) } = {}) {
+  if (projectIsEmpty(project)) return true;
+  saveNow();
+  return !!confirm('현재 작업을 저장하지 않고 나갈까요? 자동 저장본은 남습니다.');
+}
+
 export function createTopbar({ store, ui, shell, menu, view3d, actions = {} }) {
   const offs = [];
   const on = (id, fn) => {

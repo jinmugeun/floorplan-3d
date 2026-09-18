@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
-import { addWalls } from '../src/state/floorOps.js';
+import { addWalls, addMeasure } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createMeasureTool } from '../src/view2d/tools/measureTool.js';
 
@@ -43,4 +43,21 @@ test('a new measurement starts right after the previous one is stored', () => {
   t.onPointerDown([0, 0]); t.onPointerDown([1000, 0]);
   t.onPointerDown([0, 2000]); t.onPointerDown([1000, 2000]); // 빈 곳에서 다시 두 번
   expect(activeFloor(store.get()).measures).toHaveLength(2);
+});
+
+test('측정선 히트 허용치는 확대 배율을 따른다', () => {
+  const store = createStore(createEmptyProject());
+  addMeasure(store, { a: [0, 0], b: [1000.5, 0] });
+  const zoomedOut = createMeasureTool({ store, view: { camera: { scale: 0.01 } } }); // 1px = 100mm
+  zoomedOut.onPointerDown([500, 700]);          // 700mm 떨어진 클릭 = 화면에서 7px
+  expect(activeFloor(store.get()).measures).toHaveLength(0);
+  addMeasure(store, { a: [0, 0], b: [1000.5, 0] });
+  const zoomedIn = createMeasureTool({ store, view: { camera: { scale: 1 } } });     // 1px = 1mm
+  zoomedIn.onPointerDown([500, 700]);
+  expect(activeFloor(store.get()).measures).toHaveLength(1); // 멀리 있는 클릭은 지우지 않는다
+  // 위 클릭이 지우기에 걸리지 않았으므로 새 측정의 첫 점(a)이 세워졌다. 지우기 분기는 `if (!a)`일 때만
+  // 도므로 진행 중인 측정을 비워야 다음 클릭이 다시 "지우기"가 된다(C-7).
+  zoomedIn.cancel();
+  zoomedIn.onPointerDown([500, 5]);
+  expect(activeFloor(store.get()).measures).toHaveLength(0);
 });

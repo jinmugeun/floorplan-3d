@@ -18,3 +18,11 @@ export function sunPosition(sun = {}, distance = 40) {
   const horizontal = distance * Math.cos(alt);
   return [horizontal * Math.sin(b), distance * Math.sin(alt), -horizontal * Math.cos(b)];
 }
+
+// 해가 진 뒤에는 방향광을 줄인다(고도 0° 이하 = 0.25, 10° 이상 = 1). MIN_ALT로 위치만 띄워 두고 밝기로 밤을 표현한다.
+export function nightFactor(sun = {}) {
+  const alt = sunAltitudeDeg(sun);
+  if (alt <= 0) return 0.25;
+  if (alt >= 10) return 1;
+  return 0.25 + 0.75 * (alt / 10);
+}

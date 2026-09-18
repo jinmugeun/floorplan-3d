@@ -15,6 +15,8 @@ export { lenField, readLen, withUnit } from './fieldUtils.js';
 let detailsOpen = true;
 // 아이템 크기 패널의 "비율 유지" 체크박스 상태. applyNumber(모듈 최상위 함수)도 읽어야 해서 모듈 스코프에 둔다.
 let keepRatio = false;
+// 비율 유지는 제품 하나에만 뜻이 있다: 선택이 바뀌면 끈다.
+let keepRatioFor = null;
 
 export { ROOM_TYPES };
 
@@ -110,6 +112,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
     if (sel.type === 'item') {
       const it = f.items.find(x => x.id === sel.id); if (!it) { container.innerHTML = ''; return; }
+      if (keepRatioFor !== it.id) { keepRatio = false; keepRatioFor = it.id; }
       const p = productById(it.productId);
       const onWall = !!(it.attach === 'wall' && it.wallId); // 벽 부착 제품의 위치는 벽 위 t로 정해지므로 읽기 전용
       container.innerHTML = `<h2>제품 상세 정보</h2>

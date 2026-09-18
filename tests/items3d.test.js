@@ -33,6 +33,11 @@ describe('3D 아이템', () => {
     expect(itemMesh(mk('opening-pass', { pos: [0, 0] }))).toBeNull();
   });
 
+  test('원형 기둥은 새 심벌 이름으로도 원기둥이 된다', () => {
+    expect(itemMesh(mk('column-round', { pos: [0.5, 0.25] })).geometry.type).toBe('CylinderGeometry');
+    expect(itemMesh(mk('stool-round', { pos: [0, 0] })).geometry.type).toBe('BoxGeometry'); // 기둥이 아닌 원형 제품은 박스
+  });
+
   test('창은 반투명, 재질은 메시마다 새로 만든다', () => {
     const m = itemMesh(mk('window-slide-1200', { pos: [0, 0] }));
     expect(m.material.transparent).toBe(true);

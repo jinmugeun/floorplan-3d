@@ -49,3 +49,15 @@ describe('2D 심벌 부품', () => {
     for (const p of PRODUCTS) expect(symbolSvg(p.symbol, p.size[0], p.size[1]), p.id).not.toContain('NaN');
   });
 });
+
+test('원형 기둥 심벌은 채운 원과 대각선이다', async () => {
+  const { symbolParts } = await import('../src/products/symbols.js');
+  const { SYMBOL_NAMES, productById } = await import('../src/products/catalog.js');
+  expect(SYMBOL_NAMES).toContain('columnRound');
+  expect(productById('column-round').symbol).toBe('columnRound');
+  const parts = symbolParts('columnRound', 400.5, 400.5);
+  expect(parts[0]).toMatchObject({ t: 'circle', fill: 'solid' });
+  expect(parts[0].r).toBeCloseTo(200.25);
+  expect(parts.filter(p => p.t === 'line')).toHaveLength(2);
+  expect(symbolParts('circle', 400, 400)[0].fill).toBe('body');  // 스툴 등 일반 원은 그대로 연한 채움
+});

@@ -30,7 +30,7 @@ import { openRoomTemplateDialog } from './ui/templateDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { openStartScreen } from './ui/startScreen.js';
-import { createTopbar } from './app/topbar.js';
+import { createTopbar, projectIsEmpty, confirmLeave } from './app/topbar.js';
 import { templateProject, saveTemplate } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
@@ -142,7 +142,7 @@ const tools = {
   wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
   delete: createDeleteTool,
   guide: () => createGuideTool({ store, view, opts: toolOpts.guide }),
-  measure: () => createMeasureTool({ store, opts: toolOpts.measure }),
+  measure: () => createMeasureTool({ store, opts: toolOpts.measure, view }),
   place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select') }),
 };
 function setTool(name) { cancelReplace(); const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
@@ -196,8 +196,7 @@ function deleteOrTool() { if (ui.get().selection) deleteSelection(); else setToo
 const restored = loadAutosave();
 const restoredOk = !!(restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?'));
 if (restoredOk) store.replace(restored, { record: false }); // 복원은 되돌릴 단계가 아니다
-const isEmpty = s => s.floors.every(f => !f.walls.length) && !s.background;
-if (!restoredOk && isEmpty(store.get())) showStart();
+if (!restoredOk && projectIsEmpty(store.get())) showStart();
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
 // 더보기 메뉴의 "템플릿으로 저장"(태스크 14의 topbar.js가 부른다). 이름은 프로젝트 이름을 기본값으로 묻는다.
@@ -228,7 +227,8 @@ const actions = {
   },
   saveAsTemplate,
   exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); shell.toast('JSON을 내보냈습니다'); },
-  exit: () => showStart(),
+  // 시작 화면은 샘플·템플릿으로 프로젝트를 갈아 끼운다: 작업 중이면 먼저 묻는다(새로만들기와 같은 규칙).
+  exit: () => { if (confirmLeave(store.get(), { saveNow: () => auto.saveNow() })) showStart(); },
 };
 createTopbar({ store, ui, shell, menu, view3d, actions });
 

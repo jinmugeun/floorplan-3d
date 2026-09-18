@@ -248,3 +248,16 @@ test('벽 부착 제품은 회전 핸들이 없고 크기 핸들로 늘려도 �
   expect(after.wallId).toBe(top.id);
   expect(Math.abs(after.pos[1] - (100 + after.size[1] / 2))).toBeLessThanOrEqual(1);
 });
+
+test('핸들 드래그는 2px 데드존을 지나야 크기가 바뀐다', () => {
+  const { store, ui, ids, t } = setup([['sofa-3', { pos: [2000, 1500] }]]);
+  ui.set({ selection: { type: 'item', id: ids[0] } });
+  const before = item(store, ids[0]).size[0];
+  const corner = [2000 - 1050, 1500 - 450];            // 좌상 코너 핸들
+  t.onPointerDown(corner, {});
+  t.onPointerMove([corner[0] + 10.5, corner[1] + 10.5], {}); // 화면 1px = 10mm → 약 1.5px 이동
+  expect(item(store, ids[0]).size[0]).toBe(before);
+  t.onPointerMove([corner[0] + 200.5, corner[1] + 0.5], {});
+  expect(item(store, ids[0]).size[0]).not.toBe(before);
+  t.onPointerUp([corner[0] + 200.5, corner[1] + 0.5], {});
+});

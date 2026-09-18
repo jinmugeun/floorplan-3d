@@ -6,7 +6,7 @@ import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPA
 import { hiddenWallIds, cutawayMeshStyle, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
 import { cameraDistance } from './fit.js';
-import { sunPosition } from './sun.js';
+import { sunPosition, nightFactor } from './sun.js';
 import { headingDeg, toWorldXY } from './camera.js';
 import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js';
 import { createFacePicker } from './facePick.js';
@@ -129,8 +129,9 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   function applySun(s = {}) {
     const p = sunPosition(s);
     sun.position.set(p[0], p[1], p[2]);
-    sun.intensity = (s.intensity ?? 0.8) * 3;
-    hemi.intensity = (s.ambient ?? 0.6) * 4.33;
+    const night = nightFactor(s);                  // 밤에는 방향광·환경광을 함께 줄인다
+    sun.intensity = (s.intensity ?? 0.8) * 3 * night;
+    hemi.intensity = (s.ambient ?? 0.6) * 4.33 * (0.4 + 0.6 * night);
     requestRender();
   }
   // 도면 전체가 들어오도록 카메라를 다시 잡는다. 현재 모드(plan / iso)의 프레이밍을 그대로 쓴다.

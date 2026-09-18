@@ -33,3 +33,18 @@ test('fractional hours and months are accepted', () => {
   expect(Number.isFinite(a)).toBe(true);
   expect(a).toBeLessThan(sunAltitudeDeg({ month: 6.5, hour: 12 }));
 });
+
+test('해가 지면 햇빛이 감쇠한다', async () => {
+  const { nightFactor, sunAltitudeDeg } = await import('../src/view3d/sun.js');
+  expect(sunAltitudeDeg({ month: 12, hour: 2 })).toBeLessThan(0);
+  expect(nightFactor({ month: 12, hour: 2 })).toBeCloseTo(0.25, 6);
+  expect(nightFactor({ month: 6, hour: 12 })).toBe(1);
+  // 6월 19시 = 고도 약 +3.09° → 0.25 + 0.75 × 0.309 ≈ 0.482.
+  // 19.5시는 이미 고도 약 -2.09°라 0.25다(경계를 넘기지 않게 19시를 쓴다 — C-8).
+  expect(sunAltitudeDeg({ month: 6, hour: 19 })).toBeGreaterThan(0);
+  const dusk = nightFactor({ month: 6, hour: 19 });
+  expect(dusk).toBeGreaterThan(0.25);
+  expect(dusk).toBeLessThan(1);
+  expect(dusk).toBeCloseTo(0.4816, 3);
+  expect(nightFactor({ month: 6, hour: 19.5 })).toBeCloseTo(0.25, 6); // 해가 진 뒤
+});

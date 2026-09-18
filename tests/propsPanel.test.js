@@ -2,8 +2,9 @@
 import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject, activeFloor } from '../src/state/schema.js';
-import { addWalls, addFloor, setActiveFloor } from '../src/state/floorOps.js';
+import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
+import { addWalls, addFloor, setActiveFloor, addItem } from '../src/state/floorOps.js';
+import { productById } from '../src/products/catalog.js';
 import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { createPropsPanel, applyNumber, lenField, withUnit, readLen } from '../src/ui/propsPanel.js';
 import { applyMaterial, assignmentOf } from '../src/state/materialOps.js';
@@ -545,4 +546,21 @@ test('propsPanel.js는 applyNumber·lenField·withUnit·readLen을 여전히 내
   expect(typeof lenField).toBe('function');
   expect(typeof withUnit).toBe('function');
   expect(typeof readLen).toBe('function');
+});
+
+test('선택이 바뀌면 크기 비율 유지가 꺼지고, 잠긴 제품은 편집되지 않는다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const a = addItem(store, createItem(productById('sofa-3'), { pos: [1000, 1000] }));
+  const b = addItem(store, createItem(productById('bed-queen'), { pos: [2500, 1000], locked: true }));
+  const el = document.createElement('div'); createPropsPanel(el, store, ui, {});
+  ui.set({ selection: { type: 'item', id: a } });
+  const keep = el.querySelector('[name="keepRatio"]');
+  keep.checked = true; keep.dispatchEvent(new Event('change', { bubbles: true }));
+  ui.set({ selection: { type: 'item', id: b } });
+  expect(el.querySelector('[name="keepRatio"]').checked).toBe(false);   // 다른 제품으로 옮기면 꺼진다
+  const w = el.querySelector('[name="w"]');
+  w.value = '1000'; w.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).items.find(i => i.id === b).size[0]).toBe(1500); // 잠긴 제품은 그대로
+  expect(document.querySelector('#toasts').textContent).toContain('잠긴');
 });

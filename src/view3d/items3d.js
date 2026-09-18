@@ -14,7 +14,7 @@ export function itemMesh(item) {
   if (item.kind === 'opening') return null;
   const [w, d, h] = item.size;
   const p = productById(item.productId);
-  const round = p?.symbol === 'circle' && item.kind === 'column';
+  const round = item.kind === 'column' && (p?.symbol === 'columnRound' || p?.symbol === 'circle'); // 'circle'은 옛 파일 호환
   const geo = round
     ? new THREE.CylinderGeometry(M(w / 2), M(w / 2), M(h), 24)
     : new THREE.BoxGeometry(M(w), M(h), M(d));

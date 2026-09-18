@@ -36,6 +36,10 @@ export function symbolParts(symbol, w, d) {
       return [body, line(-hw, -d / 6, hw, -d / 6), line(-hw, d / 6, hw, d / 6)];
     case 'column':
       return [rect(-hw, -hd, w, d, 'solid'), line(-hw, -hd, hw, hd), line(-hw, hd, hw, -hd)];
+    case 'columnRound': {
+      const r = Math.min(w, d) / 2;
+      return [circle(0, 0, r, 'solid'), line(-r, -r, r, r), line(-r, r, r, -r)];
+    }
     case 'circle':
       return [circle(0, 0, Math.min(w, d) / 2, 'body')];
     case 'sink': {

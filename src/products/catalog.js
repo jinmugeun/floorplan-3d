@@ -18,7 +18,7 @@ export const CATEGORIES = [
   { name: '구조물', subs: ['기둥', '개구부'] },
 ];
 
-export const SYMBOL_NAMES = ['box', 'bed', 'sofa', 'table', 'chair', 'door', 'window', 'column', 'circle', 'sink', 'range', 'fridge', 'lamp'];
+export const SYMBOL_NAMES = ['box', 'bed', 'sofa', 'table', 'chair', 'door', 'window', 'column', 'columnRound', 'circle', 'sink', 'range', 'fridge', 'lamp'];
 
 export const ATTACH_LABELS = { floor: '바닥에 서있는 제품', floorLay: '바닥에 깔리는 제품', wall: '벽에 붙는 제품', ceiling: '천장에 붙는 제품' };
 
@@ -119,7 +119,7 @@ export const PRODUCTS = [
   P('light-wall', '벽등', 'LT-WL', '조명', '벽등', [200, 150, 300], 'wall', 'lamp', { zDefault: 1800, color: '#fff3c4', tags: '조명 벽등 브라켓' }),
   // 구조물
   P('column-square', '사각 기둥', 'SR-CS', '구조물', '기둥', [400, 400, 2300], 'floor', 'column', { kind: 'column', color: '#b6bdc4', tags: '기둥 사각 구조물' }),
-  P('column-round', '원형 기둥', 'SR-CR', '구조물', '기둥', [400, 400, 2300], 'floor', 'circle', { kind: 'column', color: '#b6bdc4', tags: '기둥 원형 구조물' }),
+  P('column-round', '원형 기둥', 'SR-CR', '구조물', '기둥', [400, 400, 2300], 'floor', 'columnRound', { kind: 'column', color: '#b6bdc4', tags: '기둥 원형 구조물' }),
   P('opening-pass', '개구부', 'SR-OP', '구조물', '개구부', [900, 40, 2100], 'wall', 'window', { ...hole('opening', 900, 2100, 0, '#e9e6e0'), tags: '개구부 통로 구멍' }),
 ];
 

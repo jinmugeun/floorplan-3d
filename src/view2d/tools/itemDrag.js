@@ -93,6 +93,8 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
 
   function apply(p, ev) {
     if (!drag) return;
+    // 핸들을 잡자마자 생기는 손떨림은 크기·각도를 바꾸지 않는다(1mm 데드존은 확대 배율에 따라 너무 작다).
+    if (!drag.moved && drag.kind !== 'items' && dist(p, drag.startP) < px(2)) return;
     if (drag.kind === 'rotate') {
       const rot = rotateToPoint(drag.base[0], p, { snapDeg: ev?.ctrlKey ? 0 : 15 });
       drag.moved = true;

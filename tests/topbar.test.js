@@ -5,7 +5,9 @@ import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
 import { createShell } from '../src/ui/shell.js';
 import { createContextMenu } from '../src/ui/contextMenu.js';
-import { createTopbar } from '../src/app/topbar.js';
+import { addWalls } from '../src/state/floorOps.js';
+import { rectWalls } from '../src/geom/walls.js';
+import { createTopbar, projectIsEmpty, confirmLeave } from '../src/app/topbar.js';
 
 function setup(actions = {}) {
   const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
@@ -69,5 +71,33 @@ describe('상단 바', () => {
     a.bar.destroy();
     a.click('btnNew');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('나가기 가드', () => {
+  test('빈 프로젝트는 묻지 않고, 작업한 도면은 확인을 받고 자동 저장본을 먼저 남긴다', () => {
+    const empty = createEmptyProject();
+    expect(projectIsEmpty(empty)).toBe(true);
+    let asked = 0, saved = 0;
+    expect(confirmLeave(empty, { saveNow: () => { saved += 1; }, confirm: () => { asked += 1; return true; } })).toBe(true);
+    expect([asked, saved]).toEqual([0, 0]);
+
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+    const drawn = store.get();
+    expect(projectIsEmpty(drawn)).toBe(false);
+    let msg = null;
+    expect(confirmLeave(drawn, { saveNow: () => { saved += 1; }, confirm: m => { msg = m; return false; } })).toBe(false);
+    expect(saved).toBe(1);                                   // 묻기 전에 자동 저장본을 최신으로 만든다
+    expect(msg).toContain('저장하지 않고 나갈까요');
+    expect(msg).toContain('자동 저장본은 남습니다');
+    expect(confirmLeave(drawn, { saveNow: () => { saved += 1; }, confirm: () => true })).toBe(true);
+    expect(saved).toBe(2);
+  });
+
+  test('배경 도면만 올린 프로젝트도 비어 있지 않다', () => {
+    const p = createEmptyProject();
+    p.background = { url: 'x', opacity: 1, visible: true };
+    expect(projectIsEmpty(p)).toBe(false);
   });
 });

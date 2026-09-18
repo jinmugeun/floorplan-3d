@@ -7,8 +7,10 @@ import { fmtLen } from '../../util/units.js';
 
 export const MEASURE_TOOL_DEFAULTS = { snap: true };
 
-export function createMeasureTool({ store, opts: given = null }) {
+export function createMeasureTool({ store, opts: given = null, view = null }) {
   const opts = given ?? { ...MEASURE_TOOL_DEFAULTS };
+  // 히트 허용치는 화면에서 8px에 해당하는 거리다(확대하면 좁아지고 축소하면 넓어진다).
+  const tol = () => (view?.camera?.scale ? Math.max(20, 8 / view.camera.scale) : 150);
   let a = null, b = null, cur = null;
   const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, walls: f.walls, snap: opts.snap }).point; };
   return {
@@ -16,7 +18,7 @@ export function createMeasureTool({ store, opts: given = null }) {
     onPointerDown(p) {
       const f = activeFloor(store.get());
       if (!a) { // 새 측정 시작 전에 기존 측정선을 클릭하면 지운다
-        const hit = f.measures.find(m => distToSegment(p, m.a, m.b) <= 150);
+        const hit = f.measures.find(m => distToSegment(p, m.a, m.b) <= tol());
         if (hit) { deleteMeasure(store, hit.id); return; }
       }
       const s = snap(p);
