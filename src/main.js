@@ -17,6 +17,7 @@ import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
 import { createLibraryPanel } from './ui/libraryPanel.js';
 import { createMaterialPanel } from './ui/materialPanel.js';
+import { openMaterialEditor } from './ui/materialEditor.js';
 import { panelsToCancel } from './ui/panelModes.js';
 import { applyMaterial } from './state/materialOps.js';
 import { createLayersPanel } from './ui/layersPanel.js';
@@ -90,6 +91,7 @@ const materials = createMaterialPanel(shell.els.materials, {
   },
 });
 surfaceActions.replaceMaterial = target => { materials.setMode('replace', { target }); shell.showPanel('materials'); };
+surfaceActions.openEditor = (wallId, side) => { if (wallId) openMaterialEditor({ store, wallId, side }); };
 // 라이브러리·마감재 "교체 모드"를 끄는 한 곳. Esc·도구 전환·다른 패널로 이동이 모두 이것을 부른다(배너 문구와 동작을 맞춘다).
 // 레일 탭을 누른 경우에는 그 탭의 패널만 자기 모드를 지킨다(panelModes.js) — 제품↔마감재를 오가도 상대 패널이 꺼진다.
 const cancelReplace = (clickedPanel = null) => {
