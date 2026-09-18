@@ -9,7 +9,7 @@ import { wallLength } from '../geom/walls.js';
 import { reattach, seatCopies, copyRoomProps, cloneProp } from './floorInternal.js';
 
 // 기본 층 이름은 아직 쓰이지 않는 가장 작은 Floor N이다("Floor 2"가 이미 있으면 Floor 3).
-function defaultFloorName(floors) {
+export function defaultFloorName(floors) {
   const used = new Set(floors.map(f => f.name));
   let n = 1;
   while (used.has(`Floor ${n}`)) n += 1;
@@ -68,3 +68,7 @@ export function totalArea(floor, areaMode = 'net') {
   const walls = (floor.walls ?? []).reduce((s, w) => s + wallLength(w) * w.thickness, 0) / 1e6;
   return net + walls;
 }
+
+// 방 속성 목록(ROOM_PROPS)과 층 복사용 속성 이전(copyRoomProps)은 floorInternal.js가 정본이다.
+// 여기서 다시 내보내기만 한다: 정의를 두 벌 두면 Task 2가 더한 floorMat·ceilingMat가 한쪽에만 남는다.
+export { ROOM_PROPS, copyRoomProps } from './floorInternal.js';

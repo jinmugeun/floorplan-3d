@@ -335,3 +335,25 @@ test('every floor op forwards opts to the dispatch, so a transaction stays one u
   expect(steps()).toBe(2); // 트랜잭션 한 단계 + setup의 addWalls 한 단계
   expect(activeFloor(s.get()).walls).toHaveLength(0);
 });
+
+test('층 관리 export는 floorMgmt에 모이고 floorOps가 같은 것을 다시 내보낸다', async () => {
+  const mgmt = await import('../src/state/floorMgmt.js');
+  const ops = await import('../src/state/floorOps.js');
+  const internal = await import('../src/state/floorInternal.js');
+  for (const name of ['addFloor', 'setActiveFloor', 'renameFloor', 'updateFloor', 'deleteFloor', 'totalArea', 'copyRoomProps', 'defaultFloorName']) {
+    expect(typeof mgmt[name], name).toBe('function');
+    expect(ops[name], name).toBe(mgmt[name]);
+  }
+  // ROOM_PROPS·copyRoomProps의 정본은 floorInternal.js다: floorMgmt는 재내보내기만 한다(정의가 두 벌이면 안 된다).
+  expect(mgmt.ROOM_PROPS).toBe(internal.ROOM_PROPS);
+  expect(mgmt.copyRoomProps).toBe(internal.copyRoomProps);
+  expect(ops.ROOM_PROPS).toBe(internal.ROOM_PROPS);
+  expect(mgmt.ROOM_PROPS).toContain('floorMat');       // Task 2가 더한 두 키
+  expect(mgmt.ROOM_PROPS).toContain('ceilingMat');
+  expect(mgmt.defaultFloorName([{ name: 'Floor 1' }, { name: 'Floor 3' }])).toBe('Floor 2');
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  ops.addFloor(store, { copy: 'all' });
+  expect(store.get().floors).toHaveLength(2);
+  expect(ops.totalArea(activeFloor(store.get()), 'net')).toBeCloseTo(activeFloor(store.get()).rooms[0].area, 6);
+});
