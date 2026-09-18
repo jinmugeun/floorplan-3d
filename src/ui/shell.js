@@ -3,10 +3,11 @@ import { activeFloor } from '../state/schema.js';
 import { toast } from './toast.js';
 import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
+import { fmtLen, parseLen } from '../util/units.js';
 
 
 const LABELS = { reference: '기준선', thickness: '두께', snap: '스냅 모드', ortho: '직교 모드', direction: '방향' };
-// 길이 옵션은 라벨에 현재 단위를 붙인다. 입력값은 아직 mm 숫자 그대로다(ft·in 입력란은 2B에서).
+// 길이 옵션은 라벨에 현재 단위를 붙이고, ft·in 모드에서는 속성 패널과 같은 텍스트 입력이 된다.
 const LEN_OPTS = new Set(['thickness']);
 const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
@@ -88,6 +89,11 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
   });
   q('#btnBgLock').addEventListener('click', () => store.dispatch(d => { if (d.background) d.background.locked = !d.background.locked; }, { record: false }));
 
+  // 미니맵 높이(CSS resize)를 브라우저에 기억한다.
+  const mini = q('#minimap');
+  try { const h = Number(localStorage.getItem('kvp.minimapH')); if (h >= 80 && h <= 600) mini.style.height = `${h}px`; } catch { /* 저장 불가 */ }
+  mini.addEventListener('pointerup', () => { try { localStorage.setItem('kvp.minimapH', String(Math.round(mini.getBoundingClientRect().height || parseFloat(mini.style.height) || 0))); } catch { /* 저장 불가 */ } });
+
   function showPanel(name) {
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== name);
@@ -148,7 +154,12 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
     els.optionBar.innerHTML = hasOpts ? Object.entries(tool.opts).map(([k, v]) => {
       const label = `${LABELS[k] ?? k}${LEN_OPTS.has(k) ? ` (${unitLabel(store.get().units ?? 'mm')})` : ''}`;
       if (typeof v === 'boolean') return `<label><input type="checkbox" name="${k}" ${v ? 'checked' : ''}> ${label}</label>`;
-      if (typeof v === 'number') return `<label>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
+      if (typeof v === 'number') {
+        const units = store.get().units ?? 'mm';
+        // 길이 옵션(두께)은 ft·in 모드에서 텍스트 입력이 된다(속성 패널의 lenField와 같은 규칙).
+        if (LEN_OPTS.has(k) && units === 'ftin') return `<label>${label} <input type="text" name="${k}" data-len="1" value="${esc(fmtLen(v, 'ftin'))}"></label>`;
+        return `<label>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
+      }
       if (k === 'reference') return `<label>${label} <select name="${k}">${REF.map(([val, l]) => `<option value="${val}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
       if (k === 'direction') return `<label>${label} <select name="${k}"><option value="v" ${v === 'v' ? 'selected' : ''}>세로</option><option value="h" ${v === 'h' ? 'selected' : ''}>가로</option></select></label>`;
       return `<label>${label} <input type="text" name="${k}" value="${v}"></label>`;
@@ -157,6 +168,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
   }
   els.optionBar.addEventListener('change', ev => {
     const el = ev.target, k = el.name; if (!currentTool || !k) return;
+    // ft·in 텍스트 입력은 mm로 되돌려 저장한다. 읽을 수 없는 입력은 값을 바꾸지 않고 현재 값으로 되돌린다.
+    if (el.dataset.len) { const mm = parseLen(el.value, store.get().units ?? 'mm'); if (mm === null) { el.value = fmtLen(currentTool.opts[k], 'ftin'); return; } currentTool.opts[k] = Math.round(mm); return; }
     currentTool.opts[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
   });
   // 안내 문구를 누르면 도구가 스스로 취소한다(배치 도구의 "메시지를 누르면 취소").
@@ -174,10 +187,10 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
     root.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === s.tool));
     root.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === s.mode));
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
-    const is3d = s.mode !== '2d';
-    q('#btnCam').hidden = !is3d; q('#btnSun').hidden = !is3d;
+    const isIso = s.mode === 'iso';   // 평면 뷰어·1인칭에는 궤도 카메라·햇빛 조절이 뜻이 없다
+    q('#btnCam').hidden = !isIso; q('#btnSun').hidden = !isIso;
     syncGizmoVisible(s);
-    if (!is3d && (popKind === 'cam' || popKind === 'sun')) pop.close();
+    if (!isIso && (popKind === 'cam' || popKind === 'sun')) pop.close();
     if (s.fpPick) { els.banner.hidden = false; els.banner.innerHTML = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소'; }
     else if (s.matPick) {
       els.banner.hidden = false;

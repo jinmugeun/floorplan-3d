@@ -285,3 +285,42 @@ test('상단 바에 출력 버튼이 순서대로 있다', () => {
   const ids = [...root.querySelectorAll('#topbar button')].map(b => b.id).filter(Boolean);
   expect(ids).toEqual(['btnUndo', 'btnRedo', 'btnRender', 'btnGallery', 'btnEstimate', 'btnSpec', 'btnNew', 'btnMore', 'btnSettings', 'btnCapture', 'btnLoad', 'btnSave']);
 });
+
+test('옵션 바 두께는 ft·in 모드에서 텍스트 입력이 되고 mm로 저장된다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  const tool = { name: 'wall', opts: { thickness: 200 } };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionBar input[name="thickness"]');
+  expect(el.type).toBe('text');
+  expect(el.dataset.len).toBe('1');
+  el.value = `1' 0"`; el.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(tool.opts.thickness).toBe(305);          // 12인치 = 304.8 → 반올림
+  el.value = '엉터리'; el.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(tool.opts.thickness).toBe(305);          // 잘못된 입력은 값을 바꾸지 않는다
+});
+
+test('카메라 설정·햇빛은 ISO 3D에서만 보인다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState();
+  createShell(root, { store: createStore(createEmptyProject()), ui });
+  const shown = () => [root.querySelector('#btnCam').hidden, root.querySelector('#btnSun').hidden];
+  ui.set({ mode: 'iso' }); expect(shown()).toEqual([false, false]);
+  ui.set({ mode: 'plan' }); expect(shown()).toEqual([true, true]);
+  ui.set({ mode: 'fp' }); expect(shown()).toEqual([true, true]);
+  ui.set({ mode: '2d' }); expect(shown()).toEqual([true, true]);
+});
+
+test('미니맵 높이는 조절되고 localStorage에 남는다', () => {
+  localStorage.setItem('kvp.minimapH', '320');
+  const root = document.createElement('div'); document.body.appendChild(root);
+  createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const mm = root.querySelector('#minimap');
+  expect(mm.style.height).toBe('320px');
+  mm.style.height = '150px';
+  mm.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+  expect(localStorage.getItem('kvp.minimapH')).toBe('150');
+  localStorage.clear();
+});
