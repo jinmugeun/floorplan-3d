@@ -183,6 +183,23 @@ describe('3D 아이템 피커', () => {
     expect(a.ui.get().selection).toBeNull();
   });
 
+  // I-3: 1인칭으로 들어갈 때 기즈모가 남으면 걷는 화면에 헬퍼가 그려지고 보이지 않는 편집이 된다.
+  // view3d의 fp 분기가 떼는 것을 잊어도(ui 구독이 그 사이에 붙이려 해도) 피커가 스스로 거절한다.
+  test('1인칭에서는 기즈모를 붙이지 않고 이미 붙은 것은 떼어 낸다', () => {
+    const a = setupPicker();
+    const id = addItem(a.store, createItem(productById('sofa-3'), { pos: [1000.5, 2000.25] }));
+    a.ui.set({ selection: { type: 'item', id } });
+    a.picker.attach({ type: 'item', id });
+    expect(a.gizmo.object).toBeTruthy();
+    a.setMode('fp');
+    a.picker.attach({ type: 'item', id });
+    expect(a.gizmo.object).toBeUndefined();
+    expect(a.gizmo.enabled).toBe(false);
+    a.setMode('iso'); // 1인칭을 나오면 다시 붙는다
+    a.picker.attach({ type: 'item', id });
+    expect(a.gizmo.object).toBeTruthy();
+  });
+
   test('1인칭에서는 클릭·우클릭이 선택을 건드리지 않는다', () => {
     const a = setupPicker();
     const id = addItem(a.store, createItem(productById('sofa-3'), { pos: [0, 0] }));

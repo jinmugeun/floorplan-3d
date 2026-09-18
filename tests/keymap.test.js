@@ -119,9 +119,25 @@ function setupReal() {
   const view = { camera: { scale: 0.1 }, fit: vi.fn(), requestRender: vi.fn(), tool: null };
   view.tool = createSelectTool({ store, ui, view });
   const setTool = vi.fn();
-  const h = createKeyHandler({ store, ui, view, setTool, setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn() });
-  return { store, ui, setTool, esc: () => h({ key: 'Escape', target: document.body, preventDefault() {} }) };
+  const cancelReplace = vi.fn();
+  const h = createKeyHandler({ store, ui, view, setTool, setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn(), cancelReplace });
+  return { store, ui, setTool, cancelReplace, esc: () => h({ key: 'Escape', target: document.body, preventDefault() {} }), key: (k, extra = {}) => h({ key: k, target: document.body, preventDefault() {}, ...extra }) };
 }
+
+// I-4: 라이브러리 "교체할 제품을 선택하세요" 배너가 Esc를 약속한다. 선택이 있으면 선택 도구가 Esc를
+// 소비하므로, 교체 모드 취소는 도구보다 앞에서 불려야 한다.
+test('Escape cancels the library replace mode even when the select tool consumes the key', () => {
+  const a = setupReal();
+  a.ui.set({ selection: { type: 'item', id: 'i_없음' } }); // 도구가 소비하는 상황
+  a.esc();
+  expect(a.cancelReplace).toHaveBeenCalledTimes(1);
+  expect(a.setTool).not.toHaveBeenCalled();
+  a.esc(); // 취소할 것이 없어 앱까지 오는 경우에도 한 번 더 불린다
+  expect(a.cancelReplace).toHaveBeenCalledTimes(2);
+  expect(a.setTool).toHaveBeenCalledWith('select');
+  a.key('a'); a.key('Delete'); // 다른 키는 교체 모드를 건드리지 않는다
+  expect(a.cancelReplace).toHaveBeenCalledTimes(2);
+});
 
 test('Escape clears soloRoom through the app even with the real select tool active', () => {
   const a = setupReal();

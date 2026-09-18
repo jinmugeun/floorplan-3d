@@ -237,6 +237,7 @@ test('context menu items depend on what is under the cursor', () => {
   const roomItems = t.onContextMenu([2000, 1500], {});
   expect(ui.get().selection).toEqual({ type: 'room', id: f.rooms[0].id }); // 방도 우클릭 즉시 선택된다
   expect(roomItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(['방 복사', '마감재 복사', '재질 교체', '단일 공간 모드', 'sep', '삭제']);
+  expect(roomItems[0].shortcut).toBeUndefined(); // M-10: Ctrl+C는 방 복사에 묶여 있지 않다(없는 단축키를 표기하지 않는다)
   expect(roomItems[1].disabled).toBe(true);
   roomItems[0].onSelect();
   expect(activeFloor(store.get()).rooms).toHaveLength(2);

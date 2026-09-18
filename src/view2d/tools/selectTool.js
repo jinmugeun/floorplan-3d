@@ -178,7 +178,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
       const r = f.rooms.find(x => pointInPolygon(p, x.points));
       if (r) ui.set({ selection: { type: 'room', id: r.id } });
       if (r) return [
-        { label: '방 복사', shortcut: 'Ctrl+C', onSelect: () => duplicateRoom(store, r.id) },
+        { label: '방 복사', onSelect: () => duplicateRoom(store, r.id) }, // Ctrl+C는 아이템 복사 전용이다: 없는 단축키를 표기하지 않는다(M-10)
         { label: '마감재 복사', disabled: true, title: '미지원' },
         { label: '재질 교체', onSelect: () => ui.set({ selection: { type: 'room', id: r.id }, focusField: 'floorColor' }) },
         { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: r.id }, soloRoom: r.id }) },

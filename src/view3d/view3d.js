@@ -153,6 +153,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
       store.dispatch(d => { d.view.projection = 'perspective'; }, { record: false });
       controls.enabled = false; const at = opts.at ?? center();
       camera.position.copy(toThree([at[0], at[1], 1500])); camera.lookAt(toThree([at[0], at[1] - 1000, 1500]));
+      reattachPicker(); // 1인칭에는 기즈모가 없다: 아이템을 고른 채 들어오면 여기서 떼어 낸다(보이지 않는 편집 방지)
       window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); fp.lock();
       group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); showAllWalls();
       requestRender(); return;
@@ -219,9 +220,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
     if (sig !== lastSig) { lastSig = sig; rebuild(); }
     applyViewSettings(); requestRender();
   });
-  const unsubUi = ui.subscribe(s => {
-    if (mode === 'fp' || useOrtho) picker.detach();
-    else if (!picker.isDragging()) picker.attach(s.selection);   // 기즈모 드래그 중에는 붙이지 않는다
+  const unsubUi = ui.subscribe(() => {
+    reattachPicker(); // 붙일지 뗄지는 한 곳(reattachPicker)에서만 판단한다
     requestRender();
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);

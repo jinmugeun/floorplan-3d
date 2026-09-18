@@ -10,6 +10,11 @@ const LABELS = { reference: '기준선', thickness: '두께', snap: '스냅 모�
 const LEN_OPTS = new Set(['thickness']);
 const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
+// 기즈모 모드 토글은 3D 궤도 뷰에서 기즈모가 실제로 붙는 아이템 하나를 골랐을 때만 쓸 일이 있다.
+// 1인칭·2D 투영(ortho)에는 기즈모가 없고, 벽 부착·잠긴 아이템에도 붙지 않으므로 버튼도 숨긴다.
+export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {}) {
+  return mode !== '2d' && mode !== 'fp' && !ortho && !!item && !item.locked && !(item.attach === 'wall' && item.wallId);
+}
 
 export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
   root.innerHTML = `
@@ -154,16 +159,21 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
   // 안내 문구를 누르면 도구가 스스로 취소한다(배치 도구의 "메시지를 누르면 취소").
   els.optionBar.addEventListener('click', ev => { if (ev.target.dataset.action === 'hintCancel') currentTool?.onHintClick?.(); });
 
+  // 2D 투영 뷰 이름. view3d가 onOrthoView로 알려 주면 setOrtho로 들어온다(기즈모 버튼 표시가 여기에 걸린다).
+  let orthoName = null;
+  const syncGizmoVisible = (s = ui.get()) => {
+    const item = s.selection?.type === 'item' ? activeFloor(store.get())?.items.find(i => i.id === s.selection.id) : null;
+    q('#btnGizmoMode').hidden = !gizmoBtnVisible({ mode: s.mode, ortho: orthoName, item });
+  };
+  const setOrtho = name => { orthoName = name ?? null; syncGizmoVisible(); };
+
   ui.subscribe(s => {
     root.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === s.tool));
     root.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === s.mode));
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
     const is3d = s.mode !== '2d';
     q('#btnCam').hidden = !is3d; q('#btnSun').hidden = !is3d;
-    // 기즈모 모드 토글은 3D에서 아이템 하나를 골랐을 때만 쓸 일이 있다(1인칭에는 기즈모가 없다).
-    // 벽 부착·잠긴 아이템은 3D에서 기즈모가 붙지 않으므로 버튼도 숨긴다.
-    const gizmoItem = s.selection?.type === 'item' ? activeFloor(store.get())?.items.find(i => i.id === s.selection.id) : null;
-    q('#btnGizmoMode').hidden = !(is3d && s.mode !== 'fp' && gizmoItem && !gizmoItem.locked && !(gizmoItem.attach === 'wall' && gizmoItem.wallId));
+    syncGizmoVisible(s);
     if (!is3d && (popKind === 'cam' || popKind === 'sun')) pop.close();
     if (s.fpPick) { els.banner.hidden = false; els.banner.innerHTML = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소'; }
     else if (s.soloRoom) { els.banner.hidden = false; els.banner.innerHTML = '단일 공간 모드 <button type="button" id="btnExitSolo">도면 전체 보기</button>'; q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); }
@@ -189,5 +199,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
     }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, showPanel, toast, popover: pop, refreshPopover };
+  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover };
 }

@@ -95,6 +95,22 @@ describe('라이브러리 패널', () => {
     expect(panel.state.mode).toBe('place'); // 한 번 교체하면 배치 모드로 돌아간다
   });
 
+  // I-4: setMode('place')가 교체 모드를 되돌리는 유일한 문이다(main.js의 cancelReplace가 Esc·도구
+  // 전환·패널 이동에서 이것을 부른다). 되돌린 뒤 타일을 누르면 교체가 아니라 배치여야 한다.
+  test("setMode('place')가 교체 모드를 되돌리고 다음 타일 클릭은 배치가 된다", () => {
+    const { el, panel, picked } = setup();
+    panel.setMode('replace', { itemIds: ['i1', 'i2'] });
+    expect(panel.state.mode).toBe('replace');
+    expect(el.querySelector('[data-part="note"]').hidden).toBe(false);
+    panel.setMode('place'); // = cancelReplace()
+    expect(panel.state.mode).toBe('place');
+    expect(panel.state.replaceIds).toEqual([]);
+    expect(el.querySelector('[data-part="note"]').hidden).toBe(true);
+    click(el, '[data-cat="소파"]'); click(el, '[data-sub="소파"]');
+    click(el, '.tile[data-id="sofa-2"]');
+    expect(picked).toEqual([['sofa-2', 'place']]);
+  });
+
   test('toggleFav는 localStorage가 막혀 있어도 예외를 던지지 않는다', () => {
     const orig = localStorage.setItem;
     localStorage.setItem = () => { throw new Error('denied'); };

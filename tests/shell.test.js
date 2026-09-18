@@ -3,7 +3,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
-import { createShell } from '../src/ui/shell.js';
+import { createShell, gizmoBtnVisible } from '../src/ui/shell.js';
 
 test('shell renders regions and option bar reflects tool opts', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
@@ -225,4 +225,35 @@ test('기즈모 모드 버튼은 벽 부착·잠긴 아이템에는 보이지 �
   expect(btn.hidden).toBe(true);   // 잠김
   ui.set({ selection: { type: 'item', id: '없음' } });
   expect(btn.hidden).toBe(true);   // 없는 아이템
+});
+
+// M-9: 2D 투영 뷰(정면·평면 …)는 고정 카메라라 view3d가 기즈모를 떼어 둔다. 버튼만 남으면 눌러도
+// 아무 일도 일어나지 않으므로, view3d의 onOrthoView가 shell.setOrtho로 표시 여부를 함께 갱신한다.
+test('기즈모 모드 버튼은 2D 투영 뷰에서 숨고 투영을 벗어나면 돌아온다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState(); const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.floors[0].items = [{ id: 'i1', attach: 'floor', wallId: null, locked: false, pos: [0.5, 0.25], size: [600, 600, 600] }]; });
+  const shell = createShell(root, { store, ui });
+  const btn = root.querySelector('#btnGizmoMode');
+  ui.set({ mode: 'iso', selection: { type: 'item', id: 'i1' } });
+  expect(btn.hidden).toBe(false);
+  shell.setOrtho('front');
+  expect(btn.hidden).toBe(true);
+  ui.set({ selection: null }); ui.set({ selection: { type: 'item', id: 'i1' } }); // 투영 중에는 다시 골라도 숨은 채다
+  expect(btn.hidden).toBe(true);
+  shell.setOrtho(null);
+  expect(btn.hidden).toBe(false);
+});
+
+test('gizmoBtnVisible은 모드·투영·아이템 상태를 함께 본다', () => {
+  const item = { locked: false, attach: 'floor', wallId: null };
+  expect(gizmoBtnVisible({ mode: 'iso', item })).toBe(true);
+  expect(gizmoBtnVisible({ mode: '2d', item })).toBe(false);
+  expect(gizmoBtnVisible({ mode: 'fp', item })).toBe(false);
+  expect(gizmoBtnVisible({ mode: 'iso', ortho: 'top', item })).toBe(false);
+  expect(gizmoBtnVisible({ mode: 'iso', item: null })).toBe(false);
+  expect(gizmoBtnVisible({ mode: 'iso', item: { ...item, locked: true } })).toBe(false);
+  expect(gizmoBtnVisible({ mode: 'iso', item: { attach: 'wall', wallId: 'w1' } })).toBe(false);
+  expect(gizmoBtnVisible({ mode: 'iso', item: { attach: 'wall', wallId: null } })).toBe(true); // 벽에서 떨어진 벽 부착 제품
+  expect(gizmoBtnVisible()).toBe(false);
 });

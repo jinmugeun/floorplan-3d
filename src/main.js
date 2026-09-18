@@ -63,11 +63,20 @@ const itemActions = {
     openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(`${made.length}개 복사했습니다`); } });
   },
 };
-const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions, onOrthoView: name => { if (viewPreset) viewPreset.value = name ?? ''; } });
+const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions, onOrthoView: name => { if (viewPreset) viewPreset.value = name ?? ''; shell.setOrtho(name); } }); // 투영 뷰에서는 기즈모가 없으므로 버튼도 함께 숨긴다
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
-function replaceProductOf(itemIds, product) { if (itemIds?.length) { replaceProduct(store, itemIds, product); shell.toast('제품을 교체했습니다'); } }
+// 교체 대상이 그 사이 지워졌을 수 있다: 실제로 바꾼 개수를 세어 토스트를 띄운다.
+function replaceProductOf(itemIds, product) {
+  const live = itemsOf(store.get(), itemIds ?? []).map(i => i.id);
+  if (!live.length) { shell.toast('교체할 제품이 없습니다'); return; }
+  replaceProduct(store, live, product);
+  shell.toast(`제품 ${live.length}개를 교체했습니다`);
+}
 const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
+// 라이브러리 "교체 모드"를 끄는 한 곳. Esc·도구 전환·다른 패널로 이동이 모두 이것을 부른다(배너 문구와 동작을 맞춘다).
+const cancelReplace = () => library.setMode('place');
+document.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => { if (b.dataset.panel !== 'products') cancelReplace(); }));
 createLayersPanel(shell.els.layers, { store, ui });
 createPropsPanel(shell.els.props, store, ui, { deleteSelection, itemActions });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
@@ -107,7 +116,7 @@ const tools = {
   measure: () => createMeasureTool({ store, opts: toolOpts.measure }),
   place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select') }),
 };
-function setTool(name) { const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
+function setTool(name) { cancelReplace(); const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
 // 라이브러리에서 제품을 고르면 배치 도구를 켠다(오늘의집과 같은 동작: 한 번 배치하면 선택 도구로 돌아간다).
 function startPlace(product) { pendingProduct = product; setTool('place'); }
 function setMode(mode, opts) {
@@ -200,6 +209,6 @@ canvasWrap.addEventListener('drop', async ev => {
   }
 });
 
-window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, itemActions }));
+window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions }));
 setTool('select'); view.fit(); minimap.fit(500);
 if (import.meta.env.DEV) window.__app = { store, ui, view, view3d }; // 브라우저 검증용, 개발 빌드에서만
