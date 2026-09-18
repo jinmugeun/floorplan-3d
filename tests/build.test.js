@@ -229,7 +229,7 @@ test('applyAssignment는 map·repeat·offset·rotation을 세팅하고 화이트
   expect(m.map.offset.x).toBeCloseTo(0.5, 6);       // 150 / 300
   expect(m.map.offset.y).toBeCloseTo(75.5 / 300, 6);
   expect(m.map.rotation).toBeCloseTo(Math.PI / 2, 6);
-  expect(m.map.center.x).toBe(0.5);
+  expect(m.map.center.x).toBe(0);                  // 회전·오프셋은 원점 기준(조각 위상이 렌더에서도 맞게)
   expect(m.color.getHex()).toBe(0xffffff);
   const w = new THREE.MeshStandardMaterial();
   applyAssignment(w, assign('tile-white-300'), [3000, 2400], { display: 'white' });
@@ -388,6 +388,14 @@ test('개구부 조각의 무늬 위상이 문 없는 벽·옆 조각과 이어�
   expect(right.material.map.offset.x).toBeCloseTo(bodyMap.repeat.x * 2.45 + bodyMap.offset.x, 6);
   // 조각끼리도 이어진다: 왼쪽 조각의 끝 위상 + 문 폭(900 mm) = 오른쪽 조각의 시작 위상.
   expect(left.material.map.offset.x + left.material.map.repeat.x + 900 / 230).toBeCloseTo(right.material.map.offset.x, 6);
+  // 렌더가 실제로 쓰는 uv 행렬(offset·repeat·rotation·center)로 텍셀을 구해도 이어져야 한다: 오른쪽 조각의 왼쪽 아래(uv 0,0)와
+  // 문 없는 본체의 u = 2.45 m, 인방의 왼쪽 아래와 본체의 (1.55 m, 2.1 m)가 같은 무늬 칸 위상(mod 1)에 있다.
+  const texel = (map, u, v) => { map.updateMatrix(); const p = new THREE.Vector3(u, v, 1).applyMatrix3(map.matrix); return [p.x, p.y]; };
+  const frac = x => ((x % 1) + 1) % 1;
+  const same = (a, b) => { for (let i = 0; i < 2; i++) expect(Math.abs(frac(a[i]) - frac(b[i])) < 1e-6 || Math.abs(frac(a[i]) - frac(b[i])) > 1 - 1e-6, `texel :  vs `).toBe(true); };
+  same(texel(right.material.map, 0, 0), texel(bodyMap, 2.45, 0));
+  same(texel(lintel.material.map, 0, 0), texel(bodyMap, 1.55, 2.1));
+  same(texel(left.material.map, 1, 0), texel(bodyMap, 1.55, 0)); // 왼쪽 조각의 오른쪽 끝(u 1550)
   // 벽 양면 모두 u가 "벽 시작점 → 끝점"으로 흐른다(BoxGeometry의 −z 면은 기본이 반대라 뒤집었다).
   const pos = right.geometry.attributes.position, uv = right.geometry.attributes.uv;
   for (const mi of [4, 5]) {

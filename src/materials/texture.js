@@ -66,7 +66,7 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   const shift = Array.isArray(uvShift) ? uvShift : [0, 0];
   const shifted = i => (Number(assignment.offset?.[i]) || 0) + (Number(shift[i]) || 0);
   t.offset.set(shifted(0) / (m.scale[0] || 1000), shifted(1) / (m.scale[1] || 1000));
-  t.center.set(0.5, 0.5);
+  t.center.set(0, 0);                             // center 0.5는 setUvTransform에 repeat에 비례한 항을 넣어 uvShift 위상을 깨뜨린다(원점 기준 회전)
   t.rotation = ((Number(assignment.angle) || 0) * Math.PI) / 180;
   t.userData.clone = true;                        // disposeGroup이 복제본만 정리한다
   t.needsUpdate = true;
