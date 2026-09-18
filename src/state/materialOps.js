@@ -1,0 +1,73 @@
+// 마감재 상태 변경은 모두 이 파일을 지난다(속성 패널·메뉴·면 피커·마감재 편집기가 같은 함수를 쓴다).
+// target = { kind:'wall', id, side:'in'|'out' } | { kind:'floor', id } | { kind:'ceiling', id }
+import { activeFloor, normalizeAssignment, normalizeRegion } from './schema.js';
+import { wallLength } from '../geom/walls.js';
+
+export const MAT_TARGET_LABELS = { in: '내벽 재질', out: '외벽 재질', floor: '바닥 재질', ceiling: '천장 재질' };
+const matKey = side => (side === 'out' ? 'matOut' : 'matIn');
+const sideKey = side => (side === 'out' ? 'out' : 'in');
+
+// assignment가 null이면 미지정으로 되돌린다. opts는 store.dispatch로 그대로 넘어간다
+// (트랜잭션 안에서 여러 면을 한 단계로 바꿀 때 { record: false }가 필요하다).
+export function applyMaterial(store, target, assignment, opts = {}) {
+  const a = assignment === null ? null : normalizeAssignment(assignment);
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    if (target?.kind === 'wall') {
+      const w = f.walls.find(x => x.id === target.id);
+      if (w) w[matKey(target.side)] = a ? { ...a, offset: [...a.offset] } : null;
+      return;
+    }
+    const r = f.rooms.find(x => x.id === target?.id);
+    if (!r) return;
+    if (target.kind === 'floor') r.floorMat = a ? { ...a, offset: [...a.offset] } : null;
+    if (target.kind === 'ceiling') r.ceilingMat = a ? { ...a, offset: [...a.offset] } : null;
+  }, opts);
+}
+
+// "마감재 방 전체 벽에 적용": 그 방이 소유한 벽의 내벽 재질을 한 dispatch로 바꾼다(undo 한 단계).
+export function applyRoomWalls(store, roomId, assignment, opts = {}) {
+  const a = assignment === null ? null : normalizeAssignment(assignment);
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    const r = f.rooms.find(x => x.id === roomId);
+    if (!r) return;
+    for (const w of f.walls) if (r.wallIds.includes(w.id)) w.matIn = a ? { ...a, offset: [...a.offset] } : null;
+  }, opts);
+}
+
+// 마감재 편집기의 [적용]. 벽 길이·높이로 범위를 자르고 잘못된 영역은 버린다.
+export function setWallRegions(store, wallId, side, regions, opts = {}) {
+  return store.dispatch(d => {
+    const f = activeFloor(d);
+    const w = f.walls.find(x => x.id === wallId);
+    if (!w) return;
+    const clean = (regions ?? []).map(r => normalizeRegion(r, { len: wallLength(w), height: w.height })).filter(Boolean);
+    w.regions = { in: [...(w.regions?.in ?? [])], out: [...(w.regions?.out ?? [])] };
+    w.regions[sideKey(side)] = clean;
+  }, opts);
+}
+
+export function assignmentOf(floor, target) {
+  if (!target) return null;
+  if (target.kind === 'wall') return floor.walls.find(x => x.id === target.id)?.[matKey(target.side)] ?? null;
+  const r = floor.rooms.find(x => x.id === target.id);
+  if (!r) return null;
+  return (target.kind === 'ceiling' ? r.ceilingMat : r.floorMat) ?? null;
+}
+
+export function regionsOf(floor, target) {
+  if (target?.kind !== 'wall') return [];
+  return floor.walls.find(x => x.id === target.id)?.regions?.[sideKey(target.side)] ?? [];
+}
+
+// 면 면적(m²). 견적서가 쓴다. 벽은 중심선 길이 × 벽 높이, 방은 검출된 실면적.
+export function faceArea(floor, target) {
+  if (!target) return 0;
+  if (target.kind === 'wall') {
+    const w = floor.walls.find(x => x.id === target.id);
+    return w ? (wallLength(w) * w.height) / 1e6 : 0;
+  }
+  const r = floor.rooms.find(x => x.id === target.id);
+  return r ? Number(r.area) || 0 : 0;
+}

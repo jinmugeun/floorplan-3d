@@ -66,7 +66,7 @@ export function seatCopies(drafts, ctx = {}) {
 // 흩어지지 않게 한 곳에서 걸러 낸다. updateItems 자체에는 넣지 않는다(setItemFlag의 잠금 해제가 막힌다).
 export const movable = items => (items ?? []).filter(i => !i.locked);
 
-export const ROOM_PROPS = ['name', 'type', 'height', 'floorOffset', 'hideCeiling', 'seats', 'floorColor', 'ceilingColor', 'matchWallHeight'];
+export const ROOM_PROPS = ['name', 'type', 'height', 'floorOffset', 'hideCeiling', 'seats', 'floorColor', 'ceilingColor', 'matchWallHeight', 'floorMat', 'ceilingMat'];
 // 복사한 층은 벽 id가 달라 방 자카드 매칭이 되지 않으므로, 중심점이 같은 방에서 속성을 옮긴다.
 export function copyRoomProps(fromRooms, toRooms) {
   for (const r of toRooms) {

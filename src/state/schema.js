@@ -1,5 +1,6 @@
 import { makeWall } from '../geom/walls.js';
 import { detectRooms, ROOM_FLOOR_COLOR, ROOM_CEILING_COLOR } from '../geom/rooms.js';
+import { materialById } from '../materials/catalog.js';
 
 let counter = 0;
 export const SCHEMA_VERSION = 1;
@@ -56,7 +57,18 @@ const color = (v, def) => (typeof v === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(v
 function normalizeWall(w) {
   const base = makeWall({ a: [0, 0], b: [0, 0] });
   const src = obj(w);
-  return { ...base, ...src, id: str(src.id, base.id), a: pair(src.a), b: pair(src.b), thickness: num(src.thickness, base.thickness, 2, 1000), height: num(src.height, base.height, 2, 8000), colorIn: color(src.colorIn, base.colorIn), colorOut: color(src.colorOut, base.colorOut) };
+  const a = pair(src.a), b = pair(src.b);
+  const thickness = num(src.thickness, base.thickness, 2, 1000);
+  const height = num(src.height, base.height, 2, 8000);
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const rg = obj(src.regions);
+  const side = list => arr(list).map(r => normalizeRegion(r, { len, height })).filter(Boolean);
+  return {
+    ...base, ...src, id: str(src.id, base.id), a, b, thickness, height,
+    colorIn: color(src.colorIn, base.colorIn), colorOut: color(src.colorOut, base.colorOut),
+    matIn: normalizeAssignment(src.matIn), matOut: normalizeAssignment(src.matOut),
+    regions: { in: side(rg.in), out: side(rg.out) },
+  };
 }
 export const ITEM_RANGE = { size: [10, 5000], rot: [0, 360], z: [-1000, 8000], t: [0, 1] };
 const deg360 = v => { const n = Number(v); return Number.isFinite(n) ? ((n % 360) + 360) % 360 : 0; };
@@ -85,6 +97,36 @@ export function normalizeItem(it) {
     flipH: !!src.flipH, flipV: !!src.flipV, locked: !!src.locked, hidden: !!src.hidden,
   };
 }
+
+export const MAT_RANGE = { offset: [0, 1000], angle: [0, 360] };
+
+// 마감재 지정 한 칸. 카탈로그에 없는 id는 미지정(null)으로 만든다(옛 파일·지워진 재질).
+export function normalizeAssignment(a) {
+  const src = obj(a);
+  const id = str(src.id, '');
+  if (!materialById(id)) return null;
+  const off = Array.isArray(src.offset) ? src.offset : [];
+  return {
+    id,
+    offset: [num(off[0], 0, MAT_RANGE.offset[0], MAT_RANGE.offset[1]), num(off[1], 0, MAT_RANGE.offset[0], MAT_RANGE.offset[1])],
+    angle: deg360(src.angle),
+  };
+}
+// 벽 면의 일부를 덮는 영역. band는 벽 전체 폭이라 u0/u1을 무시하고 0~len으로 채운다.
+// 재질이 없거나 범위가 뒤집혔으면 null(호출자가 걸러낸다).
+export function normalizeRegion(r, { len = 0, height = 0 } = {}) {
+  const src = obj(r);
+  const mat = normalizeAssignment(src.mat);
+  if (!mat) return null;
+  const kind = src.kind === 'rect' ? 'rect' : 'band';
+  const z0 = num(src.z0, 0, 0, height), z1 = num(src.z1, height, 0, height);
+  if (!(z1 > z0)) return null;
+  const u0 = kind === 'band' ? 0 : num(src.u0, 0, 0, len);
+  const u1 = kind === 'band' ? len : num(src.u1, len, 0, len);
+  if (!(u1 > u0)) return null;
+  return { id: str(src.id, uid('rg')), kind, u0, u1, z0, z1, mat };
+}
+
 // 카탈로그 제품에서 아이템을 만든다. 천장 부착의 z는 배치 도구가 층 높이에서 다시 계산한다.
 export function createItem(product, patch = {}) {
   return normalizeItem({
@@ -105,6 +147,7 @@ function normalizeFloor(f, index) {
     ...r, points: arr(r.points).map(p => pair(p)), wallIds: arr(r.wallIds),
     seats: Math.floor(num(r.seats, 0, 0, 999)), matchWallHeight: !!r.matchWallHeight,
     floorColor: color(r.floorColor, ROOM_FLOOR_COLOR), ceilingColor: color(r.ceilingColor, ROOM_CEILING_COLOR),
+    floorMat: normalizeAssignment(r.floorMat), ceilingMat: normalizeAssignment(r.ceilingMat),
   }));
   return {
     ...base, ...src,

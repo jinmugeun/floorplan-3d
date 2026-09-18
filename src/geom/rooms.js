@@ -116,6 +116,7 @@ export function detectRooms(walls, prevRooms = []) {
       floorMaterial: prev?.floorMaterial ?? 'wood', ceilingMaterial: prev?.ceilingMaterial ?? 'paint-white',
       seats: prev?.seats ?? 0, matchWallHeight: prev?.matchWallHeight ?? false,
       floorColor: prev?.floorColor ?? ROOM_FLOOR_COLOR, ceilingColor: prev?.ceilingColor ?? ROOM_CEILING_COLOR,
+      floorMat: prev?.floorMat ?? null, ceilingMat: prev?.ceilingMat ?? null,
       points: f.pts, wallIds: f.wallIds.filter(id => wallById[id]),
       area: Math.abs(polygonArea(inner)) / 1e6,
     };

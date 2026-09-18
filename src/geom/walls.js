@@ -5,7 +5,7 @@ export const WALL_COLOR_IN = '#f2efe9';
 export const WALL_COLOR_OUT = '#e9e6e0';
 
 export function makeWall({ a, b, thickness = 200, height = 2300, material = 'paint-white', colorIn = WALL_COLOR_IN, colorOut = WALL_COLOR_OUT }) {
-  return { id: uid('w'), a: [...a], b: [...b], thickness, height, material, colorIn, colorOut };
+  return { id: uid('w'), a: [...a], b: [...b], thickness, height, material, colorIn, colorOut, matIn: null, matOut: null, regions: { in: [], out: [] } };
 }
 // 노드(끝점) 키: 0.01 mm까지 구분한다. 같은 자리에 모인 끝점을 한 묶음으로 옮길 때 쓴다.
 export const nodeKey = p => `${Math.round(p[0] * 100)},${Math.round(p[1] * 100)}`;
@@ -33,7 +33,8 @@ export function splitWall(walls, id, point) {
   if (!w) return walls;
   const d = wallDir(w), t = dot(sub(point, w.a), d);
   const m = add(w.a, mul(d, Math.max(0, Math.min(wallLength(w), t))));
-  const w1 = { ...w, b: m }, w2 = { ...w, id: uid('w'), a: m };
+  const empty = () => ({ in: [], out: [] });
+  const w1 = { ...w, b: m, regions: empty() }, w2 = { ...w, id: uid('w'), a: m, regions: empty() };
   return walls.flatMap(x => (x.id === id ? [w1, w2] : [x]));
 }
 
