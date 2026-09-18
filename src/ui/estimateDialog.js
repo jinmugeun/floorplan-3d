@@ -3,6 +3,7 @@ import { activeFloor } from '../state/schema.js';
 import { estimateRows, estimateCsv } from '../io/estimate.js';
 import { downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
+import { toast } from './toast.js';
 import { esc } from '../util/html.js';
 
 const won = n => `${Number(n || 0).toLocaleString('ko-KR')}원`;
@@ -16,9 +17,10 @@ function tableHtml(rows) {
     <tbody>${body || '<tr><td colspan="7">배치된 제품과 마감재가 없습니다.</td></tr>'}</tbody></table>`;
 }
 
+let current = null;                                        // 마지막으로 연 인스턴스: 다시 열 때 구독을 정리한다(누수 방지)
+
 export function openEstimateDialog({ store, onClose = () => {} }) {
-  const existing = document.querySelector('.modal.estimate');
-  if (existing) existing.remove();                       // 두 개를 띄우지 않는다
+  current?.close();                                        // 두 개를 띄우지 않는다 — DOM뿐 아니라 구독도 정리한다
   const root = document.createElement('div');
   root.className = 'modal estimate';
   root.innerHTML = `<div class="modal-card">
@@ -36,7 +38,8 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
     part('total').textContent = `합계 ${won(rows.total)}`;
   }
   const unsub = store.subscribe(render);
-  const close = () => { unsub(); root.remove(); onClose(); };
+  const close = () => { unsub(); root.remove(); if (current === self) current = null; onClose(); };
+  const self = { close };
   root.addEventListener('click', ev => {
     const name = ev.target.name;
     if (name === 'close') { close(); return; }
@@ -44,11 +47,12 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
     if (name === 'print') {
       const ok = printHtml(`<h1>${esc(store.get().name)} 견적서</h1>${tableHtml(rows)}<p>합계 ${won(rows.total)}</p>
         <style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:6px;text-align:left}</style>`, { title: '견적서' });
-      if (!ok) root.querySelector('[name="print"]').textContent = '팝업이 막혀 인쇄할 수 없습니다';
+      if (!ok) toast('팝업이 차단되어 인쇄 창을 열 수 없습니다');
     }
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   render();
   root.querySelector('[name="close"]').focus();
-  return { close };
+  current = self;
+  return self;
 }

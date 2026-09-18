@@ -63,6 +63,18 @@ describe('견적서 계산', () => {
     expect(materialById('tile-white-300').pricePerM2).toBe(42000); // 카탈로그 단가가 바뀌면 여기서 걸린다
   });
 
+  test('벽 재질 면적은 문 등 개구부를 뺀 순면적(net)이다', () => {
+    const a = setup();
+    const w = a.floor().walls.find(x => Math.abs(wallLength(x) - 4000.5) < 0.01);
+    expect(w.height).toBe(2300);
+    applyMaterial(a.store, { kind: 'wall', id: w.id, side: 'in' }, mat('paint-white'));
+    addItem(a.store, createItem(productById('door-swing-900'), { pos: [2000, 0], wallId: w.id, t: 0.5 }));
+    const rows = estimateRows(a.floor());
+    const paint = rows.materials.find(r => r.id === 'paint-white');
+    // 순면적 = 4000.5 × 2300 / 1e6 − 900 × 2100 / 1e6 = 9.20115 − 1.89 = 7.31115 → round2 7.31
+    expect(paint.areaM2).toBe(7.31);
+  });
+
   test('바닥·천장 재질은 방 면적을 쓰고, 천장을 감추면 세지 않는다', () => {
     const a = setup();
     const roomId = a.floor().rooms[0].id;

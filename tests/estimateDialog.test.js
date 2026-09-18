@@ -54,4 +54,33 @@ describe('견적서 대화상자', () => {
     expect(document.querySelector('.modal.estimate')).toBeNull();
     expect(() => addItem(a.store, createItem(productById('sofa-2'), { pos: [500, 500] }))).not.toThrow();
   });
+
+  test('다시 열면 이전 구독을 정리한다(누수 없음)', () => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+    let live = 0;
+    const origSubscribe = store.subscribe.bind(store);
+    store.subscribe = fn => { live++; const unsub = origSubscribe(fn); return () => { live--; unsub(); }; };
+
+    openEstimateDialog({ store });                          // 첫 인스턴스: 닫지 않고 바로 다시 연다
+    expect(live).toBe(1);
+    const second = openEstimateDialog({ store });            // 새 인스턴스가 옛 구독을 정리해야 한다
+    expect(live).toBe(1);                                    // 누수라면 2가 된다
+    expect(document.querySelectorAll('.modal.estimate')).toHaveLength(1);
+
+    second.close();
+    expect(live).toBe(0);
+    expect(() => addItem(store, createItem(productById('sofa-2'), { pos: [500, 500] }))).not.toThrow();
+  });
+
+  test('팝업이 차단되면 toast로 안내하고 인쇄 버튼 글자는 그대로다', () => {
+    const a = setup();
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    a.root.querySelector('[name="print"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(a.root.querySelector('[name="print"]').textContent).toBe('인쇄');
+    const host = document.getElementById('toasts');
+    expect(host).toBeTruthy();
+    expect(host.textContent).toContain('팝업이 차단되어 인쇄 창을 열 수 없습니다');
+    openSpy.mockRestore();
+  });
 });

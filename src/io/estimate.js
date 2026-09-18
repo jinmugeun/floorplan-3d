@@ -25,7 +25,8 @@ export function estimateRows(floor) {
     const len = wallLength(w);
     // 면 면적의 정의는 materialOps.faceArea 한 곳에만 둔다(속성 패널과 견적이 어긋나지 않게 — I-17).
     // 벽은 안·밖 면적이 같으므로 'in'으로 한 번 구해 두 면에 쓴다. len은 영역 폭 계산에 계속 필요하다.
-    const full = faceArea(floor, { kind: 'wall', id: w.id, side: 'in' });
+    // 개구부(문·창)는 재질을 바르지 않으므로 순면적(net)으로 뺀다 — 실제 주문량이 과다해지지 않게.
+    const full = faceArea(floor, { kind: 'wall', id: w.id, side: 'in' }, { netOpenings: true });
     for (const side of ['in', 'out']) {
       let covered = 0;
       for (const rg of w.regions?.[side] ?? []) {
