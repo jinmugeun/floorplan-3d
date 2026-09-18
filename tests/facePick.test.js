@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import * as THREE from 'three';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
-import { addWalls, addItem } from '../src/state/floorOps.js';
+import { createEmptyProject, activeFloor } from '../src/state/schema.js';
+import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { productById } from '../src/products/catalog.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createFacePicker, targetOf, FACE_NAMES } from '../src/view3d/facePick.js';
+import { createItemPicker, createDragLatch } from '../src/view3d/pick3d.js';
+import { buildFloorGroup } from '../src/view3d/build.js';
+import { applyMaterial } from '../src/state/materialOps.js';
+import { setCanvasFactory, clearTextureCache } from '../src/materials/texture.js';
 
 // 평면 하나로 이루어진 가짜 층 그룹: 레이캐스트가 확실히 맞도록 위에서 내려보는 직교 카메라를 쓴다.
 function fakeGroup({ wallId, roomId, mesh = 'floor', side = null }) {
@@ -119,14 +123,14 @@ describe('3D 면 피커', () => {
     expect(b.ui.get().selection).toBeNull();
   });
 
-  test('우클릭은 3D 벽 메뉴를 열고, 이미 처리된 이벤트는 건너뛴다', () => {
+  test('우클릭은 3D 벽·방 메뉴를 연다(다른 리스너가 먼저 막은 이벤트여도)', () => {
     const a = setup({ mesh: 'wall' });
     const ev = a.rightClick();
     expect(ev.defaultPrevented).toBe(true);
     expect(labels(a.menu[0].items)).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', '도면 뷰 전환', '삭제']);
     expect(a.ui.get().selection).toEqual({ type: 'wall', id: a.wallId });
-    a.rightClick({ prevented: true });
-    expect(a.menu).toHaveLength(1);
+    a.rightClick({ prevented: true });   // OrbitControls가 먼저 preventDefault 한 경우와 같다
+    expect(a.menu).toHaveLength(2);      // defaultPrevented는 "아이템 메뉴가 이미 열렸다"의 신호가 아니다
     const b = setup({ mesh: 'floor' });
     b.rightClick();
     expect(labels(b.menu[0].items)).toContain('템플릿 적용하기');
@@ -137,5 +141,142 @@ describe('3D 면 피커', () => {
     a.picker.destroy();
     a.click();
     expect(a.ui.get().selection).toBeNull();
+  });
+});
+
+// ── 실물 그룹·등록 순서·드래그 빗장 ──────────────────────────────────────────
+// jsdom 캔버스에는 2D 컨텍스트가 없다: build.test.js와 같은 가짜 캔버스를 깔아 둔다.
+function fakeCanvas() {
+  const ctx = { fillStyle: '', strokeStyle: '', lineWidth: 1, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {} };
+  return { width: 0, height: 0, getContext: () => ctx };
+}
+beforeAll(() => setCanvasFactory(fakeCanvas));
+afterAll(() => { clearTextureCache(); setCanvasFactory(null); });
+
+// 진짜 buildFloorGroup 위의 면 피커. 카메라를 옮겨 가며 바닥·벽 본체·방 안쪽 면을 겨눈다.
+function realSetup({ matIn = null, orbit = false } = {}) {
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const f0 = activeFloor(store.get());
+  const south = f0.walls.find(w => w.a[1] === 0 && w.b[1] === 0);   // three 좌표로 z ≈ 0에 서 있는 벽
+  if (matIn) applyMaterial(store, { kind: 'wall', id: south.id, side: 'in' }, mat(matIn));
+  const f = activeFloor(store.get());
+  const g = buildFloorGroup(f, store.get().view);
+  const domElement = document.createElement('div');
+  document.body.appendChild(domElement);
+  domElement.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 200 });
+  const scene = new THREE.Scene(); scene.add(g);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+  const aim = (from, to, up = [0, 1, 0]) => { camera.up.set(...up); camera.position.set(...from); camera.lookAt(new THREE.Vector3(...to)); camera.updateMatrixWorld(); };
+  const controls = orbit ? new OrbitControls(new THREE.PerspectiveCamera(50, 1, 0.1, 100), domElement) : null; // 면 피커보다 먼저 건다(view3d의 순서)
+  const menu = [];
+  const picker = createFacePicker({
+    renderer: { domElement }, getCamera: () => camera, scene, getGroup: () => g, store, ui,
+    openMenu: (x, y, its) => menu.push(its), surfaceActions: { openEditor: () => {}, replaceMaterial: () => {}, applyTemplate: () => {} },
+  });
+  const at = { clientX: 100, clientY: 100 };   // 화면 한가운데 = 카메라 중심을 지나는 광선
+  return {
+    store, ui, picker, menu, controls, domElement, at, south, roomId: f.rooms[0].id,
+    aimFloor: () => aim([2.00025, 5, 1.500125], [2.00025, 0, 1.500125], [0, 0, -1]),      // 방 한가운데를 위에서
+    aimWallBody: () => aim([2.00025, 1, -2.5], [2.00025, 1, 1]),                          // 바깥에서 벽 본체를
+    aimWallFace: () => aim([2.00025, 1, 1.5], [2.00025, 1, -1]),                          // 방 안에서 벽 안쪽 면을
+    click: () => {
+      domElement.dispatchEvent(new MouseEvent('pointerdown', { button: 0, ...at }));
+      domElement.dispatchEvent(new MouseEvent('pointerup', { button: 0, ...at }));
+    },
+    rightClick: () => { const ev = new MouseEvent('contextmenu', { button: 2, ...at, cancelable: true }); domElement.dispatchEvent(ev); return ev; },
+  };
+}
+
+// 두 피커를 view3d와 같은 순서(아이템 → 면)로 한 요소에 건다.
+function bothSetup({ mesh = 'floor', withItem = false } = {}) {
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const f = activeFloor(store.get());
+  const isRoom = mesh === 'floor' || mesh === 'ceiling';
+  const { g, items } = fakeGroup({ wallId: isRoom ? null : f.walls[0].id, roomId: isRoom ? f.rooms[0].id : null, mesh });
+  const domElement = document.createElement('div');
+  document.body.appendChild(domElement);
+  domElement.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 200 });
+  // jsdom에는 포인터 캡처가 없다(TransformControls가 부른다).
+  domElement.setPointerCapture = () => {}; domElement.releasePointerCapture = () => {}; domElement.hasPointerCapture = () => false;
+  const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+  camera.position.set(0, 10, 0); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+  const scene = new THREE.Scene(); scene.add(g);
+  if (withItem) {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+    box.position.set(0, 1, 0); box.userData.itemId = 'i1'; items.add(box);
+  }
+  const dragLatch = createDragLatch();          // view3d가 두 피커에 같은 빗장을 준다
+  const common = { renderer: { domElement }, getCamera: () => camera, scene, getGroup: () => g, store, ui, requestRender: () => {}, dragLatch };
+  const itemPicker = createItemPicker({ ...common, controls: { enabled: true } });
+  const facePicker = createFacePicker(common);  // 아이템 피커 다음이다
+  const gizmo = scene.children.find(c => c.isTransformControlsRoot).controls;
+  return {
+    store, ui, itemPicker, facePicker, gizmo, wallId: f.walls[0].id, roomId: f.rooms[0].id,
+    click: () => {
+      domElement.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
+      domElement.dispatchEvent(new MouseEvent('pointerup', { button: 0, clientX: 100, clientY: 100 }));
+    },
+  };
+}
+
+describe('면 피커와 실물 그룹·다른 피커', () => {
+  // I-1: build.js가 붙이는 이름(FACE_NAMES)과 userData(wallId/roomId/side) 계약을 진짜 그룹으로 지킨다.
+  test('실물 buildFloorGroup의 바닥과 벽을 그대로 집는다', () => {
+    const a = realSetup(); a.aimFloor();
+    expect(a.picker.hitAt(a.at)).toEqual({ kind: 'floor', id: a.roomId });
+    a.click();
+    expect(a.ui.get().selection).toEqual({ type: 'room', id: a.roomId });
+
+    const b = realSetup(); b.aimWallBody();
+    expect(b.picker.hitAt(b.at)).toEqual({ kind: 'wall', id: b.south.id, side: 'out', roomId: null }); // 벽 본체 = 외벽
+    b.click();
+    expect(b.ui.get().selection).toEqual({ type: 'wall', id: b.south.id });
+  });
+
+  // 방 안쪽 면(wallFace)은 roomId를 들고 있어야 "마감재 방 전체 벽에 적용"이 산다.
+  test('방 안쪽 벽면은 벽 + roomId를 주고 메뉴의 방 전체 적용이 켜진다', () => {
+    const a = realSetup({ matIn: 'wood-oak' }); a.aimWallFace();
+    expect(a.picker.hitAt(a.at)).toEqual({ kind: 'wall', id: a.south.id, side: 'in', roomId: a.roomId });
+    a.rightClick();
+    const all = a.menu[0].find(x => x !== 'sep' && x.label === '마감재 방 전체 벽에 적용');
+    expect(all.disabled).toBeFalsy();
+    expect(a.ui.get().selection).toEqual({ type: 'wall', id: a.south.id });
+  });
+
+  // C1 회귀: OrbitControls는 enabled인 동안 모든 contextmenu를 preventDefault 한다.
+  // 그것을 "이미 처리됨"으로 읽으면 3D 면 메뉴가 영영 열리지 않았다.
+  test('먼저 걸린 실물 OrbitControls가 막은 우클릭에서도 면 메뉴가 열린다', () => {
+    const a = realSetup({ orbit: true }); a.aimWallBody();
+    expect(a.controls.enabled).toBe(true);
+    const ev = a.rightClick();
+    expect(ev.defaultPrevented).toBe(true);        // OrbitControls가 먼저 막았다
+    expect(a.menu).toHaveLength(1);                // 그래도 면 메뉴는 열린다
+    expect(labels(a.menu[0])).toContain('재질 교체');
+    a.controls.dispose();
+  });
+
+  // I-2: 등록 순서가 계약이다(아이템 → 면). 뒤집으면 아이템 피커의 selection: null이 나중에 덮어쓴다.
+  test('등록 순서: 빈 바닥은 방, 아이템 위는 아이템으로 남는다', () => {
+    const a = bothSetup({ mesh: 'floor' });
+    a.click();
+    expect(a.ui.get().selection).toEqual({ type: 'room', id: a.roomId });
+    const b = bothSetup({ mesh: 'floor', withItem: true });
+    b.click();
+    expect(b.ui.get().selection).toEqual({ type: 'item', id: 'i1' });
+  });
+
+  // I-4: TransformControls는 pointerup을 막지 않는다. 빗장이 없으면 기즈모를 살짝 민 드래그가
+  // 아이템 밖에서 끝날 때 뒤 벽이 선택되고 기즈모가 떨어졌다.
+  test('기즈모 드래그로 끝난 클릭은 벽을 고르지 않는다(두 피커가 같은 빗장을 본다)', () => {
+    const a = bothSetup({ mesh: 'wall' });
+    a.ui.set({ selection: { type: 'item', id: 'i1' } });
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: true });
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: false });
+    a.click();
+    expect(a.ui.get().selection).toEqual({ type: 'item', id: 'i1' }); // 아이템 피커도 면 피커도 물러난다
+    a.click();                                                        // 빗장은 한 번만 쓰인다
+    expect(a.ui.get().selection).toEqual({ type: 'wall', id: a.wallId });
   });
 });

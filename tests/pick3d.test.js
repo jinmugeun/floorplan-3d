@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker } from '../src/view3d/pick3d.js';
+import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch } from '../src/view3d/pick3d.js';
 import { createItem, createEmptyProject } from '../src/state/schema.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
@@ -217,5 +217,72 @@ describe('3D 아이템 피커', () => {
     expect(a.scene.children.length).toBe(2); // 프록시 + 기즈모 헬퍼
     expect(() => a.picker.destroy()).not.toThrow();
     expect(a.scene.children.length).toBe(0);
+  });
+});
+
+// 마감재 적용 모드에서는 아이템 피커가 물러나고 그 클릭·우클릭을 면 피커가 쓴다(아키텍처 §10.3).
+function setupMatPick() {
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  const domElement = document.createElement('div'); document.body.appendChild(domElement);
+  domElement.setPointerCapture = () => {}; domElement.releasePointerCapture = () => {}; domElement.hasPointerCapture = () => false;
+  domElement.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 200 });
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+  camera.position.set(0, 0, 10); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+  const group = new THREE.Group(); const items = new THREE.Group(); items.name = 'items'; group.add(items);
+  const id = addItem(store, createItem(productById('sofa-3'), { pos: [1000.5, 2000.25] }));
+  const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+  box.userData.itemId = id; items.add(box);
+  scene.add(group); group.updateMatrixWorld(true);
+  const menu = [];
+  const picker = createItemPicker({
+    renderer: { domElement }, getCamera: () => camera, controls: { enabled: true }, scene, store, ui,
+    getGroup: () => group, requestRender: () => {}, openMenu: (x, y, its) => menu.push(its),
+  });
+  return {
+    store, ui, picker, menu, id,
+    click: () => {
+      domElement.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
+      domElement.dispatchEvent(new MouseEvent('pointerup', { button: 0, clientX: 100, clientY: 100 }));
+    },
+    rightClick: () => { const ev = new MouseEvent('contextmenu', { button: 2, clientX: 100, clientY: 100, cancelable: true }); domElement.dispatchEvent(ev); return ev; },
+  };
+}
+
+describe('마감재 적용 모드의 아이템 피커', () => {
+  test('평소에는 아이템 좌클릭이 그 아이템을 고른다', () => {
+    const a = setupMatPick();
+    a.click();
+    expect(a.ui.get().selection).toEqual({ type: 'item', id: a.id });
+  });
+
+  test('적용 모드의 좌클릭은 선택을 바꾸지 않는다(면 피커가 재질을 바른다)', () => {
+    const a = setupMatPick();
+    a.ui.set({ matPick: { assignment: { id: 'wood-oak', offset: [0, 0], angle: 0 } } });
+    a.click();
+    expect(a.ui.get().selection).toBeNull();
+    expect(a.ui.get().matPick).not.toBeNull();     // 모드는 Esc까지 유지된다
+  });
+
+  // M-33: 적용 모드에서 아이템 메뉴가 뜨면 면 메뉴를 가로챈다.
+  test('적용 모드의 우클릭은 아이템 메뉴를 열지 않는다', () => {
+    const a = setupMatPick();
+    a.ui.set({ matPick: { assignment: { id: 'wood-oak', offset: [0, 0], angle: 0 } } });
+    const ev = a.rightClick();
+    expect(a.menu).toHaveLength(0);
+    expect(ev.defaultPrevented).toBe(false);       // 면 피커가 쓰도록 이벤트를 막지도 않는다
+  });
+});
+
+describe('기즈모 드래그 빗장(createDragLatch)', () => {
+  test('드래그 직후 pointerup 하나만 막고, 두 피커가 같은 답을 받는다', () => {
+    const l = createDragLatch();
+    const up0 = {}, up1 = {}, up2 = {};
+    expect(l.latched(up0)).toBe(false);   // 드래그가 없으면 아무것도 막지 않는다
+    l.arm();
+    expect(l.latched(up1)).toBe(true);
+    expect(l.latched(up1)).toBe(true);    // 같은 이벤트를 두 피커가 물어본다
+    expect(l.latched(up2)).toBe(false);   // 다음 클릭부터는 평소대로
+    expect(l.latched(up2)).toBe(false);
   });
 });

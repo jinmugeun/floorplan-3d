@@ -30,6 +30,21 @@ export function gizmoAxes(mode) {
   return mode === 'rotate' ? { showX: false, showY: true, showZ: false } : { showX: true, showY: false, showZ: true };
 }
 
+// 기즈모 드래그가 끝난 pointerup 하나를 막는 빗장. 아이템 피커와 면 피커가 같은 빗장을 나눠 본다:
+// 한 이벤트에 두 번 물어도 같은 답을 주고(둘 다 물러난다), 다음 pointerup부터는 평소대로 선택이 된다.
+export function createDragLatch() {
+  let armed = false, ev = null;
+  return {
+    arm() { armed = true; ev = null; },
+    latched(e) {
+      if (!armed) return false;
+      if (ev === null) { ev = e; return true; }  // 드래그 직후 첫 pointerup이 바로 이것이다
+      if (ev === e) return true;                 // 다른 피커가 같은 이벤트로 다시 물었다
+      armed = false; ev = null; return false;
+    },
+  };
+}
+
 const DIRS = { front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], top: [0, 1, 0], bottom: [0, -1, 0] };
 const UPS = { top: [0, 0, -1], bottom: [0, 0, 1] };
 
@@ -50,7 +65,7 @@ export function orthoViewParams(name, { center = [0, 0], extent = 6000, height =
 
 // 3D에서 아이템을 고르고 기즈모로 옮긴다. 렌더러·카메라는 view3d가 준다.
 // getCamera는 매번 읽는다: 투영 전환(persp/ortho)과 2D 투영 뷰가 카메라를 바꾼다.
-export function createItemPicker({ renderer, getCamera, controls, scene, store, ui, getGroup, getMode = () => 'iso', requestRender, openMenu = () => {}, itemActions = {} }) {
+export function createItemPicker({ renderer, getCamera, controls, scene, store, ui, getGroup, getMode = () => 'iso', requestRender, openMenu = () => {}, itemActions = {}, dragLatch = createDragLatch() }) {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const proxy = new THREE.Object3D();
   scene.add(proxy);
@@ -61,7 +76,7 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   gizmo.setRotationSnap(THREE.MathUtils.degToRad(15));
   scene.add(gizmo.getHelper ? gizmo.getHelper() : gizmo);
   gizmo.enabled = false;
-  let current = null, wasDragging = false;
+  let current = null;
 
   const pointFrom = ev => {
     const r = renderer.domElement.getBoundingClientRect();
@@ -75,13 +90,13 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   let down = null;
   const onDown = ev => { if (getMode() === 'fp' || ui.get().matPick) return; if (ev.button === 0) down = [ev.clientX, ev.clientY]; };
   const onUp = ev => {
-    const latched = wasDragging; wasDragging = false; // 빗장은 어느 경로로 나가든 한 번만 쓴다(오른쪽 버튼·fp 진입으로 새지 않게)
+    const latched = dragLatch.latched(ev); // 빗장은 어느 경로로 나가든 한 번만 쓴다(오른쪽 버튼·fp 진입으로 새지 않게)
     if (getMode() === 'fp' || ui.get().matPick) return; // 마감재 적용 모드의 클릭은 면 피커가 쓴다
     if (ev.button !== 0 || !down) return;
     const moved = Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 4;
     down = null;
     // 궤도 회전이나 기즈모 드래그는 선택이 아니다. TransformControls는 pointerup 전에 dragging을
-    // 되돌리므로 dragging-changed에서 걸어 둔 빗장(wasDragging)을 본다.
+    // 되돌리므로 dragging-changed에서 걸어 둔 빗장(dragLatch)을 본다(면 피커도 같은 것을 본다).
     if (moved || latched) return;
     const id = pointFrom(ev);
     ui.set({ selection: id ? { type: 'item', id } : null });
@@ -100,7 +115,7 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
 
   gizmo.addEventListener('dragging-changed', e => {
     controls.enabled = !e.value;
-    if (e.value) { wasDragging = true; store.beginTransaction(); } else store.endTransaction();
+    if (e.value) { dragLatch.arm(); store.beginTransaction(); } else store.endTransaction();
   });
   gizmo.addEventListener('objectChange', () => {
     if (!current) return;

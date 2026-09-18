@@ -8,7 +8,7 @@ import { endpoints } from '../geom/walls.js';
 import { cameraDistance } from './fit.js';
 import { sunPosition } from './sun.js';
 import { headingDeg, toWorldXY } from './camera.js';
-import { orthoViewParams, createItemPicker } from './pick3d.js';
+import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js';
 import { createFacePicker } from './facePick.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
@@ -68,9 +68,10 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   const reattachPicker = () => { if (mode === 'fp' || useOrtho) picker.detach(); else if (!picker.isDragging()) picker.attach(ui.get().selection); };
   // 컷어웨이가 감춘 벽을 모두 되돌린다(1인칭·투영 뷰는 벽을 숨기지 않는다). 밑동 윤곽만 계속 숨긴다.
   const showAllWalls = () => group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; });
-  const picker = createItemPicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), controls, scene, store, ui, getGroup: () => group, getMode: () => mode, requestRender, openMenu, itemActions });
+  const dragLatch = createDragLatch(); // 기즈모 드래그가 끝난 클릭은 두 피커 모두 무시한다
+  const picker = createItemPicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), controls, scene, store, ui, getGroup: () => group, getMode: () => mode, requestRender, openMenu, itemActions, dragLatch });
   // 아이템 피커 다음에 등록한다: 아이템을 맞히지 못한 클릭이 비워 놓은 선택을 면 피커가 덮어쓴다.
-  const facePicker = createFacePicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), scene, getGroup: () => group, store, ui, openMenu, surfaceActions, getMode: () => mode, requestRender });
+  const facePicker = createFacePicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), scene, getGroup: () => group, store, ui, openMenu, surfaceActions, getMode: () => mode, requestRender, dragLatch });
   function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); reattachPicker(); }
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;

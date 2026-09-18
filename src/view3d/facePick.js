@@ -13,7 +13,7 @@ export function targetOf(hit) {
 
 // 3D에서 면(벽·바닥·천장)을 고르고, 마감재 적용 모드면 클릭마다 재질을 바른다.
 // 아이템은 pick3d의 아이템 피커가 맡는다: 여기서는 아이템을 맞히면 물러난다.
-export function createFacePicker({ renderer, getCamera, scene, getGroup, store, ui, openMenu = () => {}, onSelect = null, surfaceActions = {}, getMode = () => 'iso', requestRender = () => {} }) {
+export function createFacePicker({ renderer, getCamera, scene, getGroup, store, ui, openMenu = () => {}, onSelect = null, surfaceActions = {}, getMode = () => 'iso', requestRender = () => {}, dragLatch = { latched: () => false } }) {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 
   function hitAt(ev) {
@@ -42,6 +42,8 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
   const onDown = ev => { if (ev.button === 0 && getMode() !== 'fp') down = [ev.clientX, ev.clientY]; };
   const onUp = ev => {
     const start = down; down = null;
+    // 기즈모 드래그로 끝난 pointerup은 선택이 아니다(TransformControls는 같은 요소의 이벤트를 막지 않는다).
+    if (dragLatch.latched(ev)) return;
     if (ev.button !== 0 || !start || getMode() === 'fp') return;
     if (Math.hypot(ev.clientX - start[0], ev.clientY - start[1]) > 4) return; // 궤도 회전은 선택이 아니다
     const pick = ui.get().matPick;
@@ -55,7 +57,9 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     onSelect?.(hit);
   };
   const onMenu = ev => {
-    if (getMode() === 'fp' || ev.defaultPrevented) return; // 아이템 피커가 이미 아이템 메뉴를 열었다
+    // defaultPrevented는 보지 않는다: OrbitControls가 enabled인 동안 모든 contextmenu를 먼저 막으므로
+    // 그것으로는 "아이템 피커가 이미 열었다"를 알 수 없다. 아래 hit.kind === 'item'이 그 판정을 한다.
+    if (getMode() === 'fp') return;
     const hit = hitAt(ev);
     if (!hit || hit.kind === 'item') return;
     ev.preventDefault();
