@@ -32,6 +32,7 @@ import { openStartScreen } from './ui/startScreen.js';
 import { openEstimateDialog } from './ui/estimateDialog.js';
 import { openRenderDialog } from './ui/renderDialog.js';
 import { openGalleryDialog } from './ui/galleryDialog.js';
+import { openSpecDialog } from './ui/specDialog.js';
 import { templateProject, saveTemplate } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
@@ -217,8 +218,8 @@ function saveAsTemplate() {
   if (saved) shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);
   else shell.toast('템플릿을 저장하지 못했습니다(저장 공간 부족)');
 }
-// 태스크 14의 상단 바·더보기 메뉴가 받아 갈 동작 묶음. 견적서·렌더샷·갤러리는 그 전까지 이 묶음으로만 연다(버튼은 태스크 14).
-const actions = { saveAsTemplate, openEstimate: () => openEstimateDialog({ store }), openRender: () => openRenderDialog({ store, view3d }), openGallery: () => openGalleryDialog({}) };
+// 태스크 14의 상단 바·더보기 메뉴가 받아 갈 동작 묶음. 견적서·렌더샷·갤러리·시방서는 그 전까지 이 묶음으로만 연다(버튼은 태스크 14).
+const actions = { saveAsTemplate, openEstimate: () => openEstimateDialog({ store }), openRender: () => openRenderDialog({ store, view3d }), openGallery: () => openGalleryDialog({}), openSpec: () => openSpecDialog({ store, ui, view3d }) };
 
 async function loadFile(file) {
   if (!file) return; // 파일 선택 취소

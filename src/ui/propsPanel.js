@@ -8,6 +8,7 @@ import { toast } from './toast.js';
 import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
+import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 export { lenField, readLen, withUnit } from './fieldUtils.js';
 
 // 상세 설정 <details>의 열림 상태는 패널을 다시 그려도 유지된다.
@@ -15,7 +16,7 @@ let detailsOpen = true;
 // 아이템 크기 패널의 "비율 유지" 체크박스 상태. applyNumber(모듈 최상위 함수)도 읽어야 해서 모듈 스코프에 둔다.
 let keepRatio = false;
 
-export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
+export { ROOM_TYPES };
 
 // 숫자·길이 입력 한 칸을 상태에 반영한다. 2B의 아이템 패널도 이 함수를 쓴다.
 export function applyNumber(store, sel, name, v) {
