@@ -461,3 +461,116 @@ test('disposeGroup은 면마다 복제한 텍스처만 정리하고 캐시 원�
   expect(clones.every(s => s.mock.calls.length === 1)).toBe(true);
   expect(spy).not.toHaveBeenCalled();
 });
+
+// --- 방 안쪽 면(wallFace)·영역도 개구부를 피해 쪼갠다 -----------------------------------------
+// 통판이면 벽 본체가 뚫어 놓은 문·창을 방 쪽에서 도로 막아 고정창이 실내에서 안 보였다.
+const doorFloor = async (extra = {}) => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const walls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200).map(w => ({ ...w, ...extra }));
+  const target = walls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);   // 길이 4000, 문은 u 1550~2450
+  const items = [createItem(productById('door-swing-900'), { wallId: target.id, t: 0.5, pos: [2000.5, 0.25] })];
+  return { walls, target, g: buildFloorGroup({ walls, rooms: detectRooms(walls), items, height: 2300 }, { wallOpacity: 1, v3: {} }) };
+};
+// 메시 정점을 벽 축 좌표 [u(mm), z(mm)]로 되돌린다(three (x, y, z) = (동쪽 m, 높이 m, 남쪽 m)).
+const wallUZ = (mesh, wall, i) => {
+  const a = mesh.geometry.attributes.position;
+  const dx = a.getX(i) * 1000 - wall.a[0], dy = a.getZ(i) * 1000 - wall.a[1];
+  const len = Math.hypot(wall.b[0] - wall.a[0], wall.b[1] - wall.a[1]);
+  return [(dx * (wall.b[0] - wall.a[0]) + dy * (wall.b[1] - wall.a[1])) / len, a.getY(i) * 1000];
+};
+
+test('문이 있는 벽의 방 안쪽 면은 세 조각으로 쪼개지고 문 구멍을 덮지 않는다', async () => {
+  const { target, g } = await doorFloor();
+  const faces = g.children.filter(c => c.name === 'wallFace' && c.userData.wallId === target.id);
+  expect(faces).toHaveLength(3);                                  // 좌 · 인방 · 우
+  expect(faces.every(f => typeof f.userData.roomId === 'string')).toBe(true);
+  for (const f of faces) {
+    for (let i = 0; i < f.geometry.attributes.position.count; i++) {
+      const [u, z] = wallUZ(f, target, i);
+      expect(u > 1550.5 && u < 2449.5 && z > 0.5 && z < 2099.5, `정점 ${i} (${u}, ${z})가 문 안에 있다`).toBe(false);
+    }
+  }
+  // 어느 조각도 문 구멍(가운데 u 2000, z 1000)을 덮지 않는다 — 통판이던 옛 코드가 걸리는 검사다.
+  for (const f of faces) {
+    const uz = [...Array(4).keys()].map(i => wallUZ(f, target, i));
+    const u = uz.map(x => x[0]), z = uz.map(x => x[1]);
+    expect(Math.min(...u) < 2000 && Math.max(...u) > 2000 && Math.min(...z) < 1000 && Math.max(...z) > 1000).toBe(false);
+  }
+  // 조각 높이: 인방은 문 위 200 mm(2100~2300), 양옆은 바닥부터 천장까지.
+  const hs = faces.map(f => { const zs = [...Array(4).keys()].map(i => wallUZ(f, target, i)[1]); return Math.max(...zs) - Math.min(...zs); }).sort((a, b) => a - b);
+  expect(hs[0]).toBeCloseTo(200, 3);      // 정점은 float32라 mm 소수 넷째 자리까지만 본다
+  expect(hs[1]).toBeCloseTo(2300, 3);
+  expect(g.children.filter(c => c.name === 'wallFace')).toHaveLength(3 + 3);   // 나머지 세 벽은 통면 그대로
+  disposeGroup(g);
+});
+
+test('개구부가 없는 벽의 안쪽 면은 예전처럼 쿼드 하나(uv 0~1)다', async () => {
+  const { walls, target, g } = await doorFloor();
+  const other = walls.find(w => w.id !== target.id);
+  const faces = g.children.filter(c => c.name === 'wallFace' && c.userData.wallId === other.id);
+  expect(faces).toHaveLength(1);
+  expect([...faces[0].geometry.attributes.uv.array]).toEqual([0, 0, 1, 0, 1, 1, 0, 1]);
+  expect(uvSpan(faces[0].geometry)).toEqual([1, 1]);
+  disposeGroup(g);
+});
+
+test('안쪽 면 조각의 무늬 위상이 문 없는 통면과 이어진다', async () => {
+  const { walls, target, g } = await doorFloor({ matIn: assign('brick-red') });
+  const plainWalls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200).map(w => ({ ...w, matIn: assign('brick-red') }));
+  const plainT = plainWalls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);
+  const pg = buildFloorGroup({ walls: plainWalls, rooms: detectRooms(plainWalls), height: 2300 }, { wallOpacity: 1 });
+  const plain = pg.children.find(c => c.name === 'wallFace' && c.userData.wallId === plainT.id);
+  const pieces = g.children.filter(c => c.name === 'wallFace' && c.userData.wallId === target.id).sort((a, b) => a.position.x - b.position.x);
+  const vtx = (m, i) => { const a = m.geometry.attributes.position; return new THREE.Vector3(a.getX(i), a.getY(i), a.getZ(i)); };
+  const P = vtx(plain, 0), faceW = P.distanceTo(vtx(plain, 1));   // 통면 정점 0 = p@바닥, 1 = q@바닥
+  expect(faceW).toBeCloseTo(3.79, 6);                             // 4000 − 양 끝 벽 105씩
+  const texel = (map, u, v) => { map.updateMatrix(); const p = new THREE.Vector3(u, v, 1).applyMatrix3(map.matrix); return [p.x, p.y]; };
+  const frac = x => ((x % 1) + 1) % 1;
+  const near = (x, y) => Math.abs(frac(x) - frac(y)) < 1e-4 || Math.abs(frac(x) - frac(y)) > 1 - 1e-4;   // 정점이 float32
+  const same = (a, b, msg) => { for (let i = 0; i < 2; i++) expect(near(a[i], b[i]), `${msg}: ${a} vs ${b}`).toBe(true); };
+  for (const [name, pc] of [['왼쪽', pieces[0]], ['인방', pieces[1]], ['오른쪽', pieces[2]]]) {
+    const A = vtx(pc, 0);                                         // 조각의 uv (0,0) 정점
+    const s = Math.hypot(A.x - P.x, A.z - P.z);                   // 통면 p에서 면을 따라 잰 거리(m)
+    same(texel(pc.material.map, 0, 0), texel(plain.material.map, s / faceW, (A.y * 1000) / 2300), name);
+  }
+  // 오른쪽 조각은 문 오른쪽(벽 축 u 2450)에서 시작하고, 반복 수는 제 폭으로 잡는다.
+  expect(wallUZ(pieces[2], target, 0)[0]).toBeCloseTo(2450, 3);
+  const widthMm = m => vtx(m, 0).distanceTo(vtx(m, 1)) * 1000;
+  expect(pieces[2].material.map.repeat.x).toBeCloseTo(widthMm(pieces[2]) / 230, 4);
+  expect(pieces[1].material.map.repeat.y).toBeCloseTo(200 / 60, 4);     // 인방 200 mm
+  disposeGroup(g); disposeGroup(pg);
+});
+
+test('영역도 개구부를 피해 쪼개지고, 개구부 안에 잠긴 영역은 사라진다', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const walls = rectWalls([0, 0], [4000, 3000], 200);
+  const target = walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  target.regions = {
+    in: [{ id: 'band', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 900, mat: assign('tile-white-300') }],
+    out: [{ id: 'inside', kind: 'rect', u0: 1600, u1: 2400, z0: 200, z1: 800, mat: assign('brick-red') }],
+  };
+  const items = [createItem(productById('door-swing-900'), { wallId: target.id, t: 0.5, pos: [2000, 0] })];
+  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), items, height: 2300 }, { wallOpacity: 1, v3: {} });
+  const regions = g.children.filter(c => c.name === 'wallRegion');
+  expect(regions.filter(r => r.userData.regionId === 'inside')).toHaveLength(0);  // 문 안에 완전히 잠겼다
+  const band = regions.filter(r => r.userData.regionId === 'band').sort((a, b) => a.position.x - b.position.x);
+  expect(band).toHaveLength(2);                                   // 문 좌 · 우
+  expect(band.every(r => r.userData.side === 'in' && r.userData.wallId === target.id)).toBe(true);
+  expect(band[0].geometry.parameters.width).toBeCloseTo(1.55, 6);
+  expect(band[1].geometry.parameters.width).toBeCloseTo(1.55, 6); // 4000 − 2450
+  expect(band.every(r => r.geometry.parameters.height === 0.9)).toBe(true);
+  expect(band[1].position.x).toBeCloseTo((2450 + 4000) / 2 / 1000, 6);
+  // 무늬 위상은 띠 전체와 이어진다: 오른쪽 조각은 u 2450에서 시작(300 타일).
+  expect(band[0].material.map.offset.x).toBeCloseTo(0, 9);
+  expect(band[1].material.map.offset.x).toBeCloseTo(2450 / 300, 6);
+  // 창(z 900~2100)은 z가 겹치지 않으니 z 0~900 띠를 나누지 않는다.
+  const w2 = rectWalls([0, 0], [4000, 3000], 200);
+  const t2 = w2.find(w => w.a[1] === 0 && w.b[1] === 0);
+  t2.regions = { in: [{ id: 'band', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 900, mat: assign('tile-white-300') }], out: [] };
+  const it2 = [createItem(productById('window-slide-1200'), { wallId: t2.id, t: 0.5, pos: [2000, 0] })];
+  const g2 = buildFloorGroup({ walls: w2, rooms: detectRooms(w2), items: it2, height: 2300 }, { wallOpacity: 1, v3: {} });
+  expect(g2.children.filter(c => c.name === 'wallRegion')).toHaveLength(1);
+  disposeGroup(g); disposeGroup(g2);
+});

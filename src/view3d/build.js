@@ -3,7 +3,7 @@ import { activeFloor } from '../state/schema.js';
 import { wallPolygon } from '../geom/walls.js';
 import { roomInnerPolygon } from '../geom/rooms.js';
 import { add, mul, eq } from '../geom/vec.js';
-import { openingsOnWall, wallPieces } from '../geom/openings.js';
+import { openingsOnWall, wallPieces, clipRectByOpenings } from '../geom/openings.js';
 import { wallAxis, RAD } from '../geom/items.js';
 import { buildItems } from './items3d.js';
 import { applyAssignment } from '../materials/texture.js';
@@ -89,24 +89,30 @@ export function sceneSignature(state) {
 
 // 벽 면의 일부만 다른 재질로 덮는 영역(마감재 편집기). 벽면에서 2 mm 앞으로 띄워 z-파이팅을 피한다.
 // side 'in' = 벽 법선 +n 쪽, 'out' = -n 쪽. 두 방이 공유하는 벽의 안쪽 두 면을 따로 나누는 것은 범위 밖이다.
-function addRegionMeshes(g, w, view) {
+// 영역도 벽 본체처럼 개구부를 피해 조각으로 쪼갠다 — 통판이면 문·창 구멍을 도로 막는다.
+// 조각의 uv는 0~1이라 uvShift(영역 왼쪽·아래 모서리에서 잰 자리)로 무늬 위상을 영역 전체와 잇는다.
+function addRegionMeshes(g, w, view, openings = []) {
   const { dir, n, len, rot } = wallAxis(w);
   for (const side of ['in', 'out']) {
     const s = side === 'in' ? 1 : -1;
     for (const rg of w.regions?.[side] ?? []) {
       const u0 = rg.kind === 'band' ? 0 : rg.u0, u1 = rg.kind === 'band' ? len : rg.u1;
-      const width = u1 - u0, height = rg.z1 - rg.z0;
-      if (!(width > 0) || !(height > 0)) continue;
+      if (!(u1 - u0 > 0) || !(rg.z1 - rg.z0 > 0)) continue;
       if (!rg.mat) continue;                        // 재질 없는 영역은 벽면을 불투명 회색 판으로 덮지 않는다
-      const mat = surfaceMaterial('wall', view, null, { assignment: rg.mat, faceSize: [width, height] });
-      mat.side = THREE.DoubleSide;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(M(width), M(height)), mat);
-      const c = add(w.a, mul(dir, (u0 + u1) / 2));
-      const off = mul(n, s * (w.thickness / 2 + 2));
-      mesh.position.copy(toThree([c[0] + off[0], c[1] + off[1], (rg.z0 + rg.z1) / 2]));
-      mesh.rotation.y = -RAD(rot) + (s > 0 ? 0 : Math.PI); // 평면의 기본 법선(+z)을 벽 법선에 맞춘다
-      mesh.name = 'wallRegion'; mesh.userData.wallId = w.id; mesh.userData.side = side; mesh.userData.regionId = rg.id;
-      g.add(mesh);
+      for (const pc of clipRectByOpenings({ u0, u1, z0: rg.z0, z1: rg.z1 }, openings)) {
+        const width = pc.u1 - pc.u0, height = pc.z1 - pc.z0;
+        // 'out' 면은 평면을 180° 돌려 붙이므로 uv u가 벽 끝점 → 시작점으로 흐른다(uv 0 = 조각의 u1 쪽).
+        const shiftU = s > 0 ? pc.u0 - u0 : u1 - pc.u1;
+        const mat = surfaceMaterial('wall', view, null, { assignment: rg.mat, faceSize: [width, height], uvShift: [shiftU, pc.z0 - rg.z0] });
+        mat.side = THREE.DoubleSide;
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(M(width), M(height)), mat);
+        const c = add(w.a, mul(dir, (pc.u0 + pc.u1) / 2));
+        const off = mul(n, s * (w.thickness / 2 + 2));
+        mesh.position.copy(toThree([c[0] + off[0], c[1] + off[1], (pc.z0 + pc.z1) / 2]));
+        mesh.rotation.y = -RAD(rot) + (s > 0 ? 0 : Math.PI); // 평면의 기본 법선(+z)을 벽 법선에 맞춘다
+        mesh.name = 'wallRegion'; mesh.userData.wallId = w.id; mesh.userData.side = side; mesh.userData.regionId = rg.id;
+        g.add(mesh);
+      }
     }
   }
 }
@@ -132,21 +138,40 @@ export function buildFloorGroup(floor, view) {
       const q = faces[(i + 1) % faces.length];
       const w = edgeWall(r, floor.walls, i);
       if (!w) return;
-      const y0 = M(r.floorOffset), y1 = M(r.floorOffset + Math.min(r.height, w.height));
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute([
-        M(p[0]), y0, M(p[1]), M(q[0]), y0, M(q[1]), M(q[0]), y1, M(q[1]), M(p[0]), y1, M(p[1]),
-      ], 3));
-      geo.setIndex([0, 1, 2, 0, 2, 3]);
-      // 정점 순서가 p@y0 → q@y0 → q@y1 → p@y1이라 uv는 면을 0~1로 덮는다. uv가 없으면 map이 (0,0) 텍셀 한 점으로만 칠해진다.
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
-      geo.computeVertexNormals();
+      const faceH = Math.min(r.height, w.height);
       const faceW = Math.hypot(q[0] - p[0], q[1] - p[1]);
-      const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: w.matIn, faceSize: [faceW, Math.min(r.height, w.height)] }));
-      face.name = 'wallFace'; face.userData.wallId = w.id; face.userData.roomId = r.id;
-      // 방 폴리곤의 회전 방향이 반대로 나올 수 있어(법선이 밖을 향할 수 있어) 양면으로 둔다.
-      face.material.side = THREE.DoubleSide;
-      g.add(face);
+      if (!(faceW > 0) || !(faceH > 0)) return;
+      // 면 조각 하나. s는 p에서 p→q를 따라 잰 거리(mm), z는 방 바닥에서 잰 높이(mm)다.
+      // uv는 조각을 0~1로 덮고(uv가 없으면 map이 (0,0) 텍셀 한 점으로만 칠해진다),
+      // uvShift = 조각의 왼쪽·아래 모서리 자리 → 조각끼리도, 개구부 없는 통면과도 무늬 위상이 이어진다.
+      const addFacePiece = (s0, s1, z0, z1) => {
+        const at = s => [p[0] + ((q[0] - p[0]) * s) / faceW, p[1] + ((q[1] - p[1]) * s) / faceW];
+        const A = at(s0), B = at(s1), y0 = M(r.floorOffset + z0), y1 = M(r.floorOffset + z1);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute([
+          M(A[0]), y0, M(A[1]), M(B[0]), y0, M(B[1]), M(B[0]), y1, M(B[1]), M(A[0]), y1, M(A[1]),
+        ], 3));
+        geo.setIndex([0, 1, 2, 0, 2, 3]);
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+        geo.computeVertexNormals();
+        const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: w.matIn, faceSize: [s1 - s0, z1 - z0], uvShift: [s0, z0] }));
+        face.name = 'wallFace'; face.userData.wallId = w.id; face.userData.roomId = r.id;
+        // 방 폴리곤의 회전 방향이 반대로 나올 수 있어(법선이 밖을 향할 수 있어) 양면으로 둔다.
+        face.material.side = THREE.DoubleSide;
+        g.add(face);
+      };
+      // 안쪽 면도 벽 본체와 같은 조각으로 낸다 — 통판이면 본체가 뚫어 놓은 문·창을 방 쪽에서 도로 막는다.
+      const holes = openingsOnWall(floor.items, w);
+      if (!holes.length) { addFacePiece(0, faceW, 0, faceH); return; }
+      // 조각은 벽 축 u(w.a에서 벽 방향으로 잰 거리)로 나오므로, 면의 두 끝 p·q를 벽 축에 투영해
+      // 면이 덮는 u 구간을 구하고(면은 벽과 평행하다) 거기에 맞춰 자른 뒤 p→q 위의 거리로 되돌린다.
+      const { dir } = wallAxis(w);
+      const proj = pt => (pt[0] - w.a[0]) * dir[0] + (pt[1] - w.a[1]) * dir[1];
+      const uP = proj(p), uQ = proj(q), fwd = uQ >= uP;
+      for (const pc of wallPieces({ ...w, height: faceH }, holes, { start: Math.min(uP, uQ), end: Math.max(uP, uQ) })) {
+        const s0 = fwd ? pc.u0 - uP : uP - pc.u1, s1 = fwd ? pc.u1 - uP : uP - pc.u0;
+        addFacePiece(s0, s1, pc.z0, pc.z1);
+      }
     });
   }
   for (const w of floor.walls) {
@@ -192,7 +217,7 @@ export function buildFloorGroup(floor, view) {
     // 컷어웨이로 감춘 벽이 바닥에 남기는 밑동 윤곽(명세 9.3.2). 기본은 숨김, view3d가 필요할 때 켠다.
     const foot = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(poly.map(p => new THREE.Vector3(M(p[0]), 0.004, M(p[1])))), lineMaterial(COLOR.foot));
     foot.name = 'wallFoot'; foot.userData.wallId = w.id; foot.visible = false; g.add(foot);
-    addRegionMeshes(g, w, view);
+    addRegionMeshes(g, w, view, openings);
   }
   g.add(buildItems(floor, view));
   return g;
