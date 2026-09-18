@@ -12,7 +12,10 @@ const SIDE_LABEL = { in: '내벽', out: '외벽' };
 export function validateRegion(r, { len, height }) {
   if (r.kind !== 'band') {
     const u0 = Number(r.u0), u1 = Number(r.u1);
-    if (!(u0 >= 0) || !(u1 > u0) || u1 > len + 0.001) return `가로 범위는 0 ~ ${Math.round(len)} mm 안에서 시작 < 끝이어야 합니다`;
+    // wallLength는 float라 4000 mm 벽이 3999.9999999999995처럼 나올 수 있다. 화면·기본값은
+    // Math.round(len)로 보여주므로(아래 addRow), 그 반올림 값까지는 범위 안으로 쳐준다.
+    const lenR = Math.round(len);
+    if (!(u0 >= 0) || !(u1 > u0) || u1 > lenR + 0.001) return `가로 범위는 0 ~ ${lenR} mm 안에서 시작 < 끝이어야 합니다`;
   }
   const z0 = Number(r.z0), z1 = Number(r.z1);
   if (!(z0 >= 0) || !(z1 > z0) || z1 > height + 0.001) return `높이 범위는 0 ~ ${Math.round(height)} mm 안에서 시작 < 끝이어야 합니다`;
@@ -89,9 +92,12 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
 
   const close = () => { root.remove(); onClose(); };
   const addRow = kind => {
+    // wallLength가 float라(예: 4000 mm 벽이 3999.9999999999995) 기본 u1을 그대로 넣으면 입력칸에
+    // 지저분한 소수가 보인다. 반올림해서 넣는다 — validateRegion도 이 값을 범위 안으로 받아들인다.
+    const lenR = Math.round(len);
     rows.push(kind === 'band'
-      ? { id: uid('rg'), kind: 'band', u0: 0, u1: len, z0: 0, z1: Math.min(1200, height), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } }
-      : { id: uid('rg'), kind: 'rect', u0: 0, u1: Math.min(1000, len), z0: 0, z1: Math.min(1000, height), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } });
+      ? { id: uid('rg'), kind: 'band', u0: 0, u1: lenR, z0: 0, z1: Math.min(1200, height), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } }
+      : { id: uid('rg'), kind: 'rect', u0: 0, u1: Math.min(1000, lenR), z0: 0, z1: Math.min(1000, height), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } });
     part('error').textContent = '';
     render();
   };
@@ -124,8 +130,19 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
     if (name === 'kind') renderRows();
     renderPreview();
   });
-  // Esc는 대화상자만 닫고 전역 단축키까지 내려가지 않는다(다른 대화상자와 같은 규칙).
-  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
+  // 대화상자 안의 키는 무엇이든 window의 전역 단축키(L/F로 2D 도구를 바꾸는 등)까지 내려가지 않는다.
+  root.addEventListener('keydown', ev => {
+    ev.stopPropagation();
+    if (ev.key === 'Escape') { close(); return; }
+    // select에 포커스가 있을 때는 브라우저가 흔히 Enter를 옵션 선택 등으로 쓰므로 적용하지 않는다.
+    if (ev.key === 'Enter') { if (ev.target?.tagName !== 'SELECT') { ev.preventDefault(); root.querySelector('[name="apply"]').click(); } return; }
+    if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target?.tagName)) return; // 입력칸에 타이핑 중인 l/f는 단축키가 아니다
+    const k = ev.key.toLowerCase();
+    // <kbd>L</kbd>/<kbd>F</kbd> 힌트가 실제로 동작하게 한다(수평 띠/사각형 추가).
+    if (k === 'l') { ev.preventDefault(); addRow('band'); }
+    else if (k === 'f') { ev.preventDefault(); addRow('rect'); }
+  });
   render();
   root.querySelector('[name="addBand"]').focus();
   return { close };
