@@ -73,9 +73,10 @@ function replaceProductOf(itemIds, product) {
   replaceProduct(store, live, product);
   shell.toast(`제품 ${live.length}개를 교체했습니다`);
 }
-const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode, itemIds } = {}) => { if (mode === 'replace') replaceProductOf(itemIds, p); else startPlace(p); } });
+const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode } = {}) => { if (mode === 'replace') replaceProductOf(selectedItemIds(), p); else startPlace(p); } });
 // 라이브러리 "교체 모드"를 끄는 한 곳. Esc·도구 전환·다른 패널로 이동이 모두 이것을 부른다(배너 문구와 동작을 맞춘다).
 const cancelReplace = () => library.setMode('place');
+ui.subscribe(() => { if (library.state.mode === 'replace' && !selectedItemIds().length) cancelReplace(); }); // 교체 대상이 사라지면 교체 모드도 끝난다(옛 아이템을 조용히 교체하지 않게)
 document.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => { if (b.dataset.panel !== 'products') cancelReplace(); }));
 createLayersPanel(shell.els.layers, { store, ui });
 createPropsPanel(shell.els.props, store, ui, { deleteSelection, itemActions });

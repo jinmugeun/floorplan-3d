@@ -56,7 +56,7 @@ export function arrayCopy(store, ids, kind, params = {}) {
       }
     }
   }
-  const copies = seatCopies(drafts, { walls: f.walls });
+  const copies = seatCopies(drafts, { walls: f.walls, items: f.items });
   if (!copies.length) return [];
   store.dispatch(d => { const g = activeFloor(d); g.items.push(...copies.map(c => structuredClone(c))); reattach(g); });
   return copies.map(c => c.id);

@@ -48,6 +48,8 @@ export function applyNumber(store, sel, name, v) {
   }
   if (sel.type === 'item') {
     const it = activeFloor(store.get()).items.find(x => x.id === sel.id); if (!it) return;
+    if (it.locked) { toast('잠긴 제품은 편집할 수 없습니다'); return; }             // 잠금 = 이동·회전·크기 불가(레이어 패널에서 골라도 같다)
+    if ((name === 'posX' || name === 'posY') && it.attach === 'wall' && it.wallId) return; // 벽 부착 제품의 pos는 (wallId, t)의 결과다
     if (name === 'w' || name === 'd' || name === 'h') {
       const i = { w: 0, d: 1, h: 2 }[name];
       const size = [...it.size];
@@ -128,6 +130,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (sel.type === 'item') {
       const it = f.items.find(x => x.id === sel.id); if (!it) { container.innerHTML = ''; return; }
       const p = productById(it.productId);
+      const onWall = !!(it.attach === 'wall' && it.wallId); // 벽 부착 제품의 위치는 벽 위 t로 정해지므로 읽기 전용
       container.innerHTML = `<h2>제품 상세 정보</h2>
         <p class="muted">${esc(it.name || p?.name || '제품')} · ${esc(it.code || p?.code || '')}</p>
         ${field('크기 (W×D×H)', `<output>${fmtSize(it.size)}</output>`)}
@@ -141,8 +144,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <button type="button" name="resetSize">수치 초기화</button>
         ${lenField(withUnit('바닥으로부터의 높이', units, showUnit), 'z', it.z, -1000, 8000, false, units)}
         ${field('각도 (°)', num('rot', it.rot, 0, 360, 1))}
-        ${lenField(withUnit('위치 X', units, showUnit), 'posX', it.pos[0], -1e6, 1e6, false, units)}
-        ${lenField(withUnit('위치 Y', units, showUnit), 'posY', it.pos[1], -1e6, 1e6, false, units)}
+        ${lenField(withUnit('위치 X', units, showUnit), 'posX', it.pos[0], -1e6, 1e6, onWall, units)}
+        ${lenField(withUnit('위치 Y', units, showUnit), 'posY', it.pos[1], -1e6, 1e6, onWall, units)}
         <button type="button" name="delete" class="danger">제품 삭제</button>`;
       return;
     }

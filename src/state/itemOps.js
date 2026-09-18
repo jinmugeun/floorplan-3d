@@ -51,8 +51,8 @@ export function replaceProduct(store, ids, product, opts = {}) {
 // 스냅샷은 `ui.clipboard`에 남아 있는 남의 객체다. 복제해서 넣는다(붙여넣기를 두 번 해도 서로 얽히지 않는다).
 // 사본은 seatCopies를 지난다: 벽 부착 제품은 붙여넣은 자리의 벽에 다시 앉거나 wallId를 비운다(I-2).
 export function pasteItems(store, snapshots, { delta = [200, 200] } = {}) {
-  const walls = activeFloor(store.get()).walls;
-  const copies = seatCopies((snapshots ?? []).map(i => ({ ...structuredClone(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls });
+  const { walls, items } = activeFloor(store.get());
+  const copies = seatCopies((snapshots ?? []).map(i => ({ ...structuredClone(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls, items });
   if (!copies.length) return [];
   store.dispatch(d => { const f = activeFloor(d); f.items.push(...copies.map(c => structuredClone(c))); reattach(f); });
   return copies.map(c => c.id);

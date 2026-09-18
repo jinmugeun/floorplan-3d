@@ -228,7 +228,7 @@ export function resizeItem(store, id, size, opts = {}) {
 // 사본은 seatCopies를 지난다: 벽 부착 제품은 옮겨진 자리의 벽에 다시 앉거나 wallId를 비운다(I-2).
 export function duplicateItems(store, ids, { delta = [0, 0] } = {}, opts) {
   const f = activeFloor(store.get());
-  const copies = seatCopies(itemsOf(store.get(), ids).map(i => ({ ...structuredClone(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls: f.walls });
+  const copies = seatCopies(itemsOf(store.get(), ids).map(i => ({ ...structuredClone(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls: f.walls, items: f.items });
   store.dispatch(d => { const g = activeFloor(d); g.items.push(...copies.map(c => structuredClone(c))); reattach(g); }, opts);
   return copies.map(c => c.id);
 }

@@ -428,3 +428,37 @@ test('multi selection panel aligns, groups and deletes', async () => {
   el.querySelector('button[name="ungroup"]').click();
   expect(calls).toEqual([['align', 'v', 'start'], ['align', 'h', 'center'], ['group'], ['ungroup']]);
 });
+
+// 최종 리뷰 I-3·I-4: 잠긴 제품은 패널 수치 입력으로도 움직이지 않고, 벽 부착 제품의 위치는 (wallId, t)가 정한다.
+test('applyNumber는 잠긴 제품을 건드리지 않고 벽 부착 제품의 위치 X/Y를 무시한다', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { addItem, updateItem } = await import('../src/state/floorOps.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const { placeOnWall } = await import('../src/geom/items.js');
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const sofa = addItem(store, createItem(productById('sofa-3'), { pos: [1000.5, 1200.25], rot: 30 }));
+  updateItem(store, sofa, { locked: true });
+  const before = activeFloor(store.get()).items.find(i => i.id === sofa);
+  for (const [name, v] of [['posX', 2000], ['posY', 2000], ['rot', 90], ['z', 300], ['w', 1500]]) applyNumber(store, { type: 'item', id: sofa }, name, v);
+  const after = activeFloor(store.get()).items.find(i => i.id === sofa);
+  expect([after.pos, after.rot, after.z, after.size]).toEqual([before.pos, before.rot, before.z, before.size]);
+  expect(document.body.textContent).toContain('잠긴 제품은 편집할 수 없습니다');
+  const w = activeFloor(store.get()).walls[0];
+  const seat = placeOnWall(w, 0.25, 1, [900, 40, 2100], { embed: true });
+  const door = addItem(store, createItem(productById('door-swing-900'), { wallId: w.id, t: 0.25, side: 1, pos: [Math.round(seat.pos[0]), Math.round(seat.pos[1])], rot: seat.rot }));
+  const dBefore = activeFloor(store.get()).items.find(i => i.id === door);
+  applyNumber(store, { type: 'item', id: door }, 'posX', 3333);
+  applyNumber(store, { type: 'item', id: door }, 'posY', 777);
+  const dAfter = activeFloor(store.get()).items.find(i => i.id === door);
+  expect(dAfter.pos).toEqual(dBefore.pos);
+  expect(dAfter.t).toBe(0.25);
+  // 패널의 위치 입력란은 읽기 전용으로 그려진다
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState();
+  createPropsPanel(root, store, ui, {});
+  ui.set({ selection: { type: 'item', id: door } });
+  expect(root.querySelector('[name="posX"]').readOnly).toBe(true);
+  ui.set({ selection: { type: 'item', id: sofa } });
+  expect(root.querySelector('[name="posX"]').readOnly).toBe(false);
+});

@@ -270,6 +270,25 @@ describe('사본의 벽 부착 불변식', () => {
     return { s, id, wall: w };
   }
 
+  test('벽에 수직으로 복제하거나 회전 복사한 문은 원본 위에 겹치지 않고 옆자리에 앉거나 부착을 놓는다', () => {
+    // delta [0, 300]은 같은 벽의 같은 t로 되돌아오므로(nearestWallPlacement) freeT가 옆으로 옮겨야 한다.
+    const a = withDoor();
+    const [c1] = duplicateItems(a.s, [a.id], { delta: [0, 300.5] });
+    const f1 = activeFloor(a.s.get());
+    const orig = f1.items.find(i => i.id === a.id), copy = f1.items.find(i => i.id === c1);
+    expect(copy.wallId).toBe(a.wall.id);
+    expect(Math.abs(copy.t - orig.t) * 4000).toBeGreaterThanOrEqual(899); // 문 너비만큼 떨어진다
+    expect(openingsOnWall(f1.items, f1.walls.find(w => w.id === a.wall.id))).toHaveLength(2);
+    // 회전 복사 3개: 모두 같은 자리로 돌아오지만 서로 다른 t를 받거나 떨어진다.
+    const b = withDoor();
+    const made = arrayCopy(b.s, [b.id], 'rotate', { count: 4, angle: 90 });
+    const f2 = activeFloor(b.s.get());
+    const seated = f2.items.filter(i => i.wallId === b.wall.id);
+    const ts = seated.map(i => Math.round(i.t * 4000));
+    expect(new Set(ts).size).toBe(ts.length);            // 같은 벽에 앉은 것들은 t가 전부 다르다
+    for (const id of made) { const c = f2.items.find(i => i.id === id); if (!c.wallId) expect(c.t).toBe(0); }
+  });
+
   test('복제·붙여넣기·배열 복사 사본이 모두 (wallId, t)와 맞는 pos를 갖는다', () => {
     for (const copy of [
       ({ s, id }) => duplicateItems(s, [id], { delta: [200, 200] }),
@@ -298,7 +317,8 @@ describe('사본의 벽 부착 불변식', () => {
     const f = activeFloor(s.get());
     const copy = f.items.find(i => i.id === copyId);
     expect(copy.wallId).toBe(wall.id);
-    expect(copy.t).toBeCloseTo(0.425, 6);          // 0.375 + 200/4000
+    // 0.375 + 200/4000 = 0.425는 원본 문(900 폭)과 겹치므로 freeT가 문 너비(900/4000 = 0.225)만큼 더 민다.
+    expect(copy.t).toBeCloseTo(0.65, 6);
     const holes = openingsOnWall(f.items, f.walls.find(w => w.id === wall.id));
     expect(holes).toHaveLength(2);
     expect(holes[0].u0).not.toBeCloseTo(holes[1].u0);
