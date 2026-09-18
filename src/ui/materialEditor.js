@@ -15,7 +15,9 @@ export function validateRegion(r, { len, height }) {
     // wallLength는 float라 4000 mm 벽이 3999.9999999999995처럼 나올 수 있다. 화면·기본값은
     // Math.round(len)로 보여주므로(아래 addRow), 그 반올림 값까지는 범위 안으로 쳐준다.
     const lenR = Math.round(len);
-    if (!(u0 >= 0) || !(u1 > u0) || u1 > lenR + 0.001) return `가로 범위는 0 ~ ${lenR} mm 안에서 시작 < 끝이어야 합니다`;
+    // 저장 시 normalizeRegion이 실제 길이 len으로 자르므로, 잘린 뒤에도 시작 < 끝이어야 조용히 사라지지 않는다.
+    const cu0 = Math.min(u0, len), cu1 = Math.min(u1, len);
+    if (!(u0 >= 0) || !(u1 > u0) || u1 > lenR + 0.001 || !(cu1 > cu0)) return `가로 범위는 0 ~ ${lenR} mm 안에서 시작 < 끝이어야 합니다`;
   }
   const z0 = Number(r.z0), z1 = Number(r.z1);
   if (!(z0 >= 0) || !(z1 > z0) || z1 > height + 0.001) return `높이 범위는 0 ~ ${Math.round(height)} mm 안에서 시작 < 끝이어야 합니다`;

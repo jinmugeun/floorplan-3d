@@ -31,6 +31,9 @@ describe('영역 범위 검증', () => {
     expect(validateRegion({ kind: 'rect', u0: -1, u1: 900, z0: 0, z1: 900 }, box)).toContain('가로');
     // len(4000.5)을 반올림하면 4001이라 그 값까지는 범위 안이다 — 뚜렷하게 넘는 값으로 검사한다.
     expect(validateRegion({ kind: 'rect', u0: 0, u1: 4002, z0: 0, z1: 900 }, box)).toContain('가로');
+    // 반올림 여유 구간(len ~ round(len)) 안에만 걸친 영역은 저장 시 len으로 잘려 0폭이 되므로 미리 거른다.
+    expect(validateRegion({ kind: 'rect', u0: 4000.6, u1: 4000.9, z0: 0, z1: 900 }, box)).toContain('가로');
+    expect(validateRegion({ kind: 'rect', u0: 3999.5, u1: 4001, z0: 0, z1: 900 }, box)).toBeNull(); // 잘려도 폭이 남는다
     expect(validateRegion({ kind: 'rect', u0: 0, u1: 900, z0: 900, z1: 100 }, box)).toContain('높이');
     expect(validateRegion({ kind: 'rect', u0: 0, u1: 900, z0: 0, z1: 2301 }, box)).toContain('높이');
   });
