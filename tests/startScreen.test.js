@@ -5,12 +5,13 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { openStartScreen } from '../src/ui/startScreen.js';
 
 test('three cards route to their callbacks and the overlay closes', () => {
+  localStorage.clear();                       // 사용자 템플릿이 카드 수에 끼어들지 않게
   const store = createStore(createEmptyProject());
   const calls = [];
   const s = openStartScreen({ store, onEmpty: () => calls.push('empty'), onUpload: () => calls.push('upload'), onSample: () => calls.push('sample') });
   const overlay = document.querySelector('#startScreen');
   expect(overlay).not.toBeNull();
-  expect(overlay.querySelectorAll('.start-card')).toHaveLength(3);
+  expect(overlay.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(3); // 템플릿 카드는 .tpl로 구분한다
   expect(overlay.textContent).toContain('강당중 조리실');
   overlay.querySelector('[data-start="sample"]').click();
   expect(calls).toEqual(['sample']);
@@ -40,4 +41,19 @@ test('Escape starts an empty project and the first card has focus', () => {
   overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   expect(document.querySelector('#startScreen')).toBeNull();
   expect(calls).toEqual(['empty']);
+});
+
+test('템플릿 카드 목록을 보여주고 고르면 onTemplate이 불린다', () => {
+  localStorage.clear();
+  const picked = [];
+  openStartScreen({ store: createStore(createEmptyProject()), onTemplate: id => picked.push(id) });
+  const root = document.getElementById('startScreen');
+  const cards = [...root.querySelectorAll('[data-template]')];
+  expect(cards.map(c => c.dataset.template)).toEqual(['builtin-studio']); // 빈 프로젝트·샘플은 위 카드가 담당한다
+  expect(cards[0].classList.contains('tpl')).toBe(true);         // 위 카드 3개와 구분되는 클래스
+  expect(root.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(3);
+  expect(root.textContent).toContain('템플릿');
+  cards[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(picked).toEqual(['builtin-studio']);
+  expect(document.getElementById('startScreen')).toBeNull();     // 고르면 닫힌다
 });

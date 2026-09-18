@@ -29,6 +29,7 @@ import { openRoomTemplateDialog } from './ui/templateDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { openStartScreen } from './ui/startScreen.js';
+import { templateProject, saveTemplate } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
 
@@ -200,10 +201,19 @@ if (!restoredOk && isEmpty(store.get())) {
     onEmpty: () => {},
     onUpload: () => openBackgroundDialog({ store }),
     onSample: () => { loadSample(store); view.fit(); },
+    onTemplate: id => { const p = templateProject(id); if (p) { store.replace(p); view.fit(); } },
   });
 }
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
+// 더보기 메뉴의 "템플릿으로 저장"(태스크 14의 topbar.js가 부른다). 이름은 프로젝트 이름을 기본값으로 묻는다.
+function saveAsTemplate() {
+  const name = window.prompt('템플릿 이름을 입력하세요', store.get().name);
+  if (name === null) return;
+  const saved = saveTemplate(name, store.get());
+  shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);
+}
+const actions = { saveAsTemplate }; // 태스크 14의 더보기 메뉴가 받아 갈 동작 묶음
 
 async function loadFile(file) {
   if (!file) return; // 파일 선택 취소
@@ -237,4 +247,4 @@ canvasWrap.addEventListener('drop', async ev => {
 
 window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions }));
 setTool('select'); view.fit(); minimap.fit(500);
-if (import.meta.env.DEV) window.__app = { store, ui, view, view3d }; // 브라우저 검증용, 개발 빌드에서만
+if (import.meta.env.DEV) window.__app = { store, ui, view, view3d, actions }; // 브라우저 검증용, 개발 빌드에서만
