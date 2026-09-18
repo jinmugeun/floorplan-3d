@@ -14,7 +14,7 @@ const COLOR = { wall: 0xe9e6e0, wallTop: 0x3a4351, floor: 0xc9a77a, ceiling: 0xf
 export const TRANSPARENT_OPACITY = { wall: 0.3, floor: 0.6, ceiling: 0.6 };
 // 재질은 메시마다 새로 만든다(불투명도·색이 벽/방마다 다르다). perMesh 표시가 있는 재질만 dispose 대상이다.
 // worldUv: uv가 월드 미터인 지오메트리(ShapeGeometry·ExtrudeGeometry)는 면 크기 대신 미터당 반복 수를 쓴다.
-function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize = null, worldUv = false, uvShift = null } = {}) {
+function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize = null, worldUv = false } = {}) {
   const display = view.display ?? 'normal';
   const base = display === 'white' ? 0xffffff : (color ?? COLOR[kind]);
   const twoSided = kind === 'floor' || kind === 'wallTop';
@@ -27,7 +27,7 @@ function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize
   m.depthWrite = opacity >= 1; // 반투명 면이 깊이 버퍼를 쓰면 뒤 벽과 z-fighting이 난다
   m.userData.perMesh = true;
   // 마감재 지정이 있으면 무늬 텍스처를 붙인다(렌더 우선순위 region > mat > color).
-  if (assignment && (faceSize || worldUv)) applyAssignment(m, assignment, faceSize, { display, worldUv, uvShift });
+  if (assignment && (faceSize || worldUv)) applyAssignment(m, assignment, faceSize, { display, worldUv });
   return m;
 }
 const lineMaterial = color => { const m = new THREE.LineBasicMaterial({ color }); m.userData.perMesh = true; return m; };
@@ -41,8 +41,8 @@ function shapeFrom(pts) { const s = new THREE.Shape(); pts.forEach((p, i) => (i 
 // 벽 본체 ExtrudeGeometry의 측벽 uv를 벽 축으로 만든다. three 기본 WorldUVGenerator는 u로 정점의 x·y 중
 // "지배 축" 하나를 그대로 써서, 기울어진 벽에서는 벽을 따라 잰 거리가 아니라 축에 투영한 거리가 된다
 // (45° 벽에서 무늬가 1/cos45 = 1.414배 늘어나 230 mm 벽돌이 325 mm로 보였다).
-// u = w.a에서 벽 방향으로 잰 거리(m), v = 바닥에서의 높이(m)로 두면 각도와 무관하게 "면 크기 ÷ scale"이 성립하고,
-// 개구부 조각(uvShift)과도 원점이 같아져 문을 넣어도 무늬 위상이 그대로다.
+// u = w.a에서 벽 방향으로 잰 거리(m), v = 바닥에서의 높이(m)로 두면 각도와 무관하게 "면 크기 ÷ scale"이 성립한다.
+// 벽의 모든 면(본체·개구부 조각·방 안쪽 면·마감 영역)이 이 좌표를 쓴다 — 원점이 하나뿐이라 무늬 위상이 저절로 이어진다.
 // 좌표: extrude 로컬 z는 0..height이고 rotateX(π/2) + translate(0, height, 0) 뒤 월드 높이 = height − z다.
 // 캡(벽 윗면·밑면)은 기본대로 평면 좌표(m)를 쓴다 — 바닥 무늬와 이어진다.
 function wallUVGenerator(w, dir) {
@@ -54,20 +54,36 @@ function wallUVGenerator(w, dir) {
   };
 }
 
-// BoxGeometry는 박스를 펼친 uv라 −z 면만 u가 +x 반대로 흐른다. 벽 조각에서 그 면은 벽 한쪽 면 전체라
-// 무늬가 좌우로 뒤집히고 uvShift 위상이 반대 방향으로 어긋난다. −z 면(면 순서 +x −x +y −y +z −z의 마지막)의
-// u만 뒤집어 양면 모두 "벽 시작점 → 끝점" 방향으로 흐르게 한다(벽 본체 ExtrudeGeometry와 같은 규약).
-function mirrorBackFaceU(geo) {
-  const uv = geo.attributes.uv, idx = geo.index;
-  const grp = geo.groups.find(x => x.materialIndex === 5);
-  if (!uv || !idx || !grp) return geo;
-  const done = new Set();
-  for (let k = grp.start; k < grp.start + grp.count; k++) {
-    const i = idx.getX(k);
-    if (done.has(i)) continue;
-    done.add(i);
-    uv.setX(i, 1 - uv.getX(i));
+// 개구부 조각 BoxGeometry의 uv를 벽 축 미터(wallUVGenerator와 같은 규약)로 다시 쓴다.
+// 조각마다 0~1 uv + uvShift로 위상을 맞추던 방식은 assignment.angle이 0이 아니면 깨진다 —
+// 회전 중심이 조각의 uv 원점(조각 왼쪽·아래 모서리)이라 조각마다 다른 축으로 돌아, 30°에서
+// 문 하나를 건너는 동안 무늬 반 칸까지 어긋났다. 좌표를 벽 원점 하나로 통일하면 repeat·offset·
+// rotation이 벽의 모든 면에서 같은 값이 되어 위상이 저절로 맞는다.
+// 로컬 x = 벽 방향, y = 위, z = 벽 법선. 앞뒤 면(±z)은 (u, 높이)를 그대로 쓰고,
+// 개구부 단면(±x)과 인방 밑·창 밑(±y)은 앞면에서 두께만큼 이어 펼친 좌표를 쓴다.
+function metricBoxUv(geo, { u0, u1, z0, z1 }, thickness) {
+  const uc = (u0 + u1) / 2, zc = (z0 + z1) / 2, t = thickness / 2;
+  const pos = geo.attributes.position, uv = geo.attributes.uv, idx = geo.index;
+  for (const grp of geo.groups) {
+    const mi = grp.materialIndex, s = mi === 0 || mi === 2 ? 1 : -1; // +x·+y는 바깥쪽으로 펼친다
+    for (let k = grp.start; k < grp.start + grp.count; k++) {
+      const i = idx.getX(k);
+      const u = uc + pos.getX(i) * 1000, z = zc + pos.getY(i) * 1000, n = pos.getZ(i) * 1000;
+      if (mi <= 1) uv.setXY(i, M(u + s * (t - n)), M(z));
+      else if (mi <= 3) uv.setXY(i, M(u), M(z + s * (t - n)));
+      else uv.setXY(i, M(u), M(z));
+    }
   }
+  uv.needsUpdate = true;
+  return geo;
+}
+
+// 마감 영역 평면의 uv도 벽 축 미터로 다시 쓴다. 'out' 면은 평면을 180° 돌려 붙이므로
+// 로컬 +x가 벽 끝점 쪽을 향한다(s = −1) — 그래도 uv는 늘 w.a에서 잰 u다.
+function metricPlaneUv(geo, { u0, u1, z0, z1 }, s) {
+  const uc = (u0 + u1) / 2, zc = (z0 + z1) / 2;
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, M(uc + s * pos.getX(i) * 1000), M(zc + pos.getY(i) * 1000));
   uv.needsUpdate = true;
   return geo;
 }
@@ -90,7 +106,7 @@ export function sceneSignature(state) {
 // 벽 면의 일부만 다른 재질로 덮는 영역(마감재 편집기). 벽면에서 2 mm 앞으로 띄워 z-파이팅을 피한다.
 // side 'in' = 벽 법선 +n 쪽, 'out' = -n 쪽. 두 방이 공유하는 벽의 안쪽 두 면을 따로 나누는 것은 범위 밖이다.
 // 영역도 벽 본체처럼 개구부를 피해 조각으로 쪼갠다 — 통판이면 문·창 구멍을 도로 막는다.
-// 조각의 uv는 0~1이라 uvShift(영역 왼쪽·아래 모서리에서 잰 자리)로 무늬 위상을 영역 전체와 잇는다.
+// 조각의 uv도 벽 축 미터라(metricPlaneUv) 무늬 위상이 영역 전체·벽 본체와 저절로 이어진다.
 function addRegionMeshes(g, w, view, openings = []) {
   const { dir, n, len, rot } = wallAxis(w);
   for (const side of ['in', 'out']) {
@@ -101,11 +117,9 @@ function addRegionMeshes(g, w, view, openings = []) {
       if (!rg.mat) continue;                        // 재질 없는 영역은 벽면을 불투명 회색 판으로 덮지 않는다
       for (const pc of clipRectByOpenings({ u0, u1, z0: rg.z0, z1: rg.z1 }, openings)) {
         const width = pc.u1 - pc.u0, height = pc.z1 - pc.z0;
-        // 'out' 면은 평면을 180° 돌려 붙이므로 uv u가 벽 끝점 → 시작점으로 흐른다(uv 0 = 조각의 u1 쪽).
-        const shiftU = s > 0 ? pc.u0 - u0 : u1 - pc.u1;
-        const mat = surfaceMaterial('wall', view, null, { assignment: rg.mat, faceSize: [width, height], uvShift: [shiftU, pc.z0 - rg.z0] });
+        const mat = surfaceMaterial('wall', view, null, { assignment: rg.mat, worldUv: true });
         mat.side = THREE.DoubleSide;
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(M(width), M(height)), mat);
+        const mesh = new THREE.Mesh(metricPlaneUv(new THREE.PlaneGeometry(M(width), M(height)), pc, s), mat);
         const c = add(w.a, mul(dir, (pc.u0 + pc.u1) / 2));
         const off = mul(n, s * (w.thickness / 2 + 2));
         mesh.position.copy(toThree([c[0] + off[0], c[1] + off[1], (pc.z0 + pc.z1) / 2]));
@@ -141,20 +155,25 @@ export function buildFloorGroup(floor, view) {
       const faceH = Math.min(r.height, w.height);
       const faceW = Math.hypot(q[0] - p[0], q[1] - p[1]);
       if (!(faceW > 0) || !(faceH > 0)) return;
-      // 면 조각 하나. s는 p에서 p→q를 따라 잰 거리(mm), z는 방 바닥에서 잰 높이(mm)다.
-      // uv는 조각을 0~1로 덮고(uv가 없으면 map이 (0,0) 텍셀 한 점으로만 칠해진다),
-      // uvShift = 조각의 왼쪽·아래 모서리 자리 → 조각끼리도, 개구부 없는 통면과도 무늬 위상이 이어진다.
-      const addFacePiece = (s0, s1, z0, z1) => {
-        const at = s => [p[0] + ((q[0] - p[0]) * s) / faceW, p[1] + ((q[1] - p[1]) * s) / faceW];
-        const A = at(s0), B = at(s1), y0 = M(r.floorOffset + z0), y1 = M(r.floorOffset + z1);
+      // 면의 두 끝 p·q를 벽 축에 투영해 이 면이 덮는 u 구간을 구한다(면은 벽과 평행하다).
+      // 개구부 조각도 벽 축 u로 나오므로, 같은 좌표로 자른 뒤 p→q 위의 점으로 되돌린다.
+      const { dir } = wallAxis(w);
+      const proj = pt => (pt[0] - w.a[0]) * dir[0] + (pt[1] - w.a[1]) * dir[1];
+      const uP = proj(p), uQ = proj(q), fwd = uQ >= uP;
+      // 면 조각 하나. uA·uB는 조각 양 끝의 벽 축 u(mm), z는 벽 밑에서 잰 높이(mm)다.
+      // uv는 벽 본체와 같은 벽 축 미터(u, 높이)다 — 원점이 벽 하나뿐이라 조각끼리도, 개구부 없는
+      // 통면·본체와도 무늬 위상이 이어지고, 무늬를 회전시켜도(assignment.angle) 같은 축으로 돈다.
+      const addFacePiece = (uA, uB, z0, z1) => {
+        const at = u => { const s = (fwd ? u - uP : uP - u) / faceW; return [p[0] + (q[0] - p[0]) * s, p[1] + (q[1] - p[1]) * s]; };
+        const A = at(uA), B = at(uB), y0 = M(r.floorOffset + z0), y1 = M(r.floorOffset + z1);
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute([
           M(A[0]), y0, M(A[1]), M(B[0]), y0, M(B[1]), M(B[0]), y1, M(B[1]), M(A[0]), y1, M(A[1]),
         ], 3));
         geo.setIndex([0, 1, 2, 0, 2, 3]);
-        geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute([M(uA), y0, M(uB), y0, M(uB), y1, M(uA), y1], 2));
         geo.computeVertexNormals();
-        const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: w.matIn, faceSize: [s1 - s0, z1 - z0], uvShift: [s0, z0] }));
+        const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: w.matIn, worldUv: true }));
         face.name = 'wallFace'; face.userData.wallId = w.id; face.userData.roomId = r.id;
         // 방 폴리곤의 회전 방향이 반대로 나올 수 있어(법선이 밖을 향할 수 있어) 양면으로 둔다.
         face.material.side = THREE.DoubleSide;
@@ -162,15 +181,9 @@ export function buildFloorGroup(floor, view) {
       };
       // 안쪽 면도 벽 본체와 같은 조각으로 낸다 — 통판이면 본체가 뚫어 놓은 문·창을 방 쪽에서 도로 막는다.
       const holes = openingsOnWall(floor.items, w);
-      if (!holes.length) { addFacePiece(0, faceW, 0, faceH); return; }
-      // 조각은 벽 축 u(w.a에서 벽 방향으로 잰 거리)로 나오므로, 면의 두 끝 p·q를 벽 축에 투영해
-      // 면이 덮는 u 구간을 구하고(면은 벽과 평행하다) 거기에 맞춰 자른 뒤 p→q 위의 거리로 되돌린다.
-      const { dir } = wallAxis(w);
-      const proj = pt => (pt[0] - w.a[0]) * dir[0] + (pt[1] - w.a[1]) * dir[1];
-      const uP = proj(p), uQ = proj(q), fwd = uQ >= uP;
+      if (!holes.length) { addFacePiece(uP, uQ, 0, faceH); return; }
       for (const pc of wallPieces({ ...w, height: faceH }, holes, { start: Math.min(uP, uQ), end: Math.max(uP, uQ) })) {
-        const s0 = fwd ? pc.u0 - uP : uP - pc.u1, s1 = fwd ? pc.u1 - uP : uP - pc.u0;
-        addFacePiece(s0, s1, pc.z0, pc.z1);
+        addFacePiece(fwd ? pc.u0 : pc.u1, fwd ? pc.u1 : pc.u0, pc.z0, pc.z1);
       }
     });
   }
@@ -180,10 +193,9 @@ export function buildFloorGroup(floor, view) {
     const { dir, len, rot } = wallAxis(w);
     // 벽 본체 메시 하나(및 hiddenLine이면 그 엣지)를 그룹에 넣는다. 개구부가 있는 벽은 이 함수를
     // 조각마다 부른다 — 모두 같은 name: 'wall' / userData.wallId라 컷어웨이가 그대로 동작한다.
-    // faceSize를 주면 0~1 uv(BoxGeometry 조각), 안 주면 월드 uv(ExtrudeGeometry 본체)로 반복을 정한다.
-    // uvShift(mm)는 조각의 uv 원점이 벽에서 어디인지 알려 무늬 위상을 벽 전체와 잇는다.
-    const addWallMesh = (geo, pos = null, rotY = 0, faceSize = null, uvShift = null) => {
-      const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null), { assignment: w.matOut, faceSize, worldUv: !faceSize, uvShift }));
+    // 지오메트리는 모두 벽 축 미터 uv라 반복은 월드 uv(미터당 반복 수)로 잡는다.
+    const addWallMesh = (geo, pos = null, rotY = 0) => {
+      const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null), { assignment: w.matOut, worldUv: true }));
       if (pos) mesh.position.copy(pos);
       mesh.rotation.y = rotY;
       mesh.name = 'wall'; mesh.userData.wallId = w.id; mesh.castShadow = true; mesh.receiveShadow = true;
@@ -204,11 +216,10 @@ export function buildFloorGroup(floor, view) {
       const start = joined(w.a) ? -w.thickness / 2 : 0;
       const end = len + (joined(w.b) ? w.thickness / 2 : 0);
       for (const pc of wallPieces(w, openings, { start, end })) {
-        const geo = mirrorBackFaceU(new THREE.BoxGeometry(M(pc.u1 - pc.u0), M(pc.z1 - pc.z0), M(w.thickness)));
+        // uv를 벽 축 미터로 다시 써서 조각끼리도, 개구부 없는 벽과도 무늬가 이어진다(회전 각도가 있어도).
+        const geo = metricBoxUv(new THREE.BoxGeometry(M(pc.u1 - pc.u0), M(pc.z1 - pc.z0), M(w.thickness)), pc, w.thickness);
         const c = add(w.a, mul(dir, (pc.u0 + pc.u1) / 2));
-        // BoxGeometry는 면마다 uv가 0~1이라 조각 크기로 반복을 잡는다(벽 전체 길이를 쓰면 조각마다 무늬 크기가 달라진다).
-        // uvShift = 조각의 왼쪽·아래 모서리가 벽에서 있는 자리(u0, z0) → 조각끼리도, 개구부 없는 벽과도 무늬가 이어진다.
-        addWallMesh(geo, toThree([c[0], c[1], (pc.z0 + pc.z1) / 2]), -RAD(rot), [pc.u1 - pc.u0, pc.z1 - pc.z0], [pc.u0, pc.z0]);
+        addWallMesh(geo, toThree([c[0], c[1], (pc.z0 + pc.z1) / 2]), -RAD(rot));
       }
     }
     // 벽 윗면도 월드 uv(shape의 x/y)라 벽이 회전해 있어도 미터당 반복 수로 잡아야 크기가 맞는다.

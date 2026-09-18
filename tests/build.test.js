@@ -264,14 +264,16 @@ test('벽 본체는 matOut, 방 안쪽 면은 matIn 텍스처를 쓴다(소수 �
   expect(body.material.map.repeat.x).toBeCloseTo(1000 / 230, 9);
   expect(body.material.map.repeat.y).toBeCloseTo(1000 / 60, 9);
   // 방 안쪽 면은 직접 만든 쿼드다: uv가 없으면 무늬가 (0,0) 텍셀 한 점으로 뭉개진다.
+  // uv는 벽 본체와 같은 벽 축 미터(u = w.a에서 잰 거리, v = 높이)라 repeat도 미터당 반복 수다.
   const faceUv = face.geometry.attributes.uv;
   expect(faceUv).toBeTruthy();
   expect(faceUv.count).toBe(4);
   expect(faceUv.itemSize).toBe(2);
-  expect([...faceUv.array]).toEqual([0, 0, 1, 0, 1, 1, 0, 1]);  // 면을 정확히 한 번 덮는다
-  expect(uvSpan(face.geometry)).toEqual([1, 1]);
-  // 0~1 uv이므로 반복 수 = 면 크기 ÷ 무늬 크기. 페인트는 scale [1000, 1000]이라 높이 2300 → 2.3회.
-  expect(face.material.map.repeat.y).toBeCloseTo(2300 / 1000, 9);
+  expect(face.material.map.repeat.y).toBeCloseTo(1000 / 1000, 9);   // 페인트 scale [1000, 1000]
+  const [fu, fv] = uvSpan(face.geometry);
+  expect(fv).toBeCloseTo(2.3, 6);                                   // 면 높이 2300 mm
+  expect(fv * face.material.map.repeat.y).toBeCloseTo(2300 / 1000, 6); // 보이는 반복 수는 그대로
+  expect(fu).toBeCloseTo(3.79, 6);                                  // 4000 − 양 끝 벽 105씩
 });
 
 test('바닥·천장은 방 재질을 쓰고 월드 uv 반복(미터당)을 쓴다', () => {
@@ -306,7 +308,14 @@ test('월드 uv 면은 방이 커져도 무늬 한 칸 크기가 같다(타일 �
   expect(uvSpan(big.geometry)[0] * big.material.map.repeat.x).toBeCloseTo(6000.5 / 300, 2);
 });
 
-test('개구부가 있는 벽 조각은 조각마다 제 크기로 반복한다', async () => {
+// BoxGeometry 한 면의 uv 범위. uv가 벽 축 미터라 면마다 다르다(0~1이 아니다).
+function faceUvSpan(geo, materialIndex) {
+  const uv = geo.attributes.uv, vs = boxFaceVerts(geo, materialIndex);
+  const us = vs.map(i => uv.getX(i)), ws = vs.map(i => uv.getY(i));
+  return [Math.max(...us) - Math.min(...us), Math.max(...ws) - Math.min(...ws)];
+}
+
+test('개구부가 있는 벽 조각의 uv는 벽 축 미터라 조각마다 무늬 실치수가 같다', async () => {
   const { createItem } = await import('../src/state/schema.js');
   const { productById } = await import('../src/products/catalog.js');
   const walls = rectWalls([0, 0], [4000, 3000], 200).map(w => ({ ...w, matOut: assign('brick-red') }));
@@ -316,20 +325,25 @@ test('개구부가 있는 벽 조각은 조각마다 제 크기로 반복한다'
   const pieces = g.children.filter(c => c.name === 'wall' && c.userData.wallId === target.id);
   expect(pieces).toHaveLength(3);
   expect(pieces.every(c => c.geometry.type === 'BoxGeometry')).toBe(true);
-  // BoxGeometry는 면마다 uv가 0~1이라 조각 크기(m) × 1000 / 230 이 그 조각의 벽돌 수다.
+  // 반복 배율은 조각 크기와 무관한 미터당 반복 수고, 보이는 벽돌 수 = uv 범위 × repeat이다.
   for (const p of pieces) {
-    expect(uvSpan(p.geometry)).toEqual([1, 1]);
+    expect(p.material.map.repeat.x).toBeCloseTo(1000 / 230, 6);
+    expect(p.material.map.repeat.y).toBeCloseTo(1000 / 60, 6);
     const { width, height } = p.geometry.parameters;
-    expect(p.material.map.repeat.x).toBeCloseTo((width * 1000) / 230, 6);
-    expect(p.material.map.repeat.y).toBeCloseTo((height * 1000) / 60, 6);
+    const [su, sv] = faceUvSpan(p.geometry, 4);        // 앞면(+z) = 벽 한쪽 면
+    expect(su).toBeCloseTo(width, 5);                  // uv 범위가 곧 조각 크기(m). 정점은 float32다
+    expect(sv).toBeCloseTo(height, 5);
+    expect(su * p.material.map.repeat.x).toBeCloseTo((width * 1000) / 230, 4);
+    expect(sv * p.material.map.repeat.y).toBeCloseTo((height * 1000) / 60, 4);
   }
-  // 조각마다 값이 달라야 한다 — 벽 전체 크기를 공유하면 인방(문 위 200 mm)에 벽돌 38줄이 들어간다.
+  // 인방(문 위 200 mm)에는 벽돌이 3.33줄만 들어간다 — 벽 전체 크기로 반복을 잡으면 38줄이 된다.
   const lintel = pieces.find(p => p.geometry.parameters.height < 0.5);
-  expect(lintel.material.map.repeat.y).toBeCloseTo((lintel.geometry.parameters.height * 1000) / 60, 6);
-  expect(lintel.material.map.repeat.y).toBeLessThan(5);
+  expect(faceUvSpan(lintel.geometry, 4)[1] * lintel.material.map.repeat.y).toBeCloseTo(200 / 60, 4);
   const side = pieces.find(p => p.geometry.parameters.height > 2);
-  expect(side.material.map.repeat.y).toBeCloseTo(2300 / 60, 6);
-  expect(side.material.map.repeat.x).not.toBeCloseTo(lintel.material.map.repeat.x, 3);
+  expect(faceUvSpan(side.geometry, 4)[1] * side.material.map.repeat.y).toBeCloseTo(2300 / 60, 4);
+  // 개구부 단면(±x)·인방 밑(±y)도 실치수다: 두께 200 mm만큼 펼친 좌표를 쓴다.
+  expect(faceUvSpan(lintel.geometry, 3)[1]).toBeCloseTo(0.2, 5);
+  expect(faceUvSpan(side.geometry, 0)[0]).toBeCloseTo(0.2, 5);
   disposeGroup(g);
 });
 
@@ -364,46 +378,59 @@ test('applyAssignment uvShift는 offset과 같은 단위(mm)로 무늬 위상을
   expect(plain.map.offset.x).toBe(0);                         // uvShift를 안 주면 예전 그대로
 });
 
-test('개구부 조각의 무늬 위상이 문 없는 벽·옆 조각과 이어진다(소수 좌표)', async () => {
+// 렌더가 실제로 쓰는 uv 행렬(offset·repeat·rotation·center)로 텍셀을 구한다.
+const texel = (map, u, v) => { map.updateMatrix(); const p = new THREE.Vector3(u, v, 1).applyMatrix3(map.matrix); return [p.x, p.y]; };
+const frac = x => ((x % 1) + 1) % 1;
+const sameTexel = (a, b, msg = '') => {
+  const near = (x, y) => Math.abs(frac(x) - frac(y)) < 1e-4 || Math.abs(frac(x) - frac(y)) > 1 - 1e-4;   // 정점이 float32
+  for (let i = 0; i < 2; i++) expect(near(a[i], b[i]), `${msg}: ${a} vs ${b}`).toBe(true);
+};
+const expectUv = (got, want, msg) => { expect(got[0], msg).toBeCloseTo(want[0], 5); expect(got[1], msg).toBeCloseTo(want[1], 5); };
+// BoxGeometry 한 면에서 로컬 좌표가 극값인 꼭짓점의 uv.
+const cornerUv = (mesh, mi, maxX, maxY) => {
+  const pos = mesh.geometry.attributes.position, uv = mesh.geometry.attributes.uv;
+  const vs = boxFaceVerts(mesh.geometry, mi);
+  const x = Math[maxX ? 'max' : 'min'](...vs.map(i => pos.getX(i))), y = Math[maxY ? 'max' : 'min'](...vs.map(i => pos.getY(i)));
+  const i = vs.find(k => pos.getX(k) === x && pos.getY(k) === y);
+  return [uv.getX(i), uv.getY(i)];
+};
+
+test('개구부 조각의 무늬 위상이 문 없는 벽과 이어진다(소수 좌표, 무늬를 돌려도)', async () => {
   const { createItem } = await import('../src/state/schema.js');
   const { productById } = await import('../src/products/catalog.js');
-  const mk = () => rectWalls([0.5, 0.25], [4000.5, 3000.75], 200).map(w => ({ ...w, matOut: assign('brick-red') }));
-  const walls = mk();
-  const target = walls[0];                                    // [0.5, 0.25] → [4000.5, 0.25], 길이 4000
-  const items = [createItem(productById('door-swing-900'), { wallId: target.id, t: 0.5, pos: [2000.5, 0.25] })];
-  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), items, height: 2300 }, { wallOpacity: 1, v3: {} });
-  const [left, lintel, right] = g.children
-    .filter(c => c.name === 'wall' && c.userData.wallId === target.id)
-    .sort((a, b) => a.position.x - b.position.x);
-  // 문 900이 벽 가운데(u 1550~2450), 양끝은 접합이라 −100부터 시작한다. 조각의 왼쪽·아래 모서리 자리만큼 무늬를 민다.
-  expect(left.material.map.offset.x).toBeCloseTo(-100 / 230, 6);
-  expect(left.material.map.offset.y).toBeCloseTo(0, 6);
-  expect(lintel.material.map.offset.x).toBeCloseTo(1550 / 230, 6);
-  expect(lintel.material.map.offset.y).toBeCloseTo(2100 / 60, 6);   // 문 높이 2100 위의 인방
-  expect(right.material.map.offset.x).toBeCloseTo(2450 / 230, 6);   // = 10.65217
-  // 문 오른쪽 조각의 위상 = 문이 없었다면 그 자리(u = 2450 mm)에 왔을 위상. 본체는 월드 uv(m)라 repeat × 2.45를 더한다.
-  const plain = mk();
-  const bodyMap = buildFloorGroup({ walls: plain, rooms: detectRooms(plain), height: 2300 }, { wallOpacity: 1 })
-    .children.find(c => c.name === 'wall' && c.userData.wallId === plain[0].id).material.map;
-  expect(right.material.map.offset.x).toBeCloseTo(bodyMap.repeat.x * 2.45 + bodyMap.offset.x, 6);
-  // 조각끼리도 이어진다: 왼쪽 조각의 끝 위상 + 문 폭(900 mm) = 오른쪽 조각의 시작 위상.
-  expect(left.material.map.offset.x + left.material.map.repeat.x + 900 / 230).toBeCloseTo(right.material.map.offset.x, 6);
-  // 렌더가 실제로 쓰는 uv 행렬(offset·repeat·rotation·center)로 텍셀을 구해도 이어져야 한다: 오른쪽 조각의 왼쪽 아래(uv 0,0)와
-  // 문 없는 본체의 u = 2.45 m, 인방의 왼쪽 아래와 본체의 (1.55 m, 2.1 m)가 같은 무늬 칸 위상(mod 1)에 있다.
-  const texel = (map, u, v) => { map.updateMatrix(); const p = new THREE.Vector3(u, v, 1).applyMatrix3(map.matrix); return [p.x, p.y]; };
-  const frac = x => ((x % 1) + 1) % 1;
-  const same = (a, b) => { for (let i = 0; i < 2; i++) expect(Math.abs(frac(a[i]) - frac(b[i])) < 1e-6 || Math.abs(frac(a[i]) - frac(b[i])) > 1 - 1e-6, `texel :  vs `).toBe(true); };
-  same(texel(right.material.map, 0, 0), texel(bodyMap, 2.45, 0));
-  same(texel(lintel.material.map, 0, 0), texel(bodyMap, 1.55, 2.1));
-  same(texel(left.material.map, 1, 0), texel(bodyMap, 1.55, 0)); // 왼쪽 조각의 오른쪽 끝(u 1550)
-  // 벽 양면 모두 u가 "벽 시작점 → 끝점"으로 흐른다(BoxGeometry의 −z 면은 기본이 반대라 뒤집었다).
-  const pos = right.geometry.attributes.position, uv = right.geometry.attributes.uv;
-  for (const mi of [4, 5]) {
-    const vs = boxFaceVerts(right.geometry, mi);
-    const minX = Math.min(...vs.map(i => pos.getX(i)));
-    expect(vs.filter(i => pos.getX(i) === minX).map(i => uv.getX(i)), `face ${mi}`).toEqual([0, 0]);
+  const mk = angle => rectWalls([0.5, 0.25], [4000.5, 3000.75], 200).map(w => ({ ...w, matOut: assign('brick-red', { offset: [46, 15], angle }) }));
+  // 무늬를 돌리면 회전 중심이 uv 원점이다. 조각마다 원점이 다르면(0~1 uv + uvShift) 30°에서 문을
+  // 건너는 동안 위상이 어긋났다 — 벽 축 미터 uv는 원점이 벽 하나뿐이라 각도와 무관하게 이어진다.
+  for (const angle of [0, 30]) {
+    const walls = mk(angle);
+    const target = walls[0];                                  // [0.5, 0.25] → [4000.5, 0.25], 길이 4000
+    const items = [createItem(productById('door-swing-900'), { wallId: target.id, t: 0.5, pos: [2000.5, 0.25] })];
+    const g = buildFloorGroup({ walls, rooms: detectRooms(walls), items, height: 2300 }, { wallOpacity: 1, v3: {} });
+    const [left, lintel, right] = g.children
+      .filter(c => c.name === 'wall' && c.userData.wallId === target.id)
+      .sort((a, b) => a.position.x - b.position.x);
+    const plain = mk(angle);
+    const pg = buildFloorGroup({ walls: plain, rooms: detectRooms(plain), height: 2300 }, { wallOpacity: 1 });
+    const bodyMap = pg.children.find(c => c.name === 'wall' && c.userData.wallId === plain[0].id).material.map;
+    // 문 900이 벽 가운데(u 1550~2450). 조각의 uv는 벽 축 미터라 그 자리 값이 그대로 들어 있다.
+    expectUv(cornerUv(right, 4, false, false), [2.45, 0], `${angle}° 오른쪽`);
+    expectUv(cornerUv(left, 4, true, false), [1.55, 0], `${angle}° 왼쪽`);
+    expectUv(cornerUv(lintel, 4, false, false), [1.55, 2.1], `${angle}° 인방`);
+    expect(cornerUv(lintel, 4, true, true)[1]).toBeCloseTo(2.3, 6);
+    // 벽 양면 모두 u가 "벽 시작점 → 끝점"으로 흐른다(뒷면 −z도 같은 u를 쓴다).
+    for (const mi of [4, 5]) expectUv(cornerUv(right, mi, false, false), [2.45, 0], `${angle}° face ${mi}`);
+    // 조각·본체가 같은 uv 규약이라 repeat·offset·rotation이 모두 같은 값이고, 위상이 저절로 맞는다.
+    for (const [nm, pc] of [['왼쪽', left], ['인방', lintel], ['오른쪽', right]]) {
+      expect(pc.material.map.repeat.x, `${angle}° ${nm}`).toBeCloseTo(bodyMap.repeat.x, 9);
+      expect(pc.material.map.offset.x, `${angle}° ${nm}`).toBeCloseTo(bodyMap.offset.x, 9);
+      expect(pc.material.map.rotation, `${angle}° ${nm}`).toBeCloseTo(bodyMap.rotation, 9);
+    }
+    // 문 양옆 조각이 만나는 자리(문 좌우 끝)의 텍셀이 문 없는 벽의 같은 자리와 한 칸 위상이다.
+    sameTexel(texel(right.material.map, ...cornerUv(right, 4, false, false)), texel(bodyMap, 2.45, 0), `${angle}° 오른쪽`);
+    sameTexel(texel(left.material.map, ...cornerUv(left, 4, true, false)), texel(bodyMap, 1.55, 0), `${angle}° 왼쪽`);
+    sameTexel(texel(lintel.material.map, ...cornerUv(lintel, 4, false, false)), texel(bodyMap, 1.55, 2.1), `${angle}° 인방`);
+    disposeGroup(g); disposeGroup(pg);
   }
-  disposeGroup(g);
 });
 
 test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들고 있다', () => {
@@ -427,12 +454,20 @@ test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들�
   expect(rect.geometry.parameters.width).toBeCloseTo(1.0, 6);   // 1500.5 - 500.5
   // 벽 면(두께 200의 절반)에서 2mm 앞: 아래 벽(y = 0)은 법선이 남(+y) → three z
   expect(Math.abs(rect.position.z)).toBeCloseTo(0.102, 6);
-  // PlaneGeometry는 uv가 0~1이라 반복 수 = 영역 크기 ÷ 무늬 크기 그대로다.
-  expect(uvSpan(band.geometry)).toEqual([1, 1]);
-  expect(band.material.map.repeat.x).toBeCloseTo(4000 / 300, 6);   // 4000 mm 띠 / 300 타일
-  expect(band.material.map.repeat.y).toBeCloseTo(1200 / 300, 6);
-  expect(rect.material.map.repeat.x).toBeCloseTo(1000 / 230, 6);   // 1500.5 - 500.5 = 1000 / 적벽돌 230
-  expect(rect.material.map.repeat.y).toBeCloseTo(600 / 60, 6);
+  // 영역 평면의 uv도 벽 축 미터(u = w.a에서 잰 거리, v = 높이)다 → 반복은 미터당 반복 수,
+  // 보이는 타일 수 = uv 범위 × repeat. 영역 크기가 달라도 타일 실치수가 같다.
+  expect(uvSpan(band.geometry)[0]).toBeCloseTo(4, 6);
+  expect(uvSpan(band.geometry)[1]).toBeCloseTo(1.2, 6);
+  expect(band.material.map.repeat.x).toBeCloseTo(1000 / 300, 6);
+  expect(uvSpan(band.geometry)[0] * band.material.map.repeat.x).toBeCloseTo(4000 / 300, 6);   // 4000 mm 띠 / 300 타일
+  expect(uvSpan(band.geometry)[1] * band.material.map.repeat.y).toBeCloseTo(1200 / 300, 6);
+  expect(uvSpan(rect.geometry)[0] * rect.material.map.repeat.x).toBeCloseTo(1000 / 230, 5);   // 1500.5 - 500.5 = 1000 / 적벽돌 230
+  expect(uvSpan(rect.geometry)[1] * rect.material.map.repeat.y).toBeCloseTo(600 / 60, 5);
+  // 벽 축 좌표라 uv 값 자체가 영역이 벽에서 있는 자리다(0~1 uv면 늘 0~1이었다).
+  const ruv = rect.geometry.attributes.uv;
+  const rus = [...Array(ruv.count).keys()].map(i => ruv.getX(i)), rvs = [...Array(ruv.count).keys()].map(i => ruv.getY(i));
+  expect(Math.min(...rus)).toBeCloseTo(0.5005, 4);   // u0 500.5 mm
+  expect(Math.min(...rvs)).toBeCloseTo(0.3, 5);      // z0 300 mm
   disposeGroup(g);
 });
 
@@ -505,41 +540,48 @@ test('문이 있는 벽의 방 안쪽 면은 세 조각으로 쪼개지고 문 �
   disposeGroup(g);
 });
 
-test('개구부가 없는 벽의 안쪽 면은 예전처럼 쿼드 하나(uv 0~1)다', async () => {
+test('개구부가 없는 벽의 안쪽 면은 쿼드 하나고 uv는 벽 축 미터다', async () => {
   const { walls, target, g } = await doorFloor();
   const other = walls.find(w => w.id !== target.id);
   const faces = g.children.filter(c => c.name === 'wallFace' && c.userData.wallId === other.id);
   expect(faces).toHaveLength(1);
-  expect([...faces[0].geometry.attributes.uv.array]).toEqual([0, 0, 1, 0, 1, 1, 0, 1]);
-  expect(uvSpan(faces[0].geometry)).toEqual([1, 1]);
+  expect(faces[0].geometry.attributes.uv.count).toBe(4);
+  const [su, sv] = uvSpan(faces[0].geometry);
+  // u 범위 = 면 길이(m), v 범위 = 면 높이(m). 3000.5 벽이라 짧은 쪽 면은 3000.5 − 210.
+  const len = faces[0].geometry.attributes.position;
+  expect(su).toBeCloseTo(Math.hypot(len.getX(1) - len.getX(0), len.getZ(1) - len.getZ(0)), 5);
+  expect(sv).toBeCloseTo(2.3, 5);
   disposeGroup(g);
 });
 
-test('안쪽 면 조각의 무늬 위상이 문 없는 통면과 이어진다', async () => {
-  const { walls, target, g } = await doorFloor({ matIn: assign('brick-red') });
-  const plainWalls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200).map(w => ({ ...w, matIn: assign('brick-red') }));
-  const plainT = plainWalls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);
-  const pg = buildFloorGroup({ walls: plainWalls, rooms: detectRooms(plainWalls), height: 2300 }, { wallOpacity: 1 });
-  const plain = pg.children.find(c => c.name === 'wallFace' && c.userData.wallId === plainT.id);
-  const pieces = g.children.filter(c => c.name === 'wallFace' && c.userData.wallId === target.id).sort((a, b) => a.position.x - b.position.x);
-  const vtx = (m, i) => { const a = m.geometry.attributes.position; return new THREE.Vector3(a.getX(i), a.getY(i), a.getZ(i)); };
-  const P = vtx(plain, 0), faceW = P.distanceTo(vtx(plain, 1));   // 통면 정점 0 = p@바닥, 1 = q@바닥
-  expect(faceW).toBeCloseTo(3.79, 6);                             // 4000 − 양 끝 벽 105씩
-  const texel = (map, u, v) => { map.updateMatrix(); const p = new THREE.Vector3(u, v, 1).applyMatrix3(map.matrix); return [p.x, p.y]; };
-  const frac = x => ((x % 1) + 1) % 1;
-  const near = (x, y) => Math.abs(frac(x) - frac(y)) < 1e-4 || Math.abs(frac(x) - frac(y)) > 1 - 1e-4;   // 정점이 float32
-  const same = (a, b, msg) => { for (let i = 0; i < 2; i++) expect(near(a[i], b[i]), `${msg}: ${a} vs ${b}`).toBe(true); };
-  for (const [name, pc] of [['왼쪽', pieces[0]], ['인방', pieces[1]], ['오른쪽', pieces[2]]]) {
-    const A = vtx(pc, 0);                                         // 조각의 uv (0,0) 정점
-    const s = Math.hypot(A.x - P.x, A.z - P.z);                   // 통면 p에서 면을 따라 잰 거리(m)
-    same(texel(pc.material.map, 0, 0), texel(plain.material.map, s / faceW, (A.y * 1000) / 2300), name);
+test('안쪽 면 조각의 uv도 벽 축 미터라 본체·통면과 위상이 이어진다(무늬를 돌려도)', async () => {
+  for (const angle of [0, 30]) {
+    const mat = () => assign('brick-red', { offset: [46, 15], angle });
+    const { target, g } = await doorFloor({ matIn: mat(), matOut: mat() });
+    const plainWalls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200).map(w => ({ ...w, matIn: mat() }));
+    const plainT = plainWalls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);
+    const pg = buildFloorGroup({ walls: plainWalls, rooms: detectRooms(plainWalls), height: 2300 }, { wallOpacity: 1 });
+    const plain = pg.children.find(c => c.name === 'wallFace' && c.userData.wallId === plainT.id);
+    const pieces = g.children.filter(c => c.name === 'wallFace' && c.userData.wallId === target.id).sort((a, b) => a.position.x - b.position.x);
+    const body = g.children.find(c => c.name === 'wall' && c.userData.wallId === target.id);
+    const uvs = m => { const a = m.geometry.attributes.uv; return [...Array(a.count).keys()].map(i => [a.getX(i), a.getY(i)]); };
+    // 조각의 uv는 벽 축 자리 그대로다: 문(u 1550~2450, z 0~2100)의 경계가 조각 모서리로 들어 있다.
+    expect(Math.max(...uvs(pieces[0]).map(p => p[0])), `${angle}° 왼쪽`).toBeCloseTo(1.55, 5);
+    expect(Math.min(...uvs(pieces[2]).map(p => p[0])), `${angle}° 오른쪽`).toBeCloseTo(2.45, 5);
+    expect(Math.min(...uvs(pieces[1]).map(p => p[1])), `${angle}° 인방`).toBeCloseTo(2.1, 5);
+    expect(Math.min(...uvs(pieces[0]).map(p => p[0])), `${angle}° 면 끝`).toBeCloseTo(0.1055, 4);  // 방 폴리곤이 5 mm 더 들어간다
+    // 안쪽 면·통면·벽 본체가 모두 같은 uv 규약이라 map 설정이 같고 위상이 저절로 맞는다.
+    for (const [nm, m] of [['왼쪽', pieces[0]], ['인방', pieces[1]], ['오른쪽', pieces[2]], ['통면', plain], ['본체', body]]) {
+      expect(m.material.map.repeat.x, `${angle}° ${nm}`).toBeCloseTo(1000 / 230, 9);
+      expect(m.material.map.offset.x, `${angle}° ${nm}`).toBeCloseTo(46 / 230, 9);
+      expect(m.material.map.rotation, `${angle}° ${nm}`).toBeCloseTo((angle * Math.PI) / 180, 9);
+    }
+    // 문 좌우 끝의 텍셀이 문 없는 통면의 같은 자리와 한 무늬 칸 위상이다(회전 각도가 있어도).
+    sameTexel(texel(pieces[2].material.map, 2.45, 0), texel(plain.material.map, 2.45, 0), `${angle}° 오른쪽`);
+    sameTexel(texel(pieces[0].material.map, 1.55, 0), texel(plain.material.map, 1.55, 0), `${angle}° 왼쪽`);
+    sameTexel(texel(pieces[1].material.map, 1.55, 2.1), texel(body.material.map, 1.55, 2.1), `${angle}° 인방`);
+    disposeGroup(g); disposeGroup(pg);
   }
-  // 오른쪽 조각은 문 오른쪽(벽 축 u 2450)에서 시작하고, 반복 수는 제 폭으로 잡는다.
-  expect(wallUZ(pieces[2], target, 0)[0]).toBeCloseTo(2450, 3);
-  const widthMm = m => vtx(m, 0).distanceTo(vtx(m, 1)) * 1000;
-  expect(pieces[2].material.map.repeat.x).toBeCloseTo(widthMm(pieces[2]) / 230, 4);
-  expect(pieces[1].material.map.repeat.y).toBeCloseTo(200 / 60, 4);     // 인방 200 mm
-  disposeGroup(g); disposeGroup(pg);
 });
 
 test('영역도 개구부를 피해 쪼개지고, 개구부 안에 잠긴 영역은 사라진다', async () => {
@@ -562,9 +604,12 @@ test('영역도 개구부를 피해 쪼개지고, 개구부 안에 잠긴 영역
   expect(band[1].geometry.parameters.width).toBeCloseTo(1.55, 6); // 4000 − 2450
   expect(band.every(r => r.geometry.parameters.height === 0.9)).toBe(true);
   expect(band[1].position.x).toBeCloseTo((2450 + 4000) / 2 / 1000, 6);
-  // 무늬 위상은 띠 전체와 이어진다: 오른쪽 조각은 u 2450에서 시작(300 타일).
-  expect(band[0].material.map.offset.x).toBeCloseTo(0, 9);
-  expect(band[1].material.map.offset.x).toBeCloseTo(2450 / 300, 6);
+  // uv가 벽 축 미터라 무늬 위상은 띠 전체와 저절로 이어진다: 오른쪽 조각의 uv가 2.45에서 시작한다.
+  const uOf = m => { const a = m.geometry.attributes.uv; return [...Array(a.count).keys()].map(i => a.getX(i)); };
+  expect(Math.max(...uOf(band[0]))).toBeCloseTo(1.55, 5);
+  expect(Math.min(...uOf(band[1]))).toBeCloseTo(2.45, 5);
+  expect(band[0].material.map.offset.x).toBeCloseTo(band[1].material.map.offset.x, 9);
+  expect(band[0].material.map.repeat.x).toBeCloseTo(1000 / 300, 9);
   // 창(z 900~2100)은 z가 겹치지 않으니 z 0~900 띠를 나누지 않는다.
   const w2 = rectWalls([0, 0], [4000, 3000], 200);
   const t2 = w2.find(w => w.a[1] === 0 && w.b[1] === 0);
