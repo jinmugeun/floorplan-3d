@@ -6,6 +6,7 @@ import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
+import { createItemDragger } from '../src/view2d/tools/itemDrag.js';
 
 const fakeView = { camera: { scale: 0.1 }, fit: () => {} };
 function setup(items = [], opts = {}) {
@@ -92,6 +93,31 @@ describe('아이템 선택과 이동', () => {
     t.onPointerDown([1000, 1000], {}); t.onPointerUp([1000, 1000], {});
     expect(ui.get().selection.type).toBe('multi');
     expect([...ui.get().selection.ids].sort()).toEqual([...ids].sort());
+  });
+
+  // I-5: 잠긴 아이템은 클릭으로 잡히지 않지만 그룹을 통해 선택에 들어온다. 그때도 끌려가면 안 된다.
+  test('그룹 드래그는 잠긴 멤버를 두고 움직인다', () => {
+    const { store, ui, t, ids } = setup([['chair-dining', { pos: [1000, 1000] }], ['chair-dining', { pos: [2000.5, 1000.25], locked: true }]]);
+    store.dispatch(d => { activeFloor(d).groups.push({ id: 'g1', itemIds: ids }); });
+    t.onPointerDown([1000, 1000], {});
+    expect(ui.get().selection.type).toBe('multi'); // 그룹 전체가 선택된다
+    t.onPointerMove([1000, 1400], { ctrlKey: true }); // 스냅 없이 400mm 아래로
+    t.onPointerUp([1000, 1400], { ctrlKey: true });
+    expect(item(store, ids[0]).pos).toEqual([1000, 1400]);
+    expect(item(store, ids[1]).pos).toEqual([2000.5, 1000.25]); // 잠긴 멤버는 그대로
+    store.undo();
+    expect(item(store, ids[0]).pos).toEqual([1000, 1000]);
+  });
+
+  test('움직일 수 있는 것이 없으면 드래그도 트랜잭션도 열리지 않는다', () => {
+    const { store, ui, ids } = setup([['chair-dining', { pos: [1000, 1000], locked: true }]]);
+    const dragger = createItemDragger({ store, ui, view: fakeView });
+    expect(dragger.start('items', ids, [1000, 1000])).toBeNull();
+    expect(dragger.getDrag()).toBeNull();
+    store.dispatch(d => { d.name = 'x'; }); // 열린 트랜잭션이 없으므로 이 dispatch가 바로 한 단계가 된다
+    expect(store.canUndo()).toBe(true);
+    store.undo();
+    expect(store.get().name).not.toBe('x');
   });
 
   test('벽 부착 아이템은 벽을 따라서만 미끄러진다', () => {

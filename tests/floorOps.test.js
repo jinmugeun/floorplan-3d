@@ -1,8 +1,11 @@
 import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
-import { createEmptyProject, activeFloor } from '../src/state/schema.js';
+import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
+import { placeOnWall } from '../src/geom/items.js';
+import { openingsOnWall } from '../src/geom/openings.js';
+import { productById } from '../src/products/catalog.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo, updateWallProps, deleteMeasure } from '../src/state/floorOps.js';
+import { addWalls, addItem, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo, updateWallProps, deleteMeasure } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -142,6 +145,30 @@ test('addFloor with copy "all" also copies measures, and fractional walls surviv
   expect(f.measures).toEqual([{ id: 'm1', a: [0.5, 0.25], b: [4000.5, 0.25] }]);
   expect(f.rooms).toHaveLength(1);
   expect(f.rooms[0].area).toBeCloseTo(3.8 * 2.8005, 2);
+});
+
+// I-1: 벽은 새 id를 받으므로 아이템의 wallId도 함께 옮겨야 한다. 옮기지 않으면 2D에는 문이 보이는데
+// 3D 벽에는 구멍이 없고, 그 층에서 벽을 한 번 만지면 부착이 조용히 풀렸다.
+test('addFloor with copy "all" re-seats wall items on the new walls so openings survive (fractional)', () => {
+  const s = createStore(createEmptyProject());
+  addWalls(s, rectWalls([0.5, 0.25], [4000.5, 3000.75], 200)); // 소수 좌표
+  const w0 = activeFloor(s.get()).walls[0];
+  const seat = placeOnWall(w0, 0.375, 1, [900, 40, 2100], { embed: true });
+  addItem(s, createItem(productById('door-swing-900'), { wallId: w0.id, t: 0.375, side: 1, pos: [Math.round(seat.pos[0]), Math.round(seat.pos[1])], rot: seat.rot }));
+  addFloor(s, { copy: 'all' });
+  const f = activeFloor(s.get());
+  expect(f.items).toHaveLength(1);
+  const it = f.items[0];
+  expect(it.wallId).not.toBe(w0.id);                       // 옛 층의 벽을 가리키지 않는다
+  const w = f.walls.find(x => x.id === it.wallId);
+  expect(w).toBeTruthy();                                  // 새 층의 벽을 가리킨다
+  expect(it.t).toBeCloseTo(0.375, 6);
+  expect(f.walls.reduce((n, x) => n + openingsOnWall(f.items, x).length, 0)).toBe(1); // 3D 개구부가 남는다
+  expect(openingsOnWall(f.items, w)).toHaveLength(1);
+  const r = placeOnWall(w, it.t, it.side, it.size, { embed: true });
+  expect(it.pos).toEqual([Math.round(r.pos[0]), Math.round(r.pos[1])]); // pos는 (wallId, t)의 결과다
+  setWallLength(s, w.id, 3800);                            // 새 층에서 벽을 만져도 부착이 풀리지 않는다
+  expect(activeFloor(s.get()).items[0].wallId).toBe(w.id);
 });
 
 test('setActiveFloor switches without an undo step; rename, updateFloor and delete work', () => {

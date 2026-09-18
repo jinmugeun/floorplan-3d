@@ -1,5 +1,5 @@
 import { activeFloor } from '../../state/schema.js';
-import { updateItems, itemsOf, resizeItem } from '../../state/floorOps.js';
+import { updateItems, movableItems, resizeItem } from '../../state/floorOps.js';
 import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, HANDLE_HIT_PX } from '../items2d.js';
@@ -39,11 +39,12 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
     return index >= 0 ? { kind: 'scale', index } : null;
   }
 
+  // 잠긴 아이템은 드래그 대상에서 빠진다(그룹을 통해 선택에 들어와도 함께 끌려가지 않는다 → I-5).
+  // 움직일 수 있는 것이 하나도 없으면 드래그를 열지 않는다(빈 트랜잭션도 열지 않는다).
   function start(kind, ids, p, extra = {}) {
-    drag = {
-      kind, ids: [...ids], startP: p, guides: [], gaps: null, moved: false, warned: false, ...extra,
-      base: itemsOf(store.get(), ids).map(i => ({ ...i, pos: [...i.pos], size: [...i.size] })),
-    };
+    const base = movableItems(store.get(), ids).map(i => ({ ...i, pos: [...i.pos], size: [...i.size] }));
+    if (!base.length) return null;
+    drag = { kind, ids: base.map(i => i.id), startP: p, guides: [], gaps: null, moved: false, warned: false, ...extra, base };
     store.beginTransaction();
     return drag;
   }

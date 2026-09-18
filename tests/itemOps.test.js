@@ -3,6 +3,8 @@ import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeItem, createItem, normalizeProject } from '../src/state/schema.js';
 import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from '../src/state/floorOps.js';
 import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
+import { placeOnWall, isEmbed } from '../src/geom/items.js';
+import { openingsOnWall } from '../src/geom/openings.js';
 import { productById } from '../src/products/catalog.js';
 
 function setup() {
@@ -245,6 +247,115 @@ describe('아이템 편집 동작', () => {
     expect(activeFloor(s.get()).items[3].pos).toEqual([1200, 1200]);
     expect(sameProductIds(activeFloor(s.get()), 'chair-dining')).toHaveLength(3);
     expect(pasteItems(s, [], {})).toEqual([]);
+  });
+});
+
+// I-2: reattach·openingsOnWall은 "pos는 항상 (wallId, t)의 결과"를 전제한다. 사본을 만드는 세 경로가
+// wallId·t를 그대로 들고 가면 2D 자리와 3D 개구부가 어긋나고, 다음 벽 편집에서 사본이 원본에 겹쳤다.
+describe('사본의 벽 부착 불변식', () => {
+  // 벽 부착 아이템은 pos가 (wallId, t, side, size)에서 나온 값이거나, wallId가 비어 있어야 한다.
+  const invariant = f => f.items.every(it => {
+    if (it.attach !== 'wall' || !it.wallId) return true;
+    const w = f.walls.find(x => x.id === it.wallId);
+    if (!w) return false;
+    const r = placeOnWall(w, it.t, it.side, it.size, { embed: isEmbed(it) });
+    return it.pos[0] === Math.round(r.pos[0]) && it.pos[1] === Math.round(r.pos[1]);
+  });
+  // 소수 t로 벽에 제대로 앉힌 문 하나.
+  function withDoor() {
+    const s = setup();
+    const w = activeFloor(s.get()).walls[0];
+    const seat = placeOnWall(w, 0.375, 1, [900, 40, 2100], { embed: true });
+    const id = addItem(s, createItem(productById('door-swing-900'), { wallId: w.id, t: 0.375, side: 1, pos: [Math.round(seat.pos[0]), Math.round(seat.pos[1])], rot: seat.rot }));
+    return { s, id, wall: w };
+  }
+
+  test('복제·붙여넣기·배열 복사 사본이 모두 (wallId, t)와 맞는 pos를 갖는다', () => {
+    for (const copy of [
+      ({ s, id }) => duplicateItems(s, [id], { delta: [200, 200] }),
+      ({ s, id }) => pasteItems(s, itemsOf(s.get(), [id]).map(i => structuredClone(i)), { delta: [200, 200] }),
+      ({ s, id }) => arrayCopy(s, [id], 'linear', { dx: 200.5, dy: 0, count: 2 }),
+    ]) {
+      const a = withDoor();
+      const made = copy(a);
+      expect(made.length).toBeGreaterThan(0);
+      const f = activeFloor(a.s.get());
+      expect(invariant(f)).toBe(true);
+      // 벽을 한 번 만져도(= reattach) 불변식이 유지되고 사본이 원본 위로 되돌아가지 않는다.
+      const before = f.items.map(i => [...i.pos]);
+      setWallLength(a.s, a.wall.id, 4000);
+      const after = activeFloor(a.s.get());
+      expect(invariant(after)).toBe(true);
+      expect(after.items.map(i => [...i.pos])).toEqual(before);
+      expect(new Set(after.items.filter(i => i.wallId).map(i => i.t)).size)
+        .toBe(after.items.filter(i => i.wallId).length); // 사본마다 t가 다르다(구멍이 겹치지 않는다)
+    }
+  });
+
+  test('복제한 문은 같은 벽의 다른 자리에 앉고 3D 구멍이 2개가 된다', () => {
+    const { s, id, wall } = withDoor();
+    const [copyId] = duplicateItems(s, [id], { delta: [200, 0] });
+    const f = activeFloor(s.get());
+    const copy = f.items.find(i => i.id === copyId);
+    expect(copy.wallId).toBe(wall.id);
+    expect(copy.t).toBeCloseTo(0.425, 6);          // 0.375 + 200/4000
+    const holes = openingsOnWall(f.items, f.walls.find(w => w.id === wall.id));
+    expect(holes).toHaveLength(2);
+    expect(holes[0].u0).not.toBeCloseTo(holes[1].u0);
+  });
+
+  test('벽에서 멀리 붙여넣은 문은 부착을 놓는다(유령 개구부를 만들지 않는다)', () => {
+    const { s, id, wall } = withDoor();
+    const snaps = itemsOf(s.get(), [id]).map(i => structuredClone(i));
+    const [copyId] = pasteItems(s, snaps, { delta: [0, 1400] });
+    const f = activeFloor(s.get());
+    const copy = f.items.find(i => i.id === copyId);
+    expect(copy.wallId).toBeNull();
+    expect(copy.t).toBe(0);
+    expect(copy.pos).toEqual([f.items.find(i => i.id === id).pos[0], f.items.find(i => i.id === id).pos[1] + 1400]);
+    expect(openingsOnWall(f.items, f.walls.find(w => w.id === wall.id))).toHaveLength(1); // 원본 것만
+    expect(invariant(f)).toBe(true);
+  });
+
+  test('제품 교체가 벽을 못 찾으면 부착을 놓는다(끊긴 wallId를 남기지 않는다)', () => {
+    const s = setup();
+    const id = addItem(s, createItem(productById('door-swing-900'), { wallId: 'w_없음', t: 0.5, pos: [1000, 0] }));
+    replaceProduct(s, [id], productById('window-slide-1200'));
+    const it = activeFloor(s.get()).items[0];
+    expect(it.wallId).toBeNull();
+    expect(it.t).toBe(0);
+    expect(invariant(activeFloor(s.get()))).toBe(true);
+  });
+});
+
+// I-5: 잠긴 아이템은 방향키·기즈모·핸들뿐 아니라 그룹 이동·정렬·상대이동·반전으로도 움직이지 않는다.
+describe('잠긴 아이템은 이동 경로 전부에서 제외된다', () => {
+  function pair() {
+    const s = setup();
+    const free = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
+    const lock = addItem(s, createItem(productById('chair-dining'), { pos: [2000.5, 1500.25], locked: true }));
+    return { s, free, lock, at: id => activeFloor(s.get()).items.find(i => i.id === id).pos };
+  }
+
+  test('정렬·상대이동·반전이 잠긴 아이템을 건드리지 않는다', () => {
+    const a = pair();
+    alignSelection(a.s, [a.free, a.lock], 'v', 'center');
+    expect(a.at(a.lock)).toEqual([2000.5, 1500.25]);
+    expect(a.at(a.free)).toEqual([1000, 1000]); // 짝이 하나뿐이라 정렬할 것이 없다
+    relativeMove(a.s, [a.free, a.lock], { dx: 300, dy: -200 });
+    expect(a.at(a.lock)).toEqual([2000.5, 1500.25]);
+    expect(a.at(a.free)).toEqual([1300, 800]);
+    mirrorItems(a.s, [a.free, a.lock], 'h');
+    expect(a.at(a.lock)).toEqual([2000.5, 1500.25]);
+    expect(activeFloor(a.s.get()).items.find(i => i.id === a.lock).flipH).toBe(false);
+    expect(activeFloor(a.s.get()).items.find(i => i.id === a.free).flipH).toBe(true);
+  });
+
+  test('방향키와 90° 회전도 잠긴 아이템을 건너뛴다', () => {
+    const a = pair();
+    nudgeItems(a.s, [a.free, a.lock], [10, 0]);
+    expect(a.at(a.lock)).toEqual([2000.5, 1500.25]);
+    expect(a.at(a.free)).toEqual([1010, 1000]);
   });
 });
 

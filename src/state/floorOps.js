@@ -1,28 +1,16 @@
-import { activeFloor, uid, createFloor, normalizeItem } from './schema.js';
-import { detectRooms, centroid, pointInPolygon } from '../geom/rooms.js';
-import { transformWalls, wallLength, wallDir } from '../geom/walls.js';
-import { normalizeWalls } from '../geom/normalize.js';
-import { dist, eq, dot } from '../geom/vec.js';
+import { activeFloor, uid, normalizeItem } from './schema.js';
+import { pointInPolygon, centroid } from '../geom/rooms.js';
+import { transformWalls, wallDir } from '../geom/walls.js';
+import { eq, dot } from '../geom/vec.js';
 import { wallAxis, placeOnWall, isEmbed } from '../geom/items.js';
+import { reroom, reattach, seatCopies, movable, ROOM_PROPS } from './floorInternal.js';
 
 // mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds는 300줄을 넘어 itemOps.js로 나눴다.
 export * from './itemOps.js';
 // groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy는 300줄을 넘어 arrangeOps.js로 나눴다.
 export * from './arrangeOps.js';
-
-const reroom = f => { f.walls = normalizeWalls(f.walls); f.rooms = detectRooms(f.walls, f.rooms); };
-// 벽이 움직이거나 사라졌을 때 그 벽에 붙은 아이템을 다시 앉힌다. reroom이 도는 곳마다 함께 돈다.
-// 벽을 지우면 wallId만 비우고 아이템은 남긴다(사용자가 만든 물건을 소리 없이 없애지 않는다).
-function reattach(f) {
-  for (let i = 0; i < f.items.length; i++) {
-    const it = f.items[i];
-    if (it.attach !== 'wall' || !it.wallId) continue;
-    const w = f.walls.find(x => x.id === it.wallId);
-    if (!w) { f.items[i] = { ...it, wallId: null }; continue; }
-    const r = placeOnWall(w, it.t, it.side, it.size, { embed: isEmbed(it) });
-    f.items[i] = { ...it, pos: [Math.round(r.pos[0]), Math.round(r.pos[1])], rot: r.rot };
-  }
-}
+// addFloor, setActiveFloor, renameFloor, updateFloor, deleteFloor, totalArea는 300줄을 넘어 floorMgmt.js로 나눴다.
+export * from './floorMgmt.js';
 
 export function setWalls(store, walls, opts = {}) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = walls; reroom(f); reattach(f); }, opts);
@@ -110,15 +98,6 @@ export function deleteMeasure(store, id, opts) {
   return store.dispatch(d => { const f = activeFloor(d); f.measures = f.measures.filter(m => m.id !== id); }, opts);
 }
 
-const ROOM_PROPS = ['name', 'type', 'height', 'floorOffset', 'hideCeiling', 'seats', 'floorColor', 'ceilingColor', 'matchWallHeight'];
-// 복사한 층은 벽 id가 달라 방 자카드 매칭이 되지 않으므로, 중심점이 같은 방에서 속성을 옮긴다.
-function copyRoomProps(fromRooms, toRooms) {
-  for (const r of toRooms) {
-    const src = fromRooms.find(x => Array.isArray(x.points) && x.points.length && dist(centroid(x.points), centroid(r.points)) < 1);
-    if (src) for (const k of ROOM_PROPS) if (src[k] !== undefined) r[k] = src[k];
-  }
-}
-
 // 방 복사: 그 방의 벽을 방 너비만큼 동쪽(+x)으로 복사한다. 정규화 후 새로 생긴 방에 속성을 옮긴다.
 export function duplicateRoom(store, roomId, opts) {
   return store.dispatch(d => {
@@ -136,60 +115,6 @@ export function duplicateRoom(store, roomId, opts) {
     const copy = f.rooms.find(x => x.id !== roomId && pointInPolygon(c, x.points));
     if (copy) for (const k of ROOM_PROPS) if (src[k] !== undefined) copy[k] = src[k];
   }, opts);
-}
-
-// 기본 층 이름은 아직 쓰이지 않는 가장 작은 Floor N이다("Floor 2"가 이미 있으면 Floor 3).
-function defaultFloorName(floors) {
-  const used = new Set(floors.map(f => f.name));
-  let n = 1;
-  while (used.has(`Floor ${n}`)) n += 1;
-  return `Floor ${n}`;
-}
-export function addFloor(store, { name = null, copy = 'none' } = {}, opts) {
-  return store.dispatch(d => {
-    const base = activeFloor(d);
-    const f = createFloor(name && name.trim() ? name.trim() : defaultFloorName(d.floors));
-    f.height = base?.height ?? f.height;
-    f.slab = base?.slab ?? 0;
-    if (copy !== 'none' && base) {
-      f.walls = base.walls.map(w => ({ ...w, id: uid('w'), a: [...w.a], b: [...w.b] }));
-      f.guides = base.guides.map(g => ({ ...g, id: uid('g') }));
-    }
-    if (copy === 'all' && base) {
-      f.items = structuredClone(base.items);
-      f.ducts = structuredClone(base.ducts);
-      f.measures = structuredClone(base.measures);
-    }
-    f.walls = normalizeWalls(f.walls);
-    f.rooms = detectRooms(f.walls);
-    if (copy !== 'none' && base) copyRoomProps(base.rooms, f.rooms);
-    d.floors.push(f);
-    d.activeFloor = d.floors.length - 1;
-  }, opts);
-}
-export function setActiveFloor(store, index) {
-  return store.dispatch(d => { if (Number.isInteger(index) && index >= 0 && index < d.floors.length) d.activeFloor = index; }, { record: false });
-}
-export function renameFloor(store, index, name, opts) {
-  return store.dispatch(d => { const f = d.floors[index]; if (f && String(name).trim()) f.name = String(name).trim(); }, opts);
-}
-export function updateFloor(store, index, patch, opts) {
-  return store.dispatch(d => { const f = d.floors[index]; if (f) Object.assign(f, patch); }, opts);
-}
-export function deleteFloor(store, index, opts) {
-  return store.dispatch(d => {
-    if (d.floors.length <= 1 || !d.floors[index]) return; // 마지막 층은 남긴다
-    d.floors.splice(index, 1);
-    // 활성 층보다 앞의 층을 지우면 활성 층은 한 칸 앞으로 당겨진다. 활성 층 자체를 지우면 범위 안으로 잘라 준다.
-    d.activeFloor = index < d.activeFloor ? d.activeFloor - 1 : Math.min(d.activeFloor, d.floors.length - 1);
-  }, opts);
-}
-// 실면적(net) = 방 폴리곤 면적 합. 실면적+내외벽(gross) = 거기에 벽 바닥면적을 더한 값. 단위 m².
-export function totalArea(floor, areaMode = 'net') {
-  const net = (floor.rooms ?? []).reduce((s, r) => s + (Number(r.area) || 0), 0);
-  if (areaMode !== 'gross') return net;
-  const walls = (floor.walls ?? []).reduce((s, w) => s + wallLength(w) * w.thickness, 0) / 1e6;
-  return net + walls;
 }
 
 // ui.soloRoom이 가리키는 방이 아직 활성 층에 있는지. 없으면 null(단일 공간 모드를 끈다).
@@ -229,6 +154,8 @@ export function pruneSelection(state, selection) {
 }
 
 export const itemsOf = (state, ids) => { const set = new Set(ids); return activeFloor(state).items.filter(i => set.has(i.id)); };
+// 움직일 수 있는 선택(잠금 필터 한 곳). 이동 드래그·정렬·상대이동·반전·방향키·회전이 모두 이것만 쓴다.
+export const movableItems = (state, ids) => movable(itemsOf(state, ids));
 // 그룹에 속한 아이템을 하나 고르면 그룹 전체가 선택된다.
 export function expandGroups(floor, ids) {
   const out = new Set(ids);
@@ -245,7 +172,7 @@ export function addItem(store, item, opts = {}) {
 // 잠긴 아이템은 움직이지 않는다(방향키·기즈모·핸들 모두 같은 규칙).
 export function nudgeItems(store, ids, delta, opts = {}) {
   const state = store.get(), f = activeFloor(state);
-  const patches = itemsOf(state, ids).filter(it => !it.locked).map(it => {
+  const patches = movableItems(state, ids).map(it => {
     const w = it.attach === 'wall' && it.wallId ? f.walls.find(x => x.id === it.wallId) : null;
     if (w) {
       const { dir, len } = wallAxis(w);
@@ -278,8 +205,8 @@ export function deleteItems(store, ids, opts = {}) {
 }
 // 제자리 회전. 벽 부착 아이템은 벽 방향에 고정이라 돌리지 않고(명세 8.5), 잠긴 아이템도 건드리지 않는다.
 export function rotateItems(store, ids, deltaDeg, opts = {}) {
-  const patches = itemsOf(store.get(), ids)
-    .filter(it => !it.locked && !(it.attach === 'wall' && it.wallId))
+  const patches = movableItems(store.get(), ids)
+    .filter(it => !(it.attach === 'wall' && it.wallId))
     .map(it => ({ id: it.id, patch: { rot: it.rot + deltaDeg } }));
   return patches.length ? updateItems(store, patches, opts) : store.get();
 }
@@ -298,8 +225,10 @@ export function resizeItem(store, id, size, opts = {}) {
   return updateItem(store, id, patch, opts);
 }
 // 새 id를 먼저 만들어 돌려준다(dispatch는 상태를 복제하므로 안에서 만든 id를 밖에서 알 수 없다).
+// 사본은 seatCopies를 지난다: 벽 부착 제품은 옮겨진 자리의 벽에 다시 앉거나 wallId를 비운다(I-2).
 export function duplicateItems(store, ids, { delta = [0, 0] } = {}, opts) {
-  const copies = itemsOf(store.get(), ids).map(i => normalizeItem({ ...i, id: uid('i'), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] }));
-  store.dispatch(d => { activeFloor(d).items.push(...copies.map(c => structuredClone(c))); }, opts);
+  const f = activeFloor(store.get());
+  const copies = seatCopies(itemsOf(store.get(), ids).map(i => ({ ...structuredClone(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls: f.walls });
+  store.dispatch(d => { const g = activeFloor(d); g.items.push(...copies.map(c => structuredClone(c))); reattach(g); }, opts);
   return copies.map(c => c.id);
 }
