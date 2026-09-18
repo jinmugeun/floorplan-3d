@@ -286,3 +286,15 @@ describe('기즈모 드래그 빗장(createDragLatch)', () => {
     expect(l.latched(up2)).toBe(false);
   });
 });
+
+// 최종 리뷰 I-2: 마감재 적용 모드에서는 기즈모를 붙이지 않는다(TransformControls 자체 리스너가 면 클릭을 가로채 가구를 끌지 않게).
+test('matPick 모드에서는 attach가 기즈모를 떼어 두고, 모드가 끝나면 다시 붙는다', () => {
+  const a = setupPicker();
+  const id = addItem(a.store, createItem(productById('sofa-3'), { pos: [100.5, 200.25] }));
+  a.ui.set({ selection: { type: 'item', id }, matPick: { assignment: { id: 'wood-oak', offset: [0, 0], angle: 0 } } });
+  a.picker.attach({ type: 'item', id });
+  expect(a.gizmo.object).toBeUndefined();
+  a.ui.set({ matPick: null });
+  a.picker.attach({ type: 'item', id });
+  expect(a.gizmo.object).toBeTruthy();
+});

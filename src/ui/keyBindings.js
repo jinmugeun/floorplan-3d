@@ -79,6 +79,8 @@ export function conflictAction(keymap, key, action) {
   const token = norm(key);
   const other = buildTable(keymap).get(token);
   if (other && other !== action) return other;
+  // Alt 조합은 표의 tokenOf가 만들지 않고 keymap.js가 Alt를 통째로 건너뛰므로 어떤 Alt 키도 표 동작에 묶을 수 없다.
+  if (token.startsWith('alt+')) return RESERVED_MAP.get(token) ?? '제품 단축키(Alt 조합)';
   return RESERVED_MAP.get(token) ?? null;
 }
 export const labelOf = action => KEYMAP.find(e => e.action === action)?.label ?? action;

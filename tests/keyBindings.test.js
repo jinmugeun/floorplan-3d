@@ -111,3 +111,13 @@ describe('단축키 재지정', () => {
     expect(getTable().get('l')).toBe('tool:wall');
   });
 });
+
+// 최종 리뷰 I-1: 예약 목록에 없는 Alt 조합(Alt+K …)도 표 동작에 묶이면 keymap.js가 Alt를 건너뛰어 동작이 조용히 죽는다 → 모두 충돌.
+test('예약 목록에 없는 Alt 조합도 충돌로 막는다', async () => {
+  const { conflictAction, effectiveKeymap, RESERVED_KEYS } = await import('../src/ui/keyBindings.js');
+  const km = effectiveKeymap({});
+  expect(RESERVED_KEYS.some(r => r.key === 'alt+k')).toBe(false);
+  expect(conflictAction(km, 'Alt+K', 'tool:wall')).toBeTruthy();
+  expect(conflictAction(km, 'Alt+H', 'tool:wall')).toBeTruthy();
+  expect(conflictAction(km, 'K', 'tool:wall')).toBeNull();
+});

@@ -127,7 +127,7 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   });
 
   function attach(sel) {
-    if (getMode() === 'fp') { detach(); return; } // 걷는 화면에는 기즈모가 없다(뷰가 떼는 것을 잊어도 붙지 않는다)
+    if (getMode() === 'fp' || ui.get().matPick) { detach(); return; } // 걷는 화면·마감재 적용 모드에는 기즈모가 없다(TransformControls의 자체 포인터 리스너가 클릭을 가로채지 않게)
     const id = sel?.type === 'item' ? sel.id : null;
     const it = id ? activeFloor(store.get()).items.find(x => x.id === id) : null;
     // 벽 부착 아이템(문·창)은 벽을 따라 2D에서 편집한다(명세 8.5). 기즈모로 옮기면 wallId/t가
