@@ -6,9 +6,13 @@ const JOIN_TOL = 1;
 // 선분 p+t*d(단위벡터) 위에서 점 q의 매개변수 t(mm)
 const paramOn = (p, d, q) => dot(sub(q, p), d);
 
+// 조각의 u 좌표는 원래 벽의 길이를 기준으로 매겨져 있어 벽을 쪼갤 때는 더 이상 맞지 않는다
+// (splitWall이 이미 같은 이유로 비운다). matIn/matOut은 면 전체 지정이라 그대로 물려준다.
+const emptyRegions = () => ({ in: [], out: [] });
+
 function splitAt(w, point) {
   if (eq(w.a, point, JOIN_TOL) || eq(w.b, point, JOIN_TOL)) return null;
-  return [{ ...w, b: [...point] }, { ...w, id: uid('w'), a: [...point] }];
+  return [{ ...w, b: [...point], regions: emptyRegions() }, { ...w, id: uid('w'), a: [...point], regions: emptyRegions() }];
 }
 
 // 두 벽의 관계를 한 번만 해소한다. 바뀌면 대체할 벽 배열을, 아니면 null을 돌려준다.
@@ -53,7 +57,7 @@ function resolvePair(A, B) {
       } else {
         if (inA && !usedA) { id = A.id; usedA = true; } else if (inB && !usedB) { id = B.id; usedB = true; } else id = uid('w');
       }
-      pieces.push({ ...src, id, a: [...ts[i].p], b: [...ts[i + 1].p] });
+      pieces.push({ ...src, id, a: [...ts[i].p], b: [...ts[i + 1].p], regions: emptyRegions() });
     }
     return pieces;
   }

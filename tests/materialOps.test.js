@@ -159,4 +159,85 @@ describe('마감재 상태 연산', () => {
     expect(s.get().floors).toHaveLength(2);
     expect(activeFloor(s.get()).rooms[0].floorMat.id).toBe('wood-walnut'); // copyRoomProps가 ROOM_PROPS를 쓴다
   });
+
+  test('방 복사는 마감재 객체를 깊이 복사한다(참조를 공유하지 않는다) (I1)', () => {
+    const s = setup();
+    const roomId = activeFloor(s.get()).rooms[0].id;
+    applyMaterial(s, { kind: 'floor', id: roomId }, mat('wood-oak'));
+    applyMaterial(s, { kind: 'ceiling', id: roomId }, mat('paint-white'));
+    duplicateRoom(s, roomId);
+    const [r1, r2] = activeFloor(s.get()).rooms;
+    expect(r1.floorMat).not.toBe(r2.floorMat);
+    expect(r1.floorMat).toEqual(r2.floorMat);
+    expect(r1.ceilingMat).not.toBe(r2.ceilingMat);
+    expect(r1.ceilingMat).toEqual(r2.ceilingMat);
+    // 한쪽만 제자리에서 바꿔도 다른 쪽은 그대로다.
+    applyMaterial(s, { kind: 'floor', id: r1.id }, mat('brick-red'));
+    const after = activeFloor(s.get());
+    expect(after.rooms.find(r => r.id === r1.id).floorMat.id).toBe('brick-red');
+    expect(after.rooms.find(r => r.id === r2.id).floorMat.id).toBe('wood-oak');
+  });
+
+  test('층 복사는 벽 재질·영역과 방 마감재를 깊이 복사한다(참조를 공유하지 않는다) (I1)', () => {
+    const s = setup();
+    const w = activeFloor(s.get()).walls[0];
+    const roomId = activeFloor(s.get()).rooms[0].id;
+    applyMaterial(s, { kind: 'wall', id: w.id, side: 'in' }, mat('paint-navy'));
+    setWallRegions(s, w.id, 'in', [{ kind: 'band', z0: 0, z1: 1000, mat: mat('tile-white-300') }]);
+    applyMaterial(s, { kind: 'floor', id: roomId }, mat('wood-oak'));
+    addFloor(s, { copy: 'all' });
+    const [f0, f1] = s.get().floors;
+    expect(f0.walls[0].matIn).not.toBe(f1.walls[0].matIn);
+    expect(f0.walls[0].matIn).toEqual(f1.walls[0].matIn);
+    expect(f0.walls[0].regions).not.toBe(f1.walls[0].regions);
+    expect(f0.walls[0].regions.in).not.toBe(f1.walls[0].regions.in);
+    expect(f0.walls[0].regions).toEqual(f1.walls[0].regions);
+    expect(f0.rooms[0].floorMat).not.toBe(f1.rooms[0].floorMat);
+    expect(f0.rooms[0].floorMat).toEqual(f1.rooms[0].floorMat);
+    // 새 층(활성)의 벽 재질을 바꿔도 원래 층은 그대로다.
+    applyMaterial(s, { kind: 'wall', id: f1.walls[0].id, side: 'in' }, mat('brick-red'));
+    const g0 = s.get().floors[0];
+    expect(g0.walls[0].matIn.id).toBe('paint-navy');
+  });
+
+  test('카탈로그에 없는 id를 넘기면 아무것도 바꾸지 않는다(no-op, undo 단계 없음) (I2)', () => {
+    const s = setup();
+    const f = activeFloor(s.get());
+    const wallId = f.walls[0].id, roomId = f.rooms[0].id;
+    const canUndoBefore = s.canUndo(); // setup()의 addWalls가 이미 쌓아 둔 단계 수는 그대로 기준으로 삼는다
+    applyMaterial(s, { kind: 'wall', id: wallId, side: 'in' }, mat('paint-navy'));
+    const before = s.get();
+    applyMaterial(s, { kind: 'wall', id: wallId, side: 'in' }, mat('없는재질')); // 기존 값을 지우면 안 된다
+    expect(s.get()).toBe(before); // dispatch 자체가 일어나지 않는다 → 상태 참조가 그대로다
+    expect(activeFloor(s.get()).walls.find(w => w.id === wallId).matIn.id).toBe('paint-navy');
+    s.undo(); // 첫 applyMaterial 이전으로 한 번만 되돌려진다(두 번째 호출이 단계를 쌓지 않았다)
+    expect(activeFloor(s.get()).walls.find(w => w.id === wallId).matIn).toBeNull();
+    expect(s.canUndo()).toBe(canUndoBefore); // 없는 재질 지정이 쌓은 undo 단계는 0개다
+
+    applyMaterial(s, { kind: 'wall', id: wallId, side: 'in' }, mat('paint-navy'));
+    applyMaterial(s, { kind: 'wall', id: wallId, side: 'in' }, null); // null은 여전히 해제한다
+    expect(activeFloor(s.get()).walls.find(w => w.id === wallId).matIn).toBeNull();
+
+    applyRoomWalls(s, roomId, mat('wallpaper-stripe'));
+    const before2 = s.get();
+    applyRoomWalls(s, roomId, mat('없는재질'));
+    expect(s.get()).toBe(before2);
+    expect(activeFloor(s.get()).walls.every(w => w.matIn.id === 'wallpaper-stripe')).toBe(true);
+  });
+
+  test('faceArea는 총면적(gross)이 기본이고, netOpenings:true면 문/창 면적을 뺀다 (I3)', () => {
+    const s = setup();
+    const f = activeFloor(s.get());
+    const w = f.walls[0];
+    const door = { id: 'i1', kind: 'door', attach: 'wall', wallId: w.id, t: 0.5, side: 1, size: [900, 40, 2100], z: 0, pos: [0, 0], rot: 0 };
+    const g0 = activeFloor(s.get());
+    g0.items.push(door); // 직접 다뤄도 되는 순수 함수 테스트(dispatch를 거치지 않는다)
+    const gross = faceArea(g0, { kind: 'wall', id: w.id, side: 'in' });
+    const net = faceArea(g0, { kind: 'wall', id: w.id, side: 'in' }, { netOpenings: true });
+    expect(gross).toBeCloseTo((wallLength(w) * w.height) / 1e6, 6);
+    expect(net).toBeLessThan(gross);
+    expect(net).toBeCloseTo(gross - (900 * 2100) / 1e6, 6);
+    // 옵션을 생략하면(기본 false) 여전히 총면적이다.
+    expect(faceArea(g0, { kind: 'wall', id: w.id, side: 'in' })).toBeCloseTo(gross, 6);
+  });
 });

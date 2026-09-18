@@ -67,10 +67,13 @@ export function seatCopies(drafts, ctx = {}) {
 export const movable = items => (items ?? []).filter(i => !i.locked);
 
 export const ROOM_PROPS = ['name', 'type', 'height', 'floorOffset', 'hideCeiling', 'seats', 'floorColor', 'ceilingColor', 'matchWallHeight', 'floorMat', 'ceilingMat'];
+// 값 하나를 옮길 때 객체(floorMat/ceilingMat 등)는 깊이 복사한다 — 참조를 그대로 옮기면
+// 사본을 나중에 제자리 수정(applyMaterial의 offset/angle 조정 등)할 때 원본도 함께 바뀐다.
+export const cloneProp = v => (v && typeof v === 'object' ? structuredClone(v) : v);
 // 복사한 층은 벽 id가 달라 방 자카드 매칭이 되지 않으므로, 중심점이 같은 방에서 속성을 옮긴다.
 export function copyRoomProps(fromRooms, toRooms) {
   for (const r of toRooms) {
     const src = fromRooms.find(x => Array.isArray(x.points) && x.points.length && dist(centroid(x.points), centroid(r.points)) < 1);
-    if (src) for (const k of ROOM_PROPS) if (src[k] !== undefined) r[k] = src[k];
+    if (src) for (const k of ROOM_PROPS) if (src[k] !== undefined) r[k] = cloneProp(src[k]);
   }
 }

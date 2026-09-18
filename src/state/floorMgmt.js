@@ -6,7 +6,7 @@ import { createFloor, uid, activeFloor } from './schema.js';
 import { normalizeWalls } from '../geom/normalize.js';
 import { detectRooms } from '../geom/rooms.js';
 import { wallLength } from '../geom/walls.js';
-import { reattach, seatCopies, copyRoomProps } from './floorInternal.js';
+import { reattach, seatCopies, copyRoomProps, cloneProp } from './floorInternal.js';
 
 // 기본 층 이름은 아직 쓰이지 않는 가장 작은 Floor N이다("Floor 2"가 이미 있으면 Floor 3).
 function defaultFloorName(floors) {
@@ -24,7 +24,11 @@ export function addFloor(store, { name = null, copy = 'none' } = {}, opts) {
     // 벽은 새 id를 받는다. 벽 부착 아이템이 옛 층의 벽을 가리키지 않도록 id 맵을 만들어 함께 옮긴다.
     const idMap = new Map();
     if (copy !== 'none' && base) {
-      f.walls = base.walls.map(w => { const id = uid('w'); idMap.set(w.id, id); return { ...w, id, a: [...w.a], b: [...w.b] }; });
+      // matIn/matOut/regions는 객체라 그대로 옮기면 새 층이 원래 층과 같은 참조를 공유한다(I1).
+      f.walls = base.walls.map(w => {
+        const id = uid('w'); idMap.set(w.id, id);
+        return { ...w, id, a: [...w.a], b: [...w.b], matIn: cloneProp(w.matIn), matOut: cloneProp(w.matOut), regions: cloneProp(w.regions) };
+      });
       f.guides = base.guides.map(g => ({ ...g, id: uid('g') }));
     }
     if (copy === 'all' && base) {

@@ -134,6 +134,42 @@ describe('normalizeWalls', () => {
     expect(detectRooms(out)).toHaveLength(2);
   });
 
+  test('splitting a wall at a T-junction carries matIn/matOut but empties each piece\'s own regions (C1)', () => {
+    const base = {
+      ...seg([0, 0], [4000, 0]),
+      matIn: { id: 'paint-navy', offset: [0, 0], angle: 0 },
+      matOut: { id: 'brick-red', offset: [0, 0], angle: 0 },
+      regions: { in: [{ id: 'rg1', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 1000, mat: { id: 'tile-white-300', offset: [0, 0], angle: 0 } }], out: [] },
+    };
+    const t = seg([2000, 3000], [2000, 0]);
+    const out = normalizeWalls([base, t]);
+    const pieces = out.filter(w => w.id !== t.id);
+    expect(pieces).toHaveLength(2);
+    for (const p of pieces) {
+      expect(p.matIn).toEqual(base.matIn);
+      expect(p.matOut).toEqual(base.matOut);
+      expect(p.regions).toEqual({ in: [], out: [] });
+    }
+    // 두 조각은 서로 다른 regions 객체를 가져야 한다(u 좌표가 새 길이에서 더 이상 맞지 않는다).
+    expect(pieces[0].regions).not.toBe(pieces[1].regions);
+    expect(pieces[0].regions.in).not.toBe(pieces[1].regions.in);
+    expect(pieces[0].regions).not.toBe(base.regions);
+  });
+
+  test('collinear overlap splitting also carries matIn/matOut and gives independent empty regions (C1)', () => {
+    const mkRegions = () => ({ in: [{ id: 'rg1', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 1000, mat: { id: 'tile-white-300', offset: [0, 0], angle: 0 } }], out: [] });
+    const a = { ...seg([0, 0], [0, 4000]), matIn: { id: 'paint-navy', offset: [0, 0], angle: 0 }, matOut: null, regions: mkRegions() };
+    const b = seg([0, 0], [0, 2000]);
+    const out = normalizeWalls([a, b]);
+    expect(out).toHaveLength(2);
+    for (const p of out) {
+      expect(p.matIn).toEqual(a.matIn);
+      expect(p.regions).toEqual({ in: [], out: [] });
+      expect(p.regions).not.toBe(a.regions);
+    }
+    expect(out[0].regions).not.toBe(out[1].regions);
+  });
+
   test('does not mutate its input and is idempotent', () => {
     const base = seg([0, 0], [4000, 0]), t = seg([2000, 3000], [2000, 0]);
     const input = [base, t]; const snapshot = JSON.stringify(input);

@@ -124,7 +124,7 @@ export function normalizeRegion(r, { len = 0, height = 0 } = {}) {
   const u0 = kind === 'band' ? 0 : num(src.u0, 0, 0, len);
   const u1 = kind === 'band' ? len : num(src.u1, len, 0, len);
   if (!(u1 > u0)) return null;
-  return { id: str(src.id, uid('rg')), kind, u0, u1, z0, z1, mat };
+  return { id: typeof src.id === 'string' && src.id ? src.id : uid('rg'), kind, u0, u1, z0, z1, mat };
 }
 
 // 카탈로그 제품에서 아이템을 만든다. 천장 부착의 z는 배치 도구가 층 높이에서 다시 계산한다.

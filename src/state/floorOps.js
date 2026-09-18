@@ -3,7 +3,7 @@ import { pointInPolygon, centroid } from '../geom/rooms.js';
 import { transformWalls, wallDir } from '../geom/walls.js';
 import { eq, dot } from '../geom/vec.js';
 import { wallAxis, placeOnWall, isEmbed } from '../geom/items.js';
-import { reroom, reattach, seatCopies, movable, ROOM_PROPS } from './floorInternal.js';
+import { reroom, reattach, seatCopies, movable, ROOM_PROPS, cloneProp } from './floorInternal.js';
 
 // mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds는 300줄을 넘어 itemOps.js로 나눴다.
 export * from './itemOps.js';
@@ -107,13 +107,17 @@ export function duplicateRoom(store, roomId, opts) {
     const xs = r.points.map(p => p[0]);
     const dx = Math.max(...xs) - Math.min(...xs);
     if (!(dx > 0)) return;
-    const copies = f.walls.filter(w => r.wallIds.includes(w.id)).map(w => ({ ...w, id: uid('w'), a: [w.a[0] + dx, w.a[1]], b: [w.b[0] + dx, w.b[1]] }));
+    // regions/matIn/matOut는 객체라 그대로 옮기면 사본과 원본 벽이 같은 참조를 공유한다(I1).
+    const copies = f.walls.filter(w => r.wallIds.includes(w.id)).map(w => ({
+      ...w, id: uid('w'), a: [w.a[0] + dx, w.a[1]], b: [w.b[0] + dx, w.b[1]],
+      matIn: cloneProp(w.matIn), matOut: cloneProp(w.matOut), regions: cloneProp(w.regions),
+    }));
     const src = { ...r };
     f.walls = [...f.walls, ...copies];
     reroom(f); reattach(f);
     const c = centroid(r.points.map(p => [p[0] + dx, p[1]]));
     const copy = f.rooms.find(x => x.id !== roomId && pointInPolygon(c, x.points));
-    if (copy) for (const k of ROOM_PROPS) if (src[k] !== undefined) copy[k] = src[k];
+    if (copy) for (const k of ROOM_PROPS) if (src[k] !== undefined) copy[k] = cloneProp(src[k]);
   }, opts);
 }
 
