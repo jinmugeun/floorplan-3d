@@ -27,6 +27,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
     <nav id="rail" aria-label="작업 영역">
       <button data-panel="draw" class="on"><span>도면 그리기</span></button>
       <button data-panel="products"><span>제품</span></button>
+      <button data-panel="materials"><span>마감재</span></button>
       <button data-panel="background"><span>배경 도면</span></button>
       <button data-panel="layers"><span>레이어</span></button>
     </nav>
@@ -45,6 +46,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
         <button data-tool="select">선택 <kbd>Esc</kbd></button>
       </section>
       <section data-panel="products" hidden><h3>제품</h3><div id="library"></div></section>
+      <section data-panel="materials" hidden><h3>마감재</h3><div id="materials"></div></section>
       <section data-panel="background" hidden>
         <h3>배경 도면</h3>
         <button data-action="background">도면 이미지 업로드 <kbd>B</kbd></button>
@@ -76,7 +78,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
     </footer>
   </div>`;
   const q = s => root.querySelector(s);
-  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library') };
+  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials') };
   const strip = q('#imageStrip');
   strip.addEventListener('change', ev => {
     const el = ev.target;
@@ -176,6 +178,12 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
     syncGizmoVisible(s);
     if (!is3d && (popKind === 'cam' || popKind === 'sun')) pop.close();
     if (s.fpPick) { els.banner.hidden = false; els.banner.innerHTML = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소'; }
+    else if (s.matPick) {
+      els.banner.hidden = false;
+      // 단일 공간 모드 중에도 모드를 빠져나갈 버튼을 남긴다(배너는 한 번에 하나만 보인다).
+      els.banner.innerHTML = '🎨 재질을 적용할 면을 클릭해주세요. [ESC] 키를 누르면 종료됩니다.' + (s.soloRoom ? ' <button type="button" id="btnExitSolo">도면 전체 보기</button>' : '');
+      if (s.soloRoom) q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null });
+    }
     else if (s.soloRoom) { els.banner.hidden = false; els.banner.innerHTML = '단일 공간 모드 <button type="button" id="btnExitSolo">도면 전체 보기</button>'; q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); }
     else { els.banner.hidden = true; els.banner.innerHTML = ''; }
     if (pop.isOpen() && popKind === 'view') refreshPopover();

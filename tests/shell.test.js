@@ -257,3 +257,24 @@ test('gizmoBtnVisible은 모드·투영·아이템 상태를 함께 본다', () 
   expect(gizmoBtnVisible({ mode: 'iso', item: { attach: 'wall', wallId: null } })).toBe(true); // 벽에서 떨어진 벽 부착 제품
   expect(gizmoBtnVisible()).toBe(false);
 });
+
+test('마감재 레일 탭과 적용 모드 배너', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  expect(root.querySelector('#rail [data-panel="materials"]')).not.toBeNull();
+  expect(shell.els.materials).not.toBeNull();
+  shell.showPanel('materials');
+  expect(root.querySelector('#panel section[data-panel="materials"]').hidden).toBe(false);
+  ui.set({ matPick: { assignment: { id: 'wood-oak', offset: [0, 0], angle: 0 } } });
+  const banner = root.querySelector('#banner');
+  expect(banner.hidden).toBe(false);
+  expect(banner.textContent).toContain('재질을 적용할 면을 클릭해주세요. [ESC] 키를 누르면 종료됩니다.');
+  // M-34: 단일 공간 모드에서 재질을 바르는 동안에도 모드를 빠져나갈 버튼이 남는다.
+  ui.set({ soloRoom: 'r1' });
+  expect(root.querySelector('#banner #btnExitSolo')).not.toBeNull();
+  root.querySelector('#banner #btnExitSolo').click();
+  expect(ui.get().soloRoom).toBeNull();
+  ui.set({ matPick: null });
+  expect(root.querySelector('#banner').hidden).toBe(true);
+});

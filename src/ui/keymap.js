@@ -81,7 +81,7 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
   const run = action => {
     if (action === 'escape') {
       const u = ui.get();
-      if (u.fpPick || u.soloRoom || u.selection || u.splitWall) ui.set({ fpPick: false, soloRoom: null, selection: null, splitWall: false });
+      if (u.fpPick || u.soloRoom || u.selection || u.splitWall || u.matPick) ui.set({ fpPick: false, soloRoom: null, selection: null, splitWall: false, matPick: null });
       setTool('select'); return;
     }
     if (action === 'undo') { store.undo(); return; }

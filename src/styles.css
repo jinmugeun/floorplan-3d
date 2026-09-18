@@ -67,3 +67,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .layer-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px; padding: 3px 0; border-bottom: 1px solid var(--line); } .layer-item.off { opacity: 0.45; }
 .layer-item .layer-name { border: 0 !important; background: none !important; padding: 0 !important; margin: 0 !important; font: inherit; text-align: left; cursor: pointer; }
 .layer-btns { display: flex; gap: 2px; } .layer-btns button { border: 0 !important; background: none !important; padding: 0 2px !important; margin: 0 !important; cursor: pointer; }
+#materials .tabs { display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 0; } #materials .tabs button { flex: 1; padding: 6px 4px; font-size: 11px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; box-shadow: none; } #materials .tabs button.on { border-color: var(--accent); color: var(--accent); background: #e6eefb; }
+canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid var(--line); display: block; }

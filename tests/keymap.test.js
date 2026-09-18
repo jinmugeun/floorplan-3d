@@ -304,3 +304,11 @@ test('붙여넣기가 아무것도 만들지 않으면 선택은 그대로다', 
   paste();
   expect(ui.get().selection.type).toBe('item');
 });
+
+test('escape가 마감재 적용 모드를 끈다', () => {
+  const a = setup();
+  a.ui.set({ matPick: { assignment: { id: 'wood-oak', offset: [0, 0], angle: 0 } } });
+  a.key('Escape');
+  expect(a.ui.get().matPick).toBeNull();
+  expect(a.calls.setTool).toEqual(['select']);
+});

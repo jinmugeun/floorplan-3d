@@ -16,6 +16,8 @@ import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
 import { createLibraryPanel } from './ui/libraryPanel.js';
+import { createMaterialPanel } from './ui/materialPanel.js';
+import { applyMaterial } from './state/materialOps.js';
 import { createLayersPanel } from './ui/layersPanel.js';
 import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
@@ -78,10 +80,19 @@ function replaceProductOf(itemIds, product) {
   shell.toast(`제품 ${live.length}개를 교체했습니다`);
 }
 const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode } = {}) => { if (mode === 'replace') replaceProductOf(selectedItemIds(), p); else startPlace(p); } });
-// 라이브러리 "교체 모드"를 끄는 한 곳. Esc·도구 전환·다른 패널로 이동이 모두 이것을 부른다(배너 문구와 동작을 맞춘다).
-const cancelReplace = () => library.setMode('place');
+const materials = createMaterialPanel(shell.els.materials, {
+  store, ui,
+  onPick: (m, { mode, target } = {}) => {
+    if (mode !== 'replace' || !target) return;                     // 배치 모드는 패널이 ui.matPick을 이미 켰다
+    applyMaterial(store, target, { id: m.id, offset: [0, 0], angle: 0 });
+    shell.toast('재질을 교체했습니다');
+  },
+});
+surfaceActions.replaceMaterial = target => { materials.setMode('replace', { target }); shell.showPanel('materials'); };
+// 라이브러리·마감재 "교체 모드"를 끄는 한 곳. Esc·도구 전환·다른 패널로 이동이 모두 이것을 부른다(배너 문구와 동작을 맞춘다).
+const cancelReplace = () => { library.setMode('place'); materials.setMode('place'); };
 ui.subscribe(() => { if (library.state.mode === 'replace' && !selectedItemIds().length) cancelReplace(); }); // 교체 대상이 사라지면 교체 모드도 끝난다(옛 아이템을 조용히 교체하지 않게)
-document.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => { if (b.dataset.panel !== 'products') cancelReplace(); }));
+document.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => { if (b.dataset.panel !== 'products' && b.dataset.panel !== 'materials') cancelReplace(); }));
 createLayersPanel(shell.els.layers, { store, ui });
 createPropsPanel(shell.els.props, store, ui, { deleteSelection, itemActions });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
