@@ -25,6 +25,7 @@ import { createKeyHandler } from './ui/keymap.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openRelativeMoveDialog, openArrayDialog } from './ui/itemDialogs.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
+import { openRoomTemplateDialog } from './ui/templateDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { openStartScreen } from './ui/startScreen.js';
@@ -92,6 +93,7 @@ const materials = createMaterialPanel(shell.els.materials, {
 });
 surfaceActions.replaceMaterial = target => { materials.setMode('replace', { target }); shell.showPanel('materials'); };
 surfaceActions.openEditor = (wallId, side) => { if (wallId) openMaterialEditor({ store, wallId, side }); };
+surfaceActions.applyTemplate = roomId => { if (roomId) openRoomTemplateDialog({ store, roomId }); };
 // 라이브러리·마감재 "교체 모드"를 끄는 한 곳. Esc·도구 전환·다른 패널로 이동이 모두 이것을 부른다(배너 문구와 동작을 맞춘다).
 // 레일 탭을 누른 경우에는 그 탭의 패널만 자기 모드를 지킨다(panelModes.js) — 제품↔마감재를 오가도 상대 패널이 꺼진다.
 const cancelReplace = (clickedPanel = null) => {
