@@ -25,6 +25,7 @@ export const saveOverrides = o => { try { localStorage.setItem(KEYMAP_KEY, JSON.
 export const reset = () => { try { localStorage.removeItem(KEYMAP_KEY); } catch { /* 저장 불가 */ } };
 
 // KEYMAP 사본을 만들어 지정된 동작의 keys만 갈아 끼운다(원본 배열은 절대 건드리지 않는다).
+// 삭제(Delete/Backspace)처럼 키가 여러 개인 동작도 예외 없이 새 키 "하나"로 전부 바뀐다(추가가 아니라 교체).
 export const effectiveKeymap = (overrides = loadOverrides()) =>
   KEYMAP.map(e => ({ ...e, keys: e.action && overrides[e.action] ? [...overrides[e.action]] : [...e.keys] }));
 
@@ -42,10 +43,41 @@ export function keyLabel(ev) {
   const ctrl = !!(ev.ctrlKey || ev.metaKey);
   return `${ctrl ? 'Ctrl+' : ''}${ctrl && ev.shiftKey ? 'Shift+' : ''}${k}`;
 }
-// 그 키를 이미 쓰는 다른 동작(자기 자신은 충돌이 아니다).
+
+// KEYMAP 표(action이 있는 행)에는 없지만 다른 곳에서 이미 그 키를 소비하는 키들.
+// - keymap.js의 itemCombo가 선택이 있을 때 먼저 가져가는 조합키(Ctrl+C/V/H/L/G, Ctrl+Shift+G, Alt+H/V/R/A/C/X)
+// - 도구 단계에서 먼저 소비하는 키(방향키로 제품 이동, Q로 제품 90° 회전 — selectTool.js)
+// 이 키들로 재지정하면 표에는 저장되지만 선택이 있는 동안은 절대 눌리지 않으므로 conflictAction에서 충돌로 본다.
+// (1인칭에서 걷는 동안의 W/A/S/D/Q/E는 여기 포함하지 않는다 — 1인칭 모드에서는 도구/아이템 키를 아예 주지 않는다.)
+export const RESERVED_KEYS = [
+  { key: 'ctrl+c', label: '제품 복사' },
+  { key: 'ctrl+v', label: '제품 붙여넣기' },
+  { key: 'ctrl+h', label: '제품 숨김' },
+  { key: 'ctrl+l', label: '제품 잠금' },
+  { key: 'ctrl+g', label: '제품 그룹' },
+  { key: 'ctrl+shift+g', label: '제품 그룹 해제' },
+  { key: 'alt+h', label: '제품 좌우 반전' },
+  { key: 'alt+v', label: '제품 상하 반전' },
+  { key: 'alt+r', label: '제품 상대이동' },
+  { key: 'alt+a', label: '제품 직선 배열 복사' },
+  { key: 'alt+c', label: '제품 원형 배열 복사' },
+  { key: 'alt+x', label: '제품 회전 배열 복사' },
+  { key: 'arrowleft', label: '제품 이동' },
+  { key: 'arrowright', label: '제품 이동' },
+  { key: 'arrowup', label: '제품 이동' },
+  { key: 'arrowdown', label: '제품 이동' },
+  { key: 'q', label: '제품 90° 회전' },
+];
+const RESERVED_MAP = new Map(RESERVED_KEYS.map(r => [r.key, r.label]));
+
+// 그 키를 이미 쓰는 다른 동작(자기 자신은 충돌이 아니다), 또는 RESERVED_KEYS가 이미 가져간 키.
+// 표 충돌은 action 이름을, 예약 키 충돌은 한글 라벨을 그대로 돌려준다 — 둘 다 labelOf에 넣으면
+// (KEYMAP에 없는 문자열은 그대로 반환하므로) toast에 바로 쓸 수 있는 라벨이 나온다.
 export function conflictAction(keymap, key, action) {
-  const other = buildTable(keymap).get(norm(key));
-  return other && other !== action ? other : null;
+  const token = norm(key);
+  const other = buildTable(keymap).get(token);
+  if (other && other !== action) return other;
+  return RESERVED_MAP.get(token) ?? null;
 }
 export const labelOf = action => KEYMAP.find(e => e.action === action)?.label ?? action;
 

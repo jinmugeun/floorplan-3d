@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, beforeEach } from 'vitest';
 import { KEYMAP, tokenOf, getTable, setTable, TABLE } from '../src/ui/keymap.js';
-import { loadOverrides, saveOverrides, effectiveKeymap, buildTable, exportJson, importJson, reset, norm, keyLabel, conflictAction, labelOf, KEYMAP_KEY } from '../src/ui/keyBindings.js';
+import { loadOverrides, saveOverrides, effectiveKeymap, buildTable, exportJson, importJson, reset, norm, keyLabel, conflictAction, labelOf, KEYMAP_KEY, RESERVED_KEYS } from '../src/ui/keyBindings.js';
 
 beforeEach(() => { localStorage.clear(); setTable(TABLE); });
 
@@ -56,6 +56,39 @@ describe('단축키 재지정', () => {
     expect(conflictAction(km, 'L', 'tool:wall')).toBeNull();   // 자기 자신은 충돌이 아니다
     expect(conflictAction(km, 'K', 'tool:wall')).toBeNull();
     expect(labelOf('tool:room')).toBe('방 그리기');
+  });
+
+  test('conflictAction은 itemCombo·도구가 먼저 가져가는 예약 키도 충돌로 본다', () => {
+    const km = effectiveKeymap({});
+    expect(conflictAction(km, 'Ctrl+C', 'tool:wall')).toBe('제품 복사');
+    expect(conflictAction(km, 'ArrowLeft', 'tool:wall')).toBe('제품 이동');
+    expect(conflictAction(km, 'K', 'tool:wall')).toBeNull();
+    // labelOf에 그대로 넣어도(=KEYMAP에 없는 action) 라벨 자신이 나온다 — settingsDialog의 toast가 그대로 쓴다.
+    expect(labelOf(conflictAction(km, 'Ctrl+V', 'tool:wall'))).toBe('제품 붙여넣기');
+  });
+
+  test('RESERVED_KEYS는 norm 토큰과 한글 라벨을 갖고, itemCombo·도구 키를 모두 포함한다', () => {
+    const keys = RESERVED_KEYS.map(r => r.key);
+    for (const r of RESERVED_KEYS) {
+      expect(norm(r.key)).toBe(r.key);
+      expect(typeof r.label).toBe('string');
+      expect(r.label.length).toBeGreaterThan(0);
+    }
+    for (const k of ['ctrl+c', 'ctrl+v', 'ctrl+h', 'ctrl+l', 'ctrl+g', 'ctrl+shift+g', 'alt+h', 'alt+v', 'alt+r', 'alt+a', 'alt+c', 'alt+x', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'q']) {
+      expect(keys).toContain(k);
+    }
+  });
+
+  test('키가 여러 개인 동작(삭제)을 다시 지정하면 새 키 하나로 전부 바뀐다', () => {
+    saveOverrides({ delete: ['X'] });
+    const km = effectiveKeymap();
+    expect(km.find(e => e.action === 'delete').keys).toEqual(['X']);
+    const t = buildTable(km);
+    expect(t.get('x')).toBe('delete');
+    expect(t.get('delete')).toBeUndefined();
+    expect(t.get('backspace')).toBeUndefined();
+    reset();
+    expect(effectiveKeymap().find(e => e.action === 'delete').keys).toEqual(['Delete', 'Backspace']);
   });
 
   test('내보내기·업로드·초기화', () => {

@@ -73,6 +73,56 @@ test('단축키 탭에서 키를 다시 지정하고 초기화한다', async () 
   expect(root.querySelector('[data-bind="tool:wall"]').textContent).toContain('L');
 });
 
+test('단축키 탭 안내문이 다중 키 재지정 동작을 설명한다', () => {
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const modal = document.querySelector('.modal');
+  modal.querySelector('[data-tab="keys"]').click();
+  expect(modal.querySelector('#tabKeys .hint').textContent).toContain('키를 누르면 그 동작의 모든 키가 새 키 하나로 바뀝니다');
+});
+
+test('itemCombo·도구가 먼저 가져가는 예약 키로 재지정하면 충돌 토스트를 띄우고 저장하지 않는다', async () => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+  const { loadOverrides } = await import('../src/ui/keyBindings.js');
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const root = document.querySelector('.modal.settings');
+  root.querySelector('[data-tab="keys"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  root.querySelector('[data-bind="tool:wall"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));   // 제품 복사가 쓰는 키
+  expect(loadOverrides()).toEqual({});
+  expect(document.querySelector('#toasts')?.textContent ?? '').toContain('제품 복사');
+  root.querySelector('[data-bind="tool:wall"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));   // 제품 이동이 쓰는 키
+  expect(loadOverrides()).toEqual({});
+  expect(document.querySelector('#toasts')?.textContent ?? '').toContain('제품 이동');
+});
+
+test('여러 키를 가진 삭제를 다시 지정하면 새 키 하나로 바뀌고, 초기화하면 원래 두 키로 되돌아온다', async () => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+  const { loadOverrides } = await import('../src/ui/keyBindings.js');
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const root = document.querySelector('.modal.settings');
+  root.querySelector('[data-tab="keys"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const cell = root.querySelector('[data-bind="delete"]');
+  expect(cell.textContent).toContain('Delete');
+  expect(cell.textContent).toContain('Backspace');
+  cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+  expect(loadOverrides()).toEqual({ delete: ['X'] });
+  const rebound = root.querySelector('[data-bind="delete"]').textContent;
+  expect(rebound).toContain('X');
+  expect(rebound).not.toContain('Delete');
+  expect(rebound).not.toContain('Backspace');
+  root.querySelector('[name="keyReset"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const reset = root.querySelector('[data-bind="delete"]').textContent;
+  expect(reset).toContain('Delete');
+  expect(reset).toContain('Backspace');
+});
+
 test('충돌하는 키와 Esc는 무시한다', async () => {
   document.body.innerHTML = '';
   localStorage.clear();

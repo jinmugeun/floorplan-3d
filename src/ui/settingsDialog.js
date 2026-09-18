@@ -31,7 +31,7 @@ export function openSettingsDialog({ store, onClose = () => {} }) {
       <p class="hint">자동 저장: 5분 간격으로 브라우저에 저장됩니다.</p>
     </section>
     <section id="tabKeys" hidden>
-      <p class="hint">키 칸을 누르고 새 키를 누르세요. [ESC]로 취소합니다.</p>
+      <p class="hint">키 칸을 누르고 새 키를 누르세요. [ESC]로 취소합니다. 키를 누르면 그 동작의 모든 키가 새 키 하나로 바뀝니다.</p>
       <div class="toolbar"><button type="button" name="keyExport">내보내기</button><button type="button" name="keyImport">업로드</button><button type="button" name="keyReset">초기화</button></div>
       <table id="keymapTable"><thead><tr><th>구분</th><th>기능</th><th>키</th></tr></thead><tbody></tbody></table>
     </section>
@@ -51,6 +51,7 @@ export function openSettingsDialog({ store, onClose = () => {} }) {
     const km = effectiveKeymap();
     const clash = conflictAction(km, label, waiting);
     if (clash) { toast(`[${label}]은 이미 "${labelOf(clash)}"이(가) 쓰고 있습니다`); stopWaiting(); return; }
+    // 삭제(Delete/Backspace)처럼 키가 두 개 이상인 동작도 여기서 배열 전체가 [label] 하나로 바뀐다(추가가 아니라 교체).
     saveOverrides({ ...loadOverrides(), [waiting]: [label] });
     setTable(buildTable(effectiveKeymap()));
     stopWaiting();
