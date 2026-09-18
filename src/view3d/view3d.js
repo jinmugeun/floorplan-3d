@@ -167,6 +167,12 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
     renderer.setPixelRatio(1);
     renderer.setSize(width, height, false);
     if (cam.isPerspectiveCamera) { cam.aspect = width / height; cam.updateProjectionMatrix(); }
+    else if (cam.isOrthographicCamera) {
+      // 현재 카메라가 직교(2D 투영 ortho2, 또는 projection: 'ortho')이면 절두체가 화면 비율로 잡혀 있다.
+      // 세로 폭(halfH)은 유지하고 가로 폭만 목표 비율로 다시 잡아 오프스크린 버퍼에서 늘어나지 않게 한다.
+      const halfH = (cam.top - cam.bottom) / 2, halfW = halfH * (width / height);
+      cam.left = -halfW; cam.right = halfW; cam.updateProjectionMatrix();
+    }
     renderer.render(scene, cam);
     const url = renderer.domElement.toDataURL('image/png');
     if (prevAspect !== null) { cam.aspect = prevAspect; cam.updateProjectionMatrix(); }
