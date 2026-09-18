@@ -37,7 +37,7 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #unitSeg button { min-width: 44px; }
 #btnZoomIn, #btnZoomOut { min-width: 30px; font-weight: 600; }
 #minimap canvas { cursor: crosshair; }
-#minimap { resize: vertical; overflow: auto; min-height: 80px; max-height: 600px; }
+#minimap { resize: vertical; overflow: auto; min-height: 80px; max-height: 600px; flex: none; }
 .popover { position: fixed; z-index: 55; min-width: 230px; max-height: 70vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.14); padding: 10px 12px; }
 .popover h4 { font-size: 11px; letter-spacing: .06em; color: var(--muted); margin: 10px 0 4px; } .popover h4:first-child { margin-top: 0; }
 .pop-row { display: flex; gap: 8px; align-items: center; margin: 4px 0; } .pop-row span { flex: 0 0 74px; color: var(--muted); } .pop-row input[type=range] { flex: 1; } .pop-row output { width: 46px; text-align: right; font-family: "IBM Plex Mono", monospace; }

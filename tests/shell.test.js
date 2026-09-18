@@ -324,3 +324,22 @@ test('미니맵 높이는 조절되고 localStorage에 남는다', () => {
   expect(localStorage.getItem('kvp.minimapH')).toBe('150');
   localStorage.clear();
 });
+
+// Task 16 리뷰 I-2·I-3: CSS resize 드래그는 pointerup이 밖에서 끝나므로 ResizeObserver가 저장과 다시 그리기를 맡는다.
+test('미니맵 크기가 바뀌면 ResizeObserver 경로로 높이를 저장하고 다시 그리기를 요청한다', () => {
+  const observed = [];
+  const prev = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; } observe(el) { observed.push({ el, cb: this.cb }); } disconnect() {} };
+  try {
+    const root = document.createElement('div'); document.body.appendChild(root);
+    let redraws = 0;
+    createShell(root, { store: createStore(createEmptyProject()), ui: createUiState(), onMinimapResize: () => { redraws += 1; } });
+    const mm = root.querySelector('#minimap');
+    const entry = observed.find(o => o.el === mm);
+    expect(entry).toBeTruthy();
+    mm.style.height = '240.5px';
+    entry.cb([]);
+    expect(localStorage.getItem('kvp.minimapH')).toBe('241');
+    expect(redraws).toBe(1);
+  } finally { globalThis.ResizeObserver = prev; localStorage.clear(); }
+});

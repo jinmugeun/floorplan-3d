@@ -37,7 +37,7 @@ import { serializeProject, parseProject, downloadText, readTextFile, startAutosa
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
-const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m) });
+const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m), onMinimapResize: () => minimap?.requestRender() });
 const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D 투영 선택(view3d가 상태를 되돌려 준다)
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 const menu = createContextMenu(document.body);

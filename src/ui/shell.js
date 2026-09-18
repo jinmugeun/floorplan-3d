@@ -17,7 +17,7 @@ export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {})
   return mode !== '2d' && mode !== 'fp' && !ortho && !!item && !item.locked && !(item.attach === 'wall' && item.wallId);
 }
 
-export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
+export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {} }) {
   root.innerHTML = `
   <div id="layout">
     <header id="topbar">
@@ -92,7 +92,10 @@ export function createShell(root, { store, ui, onGizmoMode = () => {} }) {
   // 미니맵 높이(CSS resize)를 브라우저에 기억한다.
   const mini = q('#minimap');
   try { const h = Number(localStorage.getItem('kvp.minimapH')); if (h >= 80 && h <= 600) mini.style.height = `${h}px`; } catch { /* 저장 불가 */ }
-  mini.addEventListener('pointerup', () => { try { localStorage.setItem('kvp.minimapH', String(Math.round(mini.getBoundingClientRect().height || parseFloat(mini.style.height) || 0))); } catch { /* 저장 불가 */ } });
+  const saveMiniHeight = () => { try { localStorage.setItem('kvp.minimapH', String(Math.round(mini.getBoundingClientRect().height || parseFloat(mini.style.height) || 0))); } catch { /* 저장 불가 */ } };
+  mini.addEventListener('pointerup', saveMiniHeight);
+  // CSS resize 드래그는 pointerup이 미니맵 밖에서 끝날 수 있어, 실제 크기 변화는 ResizeObserver로 잡아 저장하고 캔버스를 다시 그리게 한다.
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { saveMiniHeight(); onMinimapResize(); }).observe(mini);
 
   function showPanel(name) {
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
