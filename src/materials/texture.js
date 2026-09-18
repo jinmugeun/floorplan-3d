@@ -46,9 +46,7 @@ export function faceRepeat(material, faceSizeMm, { worldUv = false } = {}) {
 }
 
 // three 재질 하나에 지정을 반영한다. 지정이 없거나 화이트 단색 모드면 map을 붙이지 않는다.
-// uvShift(mm): 이 면이 무늬 원점에서 얼마나 떨어진 자리인가. uv가 면마다 0에서 다시 시작하는 조각(개구부로
-// 쪼갠 벽 박스)이 옆 조각·벽 본체와 무늬 위상을 잇게 한다. 단위·부호·적용 시점은 assignment.offset과 똑같다.
-export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false, uvShift = null } = {}) {
+export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false } = {}) {
   if (!threeMaterial) return threeMaterial;
   threeMaterial.map = null;
   if (!assignment || display === 'white') return threeMaterial;
@@ -63,10 +61,9 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv });
   t.repeat.set(rx, ry);
   // offset은 repeat을 곱한 뒤 더해지는 텍스처 공간 값이라 두 uv 모드에서 같은 식(offset mm ÷ 무늬 한 칸 mm)을 쓴다.
-  const shift = Array.isArray(uvShift) ? uvShift : [0, 0];
-  const shifted = i => (Number(assignment.offset?.[i]) || 0) + (Number(shift[i]) || 0);
+  const shifted = i => Number(assignment.offset?.[i]) || 0;
   t.offset.set(shifted(0) / (m.scale[0] || 1000), shifted(1) / (m.scale[1] || 1000));
-  t.center.set(0, 0);                             // center 0.5는 setUvTransform에 repeat에 비례한 항을 넣어 uvShift 위상을 깨뜨린다(원점 기준 회전)
+  t.center.set(0, 0);                             // center 0.5는 setUvTransform에 repeat에 비례한 항을 넣어 위상을 깨뜨린다(원점 기준 회전)
   t.rotation = ((Number(assignment.angle) || 0) * Math.PI) / 180;
   t.userData.clone = true;                        // disposeGroup이 복제본만 정리한다
   t.needsUpdate = true;

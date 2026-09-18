@@ -368,16 +368,6 @@ test('벽 본체 측벽 uv는 축 투영이 아니라 벽을 따라 잰 거리�
   }
 });
 
-test('applyAssignment uvShift는 offset과 같은 단위(mm)로 무늬 위상을 민다', () => {
-  const m = new THREE.MeshStandardMaterial();
-  applyAssignment(m, assign('brick-red', { offset: [46, 15] }), [1650, 2300], { uvShift: [2450, 2100] });
-  expect(m.map.offset.x).toBeCloseTo((2450 + 46) / 230, 6);   // 적벽돌 230 × 60
-  expect(m.map.offset.y).toBeCloseTo((2100 + 15) / 60, 6);
-  const plain = new THREE.MeshStandardMaterial();
-  applyAssignment(plain, assign('brick-red'), [1650, 2300]);
-  expect(plain.map.offset.x).toBe(0);                         // uvShift를 안 주면 예전 그대로
-});
-
 // 렌더가 실제로 쓰는 uv 행렬(offset·repeat·rotation·center)로 텍셀을 구한다.
 const texel = (map, u, v) => { map.updateMatrix(); const p = new THREE.Vector3(u, v, 1).applyMatrix3(map.matrix); return [p.x, p.y]; };
 const frac = x => ((x % 1) + 1) % 1;
