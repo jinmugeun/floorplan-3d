@@ -40,6 +40,10 @@ export const KEYMAP = [
 const norm = k => k.trim().toLowerCase().replace(/\s+/g, '');
 export const TABLE = new Map();
 for (const e of KEYMAP) if (e.action) for (const k of e.keys) TABLE.set(norm(k), e.action);
+// 현재 쓰이는 표. 설정 > 단축키가 재지정한 표를 setTable로 넣는다(기본값은 TABLE).
+let table = TABLE;
+export const getTable = () => table;
+export const setTable = map => { table = map instanceof Map && map.size ? map : TABLE; };
 // 1인칭에서 허용하는 동작(WASD로 걷는 동안 도구·삭제가 끼어들지 않게)
 export const FP_ALLOWED = new Set(['escape', 'mode:2d', 'mode:plan', 'mode:iso', 'mode:fp']);
 export const PREVENT = new Set(['undo', 'redo', 'save', 'selectAll', 'settings']);
@@ -111,7 +115,7 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
     const k = ev.key.toLowerCase();
     if (!fp && (!modified || isUndoKey) && view.tool?.onKey?.(ev)) { ev.preventDefault(); view.requestRender(); return; } // 도구가 먼저(조합키 중에는 Ctrl+Z만 전달). 도구가 먹은 키는 브라우저 기본 동작(방향키 스크롤 등)도 막는다. 1인칭에서는 도구에 키를 주지 않는다
     if (!fp && itemCombo(ev, k, itemActions)) { ev.preventDefault(); return; }
-    const action = TABLE.get(token);
+    const action = getTable().get(token);
     if (!action) return; // 표에 없는 키(Ctrl+F 등)는 브라우저에 맡긴다
     if (ev.altKey) return; // Alt 조합은 2B의 제품 단축키가 쓸 자리다
     if (ui.get().mode === 'fp' && !FP_ALLOWED.has(action)) return;

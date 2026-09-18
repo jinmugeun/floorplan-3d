@@ -52,3 +52,41 @@ test('Escape closes the dialog without leaking to the page, and a second open re
   expect(document.querySelector('.modal.settings')).toBeNull();
   expect(leaked).toEqual([]); // stopPropagation으로 window까지 가지 않는다
 });
+
+test('단축키 탭에서 키를 다시 지정하고 초기화한다', async () => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+  const { loadOverrides } = await import('../src/ui/keyBindings.js');
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const root = document.querySelector('.modal.settings');
+  root.querySelector('[data-tab="keys"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const cell = root.querySelector('[data-bind="tool:wall"]');
+  expect(cell.textContent).toContain('L');
+  cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(cell.textContent).toBe('키를 누르세요');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }));
+  expect(loadOverrides()).toEqual({ 'tool:wall': ['K'] });
+  expect(root.querySelector('[data-bind="tool:wall"]').textContent).toContain('K');
+  root.querySelector('[name="keyReset"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(loadOverrides()).toEqual({});
+  expect(root.querySelector('[data-bind="tool:wall"]').textContent).toContain('L');
+});
+
+test('충돌하는 키와 Esc는 무시한다', async () => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+  const { loadOverrides } = await import('../src/ui/keyBindings.js');
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const root = document.querySelector('.modal.settings');
+  root.querySelector('[data-tab="keys"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  root.querySelector('[data-bind="tool:wall"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));   // 방 그리기가 쓰는 키
+  expect(loadOverrides()).toEqual({});
+  expect(document.querySelector('#toasts')?.textContent ?? '').toContain('이미');
+  root.querySelector('[data-bind="tool:wall"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(loadOverrides()).toEqual({});
+  expect(root.querySelector('[data-bind="tool:wall"]').textContent).toContain('L');
+});

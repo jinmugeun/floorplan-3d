@@ -312,3 +312,14 @@ test('escape가 마감재 적용 모드를 끈다', () => {
   expect(a.ui.get().matPick).toBeNull();
   expect(a.calls.setTool).toEqual(['select']);
 });
+
+test('재지정한 키가 핸들러에 바로 듣는다', async () => {
+  const { setTable, TABLE } = await import('../src/ui/keymap.js');
+  const { buildTable, effectiveKeymap } = await import('../src/ui/keyBindings.js');
+  const a = setup();
+  setTable(buildTable(effectiveKeymap({ 'tool:wall': ['K'] })));
+  a.key('k');
+  a.key('l');
+  expect(a.calls.setTool).toEqual(['wall']);   // K가 벽 그리기, L은 이제 아무것도 아니다
+  setTable(TABLE);
+});

@@ -21,7 +21,8 @@ import { openMaterialEditor } from './ui/materialEditor.js';
 import { panelsToCancel } from './ui/panelModes.js';
 import { applyMaterial } from './state/materialOps.js';
 import { createLayersPanel } from './ui/layersPanel.js';
-import { createKeyHandler } from './ui/keymap.js';
+import { createKeyHandler, setTable } from './ui/keymap.js';
+import { buildTable, effectiveKeymap, loadOverrides } from './ui/keyBindings.js';
 import { createPropsPanel } from './ui/propsPanel.js';
 import { openRelativeMoveDialog, openArrayDialog } from './ui/itemDialogs.js';
 import { openBackgroundDialog } from './ui/backgroundDialog.js';
@@ -261,6 +262,7 @@ canvasWrap.addEventListener('drop', async ev => {
   }
 });
 
+setTable(buildTable(effectiveKeymap(loadOverrides()))); // 저장된 단축키 재지정을 적용한다
 window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions }));
 setTool('select'); view.fit(); minimap.fit(500);
 if (import.meta.env.DEV) window.__app = { store, ui, view, view3d, actions }; // 브라우저 검증용, 개발 빌드에서만
