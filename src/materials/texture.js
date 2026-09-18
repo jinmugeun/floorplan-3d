@@ -34,9 +34,10 @@ export function materialTexture(id, { makeCanvas = null } = {}) {
 }
 
 // 반복 횟수 = 면 크기(mm) ÷ 무늬 한 칸 크기(mm). 0 나누기를 막고 최소 0.05를 준다.
-// worldUv: uv가 0~1이 아니라 "월드 미터"인 지오메트리(ShapeGeometry·ExtrudeGeometry는 정점 좌표를 그대로
-// uv로 쓴다)는 uv에 이미 면 크기가 들어 있다. 그래서 repeat은 면 크기와 무관한 "미터당 반복 수" = 1000 / scale(mm)이고,
-// 실제 반복 수 = uv 범위(m) × repeat = 면 크기(mm) / scale(mm)로 0~1 uv와 같은 결과가 된다.
+// worldUv: uv가 0~1이 아니라 "미터"인 지오메트리(ShapeGeometry는 정점 좌표를 그대로 uv로 쓰고, 벽 본체
+// ExtrudeGeometry는 build.js가 벽 축으로 잰 거리를 uv에 넣는다)는 uv에 이미 면 크기가 들어 있다. 그래서 repeat은
+// 면 크기와 무관한 "미터당 반복 수" = 1000 / scale(mm)이고, 실제 반복 수 = uv 범위(m) × repeat = 면 크기(mm) /
+// scale(mm)로 0~1 uv와 같은 결과가 된다. 이 말은 uv가 면을 따라 잰 거리일 때만 참이다(build.js의 UVGenerator 참고).
 export function faceRepeat(material, faceSizeMm, { worldUv = false } = {}) {
   const [sw, sh] = material?.scale ?? [1000, 1000];
   if (worldUv) return [Math.max(0.05, 1000 / (sw || 1000)), Math.max(0.05, 1000 / (sh || 1000))];
@@ -45,7 +46,9 @@ export function faceRepeat(material, faceSizeMm, { worldUv = false } = {}) {
 }
 
 // three 재질 하나에 지정을 반영한다. 지정이 없거나 화이트 단색 모드면 map을 붙이지 않는다.
-export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false } = {}) {
+// uvShift(mm): 이 면이 무늬 원점에서 얼마나 떨어진 자리인가. uv가 면마다 0에서 다시 시작하는 조각(개구부로
+// 쪼갠 벽 박스)이 옆 조각·벽 본체와 무늬 위상을 잇게 한다. 단위·부호·적용 시점은 assignment.offset과 똑같다.
+export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false, uvShift = null } = {}) {
   if (!threeMaterial) return threeMaterial;
   threeMaterial.map = null;
   if (!assignment || display === 'white') return threeMaterial;
@@ -60,7 +63,9 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv });
   t.repeat.set(rx, ry);
   // offset은 repeat을 곱한 뒤 더해지는 텍스처 공간 값이라 두 uv 모드에서 같은 식(offset mm ÷ 무늬 한 칸 mm)을 쓴다.
-  t.offset.set((Number(assignment.offset?.[0]) || 0) / (m.scale[0] || 1000), (Number(assignment.offset?.[1]) || 0) / (m.scale[1] || 1000));
+  const shift = Array.isArray(uvShift) ? uvShift : [0, 0];
+  const shifted = i => (Number(assignment.offset?.[i]) || 0) + (Number(shift[i]) || 0);
+  t.offset.set(shifted(0) / (m.scale[0] || 1000), shifted(1) / (m.scale[1] || 1000));
   t.center.set(0.5, 0.5);
   t.rotation = ((Number(assignment.angle) || 0) * Math.PI) / 180;
   t.userData.clone = true;                        // disposeGroup이 복제본만 정리한다
