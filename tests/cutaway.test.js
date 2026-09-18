@@ -110,3 +110,13 @@ test('soloMeshVisible: 벽은 컷어웨이 결과를 존중하고 이웃 방의 
   expect(soloMeshVisible(mesh('wallFace', { wallId: 'w1', roomId: 'r2' }), room)).toBe(false);
   expect(soloMeshVisible(mesh('wall', { wallId: 'w1' }, false), null)).toBe(false); // 해제해도 벽은 컷어웨이가 정한 대로
 });
+
+test('영역 메시는 컷어웨이·단일 공간 모드에서 벽면과 같게 다뤄진다', () => {
+  expect(cutawayMeshStyle('wallRegion', { isHidden: false, baseOpacity: 1 })).toEqual({ visible: true, opacity: 1 });
+  expect(cutawayMeshStyle('wallRegion', { isHidden: true, baseOpacity: 1 })).toEqual({ visible: false, opacity: 1 });
+  expect(cutawayMeshStyle('wallRegion', { isHidden: true, seeThrough: true, baseOpacity: 1 })).toEqual({ visible: true, opacity: 0.25 });
+  const room = { id: 'r1', wallIds: ['w1'] };
+  expect(soloMeshVisible({ name: 'wallRegion', visible: true, userData: { wallId: 'w1', side: 'in' } }, room)).toBe(true);
+  expect(soloMeshVisible({ name: 'wallRegion', visible: true, userData: { wallId: 'w2', side: 'in' } }, room)).toBe(false);
+  expect(soloMeshVisible({ name: 'wallFace', visible: true, userData: { wallId: 'w1', roomId: 'r2' } }, room)).toBe(false);
+});

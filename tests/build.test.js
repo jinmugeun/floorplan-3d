@@ -5,6 +5,10 @@ import { buildFloorGroup, disposeGroup, sceneSignature, TRANSPARENT_OPACITY } fr
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addFloor, setActiveFloor } from "../src/state/floorOps.js";
+import { beforeAll, afterAll } from 'vitest';
+import { setCanvasFactory, clearTextureCache, materialTexture, faceRepeat, applyAssignment, TEX_PX } from '../src/materials/texture.js';
+import { materialById } from '../src/materials/catalog.js';
+import * as THREE from 'three';
 
 function floor() { const walls = rectWalls([0, 0], [4000, 3000], 200); return { walls, rooms: detectRooms(walls), height: 2300 }; }
 
@@ -144,4 +148,109 @@ test('sceneSignature changes when a v3 item-visibility flag changes but not for 
   const c = sceneSignature({ ...s, view: { ...s.view, v3: { ...s.view.v3, wallItems: false } } });
   expect(b).toBe(a);
   expect(c).not.toBe(a);
+});
+
+// node 환경에는 document가 없다. drawPattern이 부르는 메서드만 가진 가짜 캔버스를 쓴다.
+function fakeCanvas() {
+  const ctx = { fillStyle: '', strokeStyle: '', lineWidth: 1, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {} };
+  return { width: 0, height: 0, getContext: () => ctx };
+}
+beforeAll(() => setCanvasFactory(fakeCanvas));
+afterAll(() => { clearTextureCache(); setCanvasFactory(null); });
+
+const assign = (id, patch = {}) => ({ id, offset: [0, 0], angle: 0, ...patch });
+
+test('materialTexture는 id마다 한 장을 캐시하고 반복·색공간을 세팅한다', () => {
+  const t = materialTexture('wood-oak');
+  expect(t).toBeTruthy();
+  expect(t.image.width).toBe(TEX_PX);
+  expect(t.wrapS).toBe(THREE.RepeatWrapping);
+  expect(t.wrapT).toBe(THREE.RepeatWrapping);
+  expect(t.colorSpace).toBe(THREE.SRGBColorSpace);
+  expect(materialTexture('wood-oak')).toBe(t);       // 같은 재질은 같은 텍스처
+  expect(materialTexture('없는재질')).toBeNull();
+});
+
+test('faceRepeat은 면 크기를 무늬 크기로 나눈다(소수 크기)', () => {
+  const oak = materialById('wood-oak');            // scale [1200, 190]
+  const [rx, ry] = faceRepeat(oak, [4000.5, 2300]);
+  expect(rx).toBeCloseTo(4000.5 / 1200, 6);
+  expect(ry).toBeCloseTo(2300 / 190, 6);
+  expect(faceRepeat(oak, [0, 0])[0]).toBe(0.05);   // 0으로 나누지 않고 최소값을 쓴다
+  expect(faceRepeat(null, [1000, 1000])).toEqual([1, 1]);
+});
+
+test('applyAssignment는 map·repeat·offset·rotation을 세팅하고 화이트 모드에서는 붙이지 않는다', () => {
+  const m = new THREE.MeshStandardMaterial();
+  applyAssignment(m, assign('tile-white-300', { offset: [150, 75.5], angle: 90 }), [3000, 2400]);
+  expect(m.map).toBeTruthy();
+  expect(m.map.repeat.x).toBeCloseTo(10, 6);        // 3000 / 300
+  expect(m.map.offset.x).toBeCloseTo(0.5, 6);       // 150 / 300
+  expect(m.map.offset.y).toBeCloseTo(75.5 / 300, 6);
+  expect(m.map.rotation).toBeCloseTo(Math.PI / 2, 6);
+  expect(m.map.center.x).toBe(0.5);
+  expect(m.color.getHex()).toBe(0xffffff);
+  const w = new THREE.MeshStandardMaterial();
+  applyAssignment(w, assign('tile-white-300'), [3000, 2400], { display: 'white' });
+  expect(w.map).toBeNull();
+  const none = new THREE.MeshStandardMaterial();
+  applyAssignment(none, null, [3000, 2400]);
+  expect(none.map).toBeNull();
+});
+
+test('벽 본체는 matOut, 방 안쪽 면은 matIn 텍스처를 쓴다(소수 길이)', () => {
+  const walls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200)
+    .map(w => ({ ...w, matIn: assign('paint-navy'), matOut: assign('brick-red') }));
+  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), height: 2300 }, { wallOpacity: 1 });
+  const body = g.children.find(c => c.name === 'wall');
+  const face = g.children.find(c => c.name === 'wallFace');
+  expect(body.material.map).toBeTruthy();
+  expect(face.material.map).toBeTruthy();
+  expect(body.material.map.uuid).not.toBe(face.material.map.uuid); // 면마다 복제한다(반복·오프셋이 다르다)
+  const top = walls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);
+  const topBody = g.children.find(c => c.name === 'wall' && c.userData.wallId === top.id);
+  expect(topBody.material.map.repeat.x).toBeCloseTo(4000 / 230, 3);  // 벽 길이 4000 / 적벽돌 230
+});
+
+test('바닥·천장은 방 재질을 쓰고, 지정이 없으면 색만 쓴다', () => {
+  const walls = rectWalls([0, 0], [4000, 3000], 200);
+  const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('wood-oak'), ceilingMat: null, hideCeiling: false }));
+  const g = buildFloorGroup({ walls, rooms, height: 2300 }, { wallOpacity: 1 });
+  expect(g.children.find(c => c.name === 'floor').material.map).toBeTruthy();
+  expect(g.children.find(c => c.name === 'ceiling').material.map).toBeNull();
+});
+
+test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들고 있다', () => {
+  const walls = rectWalls([0, 0], [4000, 3000], 200);
+  const target = walls[0];
+  target.regions = {
+    in: [{ id: 'rg1', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 1200, mat: assign('tile-white-300') }],
+    out: [{ id: 'rg2', kind: 'rect', u0: 500.5, u1: 1500.5, z0: 300, z1: 900, mat: assign('brick-red') }],
+  };
+  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), height: 2300 }, { wallOpacity: 1 });
+  const regions = g.children.filter(c => c.name === 'wallRegion');
+  expect(regions).toHaveLength(2);
+  expect(regions.map(r => r.userData.side).sort()).toEqual(['in', 'out']);
+  expect(regions.every(r => r.userData.wallId === target.id)).toBe(true);
+  expect(regions.every(r => r.geometry.type === 'PlaneGeometry')).toBe(true);
+  const band = regions.find(r => r.userData.side === 'in');
+  expect(band.geometry.parameters.width).toBeCloseTo(4);        // 4000mm = 4m
+  expect(band.geometry.parameters.height).toBeCloseTo(1.2);
+  expect(band.position.y).toBeCloseTo(0.6);                     // (0 + 1200) / 2
+  const rect = regions.find(r => r.userData.side === 'out');
+  expect(rect.geometry.parameters.width).toBeCloseTo(1.0, 6);   // 1500.5 - 500.5
+  // 벽 면(두께 200의 절반)에서 2mm 앞: 아래 벽(y = 0)은 법선이 남(+y) → three z
+  expect(Math.abs(rect.position.z)).toBeCloseTo(0.102, 6);
+  disposeGroup(g);
+});
+
+test('disposeGroup은 면마다 복제한 텍스처만 정리하고 캐시 원본은 남긴다', () => {
+  const cached = materialTexture('brick-red');
+  const spy = vi.spyOn(cached, 'dispose');
+  const walls = rectWalls([0, 0], [4000, 3000], 200).map(w => ({ ...w, matOut: assign('brick-red') }));
+  const g = buildFloorGroup({ walls, rooms: detectRooms(walls), height: 2300 }, { wallOpacity: 1 });
+  const clones = g.children.filter(c => c.name === 'wall').map(c => vi.spyOn(c.material.map, 'dispose'));
+  disposeGroup(g);
+  expect(clones.every(s => s.mock.calls.length === 1)).toBe(true);
+  expect(spy).not.toHaveBeenCalled();
 });

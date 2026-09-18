@@ -34,7 +34,7 @@ export function hiddenWallIds(floor, camPos, elevationDeg, view) {
 export function cutawayMeshStyle(name, { isHidden = false, seeThrough = false, baseOpacity = 1 } = {}) {
   if (name === 'wallFoot') return { visible: isHidden && !seeThrough, opacity: null }; // 감춘 벽은 밑동 윤곽만 남긴다
   const visible = !isHidden || seeThrough; // wallTop·edges·wallFace도 "벽 투명화"를 따른다
-  if (name === 'wall' || name === 'wallFace') return { visible, opacity: isHidden && seeThrough ? 0.25 : baseOpacity };
+  if (name === 'wall' || name === 'wallFace' || name === 'wallRegion') return { visible, opacity: isHidden && seeThrough ? 0.25 : baseOpacity };
   return { visible, opacity: null };
 }
 
@@ -45,8 +45,11 @@ export function soloMeshVisible(mesh, room, mode = 'iso') {
   const solo = room?.id ?? null;
   if (mesh.userData?.wallId) {
     if (!room) return mesh.visible;
-    // 이웃 방의 wallFace는 단일 공간 모드에서 숨긴다(벽 본체는 남는다).
-    return mesh.visible && room.wallIds.includes(mesh.userData.wallId) && (mesh.name !== 'wallFace' || mesh.userData.roomId === solo);
+    if (!room.wallIds.includes(mesh.userData.wallId)) return false;
+    // wallFace는 방마다 하나씩 있으므로 이웃 방의 면은 숨긴다.
+    if (mesh.name === 'wallFace') return mesh.visible && mesh.userData.roomId === solo;
+    // wallRegion은 벽 면 전체를 덮는 것이라 방 소속이 없다: 벽 본체와 함께 보이고 숨는다.
+    return mesh.visible;
   }
   if (!mesh.userData?.roomId) return mesh.visible;
   if (room) return mesh.userData.roomId === solo && mesh.name !== 'ceiling';
