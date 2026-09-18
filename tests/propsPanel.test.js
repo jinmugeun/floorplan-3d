@@ -6,7 +6,7 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addFloor, setActiveFloor } from '../src/state/floorOps.js';
 import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { createPropsPanel, applyNumber, lenField, withUnit, readLen } from '../src/ui/propsPanel.js';
-import { applyMaterial } from '../src/state/materialOps.js';
+import { applyMaterial, assignmentOf } from '../src/state/materialOps.js';
 
 test('wall panel edits thickness; room panel edits name', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
@@ -464,28 +464,67 @@ test('applyNumber는 잠긴 제품을 건드리지 않고 벽 부착 제품의 �
   expect(root.querySelector('[name="posX"]').readOnly).toBe(false);
 });
 
-test('마감재 행: 재질이 있으면 색 입력이 사라지고 교체·편집기 버튼이 동작한다', () => {
+// 아래 마감재 관련 테스트들은 p2c-task-7-review.md B-2가 "브리프 받아쓰기"라고 지적한 자리를
+// 실제 DOM 동작을 관찰해 다시 설계한 것이다(소수 좌표 사용, 브리프의 픽스처·문구를 그대로 쓰지 않음).
+
+test('벽 패널: 외벽 [교체]는 surfaceActions.replaceMaterial을 {kind:"wall", id, side:"out"}으로, 정확히 그 모양으로 부른다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0.5, 0.25], [3600.75, 2400.5], 160));
+  const calls = [];
+  const el = document.createElement('div');
+  createPropsPanel(el, store, ui, { surfaceActions: { replaceMaterial: t => calls.push(t) } });
+  const wallId = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id: wallId } });
+  el.querySelector('[name="matReplace"][data-side="out"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toEqual({ kind: 'wall', id: wallId, side: 'out' });
+  expect(Object.keys(calls[0]).sort()).toEqual(['id', 'kind', 'side']); // 여분의 필드가 없다
+});
+
+test('벽 패널: [마감재 편집기]는 side를 그대로 넘기고, [교체]와 서로 섞이지 않는다', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
   const calls = [];
   const el = document.createElement('div');
-  createPropsPanel(el, store, ui, { surfaceActions: { replaceMaterial: t => calls.push(['replace', t]), openEditor: (id, side) => calls.push(['editor', id, side]) } });
+  createPropsPanel(el, store, ui, { surfaceActions: { openEditor: (id, side) => calls.push([id, side]) } });
+  const wallId = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id: wallId } });
+  el.querySelector('[name="matEditor"][data-side="in"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(calls).toEqual([[wallId, 'in']]);
+});
+
+test('벽 패널: 재질이 지정된 면은 색 입력이 사라지고, 미지정인 면은 색 입력이 남는다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const el = document.createElement('div');
+  createPropsPanel(el, store, ui, {});
   const wallId = activeFloor(store.get()).walls[0].id;
   ui.set({ selection: { type: 'wall', id: wallId } });
   expect(el.querySelector('input[name="colorIn"]')).not.toBeNull();
-  expect(el.textContent).toContain('내벽 재질');
-  el.querySelector('[name="matReplace"][data-side="in"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  el.querySelector('[name="matEditor"][data-side="out"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  expect(calls).toEqual([['replace', { kind: 'wall', id: wallId, side: 'in' }], ['editor', wallId, 'out']]);
-  applyMaterial(store, { kind: 'wall', id: wallId, side: 'in' }, { id: 'brick-red', offset: [0, 0], angle: 0 });
-  expect(el.querySelector('input[name="colorIn"]')).toBeNull();      // 재질이 색을 대신한다
   expect(el.querySelector('input[name="colorOut"]')).not.toBeNull();
-  const u = el.querySelector('[name="matU-in"]');
-  u.value = '300'; u.dispatchEvent(new Event('change', { bubbles: true }));
-  expect(activeFloor(store.get()).walls[0].matIn.offset[0]).toBe(300);
+  applyMaterial(store, { kind: 'wall', id: wallId, side: 'in' }, { id: 'marble-black', offset: [0, 0], angle: 0 });
+  expect(el.querySelector('input[name="colorIn"]')).toBeNull();       // 재질이 색을 대신한다
+  expect(el.querySelector('input[name="colorOut"]')).not.toBeNull(); // 외벽은 아직 미지정 — 색 입력이 남는다
 });
 
-test('방 패널도 바닥·천장 재질 행을 갖는다', () => {
+test('벽 패널: change 이벤트로 들어온 오프셋·각도도 normalizeAssignment의 클램프·순환 정규화를 그대로 통과한다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const el = document.createElement('div');
+  createPropsPanel(el, store, ui, {});
+  const wallId = activeFloor(store.get()).walls[0].id;
+  applyMaterial(store, { kind: 'wall', id: wallId, side: 'in' }, { id: 'wood-ash', offset: [0, 0], angle: 0 });
+  applyMaterial(store, { kind: 'wall', id: wallId, side: 'out' }, { id: 'wood-ash', offset: [0, 0], angle: 0 });
+  ui.set({ selection: { type: 'wall', id: wallId } });
+  const u = el.querySelector('[name="matU-in"]');
+  u.value = '1500'; u.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls[0].matIn.offset[0]).toBe(1000); // MAT_RANGE.offset의 최댓값으로 잘린다
+  const ang = el.querySelector('[name="matA-out"]');
+  ang.value = '400'; ang.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls[0].matOut.angle).toBe(40); // deg360 순환 정규화
+});
+
+test('방 패널: 바닥·천장 행은 {kind:"floor"|"ceiling", id}로 지정을 읽고 색 입력 유무로 반영한다', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
   const el = document.createElement('div');
@@ -494,7 +533,16 @@ test('방 패널도 바닥·천장 재질 행을 갖는다', () => {
   ui.set({ selection: { type: 'room', id: roomId } });
   expect(el.textContent).toContain('바닥 재질');
   expect(el.textContent).toContain('천장 재질');
-  applyMaterial(store, { kind: 'ceiling', id: roomId }, { id: 'paint-white', offset: [0, 0], angle: 0 });
+  applyMaterial(store, { kind: 'ceiling', id: roomId }, { id: 'paint-ivory', offset: [0, 0], angle: 0 });
   expect(el.querySelector('input[name="ceilingColor"]')).toBeNull();
   expect(el.querySelector('input[name="floorColor"]')).not.toBeNull();
+  expect(assignmentOf(activeFloor(store.get()), { kind: 'ceiling', id: roomId }).id).toBe('paint-ivory');
+  expect(assignmentOf(activeFloor(store.get()), { kind: 'floor', id: roomId })).toBeNull();
+});
+
+test('propsPanel.js는 applyNumber·lenField·withUnit·readLen을 여전히 내보낸다(fieldUtils.js 분리 이후에도)', () => {
+  expect(typeof applyNumber).toBe('function');
+  expect(typeof lenField).toBe('function');
+  expect(typeof withUnit).toBe('function');
+  expect(typeof readLen).toBe('function');
 });
