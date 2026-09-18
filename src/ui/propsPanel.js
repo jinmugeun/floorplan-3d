@@ -1,11 +1,14 @@
 import { activeFloor } from '../state/schema.js';
 import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFloor, deleteFloor, totalArea, setWallLength, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
 import { wallLength } from '../geom/walls.js';
-import { fmtLen, parseLen, fmtArea } from '../util/units.js';
+import { fmtArea } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
+import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
+import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
+export { lenField, readLen, withUnit } from './fieldUtils.js';
 
 // 상세 설정 <details>의 열림 상태는 패널을 다시 그려도 유지된다.
 let detailsOpen = true;
@@ -13,31 +16,6 @@ let detailsOpen = true;
 let keepRatio = false;
 
 export const ROOM_TYPES = [['none', '미지정'], ['cook', '가열조리실'], ['prep', '전처리실'], ['cold', '비가열조리실'], ['wash', '식기구세척실'], ['dining', '식당'], ['storage', '창고'], ['office', '사무실'], ['etc', '기타']];
-
-const field = (label, inner) => `<label class="field"><span>${label}</span>${inner}</label>`;
-const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${Number(value) || 0}" min="${min}" max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
-// 숫자 입력: 비어 있거나 숫자가 아니면 null, 범위를 벗어나면 min/max로 잘라 준다.
-function numValue(el) {
-  if (el.value.trim() === '') return null;
-  const v = Number(el.value); if (Number.isNaN(v)) return null;
-  const min = el.min === '' ? -Infinity : Number(el.min), max = el.max === '' ? Infinity : Number(el.max);
-  return Math.min(max, Math.max(min, v));
-}
-// 길이 입력은 단위에 따라 모양이 달라진다: mm는 숫자 입력, ft·in은 텍스트 입력(12' 6").
-// 저장 값은 언제나 mm 정수다. step은 mm 숫자 입력의 화살표 간격이다(기존 층 높이·바닥 기준 높이·방 높이는 10을 썼다).
-export function lenField(label, name, mm, min, max, ro = false, units = 'mm', step = 1) {
-  if (units !== 'ftin') return field(label, num(name, mm, min, max, step, ro));
-  return field(label, `<input type="text" name="${name}" data-len="1" data-min="${min}" data-max="${max}" value="${esc(fmtLen(mm, 'ftin'))}" ${ro ? 'readonly' : ''}>`);
-}
-export function readLen(el, units) {
-  const v = parseLen(el.value, units);
-  if (v === null) return null;
-  const min = Number(el.dataset.min ?? -Infinity), max = Number(el.dataset.max ?? Infinity);
-  return Math.min(max, Math.max(min, Math.round(v)));
-}
-// 치수 단위 표시가 꺼져 있으면 라벨에 단위를 쓰지 않는다: "벽 높이" / "벽 높이 (mm)"
-export const withUnit = (label, units, showUnit) => (showUnit ? `${label} (${units === 'ftin' ? 'ft·in' : 'mm'})` : label);
-const colorField = (label, name, value) => field(label, `<input type="color" name="${name}" value="${esc(value)}">`);
 
 // 숫자·길이 입력 한 칸을 상태에 반영한다. 2B의 아이템 패널도 이 함수를 쓴다.
 export function applyNumber(store, sel, name, v) {
@@ -93,12 +71,14 @@ export function applyNumber(store, sel, name, v) {
 
 // deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
 // itemActions: main.js의 아이템 동작 묶음(정렬·그룹화·그룹 해제는 여기서 부른다).
-export function createPropsPanel(container, store, ui, { deleteSelection = () => {}, itemActions = {} } = {}) {
+export function createPropsPanel(container, store, ui, { deleteSelection = () => {}, itemActions = {}, surfaceActions = {} } = {}) {
   function render() {
     const active = document.activeElement;
     if (colorTx && active?.type === 'color' && container.contains(active)) return; // 색을 끌고 있는 동안만 다시 그리지 않는다(입력이 끊긴다)
     renderBody();
-    const details = container.querySelector('details');
+    mountSwatches(container, activeFloor(store.get()), ui.get().selection);
+    // 마감재 행에도 <details>가 생겼다: 층 관리 패널의 "상세 설정"만 골라 잡는다(I-14).
+    const details = container.querySelector('details:not(.mat-row details)');
     if (details) details.addEventListener('toggle', () => { detailsOpen = details.open; });
     const wanted = ui.get().focusField;
     if (!wanted) return;
@@ -158,8 +138,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${lenField(withUnit('두께', units, showUnit), 'thickness', w.thickness, 2, 1000, false, units)}
         ${lenField(withUnit('벽 높이', units, showUnit), 'height', w.height, 2, 8000, false, units)}
         ${field('선택된 벽 면적', `<output name="wallArea">${fmtArea((len * w.height) / 1e6, { pyeong })}</output>`)}
-        ${colorField('내벽 색', 'colorIn', w.colorIn)}
-        ${colorField('외벽 색', 'colorOut', w.colorOut)}
+        ${materialRowsHtml(f, sel, { detailsOpen: false })}
+        ${w.matIn ? '' : colorField('내벽 색', 'colorIn', w.colorIn)}
+        ${w.matOut ? '' : colorField('외벽 색', 'colorOut', w.colorOut)}
         <button type="button" name="split">벽 나누기 (나눌 지점 클릭)</button>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
       return;
@@ -198,8 +179,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${lenField(withUnit('방 높이', units, showUnit), 'height', r.height, 0, 8000, false, units, 10)}
         ${field('좌석수', num('seats', r.seats ?? 0, 0, 999, 1))}
         <label class="check"><input type="checkbox" name="matchWallHeight" ${r.matchWallHeight ? 'checked' : ''}> 공간 높이 맞추기</label>
-        ${colorField('바닥 색', 'floorColor', r.floorColor)}
-        ${colorField('천장 색', 'ceilingColor', r.ceilingColor)}
+        ${materialRowsHtml(f, sel, { detailsOpen: false })}
+        ${r.floorMat ? '' : colorField('바닥 색', 'floorColor', r.floorColor)}
+        ${r.ceilingMat ? '' : colorField('천장 색', 'ceilingColor', r.ceilingColor)}
         <label class="check"><input type="checkbox" name="hideCeiling" ${r.hideCeiling ? 'checked' : ''}> 천장 감추기</label>
         <button type="button" name="delete" class="danger">방 삭제</button>`;
       return;
@@ -221,6 +203,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   };
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
+    if (applyMaterialField(store, sel, el)) return;      // 마감재 오프셋·각도
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }
     if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }, { record: false }); return; }
     if (name === 'bgLocked') { store.dispatch(d => { d.background.locked = el.checked; }, { record: false }); return; }
@@ -258,6 +241,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   };
   const onClick = ev => {
     if (ev.target.name === 'split') { ui.set({ splitWall: true }); return; }
+    if (ev.target.name === 'matReplace') { surfaceActions.replaceMaterial?.(targetFor(ui.get().selection, ev.target.dataset.side)); return; }
+    if (ev.target.name === 'matEditor') { surfaceActions.openEditor?.(ui.get().selection?.id, ev.target.dataset.side); return; }
     if (ev.target.name === 'resetSize') {
       const sel = ui.get().selection;
       const it = activeFloor(store.get()).items.find(x => x.id === sel?.id);
