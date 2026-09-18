@@ -39,3 +39,7 @@ export async function capture2D(store, _ui, width = 2000) {
     finally { v.destroy(); }
   })));
 }
+// dataURL(렌더샷·시방서 이미지)을 파일로 내려받는다.
+export function downloadDataUrl(filename, dataUrl) {
+  const a = document.createElement('a'); a.href = dataUrl; a.download = filename; a.click();
+}

@@ -148,6 +148,33 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   }
   // 하단 바 "화면 맞추기"(키 0)의 3D 쪽 동작. 모드는 바꾸지 않는다.
   function fit() { if (mode === 'fp') return; resize(); frameScene(); }
+  // 렌더샷: 화면과 다른 해상도로 한 장 렌더해 dataURL을 돌려준다.
+  // setSize(w, h, false)는 캔버스 CSS 크기를 건드리지 않으므로 화면이 흔들리지 않는다.
+  function renderImage({ width = 1920, height = 1080, preset = null } = {}) {
+    const prev = new THREE.Vector2(); renderer.getSize(prev);
+    const prevRatio = renderer.getPixelRatio();
+    let cam = useOrtho && ortho2 ? ortho2 : camera;
+    if (preset) {
+      const b = bounds();
+      const p = orthoViewParams(preset, { center: b.center, extent: b.extent, height: activeFloor(store.get()).height, aspect: width / height });
+      const shot = new THREE.OrthographicCamera(-p.halfW, p.halfW, p.halfH, -p.halfH, 0.01, 1000);
+      shot.position.set(...p.pos); shot.up.set(...p.up);
+      shot.lookAt(new THREE.Vector3(...p.target)); shot.updateProjectionMatrix();
+      cam = shot;
+      showAllWalls();                       // 정면·평면 도면은 컷어웨이로 벽을 지우지 않는다
+    }
+    const prevAspect = cam.isPerspectiveCamera ? cam.aspect : null;
+    renderer.setPixelRatio(1);
+    renderer.setSize(width, height, false);
+    if (cam.isPerspectiveCamera) { cam.aspect = width / height; cam.updateProjectionMatrix(); }
+    renderer.render(scene, cam);
+    const url = renderer.domElement.toDataURL('image/png');
+    if (prevAspect !== null) { cam.aspect = prevAspect; cam.updateProjectionMatrix(); }
+    renderer.setPixelRatio(prevRatio);
+    renderer.setSize(prev.x, prev.y, false);
+    resize(); requestRender();               // 다음 프레임에 평소 상태로 되돌린다
+    return url;
+  }
   function setMode(m, opts = {}) {
     if (useOrtho) { useOrtho = false; orthoName = null; controls.enabled = true; onOrthoView(null); } // 모드 버튼을 누르면 투영에서 빠져나온다(하단 바 선택도 비운다)
     resize(); // 숨겨져 있다가 보이는 경우 크기를 다시 맞춘다
@@ -230,5 +257,5 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, getCameraInfo, setTarget, requestRender, setOrthoView, clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView, clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }
