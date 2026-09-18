@@ -214,7 +214,8 @@ function saveAsTemplate() {
   const name = window.prompt('템플릿 이름을 입력하세요', store.get().name);
   if (name === null) return;
   const saved = saveTemplate(name, store.get());
-  shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);
+  if (saved) shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);
+  else shell.toast('템플릿을 저장하지 못했습니다(저장 공간 부족)');
 }
 // 태스크 14의 상단 바·더보기 메뉴가 받아 갈 동작 묶음. 견적서·렌더샷·갤러리는 그 전까지 이 묶음으로만 연다(버튼은 태스크 14).
 const actions = { saveAsTemplate, openEstimate: () => openEstimateDialog({ store }), openRender: () => openRenderDialog({ store, view3d }), openGallery: () => openGalleryDialog({}) };

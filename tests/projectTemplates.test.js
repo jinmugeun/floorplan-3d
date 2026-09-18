@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { BUILTIN_TEMPLATES, saveTemplate, listTemplates, deleteTemplate, templateProject, allTemplateCards, TEMPLATE_KEY } from '../src/templates/projectTemplates.js';
 
@@ -70,5 +70,20 @@ describe('프로젝트 템플릿', () => {
     localStorage.setItem(TEMPLATE_KEY, '{보기 안 좋은 JSON');
     expect(listTemplates()).toEqual([]);
     expect(() => deleteTemplate('x')).not.toThrow();
+  });
+
+  test('엔트리의 project 필드가 잘못된 모양이어도 templateProject는 던지지 않고 null을 돌려준다', () => {
+    localStorage.setItem(TEMPLATE_KEY, JSON.stringify([{ id: 'bad1', name: '깨진 것', savedAt: new Date().toISOString(), project: 42 }]));
+    expect(() => templateProject('bad1')).not.toThrow();
+    expect(templateProject('bad1')).toBeNull();
+  });
+
+  test('용량 초과 등으로 localStorage.setItem이 던지면 saveTemplate이 null을 돌려준다', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+    try {
+      expect(saveTemplate('실패할 이름', createEmptyProject('x'))).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

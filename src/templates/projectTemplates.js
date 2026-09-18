@@ -31,16 +31,18 @@ export const BUILTIN_TEMPLATES = [
 ];
 
 const readAll = () => { try { const t = JSON.parse(localStorage.getItem(TEMPLATE_KEY) ?? '[]'); return Array.isArray(t) ? t : []; } catch { return []; } };
-const writeAll = list => { try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(list)); } catch { /* 저장 불가(용량·사생활 보호 모드) */ } };
+// 성공 여부를 돌려준다: 용량 초과·사생활 보호 모드에서는 false → 호출자가 "저장했습니다"라고 속이지 않게 한다.
+const writeAll = list => { try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(list)); return true; } catch { return false; } };
 
 // 배경 이미지는 dataURL이라 용량이 커서 뺀다. 같은 이름의 템플릿은 덮어쓴다.
+// 저장이 실패하면(용량 초과 등) null을 돌려준다.
 export function saveTemplate(name, project) {
   const clean = { ...structuredClone(project), background: null };
   clean.name = String(name ?? '').trim() || project.name || '템플릿';
   // id에 난수 4자를 붙인다: 같은 밀리초에 두 번 저장하면 Date.now()만으로는 겹친다.
   const entry = { id: `tpl_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: clean.name, savedAt: new Date().toISOString(), project: clean };
-  writeAll([...readAll().filter(t => t.name !== entry.name), entry]);
-  return { id: entry.id, name: entry.name, savedAt: entry.savedAt };
+  const ok = writeAll([...readAll().filter(t => t.name !== entry.name), entry]);
+  return ok ? { id: entry.id, name: entry.name, savedAt: entry.savedAt } : null;
 }
 export const listTemplates = () => readAll()
   .map(({ id, name, savedAt }) => ({ id, name, savedAt: savedAt ?? '' }))
@@ -48,11 +50,13 @@ export const listTemplates = () => readAll()
 export const deleteTemplate = id => writeAll(readAll().filter(t => t.id !== id));
 
 // 사용자 템플릿도 migrate를 지나야 한다: 옛 스키마로 저장해 둔 것이 그대로 앱에 들어가지 않게 한다.
+// project 필드가 손상돼 있으면(수동 조작 등) migrate()가 던질 수 있다 — 그 항목만 건너뛰고 null을 돌려준다.
 export function templateProject(id) {
   const b = BUILTIN_TEMPLATES.find(t => t.id === id);
   if (b) return b.build();
   const e = readAll().find(t => t.id === id);
-  return e?.project ? migrate(e.project) : null;
+  if (!e?.project) return null;
+  try { return migrate(e.project); } catch { return null; }
 }
 export const allTemplateCards = () => [
   ...BUILTIN_TEMPLATES.map(t => ({ id: t.id, name: t.name, desc: t.desc, user: false })),
