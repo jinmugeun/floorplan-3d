@@ -5,7 +5,7 @@ import { createEmptyProject, activeFloor, createItem } from '../src/state/schema
 import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { openRoomTemplateDialog } from '../src/ui/templateDialog.js';
+import { openRoomTemplateDialog, placementMessage } from '../src/ui/templateDialog.js';
 import { updateRoom } from '../src/state/floorOps.js';
 
 function setup() {
@@ -30,6 +30,8 @@ describe('템플릿 대화상자', () => {
     expect(cards.length).toBeGreaterThanOrEqual(2);
     expect(cards[0].textContent).toContain('m²');
     expect(cards[0].textContent).toContain('개');
+    expect(cards[0].textContent).toContain('가열조리실');   // 용도만이 아니라 공간 타입도 보여 준다
+    expect(cards[0].textContent).toContain('예산 기준');
   });
 
   test('필터를 바꾸면 카드가 줄고, 맞는 것이 없으면 안내가 나온다', () => {
@@ -48,6 +50,22 @@ describe('템플릿 대화상자', () => {
     expect(a.floor().items.some(i => i.id === old)).toBe(false);
     expect(a.floor().items.length).toBeGreaterThanOrEqual(3);
     expect(document.querySelector('.modal.templates')).toBeNull();
+    expect(document.querySelector('.toast').textContent).toContain('개 배치');   // 배치 개수를 알린다
+  });
+
+  test('자리가 모자라면 생략 개수를, 하나도 못 놓으면 그 사실을 문구로 알린다', () => {
+    expect(placementMessage(5, 0)).toBe('5개 배치');
+    expect(placementMessage(3, 2)).toBe('3개 배치, 2개 생략(공간 부족)');
+    expect(placementMessage(0, 4)).toBe('배치할 공간이 없습니다');
+  });
+
+  test('좁은 방에 적용하면 생략 개수가 토스트에 나온다', () => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [1600.5, 1200.25], 200));
+    const roomId = activeFloor(store.get()).rooms[0].id;
+    openRoomTemplateDialog({ store, roomId });
+    click(document.querySelector('.modal.templates'), `[data-template="cook-basic"] [name="apply"]`);
+    expect(document.querySelector('.toast').textContent).toContain('생략(공간 부족)');
   });
 
   test('[기존 제품 유지하고 추가]는 지우지 않는다', () => {

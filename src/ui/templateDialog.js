@@ -3,8 +3,14 @@ import { ROOM_TEMPLATES, filterTemplates, applyRoomTemplate } from '../templates
 import { ROOM_TYPES } from './propsPanel.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
+import { toast } from './toast.js';
 
 const USES = ['주거', '상업'];
+const TYPE_LABEL = Object.fromEntries(ROOM_TYPES);
+// 부분 배치·0개 배치를 사용자가 알 수 있게 하는 문구(자리가 없어 빠진 제품이 조용히 사라지지 않게).
+export const placementMessage = (placed, skipped) => (placed
+  ? `${placed}개 배치${skipped ? `, ${skipped}개 생략(공간 부족)` : ''}`
+  : '배치할 공간이 없습니다');
 const numField = (name, label, value) => `<label class="field"><span>${label}</span><input type="number" name="${name}" value="${value}" min="0" max="100000000" step="any"></label>`;
 
 export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
@@ -39,8 +45,8 @@ export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
     });
     part('cards').innerHTML = list.length ? list.map(t => `<div class="tpl-card" data-template="${t.id}">
       <b>${esc(t.name)}</b>
-      <span class="muted">${esc(t.use)} · ${t.minArea}~${t.maxArea} m² · 제품 ${t.items.length}개</span>
-      <span class="muted">예산 ${t.budget.toLocaleString('ko-KR')}원</span>
+      <span class="muted">${esc(TYPE_LABEL[t.roomType] ?? t.roomType)} · ${esc(t.use)} · ${t.minArea}~${t.maxArea} m² · 제품 ${t.items.length}개</span>
+      <span class="muted">예산 기준 ${t.budget.toLocaleString('ko-KR')}원</span>
       <div class="row"><button type="button" name="apply" class="primary">적용</button><button type="button" name="add">기존 제품 유지하고 추가</button></div>
     </div>`).join('') : '<p class="hint">조건에 맞는 템플릿이 없습니다.</p>';
   }
@@ -49,15 +55,18 @@ export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
     if (ev.target.name === 'close') { close(); return; }
     const card = ev.target.closest('[data-template]');
     if (!card || !['apply', 'add'].includes(ev.target.name)) return;
-    applyRoomTemplate(store, roomId, card.dataset.template, { replace: ev.target.name === 'apply' });
+    const { placed, skipped } = applyRoomTemplate(store, roomId, card.dataset.template, { replace: ev.target.name === 'apply' });
+    toast(placementMessage(placed.length, skipped));
     close();
   });
-  root.addEventListener('change', ev => {
+  const onEdit = ev => {
     const name = ev.target.name;
-    if (!(name in st)) return;
+    if (!(name in st) || st[name] === ev.target.value) return;
     st[name] = ev.target.value;
     render();
-  });
+  };
+  root.addEventListener('change', onEdit);
+  root.addEventListener('input', onEdit);   // 숫자 필드는 타이핑 중에도 좁혀진다(M2)
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   render();
   root.querySelector('[name="close"]').focus();
