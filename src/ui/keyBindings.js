@@ -41,7 +41,9 @@ export function keyLabel(ev) {
   const raw = String(ev.key ?? '');
   const k = raw === 'Escape' ? 'Esc' : raw === ' ' ? 'Space' : raw.length === 1 ? raw.toUpperCase() : raw;
   const ctrl = !!(ev.ctrlKey || ev.metaKey);
-  return `${ctrl ? 'Ctrl+' : ''}${ctrl && ev.shiftKey ? 'Shift+' : ''}${k}`;
+  // Alt 조합은 표(tokenOf)에 없지만 제품 단축키(itemCombo)가 쓰므로, 캡처에서는 'Alt+H'로 적어 예약 키 충돌로 걸리게 한다.
+  const alt = !!ev.altKey && !ctrl;
+  return `${alt ? 'Alt+' : ''}${ctrl ? 'Ctrl+' : ''}${ctrl && ev.shiftKey ? 'Shift+' : ''}${k}`;
 }
 
 // KEYMAP 표(action이 있는 행)에는 없지만 다른 곳에서 이미 그 키를 소비하는 키들.

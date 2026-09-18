@@ -140,3 +140,20 @@ test('충돌하는 키와 Esc는 무시한다', async () => {
   expect(loadOverrides()).toEqual({});
   expect(root.querySelector('[data-bind="tool:wall"]').textContent).toContain('L');
 });
+
+// 재검토 Important 1: 실제 Alt 조합 keydown도 예약 키로 잡혀야 한다(keyLabel이 altKey를 읽는다).
+test('실제 Alt+H keydown을 캡처하면 예약 키(좌우 반전) 충돌로 막고 저장하지 않는다', async () => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+  const { loadOverrides, keyLabel } = await import('../src/ui/keyBindings.js');
+  expect(keyLabel({ key: 'h', altKey: true })).toBe('Alt+H');
+  expect(keyLabel({ key: 'h', altKey: true, ctrlKey: true })).toBe('Ctrl+H'); // Ctrl이 우선(표의 토큰과 같다)
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const root = document.querySelector('.modal.settings');
+  root.querySelector('[data-tab="keys"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  root.querySelector('[data-bind="tool:wall"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', altKey: true, bubbles: true }));
+  expect(loadOverrides()).toEqual({});
+  expect(document.querySelector('#toasts')?.textContent ?? '').toContain('Alt+H');
+});
