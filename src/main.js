@@ -67,7 +67,7 @@ const itemActions = {
 const surfaceActions = {
   toPlanView: () => setMode('2d'),
 };
-const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions, onOrthoView: name => { if (viewPreset) viewPreset.value = name ?? ''; shell.setOrtho(name); } }); // 투영 뷰에서는 기즈모가 없으므로 버튼도 함께 숨긴다
+const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions, surfaceActions, onOrthoView: name => { if (viewPreset) viewPreset.value = name ?? ''; shell.setOrtho(name); } }); // 투영 뷰에서는 기즈모가 없으므로 버튼도 함께 숨긴다
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
 // 교체 대상이 그 사이 지워졌을 수 있다: 실제로 바꾼 개수를 세어 토스트를 띄운다.

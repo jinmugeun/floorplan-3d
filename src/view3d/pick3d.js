@@ -73,10 +73,10 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   };
 
   let down = null;
-  const onDown = ev => { if (getMode() === 'fp') return; if (ev.button === 0) down = [ev.clientX, ev.clientY]; };
+  const onDown = ev => { if (getMode() === 'fp' || ui.get().matPick) return; if (ev.button === 0) down = [ev.clientX, ev.clientY]; };
   const onUp = ev => {
     const latched = wasDragging; wasDragging = false; // 빗장은 어느 경로로 나가든 한 번만 쓴다(오른쪽 버튼·fp 진입으로 새지 않게)
-    if (getMode() === 'fp') return;
+    if (getMode() === 'fp' || ui.get().matPick) return; // 마감재 적용 모드의 클릭은 면 피커가 쓴다
     if (ev.button !== 0 || !down) return;
     const moved = Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 4;
     down = null;
@@ -87,7 +87,7 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
     ui.set({ selection: id ? { type: 'item', id } : null });
   };
   const onMenu = ev => {
-    if (getMode() === 'fp') return;
+    if (getMode() === 'fp' || ui.get().matPick) return; // 적용 모드에서는 면 메뉴가 뜬다(아이템 메뉴가 가로채지 않는다)
     const id = pointFrom(ev);
     if (!id) return;
     ev.preventDefault();

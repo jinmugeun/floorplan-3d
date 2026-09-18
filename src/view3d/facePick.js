@@ -1,0 +1,83 @@
+import * as THREE from 'three';
+import { applyMaterial } from '../state/materialOps.js';
+import { wallMenuItems, roomMenuItems } from '../ui/surfaceMenu.js';
+
+// 레이캐스트로 고를 수 있는 면 메시 이름(build.js가 붙인다).
+export const FACE_NAMES = new Set(['wall', 'wallFace', 'wallRegion', 'floor', 'ceiling', 'wallTop']);
+
+// hit → materialOps의 target. 벽 본체·윗면은 외벽, 방 안쪽 면은 내벽으로 본다.
+export function targetOf(hit) {
+  if (hit?.kind === 'wall') return { kind: 'wall', id: hit.id, side: hit.side === 'out' ? 'out' : 'in' };
+  return { kind: hit?.kind === 'ceiling' ? 'ceiling' : 'floor', id: hit?.id };
+}
+
+// 3D에서 면(벽·바닥·천장)을 고르고, 마감재 적용 모드면 클릭마다 재질을 바른다.
+// 아이템은 pick3d의 아이템 피커가 맡는다: 여기서는 아이템을 맞히면 물러난다.
+export function createFacePicker({ renderer, getCamera, scene, getGroup, store, ui, openMenu = () => {}, onSelect = null, surfaceActions = {}, getMode = () => 'iso', requestRender = () => {} }) {
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+
+  function hitAt(ev) {
+    const r = renderer.domElement.getBoundingClientRect();
+    ndc.set(((ev.clientX - r.left) / (r.width || 1)) * 2 - 1, -((ev.clientY - r.top) / (r.height || 1)) * 2 + 1);
+    ray.setFromCamera(ndc, getCamera());
+    const root = getGroup() ?? scene;
+    root.updateMatrixWorld();   // 레이캐스트는 최신 월드 행렬을 본다: 다시 지은 직후(렌더 전) 클릭도 맞아야 한다
+    const roots = root.children;
+    const itemGroup = roots.find(c => c.name === 'items');
+    const itemHit = itemGroup ? ray.intersectObjects(itemGroup.children, false)[0] : null;
+    const faceHit = ray.intersectObjects(roots.filter(c => FACE_NAMES.has(c.name) && c.visible), false)[0] ?? null;
+    // 아이템이 면보다 가까우면 아이템 피커의 일이다.
+    if (itemHit && (!faceHit || itemHit.distance <= faceHit.distance)) return { kind: 'item', id: itemHit.object.userData.itemId };
+    if (!faceHit) return null;
+    const o = faceHit.object;
+    if (o.userData.wallId) {
+      const side = o.userData.side ?? (o.name === 'wallFace' ? 'in' : 'out');
+      return { kind: 'wall', id: o.userData.wallId, side, roomId: o.userData.roomId ?? null };
+    }
+    if (o.userData.roomId) return { kind: o.name === 'ceiling' ? 'ceiling' : 'floor', id: o.userData.roomId };
+    return null;
+  }
+
+  let down = null;
+  const onDown = ev => { if (ev.button === 0 && getMode() !== 'fp') down = [ev.clientX, ev.clientY]; };
+  const onUp = ev => {
+    const start = down; down = null;
+    if (ev.button !== 0 || !start || getMode() === 'fp') return;
+    if (Math.hypot(ev.clientX - start[0], ev.clientY - start[1]) > 4) return; // 궤도 회전은 선택이 아니다
+    const pick = ui.get().matPick;
+    const hit = hitAt(ev);
+    if (pick) {
+      if (hit && hit.kind !== 'item') { applyMaterial(store, targetOf(hit), pick.assignment); requestRender(); }
+      return;                                    // 적용 모드는 Esc까지 계속된다
+    }
+    if (!hit || hit.kind === 'item') return;      // 아이템은 아이템 피커가 이미 골랐다
+    ui.set({ selection: hit.kind === 'wall' ? { type: 'wall', id: hit.id } : { type: 'room', id: hit.id } });
+    onSelect?.(hit);
+  };
+  const onMenu = ev => {
+    if (getMode() === 'fp' || ev.defaultPrevented) return; // 아이템 피커가 이미 아이템 메뉴를 열었다
+    const hit = hitAt(ev);
+    if (!hit || hit.kind === 'item') return;
+    ev.preventDefault();
+    if (hit.kind === 'wall') {
+      ui.set({ selection: { type: 'wall', id: hit.id } });
+      openMenu(ev.clientX, ev.clientY, wallMenuItems({ store, ui, wallId: hit.id, roomId: hit.roomId, side: hit.side, in3d: true, actions: surfaceActions }) ?? []);
+      return;
+    }
+    ui.set({ selection: { type: 'room', id: hit.id } });
+    openMenu(ev.clientX, ev.clientY, roomMenuItems({ store, ui, roomId: hit.id, in3d: true, actions: surfaceActions }) ?? []);
+  };
+
+  renderer.domElement.addEventListener('pointerdown', onDown);
+  renderer.domElement.addEventListener('pointerup', onUp);
+  renderer.domElement.addEventListener('contextmenu', onMenu);
+
+  return {
+    hitAt,
+    destroy() {
+      renderer.domElement.removeEventListener('pointerdown', onDown);
+      renderer.domElement.removeEventListener('pointerup', onUp);
+      renderer.domElement.removeEventListener('contextmenu', onMenu);
+    },
+  };
+}
