@@ -29,6 +29,7 @@ import { openRoomTemplateDialog } from './ui/templateDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { openStartScreen } from './ui/startScreen.js';
+import { openEstimateDialog } from './ui/estimateDialog.js';
 import { templateProject, saveTemplate } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
@@ -213,7 +214,8 @@ function saveAsTemplate() {
   const saved = saveTemplate(name, store.get());
   shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);
 }
-const actions = { saveAsTemplate }; // 태스크 14의 더보기 메뉴가 받아 갈 동작 묶음
+// 태스크 14의 상단 바·더보기 메뉴가 받아 갈 동작 묶음. 견적서는 그 전까지 이 묶음으로만 연다(#btnEstimate는 태스크 14).
+const actions = { saveAsTemplate, openEstimate: () => openEstimateDialog({ store }) };
 
 async function loadFile(file) {
   if (!file) return; // 파일 선택 취소

@@ -64,6 +64,19 @@ describe('제품 카탈로그', () => {
     expect(productsIn('소파')).toEqual(src);
   });
 
+  test('모든 제품에 정적 단가가 있다', async () => {
+    const { PRICES } = await import('../src/products/catalog.js');
+    for (const p of PRODUCTS) {
+      expect(typeof p.price, p.id).toBe('number');
+      expect(p.price, p.id).toBeGreaterThanOrEqual(0);
+      expect(Number.isInteger(p.price), p.id).toBe(true);
+    }
+    expect(Object.keys(PRICES)).toHaveLength(PRODUCTS.length);
+    expect(productById('fridge-2door').price).toBe(1290000);
+    expect(productById('column-square').price).toBe(0);   // 구조물은 도면 요소라 0원
+    expect(PRODUCTS.filter(p => p.price > 0).length).toBeGreaterThanOrEqual(55);
+  });
+
   test('productById와 fmtSize', () => {
     expect(productById('door-swing-900').name).toBe('여닫이문 900');
     expect(productById('없음')).toBeNull();

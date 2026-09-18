@@ -22,8 +22,28 @@ export const SYMBOL_NAMES = ['box', 'bed', 'sofa', 'table', 'chair', 'door', 'wi
 
 export const ATTACH_LABELS = { floor: '바닥에 서있는 제품', floorLay: '바닥에 깔리는 제품', wall: '벽에 붙는 제품', ceiling: '천장에 붙는 제품' };
 
+// 제품 단가(원). 실판매 가격 DB는 범위 밖이라 견적서용 정적 값이다(명세 §17).
+// 구조물(기둥·개구부)은 사는 물건이 아니라 도면 요소라 0원이다.
+export const PRICES = {
+  'door-swing-900': 180000, 'door-swing-1000': 190000, 'door-double-1800': 360000, 'door-slide-1500': 420000,
+  'window-slide-1200': 260000, 'window-slide-1800': 380000, 'window-fix-600': 140000,
+  'fridge-2door': 1290000, 'fridge-kimchi': 980000, 'range-gas-6': 1850000, 'range-induction': 890000,
+  'oven-built': 1250000, dishwasher: 760000, 'washer-drum': 890000, dryer: 1090000, 'aircon-stand': 1450000,
+  'tv-55': 890000, 'hood-wall': 320000,
+  'bed-single': 290000, 'bed-super-single': 340000, 'bed-queen': 450000, 'bed-king': 520000, 'mattress-queen': 390000,
+  'wardrobe-1200': 420000, 'wardrobe-1800': 590000, 'hanger-open': 95000, 'drawer-5': 210000,
+  'shelf-steel-4': 120000, bookshelf: 150000, 'cabinet-upper': 180000, 'cabinet-lower': 240000, 'storage-box': 25000,
+  'sofa-2': 690000, 'sofa-3': 890000, 'sofa-corner': 1390000, 'sofa-recliner': 740000,
+  'desk-1400': 240000, 'dining-4': 320000, 'dining-6': 480000, 'worktable-1800': 560000, 'side-table': 85000,
+  'chair-dining': 68000, 'chair-office': 190000, 'stool-round': 45000, 'bench-1200': 130000,
+  'vanity-800': 220000, dresser: 310000, 'mirror-wall': 95000,
+  'sink-double': 1150000, 'sink-single': 820000, washbasin: 180000, toilet: 290000, bathtub: 650000, 'shower-booth': 780000,
+  'light-ceiling': 85000, 'light-pendant': 120000, 'light-downlight': 18000, 'light-fluorescent': 42000, 'light-wall': 56000,
+  'column-square': 0, 'column-round': 0, 'opening-pass': 0,
+};
+
 const P = (id, name, code, category, sub, size, attach, symbol, extra = {}) =>
-  ({ id, name, code, category, sub, size, attach, symbol, zDefault: 0, color: '#cfd4da', kind: 'product', tags: '', ...extra });
+  ({ id, name, code, category, sub, size, attach, symbol, zDefault: 0, color: '#cfd4da', kind: 'product', tags: '', price: PRICES[id] ?? 0, ...extra });
 const hole = (kind, w, h, sill, color) => ({ kind, color, zDefault: sill, opening: { w, h, sill } });
 
 export const PRODUCTS = [
