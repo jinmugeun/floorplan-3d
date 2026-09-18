@@ -63,6 +63,10 @@ const itemActions = {
     openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(`${made.length}개 복사했습니다`); } });
   },
 };
+// 벽·방 메뉴(surfaceMenu.js)와 속성 패널이 부르는 면 동작 묶음. 2D·3D가 같은 묶음을 쓴다.
+const surfaceActions = {
+  toPlanView: () => setMode('2d'),
+};
 const view3d = createView3D(shell.els.view3d, store, ui, { onExitFp: () => ui.set({ mode: 'iso' }), openMenu: (x, y, items) => menu.open(x, y, items), itemActions, onOrthoView: name => { if (viewPreset) viewPreset.value = name ?? ''; shell.setOrtho(name); } }); // 투영 뷰에서는 기즈모가 없으므로 버튼도 함께 숨긴다
 minimap = createMinimap(shell.els.minimap, store, ui, { view2d: view, view3d });
 view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D 궤도 드래그도 미니맵을 다시 그린다
@@ -109,7 +113,7 @@ function createDeleteTool() {
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS } };
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
-  select: () => createSelectTool({ store, ui, view, itemActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
+  select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
   room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
   wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
   delete: createDeleteTool,

@@ -1,5 +1,6 @@
 import { activeFloor } from '../../state/schema.js';
-import { setWalls, deleteWall, deleteRoom, duplicateRoom, expandGroups, nudgeItems, rotateItems } from '../../state/floorOps.js';
+import { setWalls, expandGroups, nudgeItems, rotateItems } from '../../state/floorOps.js';
+import { applyMaterial } from '../../state/materialOps.js';
 import { hitWall, moveWallParallel, moveVertex, translateNodes, splitWall, wallPolygon, nodeKey } from '../../geom/walls.js';
 import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
@@ -7,13 +8,14 @@ import { fmtLen } from '../../util/units.js';
 import { createItemDragger } from './itemDrag.js';
 import { drawItemSelection, ITEM_COLORS } from '../items2d.js';
 import { itemMenuItems } from '../../ui/itemMenu.js';
+import { wallMenuItems, roomMenuItems } from '../../ui/surfaceMenu.js';
 
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
 export const ARROW_STEP = 10, ARROW_STEP_SHIFT = 100;
 const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
-export function createSelectTool({ store, ui, view, onLocked = () => {}, itemActions = {}, toast = () => {} }) {
+export function createSelectTool({ store, ui, view, onLocked = () => {}, itemActions = {}, surfaceActions = {}, toast = () => {} }) {
   const items = createItemDragger({ store, ui, view, toast });
   const selIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
   const setItemSelection = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids: [...ids] } });
@@ -25,9 +27,30 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     name: 'select', opts: {},
     onPointerDown(p, ev) {
       const f = floor(), sel = ui.get().selection;
+      // 마감재 적용 모드: 클릭이 선택 대신 재질 적용이다(Esc까지 계속). 벽은 안·밖을 한 단계로 함께 바른다.
+      // 두 모드가 겹치면(둘 다 ui.set으로 켜진다) 적용 모드가 이긴다: ui.splitWall은 건드리지 않으므로
+      // "벽 나누기 대기"는 다음 클릭에 그대로 남는다(M-37).
+      const pick = ui.get().matPick;
+      if (pick) {
+        const hitW = hitWall(f.walls, p, px(6));
+        if (hitW) {
+          store.beginTransaction();
+          applyMaterial(store, { kind: 'wall', id: hitW.id, side: 'in' }, pick.assignment, { record: false });
+          applyMaterial(store, { kind: 'wall', id: hitW.id, side: 'out' }, pick.assignment, { record: false });
+          store.endTransaction();
+          return;
+        }
+        const hitR = f.rooms.find(x => pointInPolygon(p, x.points));
+        if (hitR) applyMaterial(store, { kind: 'floor', id: hitR.id }, pick.assignment);
+        return;                       // 빈 곳 클릭은 아무 일도 하지 않는다
+      }
       if (ui.get().splitWall) {
         const w = hitWall(f.walls, p, px(6));
-        if (w) { setWalls(store, splitWall(f.walls, w.id, p)); }
+        if (w) {
+          // 벽을 나누면 u 좌표의 뜻이 달라져 영역을 이을 수 없다: 지워진다는 것을 알린다.
+          if ((w.regions?.in?.length ?? 0) + (w.regions?.out?.length ?? 0) > 0) toast('벽을 나누면 마감재 영역은 초기화됩니다');
+          setWalls(store, splitWall(f.walls, w.id, p));
+        }
         ui.set({ splitWall: false }); return;
       }
       const multi = sel?.type === 'multi' && sel.kind === 'wall' ? sel.ids : null;
@@ -142,7 +165,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     onKey(ev) {
       if (ev.key === 'Escape') {
         const u = ui.get();
-        if (u.fpPick || u.soloRoom) return false; // 취소할 것이 앱 쪽에 있으면 keymap이 처리한다
+        if (u.fpPick || u.soloRoom || u.matPick) return false; // 취소할 것이 앱 쪽에 있으면 keymap이 처리한다
         if (items.getDrag()) { items.cancel(); return true; } // 아이템 드래그 중 Esc는 이동을 되돌린다
         const had = !!drag || !!u.selection || !!u.splitWall;
         if (drag) { store.cancelTransaction(); drag = null; } // 드래그 중 Esc는 이동을 되돌린다
@@ -168,23 +191,12 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
       // 우클릭은 먼저 대상을 선택한다(다중 선택에 이미 든 벽이면 다중 선택을 유지한다).
       const sel = ui.get().selection;
       if (w && !(sel?.type === 'multi' && sel.ids.includes(w.id))) ui.set({ selection: { type: 'wall', id: w.id } });
-      if (w) return [
-        { label: '벽 나누기', onSelect: () => { ui.set({ selection: { type: 'wall', id: w.id }, splitWall: true }); } },
-        { label: '곡선벽 전환', disabled: true, title: '미지원' },
-        { label: '재질 교체', onSelect: () => ui.set({ selection: { type: 'wall', id: w.id }, focusField: 'colorOut' }) },
-        'sep',
-        { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => deleteWall(store, w.id) },
-      ];
+      if (w) return wallMenuItems({ store, ui, wallId: w.id, side: 'in', in3d: false, actions: surfaceActions });
       const r = f.rooms.find(x => pointInPolygon(p, x.points));
-      if (r) ui.set({ selection: { type: 'room', id: r.id } });
-      if (r) return [
-        { label: '방 복사', onSelect: () => duplicateRoom(store, r.id) }, // Ctrl+C는 아이템 복사 전용이다: 없는 단축키를 표기하지 않는다(M-10)
-        { label: '마감재 복사', disabled: true, title: '미지원' },
-        { label: '재질 교체', onSelect: () => ui.set({ selection: { type: 'room', id: r.id }, focusField: 'floorColor' }) },
-        { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: r.id }, soloRoom: r.id }) },
-        'sep',
-        { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => { if (window.confirm('방과 그 벽을 모두 삭제할까요?')) deleteRoom(store, r.id); } },
-      ];
+      if (r) {
+        ui.set({ selection: { type: 'room', id: r.id } });
+        return roomMenuItems({ store, ui, roomId: r.id, in3d: false, actions: surfaceActions });
+      }
       return [
         { label: '전체 선택', shortcut: 'Ctrl+A', onSelect: () => { const ids = floor().walls.map(x => x.id); ui.set({ selection: ids.length ? { type: 'multi', kind: 'wall', ids } : null }); } },
         { label: '화면 맞추기', onSelect: () => view.fit() },

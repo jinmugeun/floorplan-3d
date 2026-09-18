@@ -12,6 +12,7 @@ function setup() {
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
   return { store, ui, t: createSelectTool({ store, ui, view: fakeView }) };
 }
+const pick = (items, label) => items.find(x => x !== 'sep' && x.label === label);
 function setupAdjacent() {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
@@ -221,27 +222,33 @@ test('a multi drag with fractional coordinates moves every selected node', () =>
 });
 
 test('context menu items depend on what is under the cursor', () => {
-  const { store, ui, t } = setup();
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const calls = [];
+  const t = createSelectTool({ store, ui, view: fakeView, surfaceActions: { replaceMaterial: target => calls.push(target) } });
   const f = activeFloor(store.get());
   const wallItems = t.onContextMenu([2000, 0], { shiftKey: false });
   expect(ui.get().selection).toEqual({ type: 'wall', id: f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id }); // 우클릭이 먼저 선택한다
-  expect(wallItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', 'sep', '삭제']);
-  expect(wallItems[1].disabled).toBe(true);
-  expect(wallItems[1].title).toBe('미지원');
-  wallItems[0].onSelect();
+  expect(wallItems.map(i => (i === 'sep' ? 'sep' : i.label)))
+    .toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', 'sep', '삭제']);
+  expect(pick(wallItems, '곡선벽 전환').disabled).toBe(true);
+  expect(pick(wallItems, '곡선벽 전환').title).toBe('미지원');
+  pick(wallItems, '벽 나누기').onSelect();
   expect(ui.get().splitWall).toBe(true);
-  wallItems[2].onSelect();
-  expect(ui.get().selection).toEqual({ type: 'wall', id: f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id });
-  expect(ui.get().focusField).toBe('colorOut');
+  // '재질 교체'는 이제 focusField가 아니라 surfaceActions.replaceMaterial을 부른다(재질 교체 패널이 담당).
+  pick(wallItems, '재질 교체').onSelect();
+  expect(calls).toEqual([{ kind: 'wall', id: f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id, side: 'in' }]);
 
   const roomItems = t.onContextMenu([2000, 1500], {});
   expect(ui.get().selection).toEqual({ type: 'room', id: f.rooms[0].id }); // 방도 우클릭 즉시 선택된다
-  expect(roomItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(['방 복사', '마감재 복사', '재질 교체', '단일 공간 모드', 'sep', '삭제']);
-  expect(roomItems[0].shortcut).toBeUndefined(); // M-10: Ctrl+C는 방 복사에 묶여 있지 않다(없는 단축키를 표기하지 않는다)
-  expect(roomItems[1].disabled).toBe(true);
-  roomItems[0].onSelect();
+  expect(roomItems.map(i => (i === 'sep' ? 'sep' : i.label)))
+    .toEqual(['템플릿 적용하기', '방 복사', '마감재 복사', '재질 교체', '단일 공간 모드', 'sep', '삭제']);
+  expect(pick(roomItems, '방 복사').shortcut).toBeUndefined(); // M-10: Ctrl+C는 방 복사에 묶여 있지 않다
+  expect(pick(roomItems, '마감재 복사').disabled).toBe(true);  // 바닥 재질이 없으면 복사할 것이 없다
+  expect(pick(roomItems, '템플릿 적용하기').disabled).toBe(true); // surfaceActions.applyTemplate이 아직 없다(Task 9에서 켜진다)
+  pick(roomItems, '방 복사').onSelect();
   expect(activeFloor(store.get()).rooms).toHaveLength(2);
-  roomItems[3].onSelect();
+  pick(roomItems, '단일 공간 모드').onSelect();
   expect(ui.get().soloRoom).toBe(f.rooms[0].id);
 
   const emptyItems = t.onContextMenu([-9000, -9000], {});
