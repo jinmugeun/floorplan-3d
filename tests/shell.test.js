@@ -278,3 +278,10 @@ test('마감재 레일 탭과 적용 모드 배너', () => {
   ui.set({ matPick: null });
   expect(root.querySelector('#banner').hidden).toBe(true);
 });
+
+test('상단 바에 출력 버튼이 순서대로 있다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const ids = [...root.querySelectorAll('#topbar button')].map(b => b.id).filter(Boolean);
+  expect(ids).toEqual(['btnUndo', 'btnRedo', 'btnRender', 'btnGallery', 'btnEstimate', 'btnSpec', 'btnNew', 'btnMore', 'btnSettings', 'btnCapture', 'btnLoad', 'btnSave']);
+});

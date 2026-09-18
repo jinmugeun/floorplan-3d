@@ -29,10 +29,7 @@ import { openRoomTemplateDialog } from './ui/templateDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { openStartScreen } from './ui/startScreen.js';
-import { openEstimateDialog } from './ui/estimateDialog.js';
-import { openRenderDialog } from './ui/renderDialog.js';
-import { openGalleryDialog } from './ui/galleryDialog.js';
-import { openSpecDialog } from './ui/specDialog.js';
+import { createTopbar } from './app/topbar.js';
 import { templateProject, saveTemplate } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
@@ -199,15 +196,7 @@ const restored = loadAutosave();
 const restoredOk = !!(restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?'));
 if (restoredOk) store.replace(restored, { record: false }); // 복원은 되돌릴 단계가 아니다
 const isEmpty = s => s.floors.every(f => !f.walls.length) && !s.background;
-if (!restoredOk && isEmpty(store.get())) {
-  openStartScreen({
-    store,
-    onEmpty: () => {},
-    onUpload: () => openBackgroundDialog({ store }),
-    onSample: () => { loadSample(store); view.fit(); },
-    onTemplate: id => { const p = templateProject(id); if (p) { store.replace(p); view.fit(); } },
-  });
-}
+if (!restoredOk && isEmpty(store.get())) showStart();
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
 // 더보기 메뉴의 "템플릿으로 저장"(태스크 14의 topbar.js가 부른다). 이름은 프로젝트 이름을 기본값으로 묻는다.
@@ -218,8 +207,29 @@ function saveAsTemplate() {
   if (saved) shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);
   else shell.toast('템플릿을 저장하지 못했습니다(저장 공간 부족)');
 }
-// 태스크 14의 상단 바·더보기 메뉴가 받아 갈 동작 묶음. 견적서·렌더샷·갤러리·시방서는 그 전까지 이 묶음으로만 연다(버튼은 태스크 14).
-const actions = { saveAsTemplate, openEstimate: () => openEstimateDialog({ store }), openRender: () => openRenderDialog({ store, view3d }), openGallery: () => openGalleryDialog({}), openSpec: () => openSpecDialog({ store, ui, view3d }) };
+// 새로 만들기·나가기·JSON 내보내기. 상단 바 버튼 배선은 topbar.js가 한다.
+function showStart() {
+  openStartScreen({
+    store,
+    onEmpty: () => {},
+    onUpload: () => openBackgroundDialog({ store }),
+    onSample: () => { loadSample(store); view.fit(); },
+    onTemplate: id => { const p = templateProject(id); if (p) { store.replace(p); view.fit(); } },
+  });
+}
+const actions = {
+  newProject: () => {
+    if (!window.confirm('현재 도면이 초기화됩니다. 새로 만들까요?')) return;
+    store.replace(createEmptyProject());
+    ui.set({ selection: null, soloRoom: null, matPick: null });
+    view.fit();
+    showStart();
+  },
+  saveAsTemplate,
+  exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); shell.toast('JSON을 내보냈습니다'); },
+  exit: () => showStart(),
+};
+createTopbar({ store, ui, shell, menu, view3d, actions });
 
 async function loadFile(file) {
   if (!file) return; // 파일 선택 취소
