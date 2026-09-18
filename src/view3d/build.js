@@ -171,7 +171,10 @@ export function buildFloorGroup(floor, view) {
           M(A[0]), y0, M(A[1]), M(B[0]), y0, M(B[1]), M(B[0]), y1, M(B[1]), M(A[0]), y1, M(A[1]),
         ], 3));
         geo.setIndex([0, 1, 2, 0, 2, 3]);
-        geo.setAttribute('uv', new THREE.Float32BufferAttribute([M(uA), y0, M(uB), y0, M(uB), y1, M(uA), y1], 2));
+        // uv의 v는 벽 밑에서 잰 높이(z)를 쓴다 — 지오메트리 y(= floorOffset + z, 월드 높이)를 쓰면
+        // floorOffset ≠ 0인 방에서 이 면의 무늬가 같은 벽의 본체(metricBoxUv)·개구부 단면·영역
+        // (metricPlaneUv)과 floorOffset만큼 위상이 어긋난다. 모두 벽 밑 기준이라야 원점이 하나다.
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute([M(uA), M(z0), M(uB), M(z0), M(uB), M(z1), M(uA), M(z1)], 2));
         geo.computeVertexNormals();
         const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: w.matIn, worldUv: true }));
         face.name = 'wallFace'; face.userData.wallId = w.id; face.userData.roomId = r.id;

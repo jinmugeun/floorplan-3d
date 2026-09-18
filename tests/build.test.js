@@ -423,6 +423,28 @@ test('개구부 조각의 무늬 위상이 문 없는 벽과 이어진다(소수
   }
 });
 
+test('floorOffset ≠ 0이어도 안쪽 면 조각의 무늬 위상이 벽 본체와 이어진다(무늬를 돌려도)', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  for (const angle of [0, 30]) {
+    const mat = () => assign('brick-red', { offset: [46, 15], angle });
+    const walls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200).map(w => ({ ...w, matIn: mat(), matOut: mat() }));
+    const target = walls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);   // 길이 4000, 문은 u 1550~2450
+    const items = [createItem(productById('door-swing-900'), { wallId: target.id, t: 0.5, pos: [2000.5, 0.25] })];
+    // floorOffset은 바닥/방 메시를 위로 띄울 뿐, 벽면 uv는 늘 벽 밑(z) 기준이어야 한다.
+    const rooms = detectRooms(walls).map(r => ({ ...r, floorOffset: 300 }));
+    const g = buildFloorGroup({ walls, rooms, items, height: 2300 }, { wallOpacity: 1, v3: {} });
+    const pieces = g.children.filter(c => c.name === 'wallFace' && c.userData.wallId === target.id).sort((a, b) => a.position.x - b.position.x);
+    expect(pieces).toHaveLength(3);                                     // 좌 · 인방 · 우
+    const body = g.children.find(c => c.name === 'wall' && c.userData.wallId === target.id);
+    // 문 좌우 끝·인방 밑의 텍셀이 floorOffset과 무관하게 벽 본체의 같은 자리(u, z)와 한 무늬 칸 위상이다.
+    sameTexel(texel(pieces[2].material.map, 2.45, 0), texel(body.material.map, 2.45, 0), `${angle}° floorOffset 300 오른쪽`);
+    sameTexel(texel(pieces[0].material.map, 1.55, 0), texel(body.material.map, 1.55, 0), `${angle}° floorOffset 300 왼쪽`);
+    sameTexel(texel(pieces[1].material.map, 1.55, 2.1), texel(body.material.map, 1.55, 2.1), `${angle}° floorOffset 300 인방`);
+    disposeGroup(g);
+  }
+});
+
 test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들고 있다', () => {
   const walls = rectWalls([0, 0], [4000, 3000], 200);
   const target = walls[0];
