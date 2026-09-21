@@ -119,3 +119,17 @@ describe('덕트 패널', () => {
     expect(applyDuctField(store, { type: 'duct', id: duct().id }, { name: 'thickness' })).toBe(false);
   });
 });
+
+// §15.14(감사 §20): 댐퍼 추가·삭제에 피드백이 전혀 없고, 행에 위치(거리)도 없었다.
+test('댐퍼 추가·삭제가 토스트를 띄우고 행이 위치를 보여 준다', () => {
+  const a = setup();
+  a.click('[name="damperAdd"]');                        // 고른 구간은 0번 → "1구간"
+  let texts = [...document.querySelectorAll('.toast')].map(t => t.textContent);
+  expect(texts.at(-1)).toBe('1구간에 댐퍼를 추가했습니다');
+  // setup()이 이미 2구간 댐퍼 하나를 갖고 있으므로 방금 붙은 줄을 글자로 찾는다.
+  const rows = [...a.el.querySelectorAll('.duct-dampers li')].map(li => li.textContent);
+  expect(rows.some(t => t.includes('1구간') && /50%/.test(t) && /3000/.test(t))).toBe(true);
+  a.click('[name="damperDelete"]');
+  texts = [...document.querySelectorAll('.toast')].map(t => t.textContent);
+  expect(texts.at(-1)).toBe('댐퍼를 삭제했습니다');
+});

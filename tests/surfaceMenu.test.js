@@ -7,6 +7,7 @@ import { addWalls } from '../src/state/floorOps.js';
 import { applyMaterial } from '../src/state/materialOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { wallMenuItems, roomMenuItems } from '../src/ui/surfaceMenu.js';
+import { CURVED_WALL_TITLE } from '../src/ui/messages.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 
 const fakeView = { camera: { scale: 0.1 }, fit: () => {} };
@@ -29,7 +30,7 @@ describe('벽·방 공용 메뉴', () => {
     const a = setup();
     const items = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, roomId: a.roomId });
     expect(labels(items)).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '타일 배치', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', '삭제']);
-    expect(pick(items, '곡선벽 전환')).toMatchObject({ disabled: true, title: '미지원' }); // 곡선벽은 범위 밖임을 메뉴로 알린다(I-20)
+    expect(pick(items, '곡선벽 전환')).toMatchObject({ disabled: true, title: CURVED_WALL_TITLE }); // 곡선벽은 범위 밖임을 메뉴로 알린다(I-20 · §15.14)
     const in3d = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, roomId: a.roomId, in3d: true });
     expect(labels(in3d)).toContain('도면 뷰 전환');
     expect(wallMenuItems({ store: a.store, ui: a.ui, wallId: '없음' })).toBeNull();
@@ -183,4 +184,13 @@ test('벽 메뉴 삭제는 붙은 제품을 함께 지우고 알린다', async (
   expect(a.floor().items.find(x => x.id === id)).toBeUndefined();
   const texts = [...document.querySelectorAll('.toast')].map(t => t.textContent);
   expect(texts.at(-1)).toContain('붙어 있던 제품 1개를 삭제했습니다');
+});
+
+// §15.14(감사 §10): "곡선벽 전환"이 일반 항목처럼 보이고 눌러도 아무 일도 없었다.
+test('곡선벽 전환은 비활성이고 사유를 말한다', () => {
+  const a = setup();
+  const item = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, actions: a.actions }).find(x => x !== 'sep' && x.label === '곡선벽 전환');
+  expect(item.disabled).toBe(true);
+  expect(item.title).toBe('곡선벽은 아직 지원하지 않습니다');
+  expect(item.onSelect).toBeUndefined();          // 누를 수 있는 것처럼 보이지도 않는다
 });

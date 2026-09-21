@@ -679,3 +679,18 @@ test('층이 하나면 층 삭제 버튼이 disabled + title이다', () => {
   store.dispatch(d => { d.floors.push(structuredClone(d.floors[0])); });
   expect(el.querySelector('[name="floorDelete"]').disabled).toBe(false);
 });
+
+// §15.14: 슬라이더에 수치가 없어 얼마나 투명한지 알 수 없었다.
+test('벽·바닥 투명도에 % 수치가 붙는다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  const out = el.querySelector('output[name="wallOpacityOut"]');
+  expect(out.textContent).toBe('100%');
+  const slider = el.querySelector('[name="wallOpacity"]');
+  slider.value = '0.4';
+  slider.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(store.get().view.wallOpacity).toBeCloseTo(0.4, 6);
+  expect(el.querySelector('output[name="wallOpacityOut"]').textContent).toBe('40%');
+  expect(el.querySelector('output[name="floorOpacityOut"]').textContent).toBe('100%');
+});

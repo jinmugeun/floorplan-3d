@@ -41,7 +41,7 @@ import { createProjectActions } from './app/projectActions.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
 import { stickyTools } from './ui/prefs.js';
-import { FP_NO_LOCK, SAVED_MANUAL } from './ui/messages.js';
+import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT } from './ui/messages.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -62,7 +62,9 @@ const itemActions = {
   replace: () => { library.setMode('replace', { itemIds: selectedItemIds() }); shell.showPanel('products'); },
   copy: () => { ui.set({ clipboard: itemsOf(store.get(), selectedItemIds()).map(i => structuredClone(i)) }); shell.toast('복사했습니다'); },
   canPaste: () => (ui.get().clipboard?.length ?? 0) > 0,
-  paste: () => { const made = pasteItems(store, ui.get().clipboard ?? [], { delta: [200, 200] }); if (made.length) selectItems(made); }, // 붙여넣을 것이 없으면 선택을 건드리지 않는다
+  // 붙여넣을 것이 없으면 선택도 건드리지 않고 알리지도 않는다. 복사에는 문구가 있었는데
+  // 붙여넣기에는 없어 "먹었나?" 싶었다(§15.14 · 감사 §30).
+  paste: () => { const made = pasteItems(store, ui.get().clipboard ?? [], { delta: [200, 200] }); if (made.length) { selectItems(made); shell.toast(PASTE_RESULT(made.length)); } },
   remove: () => deleteSelection(),
   selectSame: () => {
     const it = itemsOf(store.get(), selectedItemIds())[0];

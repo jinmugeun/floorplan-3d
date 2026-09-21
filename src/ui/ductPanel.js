@@ -10,6 +10,7 @@ import { productById } from '../products/catalog.js';
 import { fmtLen } from '../util/units.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
+import { DAMPER_ADDED, DAMPER_DELETED } from './messages.js';
 
 const segIndex = sel => (Number.isInteger(sel?.segment) ? sel.segment : 0);
 
@@ -22,8 +23,10 @@ export function ductPanelHtml(floor, sel, { units = 'mm', showUnit = false } = {
     `<li class="${k === i ? 'on' : ''}"><button type="button" name="ductSeg" data-i="${k}">${k + 1}구간</button>`
     + `<span class="muted">${Math.round(s.w)}×${Math.round(s.h)} · ${esc(fmtLen(Math.round(segmentLength(d, k)), units))}</span></li>`).join('');
   // 댐퍼 줄: 종류 토글 + 크기 두 칸(명세 DT-06의 "크기 입력", 아키텍처 §11.6의 "종류·크기·삭제") + 삭제.
+  // 위치는 "몇 구간 몇 %"만으로는 도면에서 찾기 어렵다(감사 §20): 구간 시작에서의 거리도 적는다.
+  // 단위는 같은 패널의 구간 줄과 같은 fmtLen을 쓴다 — 원시 mm를 찍으면 ft·in 모드에서 틀린다.
   const damperRows = d.dampers.map((x, k) =>
-    `<li><span>${esc(x.type)} · ${x.segment + 1}구간 ${Math.round(x.t * 100)}%</span>`
+    `<li><span>${esc(x.type)} · ${x.segment + 1}구간 ${Math.round(x.t * 100)}% · ${esc(fmtLen(Math.round(x.t * segmentLength(d, x.segment)), units))}</span>`
     + `<input type="number" name="damperW" data-i="${k}" value="${Math.round(x.w)}" min="${DUCT_RANGE.w[0]}" max="${DUCT_RANGE.w[1]}" step="10" aria-label="댐퍼 너비">`
     + `<input type="number" name="damperH" data-i="${k}" value="${Math.round(x.h)}" min="${DUCT_RANGE.h[0]}" max="${DUCT_RANGE.h[1]}" step="10" aria-label="댐퍼 높이">`
     + `<button type="button" name="damperType" data-i="${k}">${x.type === 'VD' ? 'FVD로' : 'VD로'}</button>`
@@ -104,13 +107,13 @@ export function ductPanelClick(store, ui, sel, el) {
   const i = Math.min(segIndex(sel), d.segments.length - 1);
   if (name === 'segAll') { const s = d.segments[i]; setAllSegments(store, d.id, { w: s.w, h: s.h, z: s.z }); return true; }
   // 새 댐퍼는 고른 구간 가운데에, 그 구간의 단면 크기로 붙는다(DT-06).
-  if (name === 'damperAdd') { const s = d.segments[i]; addDamper(store, d.id, { segment: i, t: 0.5, type: DAMPER_TYPES[0], w: s.w, h: s.h }); return true; }
+  if (name === 'damperAdd') { const s = d.segments[i]; addDamper(store, d.id, { segment: i, t: 0.5, type: DAMPER_TYPES[0], w: s.w, h: s.h }); toast(DAMPER_ADDED(i + 1)); return true; }
   if (name === 'damperType') {
     const k = Number(el.dataset.i), x = d.dampers[k];
     if (x) updateDamper(store, d.id, k, { type: x.type === DAMPER_TYPES[0] ? DAMPER_TYPES[1] : DAMPER_TYPES[0] });
     return true;
   }
-  if (name === 'damperDelete') { deleteDamper(store, d.id, Number(el.dataset.i)); return true; }
+  if (name === 'damperDelete') { deleteDamper(store, d.id, Number(el.dataset.i)); toast(DAMPER_DELETED); return true; }
   disconnectDuct(store, d.id, Number(el.dataset.p));   // ductDisconnect
   return true;
 }

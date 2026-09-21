@@ -56,8 +56,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
           ${field('실면적 기준', `<select name="areaMode"><option value="net" ${p.areaMode !== 'gross' ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option></select>`)}
           ${field('총면적', `<output name="totalArea">${fmtArea(totalArea(f, p.areaMode), { pyeong })}</output>`)}
           ${lenField(withUnit('슬래브 두께', units, showUnit), 'slab', f.slab ?? 0, 0, 1000, false, units)}
-          ${field('벽 투명도', `<input type="range" name="wallOpacity" min="0" max="1" step="0.05" value="${p.view.wallOpacity}">`)}
-          ${field('바닥 투명도', `<input type="range" name="floorOpacity" min="0" max="1" step="0.05" value="${p.view.floorOpacity}">`)}
+          ${field('벽 투명도', `<input type="range" name="wallOpacity" min="0" max="1" step="0.05" value="${p.view.wallOpacity}"><output name="wallOpacityOut">${Math.round((p.view.wallOpacity ?? 1) * 100)}%</output>`)}
+          ${field('바닥 투명도', `<input type="range" name="floorOpacity" min="0" max="1" step="0.05" value="${p.view.floorOpacity}"><output name="floorOpacityOut">${Math.round((p.view.floorOpacity ?? 1) * 100)}%</output>`)}
         </details>
         <p class="hint">객체를 클릭하면 상세 정보가 표시됩니다.</p>`;
       const bg = store.get().background;

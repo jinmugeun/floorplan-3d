@@ -7,7 +7,7 @@ import { applyRoomWalls, assignmentOf } from '../state/materialOps.js';
 // 방 삭제는 ui/ 안의 roomActions에서 가져온다: ui/는 view2d/·view3d/·app/을 import하지 않는다(아키텍처 §9).
 import { removeRoom } from './roomActions.js';
 import { toast } from './toast.js';
-import { WALL_DELETE_RESULT, ROOMS_GONE } from './messages.js';
+import { WALL_DELETE_RESULT, ROOMS_GONE, CURVED_WALL_TITLE } from './messages.js';
 
 const copyItem = (ui, mat) => ({
   label: '마감재 복사', disabled: !mat,
@@ -22,7 +22,8 @@ export function wallMenuItems({ store, ui, wallId, roomId = null, side = 'in', i
   const room = roomId ?? f.rooms.find(r => r.wallIds.includes(wallId))?.id ?? null;
   const items = [
     { label: '벽 나누기', onSelect: () => ui.set({ selection: { type: 'wall', id: wallId }, splitWall: true }) },
-    { label: '곡선벽 전환', disabled: true, title: '미지원' }, // 2A가 정한 UI 약속: 곡선벽은 범위 밖임을 비활성 항목으로 알린다(I-20)
+    // 2A가 정한 UI 약속: 곡선벽은 범위 밖임을 비활성 항목 + 사유로 알린다(§15.14 · 감사 §10).
+    { label: '곡선벽 전환', disabled: true, title: CURVED_WALL_TITLE },
     { label: '재질 교체', disabled: !actions.replaceMaterial, onSelect: () => actions.replaceMaterial?.(target) },
     // 타일은 크기를 면마다 정하고 여러 면에 연속으로 바르는 일이 많다: 재질 교체와 다른 항목이다(§13.3).
     { label: '타일 배치', disabled: !actions.placeTile, onSelect: () => actions.placeTile?.(target) },
