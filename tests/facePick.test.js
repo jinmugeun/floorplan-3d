@@ -11,6 +11,7 @@ import { createFacePicker, targetOf, FACE_NAMES } from '../src/view3d/facePick.j
 import { createItemPicker, createDragLatch } from '../src/view3d/pick3d.js';
 import { buildFloorGroup } from '../src/view3d/build.js';
 import { applyMaterial } from '../src/state/materialOps.js';
+import { addDuct } from '../src/state/ductOps.js';
 import { setCanvasFactory, clearTextureCache } from '../src/materials/texture.js';
 
 // 평면 하나로 이루어진 가짜 층 그룹: 레이캐스트가 확실히 맞도록 위에서 내려보는 직교 카메라를 쓴다.
@@ -292,5 +293,62 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     domElement.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
     domElement.dispatchEvent(new MouseEvent('pointerup', { button: 0, clientX: 100, clientY: 100 }));
     expect(ui.get().selection).toEqual({ type: 'duct', id: 'd1', segment: 1, vertex: null });
+  });
+
+  // 실물 덕트(2구간, 소수 좌표, z 2100)를 store에 넣고 그 id로 덕트 박스를 만든다.
+  const ductFixture = store => addDuct(store, {
+    points: [[1234.5, 678.25], [4234.5, 678.25], [4234.5, 3678.75]],
+    segments: [{ w: 500, h: 300, z: 2100 }, { w: 500, h: 300, z: 2100 }],
+  });
+  const mkDuctGroup = (id, segment, y = 3) => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 0.5), new THREE.MeshBasicMaterial());
+    box.position.set(0, y, 0);           // 바닥 평면보다 카메라에 가깝다(기본 y)
+    box.name = 'duct';
+    box.userData.ductId = id;
+    box.userData.segment = segment;
+    const ducts = new THREE.Group(); ducts.name = 'ducts'; ducts.add(box);
+    return ducts;
+  };
+
+  test('마감재 적용 모드에서 덕트를 맞히면 선택도 재질도 바뀌지 않는다', () => {
+    const a = setup({ mesh: 'floor' });
+    const ductId = ductFixture(a.store);
+    a.g.add(mkDuctGroup(ductId, 0));
+    a.ui.set({ matPick: { assignment: mat('brick-red') } });
+    a.click();
+    expect(a.ui.get().selection).toBeNull();               // 덕트는 선택되지 않는다
+    expect(a.ui.get().matPick).not.toBeNull();              // 적용 모드는 계속된다
+    expect(a.floor().rooms[0].floorMat).toBeNull();         // 바닥 마감재도 바뀌지 않는다(재질을 바르지 않았다)
+  });
+
+  test('덕트 우클릭은 ductMenuItems를 열고 선택을 그 구간으로 맞춘다', () => {
+    const a = setup({ mesh: 'floor' });
+    const ductId = ductFixture(a.store);
+    a.g.add(mkDuctGroup(ductId, 1));
+    const ev = a.rightClick();
+    expect(ev.defaultPrevented).toBe(true);
+    expect(labels(a.menu[0].items)).toEqual(['점 삽입', '점 삭제', '댐퍼 추가', '급기로 전환', '설비 연결 해제', '잠금', '숨김', '삭제']);
+    expect(a.ui.get().selection).toEqual({ type: 'duct', id: ductId, segment: 1, vertex: null });
+  });
+
+  test('아이템과 덕트가 겹치면 카메라에 더 가까운 쪽이 이긴다', () => {
+    const mkItem = y => {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+      box.position.set(0, y, 0); box.name = 'item'; box.userData.itemId = 'i1';
+      return box;
+    };
+    const ev = { clientX: 100, clientY: 100 };
+
+    const a = setup({ mesh: 'floor' });                    // 아이템(y=4)이 덕트(y=3)보다 가깝다
+    const ductIdA = ductFixture(a.store);
+    a.items.add(mkItem(4));
+    a.g.add(mkDuctGroup(ductIdA, 0, 3));
+    expect(a.picker.hitAt(ev)).toEqual({ kind: 'item', id: 'i1' });
+
+    const b = setup({ mesh: 'floor' });                    // 덕트(y=4)가 아이템(y=3)보다 가깝다
+    const ductIdB = ductFixture(b.store);
+    b.items.add(mkItem(3));
+    b.g.add(mkDuctGroup(ductIdB, 0, 4));
+    expect(b.picker.hitAt(ev)).toEqual({ kind: 'duct', id: ductIdB, segment: 0 });
   });
 });
