@@ -3,7 +3,7 @@ html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif; font-size: 13px; }
 [hidden] { display: none !important; } /* display:flex 등이 hidden 속성을 덮어쓰지 않게 */
 /* 폭은 CSS 변수다(layout.js가 쓴다). 패널을 접으면 그 열과 스플리터 열이 0이 되어 캔버스가 넓어진다. */
-#layout { --panel-w: 320px; --right-w: 300px; display: grid; grid-template-columns: 64px var(--panel-w) 5px 1fr 5px var(--right-w); grid-template-rows: 48px 1fr 44px; grid-template-areas: "top top top top top top" "rail panel psplit canvas rsplit right" "rail panel psplit bottom rsplit right"; height: 100vh; }
+#layout { --panel-w: 320px; --right-w: 300px; display: grid; grid-template-columns: 64px var(--panel-w) 5px 1fr 5px var(--right-w); grid-template-rows: 48px 1fr 48px; grid-template-areas: "top top top top top top" "rail panel psplit canvas rsplit right" "rail panel psplit bottom rsplit right"; height: 100vh; }
 #layout.panel-off { grid-template-columns: 64px 0 0 1fr 5px var(--right-w); }
 #layout.right-off { grid-template-columns: 64px var(--panel-w) 5px 1fr 0 0; }
 #layout.panel-off.right-off { grid-template-columns: 64px 0 0 1fr 0 0; }
@@ -53,7 +53,15 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #minimap { height: 200px; border-bottom: 1px solid var(--line); position: relative; } #minimap canvas { width: 100%; height: 100%; display: block; } #minimap .mm-label { position: absolute; top: 6px; left: 8px; font-size: 11px; color: var(--muted); }
 #props { padding: 12px; } #props h2 { font-size: 14px; margin: 0 0 10px; } .field { display: block; margin-bottom: 8px; } .field span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; } .field input, .field select { width: 100%; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; }
 .check { display: flex; gap: 6px; align-items: center; margin: 8px 0; } .danger { color: var(--exhaust); border-color: var(--exhaust); background: #fff; border: 1px solid; padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+/* 행 높이는 48 px다(§14.3): 44 px에서는 가로 스크롤바(15 px)가 생긴 순간 남는 높이가 28 px뿐이라
+   버튼 아래 2 px와 :focus-visible 외곽선이 overflow-y: hidden에 잘렸다. */
 #bottombar { grid-area: bottom; display: flex; gap: 10px; align-items: center; padding: 0 10px; background: var(--panel); border-top: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; white-space: nowrap; }
+/* 1100 px에서 하단 바는 캔버스 열(480 px)만 차지하는데 "항상 보이는" 묶음만 660 px다 — 접어도
+   넘친다. 오른쪽 끝의 "더보기 ▾"·"속성 ▸"을 스크롤과 무관하게 붙여 두어(sticky) 접힌 기능에
+   늘 두 번 클릭으로 닿게 한다. 배경은 불투명이어야 아래로 지나가는 버튼이 겹쳐 보이지 않는다. */
+/* 붙어 있는 동안에는 스크롤되는 버튼 위를 덮으므로(스크롤하면 그 버튼이 옆으로 빠져나온다)
+   왼쪽에 옅은 그림자를 두어 "떠 있는 묶음"으로 읽히게 한다. */
+#bottomTail { position: sticky; right: 0; z-index: 2; display: flex; gap: 10px; align-items: center; flex: none; padding-left: 10px; background: var(--panel); box-shadow: -8px 0 8px -6px rgba(0,0,0,.12); }
 .seg { display: flex; gap: 6px; align-items: center; } .seg button { padding: 5px 8px; white-space: nowrap; flex: none; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; } .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 #unitSeg button { min-width: 44px; }
 #btnZoomIn, #btnZoomOut { min-width: 30px; font-weight: 600; }

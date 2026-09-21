@@ -5,12 +5,13 @@ import { test, expect } from 'vitest';
 import { createBottomBar, compactNext, BOTTOM_HYSTERESIS } from '../src/ui/bottomBar.js';
 import { shellHtml } from '../src/ui/shellHtml.js';
 
-function setup(sizes = { scrollWidth: 900, clientWidth: 900 }) {
+function setup(sizes = { scrollWidth: 900, clientWidth: 900 }, opts = {}) {
   document.body.innerHTML = shellHtml({ name: '테스트' });
   const size = { ...sizes };
-  const bar = createBottomBar(document.body, { measure: () => ({ ...size }) });
+  const bar = createBottomBar(document.body, { measure: () => ({ ...size }), ...opts });
   return { bar, size, bottom: document.querySelector('#bottombar'), more: document.querySelector('#bottomMore') };
 }
+const overflowCtl = () => [...document.querySelectorAll('[data-overflow] button, [data-overflow] select')];
 
 test('compactNext는 넘칠 때 접고 히스테리시스만큼 여유가 생겨야 펼친다', () => {
   expect(BOTTOM_HYSTERESIS).toBe(64);
@@ -73,6 +74,65 @@ test('접힌 상태에서 다시 펼치면 더보기 팝오버도 닫힌다', ()
   bar.sync();
   expect(bar.isCompact()).toBe(false);
   expect(more.classList.contains('open')).toBe(false);
+  bar.destroy();
+});
+
+test('접을 것이 하나도 보이지 않으면 더보기 버튼을 감춘다(빈 팝오버 방지)', () => {
+  const { bar, size } = setup();
+  // 모드에 따라 3D 전용 컨트롤이 모두 숨은 상황: 접어도 팝오버에 누를 것이 없다.
+  for (const c of overflowCtl()) c.hidden = true;
+  size.scrollWidth = 1100; size.clientWidth = 900;
+  bar.sync();
+  expect(bar.isCompact()).toBe(true);
+  expect(document.querySelector('#btnBottomMore').hidden).toBe(true);
+  // 빈 묶음은 gap 만큼의 빈 여백도 남기지 않는다.
+  expect(document.querySelector('#seg3d').hidden).toBe(true);
+  expect(document.querySelector('#segGizmo').hidden).toBe(true);
+  bar.destroy();
+});
+
+test('모드가 바뀌어 보이는 버튼이 줄면 필요한 폭을 다시 재고 펼친다', () => {
+  const { bar, size } = setup();
+  // 3D: 카메라·햇빛·기즈모가 보이고 바가 넘쳐 접힌다(이때 fullWidth = 1100).
+  for (const id of ['#btnCam', '#btnSun', '#btnGizmoMode']) document.querySelector(id).hidden = false;
+  size.scrollWidth = 1100; size.clientWidth = 900;
+  bar.sync();
+  expect(bar.isCompact()).toBe(true);
+  // 2D로 돌아오면 3D 전용 버튼이 숨어 실제 필요한 폭이 줄어든다: 옛 fullWidth로는 계속 접혀 있었다.
+  for (const id of ['#btnCam', '#btnSun', '#btnGizmoMode']) document.querySelector(id).hidden = true;
+  size.scrollWidth = 700;
+  bar.sync();
+  expect(bar.isCompact()).toBe(false);
+  expect(document.querySelector('#bottomMore').children).toHaveLength(0);
+  bar.destroy();
+});
+
+test('더보기를 열면 포커스가 팝오버 안으로 들어가고 [Esc]로 닫으면 버튼으로 돌아온다', () => {
+  const opened = [];
+  const { bar, size, more } = setup({ scrollWidth: 900, clientWidth: 900 }, { onOpen: () => opened.push(1) });
+  size.scrollWidth = 1100; size.clientWidth = 900;
+  bar.sync();
+  const btn = document.querySelector('#btnBottomMore');
+  btn.focus();
+  btn.click();
+  expect(opened).toHaveLength(1);                       // 셸 팝오버를 닫으라고 알린다(팝오버는 하나만)
+  expect(more.contains(document.activeElement)).toBe(true);
+  expect(document.activeElement.hidden).toBe(false);    // 숨은 3D 버튼이 아니라 실제로 보이는 컨트롤
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(more.classList.contains('open')).toBe(false);
+  expect(document.activeElement).toBe(btn);
+  bar.destroy();
+});
+
+test('도면 잠금은 3D 전용이 아니므로 접히지 않는다', () => {
+  const { bar, size, bottom } = setup();
+  const lock = document.querySelector('#btnLock');
+  expect(lock.closest('[data-overflow]')).toBeNull();
+  size.scrollWidth = 1100; size.clientWidth = 900;
+  bar.sync();
+  expect(bar.isCompact()).toBe(true);
+  expect(lock.closest('#bottomMore')).toBeNull();
+  expect(bottom.contains(lock)).toBe(true);
   bar.destroy();
 });
 

@@ -49,7 +49,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     firstLayout = false;
   }
   relayout();
-  bottom = createBottomBar(root);
+  // 팝오버는 한 번에 하나만 열린다: 더보기를 열면 셸 팝오버(보기·카메라·햇빛·도움말)를 닫는다.
+  // pop은 아래에서 만들지만 이 콜백은 클릭 때 비로소 돌아 TDZ에 걸리지 않는다.
+  bottom = createBottomBar(root, { onOpen: () => pop.close() });
   const resizeWatch = createResizeWatch(layout, relayout);
   q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; onMinimapResize(); });
   const splitters = [
@@ -114,12 +116,19 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     if (kind === 'help') return helpHtml(ui.get().tool === 'duct' ? 'duct' : ui.get().mode === '2d' ? '2d' : '3d');
     return '';
   };
+  // 접힌 하단 바의 버튼(카메라·햇빛)은 더보기 팝오버 안에 있다. 그 팝오버를 닫으면 버튼이
+  // display: none이 되어 rect가 0이 되므로(팝오버가 좌상단으로 튄다) 늘 보이는 "더보기 ▾"를
+  // 앵커로 삼는다 — 팝오버는 접힌 바에서도 버튼 근처에 뜬다.
+  const anchorFor = el => (el?.closest?.('#bottomMore') ? q('#btnBottomMore') : el);
+  const popHandlers = { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; } };
   function openPopover(kind, anchor) {
+    const at = anchorFor(anchor);
+    bottom?.closeMore();                 // 팝오버는 한 번에 하나만 열린다
     if (pop.isOpen() && popKind === kind) { pop.close(); popKind = null; return; }
     popKind = kind;
-    pop.open(anchor, popHtml(kind), { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; } });
+    pop.open(at, popHtml(kind), popHandlers);
   }
-  function refreshPopover() { if (pop.isOpen() && popKind) { const anchor = root.querySelector(`[data-popover="${popKind}"]`); pop.open(anchor, popHtml(popKind), { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; } }); } }
+  function refreshPopover() { if (pop.isOpen() && popKind) pop.open(anchorFor(root.querySelector(`[data-popover="${popKind}"]`)), popHtml(popKind), popHandlers); }
   const setPath = (o, path, v) => { const ks = path.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = t[k]; t[ks.at(-1)] = v; };
   // 보기 옵션은 되돌릴 단계가 아니다(record: false).
   function applyViewChange(ev) {
@@ -200,7 +209,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     const item = s.selection?.type === 'item' ? activeFloor(store.get())?.items.find(i => i.id === s.selection.id) : null;
     q('#btnGizmoMode').hidden = !gizmoBtnVisible({ mode: s.mode, ortho: orthoName, item });
   };
-  const setOrtho = name => { orthoName = name ?? null; syncGizmoVisible(); };
+  // 2D 투영으로 들어가고 나오면 기즈모 버튼이 숨거나 보인다 → 하단 바 접기 판정도 다시 한다.
+  const setOrtho = name => { orthoName = name ?? null; syncGizmoVisible(); bottom?.sync(); };
 
   ui.subscribe(s => {
     root.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === s.tool));

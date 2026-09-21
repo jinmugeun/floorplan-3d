@@ -26,6 +26,17 @@ test('컨텍스트 규칙은 .primary가 아닌 버튼에만 배경을 준다', 
   expect(CSS).not.toMatch(/\.tpl-card button\s*\{/);
 });
 
+// §14.3: 1100 px에서 하단 바는 캔버스 열(480 px)만 차지해 접은 뒤에도 넘친다.
+// "더보기 ▾"가 가로 스크롤 밖으로 밀려나면 접힌 기능에 두 번 클릭으로 닿을 수 없다.
+test('하단 바 오른쪽 끝 묶음은 가로 스크롤과 무관하게 붙어 있다(sticky)', () => {
+  const tail = CSS.match(/#bottomTail\s*\{[^}]*\}/)?.[0] ?? '';
+  expect(tail).toMatch(/position:\s*sticky/);
+  expect(tail).toMatch(/right:\s*0/);
+  expect(tail).toMatch(/background:\s*var\(--panel\)/);   // 불투명해야 아래로 지나가는 버튼이 겹쳐 보이지 않는다
+  // 가로 스크롤바(15 px)가 생겨도 overflow-y: hidden이 버튼을 자르지 않는 행 높이
+  expect(CSS).toMatch(/grid-template-rows:\s*48px 1fr 48px/);
+});
+
 test('.primary 블록은 .primary가 아닌 선택자 뒤에 온다(뒤에 오는 규칙이 이긴다)', () => {
   const primaryAt = CSS.indexOf('.primary {');
   expect(CSS.indexOf('#topbar button:not(.primary)')).toBeLessThan(primaryAt);
