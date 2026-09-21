@@ -31,10 +31,11 @@ import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { createDeleteActions } from './app/deleteActions.js';
 import { confirmDialog } from './ui/confirmDialog.js';
+import { promptDialog } from './ui/promptDialog.js';
 import { openStartScreen } from './ui/startScreen.js';
 import { openOnboarding, isOnboarded } from './ui/onboarding.js';
 import { createTopbar, projectIsEmpty, confirmLeave } from './app/topbar.js';
-import { templateProject, saveTemplate } from './templates/projectTemplates.js';
+import { templateProject, saveTemplate, listTemplates, BUILTIN_TEMPLATES } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
 
@@ -182,9 +183,14 @@ if (projectIsEmpty(store.get())) showStart({ restored, onClose: maybeOnboard });
 else maybeOnboard();
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
-// 더보기 메뉴의 "템플릿으로 저장"(태스크 14의 topbar.js가 부른다). 이름은 프로젝트 이름을 기본값으로 묻는다.
-function saveAsTemplate() {
-  const name = window.prompt('템플릿 이름을 입력하세요', store.get().name);
+// 더보기 메뉴의 "템플릿으로 저장". 이름은 프로젝트 이름을 기본값으로 묻고, 이미 있는 이름은 막는다
+// (saveTemplate은 같은 이름을 조용히 덮어쓴다 — 실수로 저장해 둔 템플릿을 지우지 않게 여기서 거른다).
+async function saveAsTemplate() {
+  const taken = new Set([...listTemplates(), ...BUILTIN_TEMPLATES].map(t => String(t.name).trim()));
+  const name = await promptDialog({
+    title: '템플릿으로 저장', label: '템플릿 이름', value: store.get().name, ok: '저장',
+    validate: t => (!t.trim() ? '이름을 입력해주세요' : taken.has(t.trim()) ? '같은 이름의 템플릿이 있습니다' : null),
+  });
   if (name === null) return;
   const saved = saveTemplate(name, store.get());
   if (saved) shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);

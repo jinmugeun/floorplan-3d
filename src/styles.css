@@ -77,6 +77,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .modal-card.narrow { width: min(380px, 94vw); } .modal-card fieldset { border: 1px solid var(--line); border-radius: 4px; } .modal .error { color: var(--exhaust); }
 .modal-card.narrow .toolbar { justify-content: flex-end; } .modal-body .field { margin-bottom: 10px; }
 .modal.confirm .modal-body { margin: 6px 0 14px; white-space: pre-line; }
+.modal.prompt .modal-body { margin: 6px 0 10px; } .modal.prompt .error { margin: 4px 0 0; font-size: 12px; } .modal.prompt .error:empty { display: none; }
 .modal.onboarding .modal-body { margin: 6px 0 10px; min-height: 3.2em; }
 .onb-dots { text-align: center; color: var(--muted); letter-spacing: .3em; margin: 4px 0 2px; }
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 8px 0 12px; } .tabs button { padding: 6px 12px; border: 0; background: none; font: inherit; cursor: pointer; color: var(--muted); } .tabs button.on { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
