@@ -1,11 +1,12 @@
 import { activeFloor } from '../state/schema.js';
-import { wallPolygon, endpoints, wallLength } from '../geom/walls.js';
+import { endpoints, wallLength } from '../geom/walls.js';
 import { roomInnerPolygon, centroid, pointInPolygon } from '../geom/rooms.js';
 import { fmtLen, fmtArea } from '../util/units.js';
 import { dist } from '../geom/vec.js';
 import { drawItems, ITEM_DRAG_KINDS } from './items2d.js';
 import { drawDucts } from './ducts2d.js';
 import { memoCollisions } from '../geom/collide.js';
+import { drawWalls } from './walls2d.js';
 
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
@@ -125,10 +126,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
         if (v2.roomName && r.name) label(r.name, [c[0], c[1] + 250], { size: 13, color: COLORS.dim }); // 면적 라벨 아래
       }
     }
-    for (const wl of f.walls) {
-      ctx.globalAlpha = soloWalls && !soloWalls.has(wl.id) ? 0.25 : 1;
-      poly(wallPolygon(wl, f.walls), sel?.type === 'wall' && sel.id === wl.id ? COLORS.wallSel : COLORS.wall, null);
-    }
+    drawWalls(ctx, api, f, { sel, soloWalls, flags: v2 });
     ctx.globalAlpha = 1;
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
     // 벽마다 치수 라벨을 그리되, 화면에서 40px보다 짧은 벽은 건너뛴다(LOD: 라벨이 겹쳐 뭉치는 것을 막는다).
