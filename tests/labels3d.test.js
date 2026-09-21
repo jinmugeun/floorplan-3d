@@ -1,6 +1,7 @@
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as THREE from 'three';
-import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_H_PX, labelTextureSize, cullSprites, cullLabels, LABEL3D_PRIORITY } from '../src/view3d/labels3d.js';
+import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_H_PX, labelTextureSize, cullSprites, cullLabels, LABEL3D_PRIORITY, LABEL_DEBOUNCE_MS, LABEL_BOX_PX, spriteLabelSize, createCameraWatch } from '../src/view3d/labels3d.js';
+import { createOrthoView } from '../src/view3d/orthoView.js';
 import { DEFAULT_VIEW, createItem } from '../src/state/schema.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
 import { productById } from '../src/products/catalog.js';
@@ -137,4 +138,106 @@ test('cullLabels는 그룹의 스프라이트 visible을 맞춘다', () => {
   let n = 0;
   cullLabels(g, null, { width: 800, height: 600, project: () => [100 + (n++) * 300, 300] });
   expect(g.children.every(c => c.visible)).toBe(true);
+});
+
+// 아래 세 테스트는 리뷰 Important 1·2·3(고정된 visible · 거울 투영 · 줌 불변)을 막는다.
+function labelGroup(specs) {
+  const g = new THREE.Group();
+  g.name = 'labels';
+  for (const [kind, text, pos] of specs) {
+    const s = labelSprite(text, kind === 'equip' ? {} : { color: '#dc2626' });
+    s.position.set(...pos);
+    s.userData.kind = kind;
+    g.add(s);
+  }
+  return g;
+}
+const lookFrom = dist => {
+  const c = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+  c.position.set(0, 0, dist); c.lookAt(0, 0, 0); c.updateMatrixWorld();
+  return c;
+};
+
+test('카메라 뒤의 스프라이트는 후보에서 뺀다(거울 투영이 화면 안 라벨을 밀어내지 않게)', () => {
+  const cam = lookFrom(5);
+  // 카메라는 -Z를 본다: z = 8은 카메라 뒤다. w < 0이라 x·y가 뒤집혀 화면 중앙으로 들어온다.
+  const g = labelGroup([['ductSize', '750×400', [0.0005, 0.0025, 0]], ['equip', '③', [0.0005, 0.0025, 8]]]);
+  const [dl, eq] = g.children;
+  const keep = cullLabels(g, cam, { width: 800, height: 600 });
+  expect(eq.visible).toBe(false);          // 보이지 않는 라벨이 자리를 빼앗지 않는다
+  expect(dl.visible).toBe(true);
+  expect(keep.has(dl.uuid)).toBe(true);
+  expect(keep.has(eq.uuid)).toBe(false);
+  // 같은 스프라이트가 카메라 앞에 오면 우선순위대로 덕트 라벨이 자리를 내준다(기계가 살아 있음을 확인).
+  eq.position.set(0.0005, 0.0025, 0.01);
+  cullLabels(g, cam, { width: 800, height: 600 });
+  expect(eq.visible).toBe(true);
+  expect(dl.visible).toBe(false);
+});
+
+test('겹침 상자는 스프라이트의 실제 화면 크기를 따른다(줌 2배에도 판정이 같다)', () => {
+  const far = lookFrom(4), near = lookFrom(2);
+  const at = () => labelGroup([['equip', '③', [-0.2005, 0.0025, 0]], ['ductSize', '750×400', [0.2005, 0.0025, 0]]]);
+  const probe = at().children[1];
+  // 화면 높이 = scale.y ÷ 절두체 높이 × 뷰포트 px → 거리가 절반이면 상자도 두 배다.
+  expect(spriteLabelSize(probe, near, 600)).toBeCloseTo(spriteLabelSize(probe, far, 600) * 2, 6);
+  expect(spriteLabelSize(probe, null, 600)).toBe(LABEL_BOX_PX);   // 카메라를 모르면 예전 고정값
+  for (const [name, cam] of [['기본', far], ['2배 줌인', near]]) {
+    const g = at();
+    cullLabels(g, cam, { width: 800, height: 600 });
+    expect(g.children[0].visible, `${name}: 설비 번호`).toBe(true);
+    expect(g.children[1].visible, `${name}: 덕트 단면`).toBe(false);
+  }
+  // 고정 12 px 상자로는 같은 배치가 "안 겹친다"로 읽혀 감사 §11 증상이 되돌아온다(회귀 방어).
+  expect(cullSprites([
+    { key: 'eq', kind: 'equip', text: '③', sp: [357.0, 300.5], size: 12 },
+    { key: 'duct', kind: 'ductSize', text: '750×400', sp: [443.0, 300.5], size: 12 },
+  ]).size).toBe(2);
+});
+
+test('2D 투영 프리셋에 들어가고 나올 때도 컬링이 다시 돈다(디바운스 1회)', () => {
+  vi.useFakeTimers();
+  try {
+    expect(LABEL_DEBOUNCE_MS).toBe(120);
+    // view3d의 scheduleLabelCull과 같은 배선: 카메라가 바뀌면 걸고, 정착 뒤 한 번만 돈다.
+    let culls = 0, timer = 0;
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { culls++; }, LABEL_DEBOUNCE_MS); };
+    const controls = { enabled: true };
+    const ov = createOrthoView({
+      container: { clientWidth: 800, clientHeight: 600 },
+      store: { get: () => ({ activeFloor: 0, floors: [{ height: 2300 }] }) },
+      controls, bounds: () => ({ center: [1000.5, 2000.25], extent: 8000.5 }),
+      onCameraChange: schedule,
+    });
+    ov.setOrthoView('front');
+    expect(ov.camera().isOrthographicCamera).toBe(true);   // 컬링이 쓸 활성 카메라가 바뀌었다
+    expect(controls.enabled).toBe(false);                  // OrbitControls 'change'는 더 오지 않는다
+    vi.advanceTimersByTime(LABEL_DEBOUNCE_MS - 1);
+    expect(culls).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(culls).toBe(1);
+    ov.setOrthoView('left'); ov.setOrthoView('top');       // 연속 전환은 정착 뒤 1회로 합쳐진다
+    vi.advanceTimersByTime(LABEL_DEBOUNCE_MS);
+    expect(culls).toBe(2);
+    ov.clearOrthoView();                                   // 나올 때도 첫 드래그를 기다리지 않는다
+    vi.advanceTimersByTime(LABEL_DEBOUNCE_MS);
+    expect(culls).toBe(3);
+    ov.clearOrthoView();                                   // 투영 중이 아니면 아무 일도 없다
+    vi.advanceTimersByTime(LABEL_DEBOUNCE_MS);
+    expect(culls).toBe(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('createCameraWatch는 움직인 프레임에만 true를 준다(1인칭 저빈도 컬링)', () => {
+  const moved = createCameraWatch();
+  const cam = lookFrom(4);
+  expect(moved(cam)).toBe(true);        // 첫 호출은 한 번 잰다
+  expect(moved(cam)).toBe(false);       // 서 있는 동안은 디바운스를 다시 걸지 않는다
+  cam.position.set(0.5, 0, 4.25);
+  expect(moved(cam)).toBe(true);
+  cam.lookAt(1, 0, 0); cam.updateMatrixWorld();
+  expect(moved(cam)).toBe(true);        // 방향만 돌아도 다시 잰다
+  expect(moved(null)).toBe(false);
 });

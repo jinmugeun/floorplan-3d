@@ -13,7 +13,7 @@ import { createFirstPerson } from './firstPerson.js';
 import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js';
 import { createFacePicker } from './facePick.js';
 import { createOrthoView } from './orthoView.js';
-import { cullLabels, LABEL_DEBOUNCE_MS } from './labels3d.js';
+import { cullLabels, createCameraWatch, LABEL_DEBOUNCE_MS } from './labels3d.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -48,6 +48,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   const ov = createOrthoView({
     container, store, controls, bounds, onOrthoView, getMode: () => mode,
     requestRender: () => requestRender(), detachPicker: () => picker.detach(), reattachPicker: () => reattachPicker(),
+    onCameraChange: () => scheduleLabelCull(),   // 프리셋 진입·이탈에는 'change'가 없다 → 라벨을 다시 잰다(§15.12)
   });
   // rebuild가 picker를 읽으므로 picker를 먼저 만든다(TDZ).
   // 기즈모를 다시 붙여도 되는 상황(1인칭·투영 아님, 드래그 중 아님)에서만 붙인다.
@@ -229,6 +230,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     raf = 0; if (!alive) return;
     if (mode === 'fp') {
       fpCtl.step(t); showAllWalls(); renderer.render(scene, ov.camera() ?? camera);
+      if (fpMoved(camera)) scheduleLabelCull();   // 1인칭에도 'change'가 없다: 걸음이 멈춘 뒤 한 번 잰다
       requestRender(); return;
     }
     controls.update();
@@ -242,6 +244,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   // 3D 라벨 겹침 억제(§15.12 · 감사 §11): 매 프레임 76개를 투영하면 궤도가 무거워지므로
   // 카메라가 멈춘 뒤 120 ms에 한 번만 잰다. 씬을 다시 짓거나 창이 바뀔 때도 다시 잰다.
   let labelTimer = 0;
+  const fpMoved = createCameraWatch();   // 1인칭 렌더 루프는 움직인 프레임에만 디바운스를 건다
   function scheduleLabelCull() {
     clearTimeout(labelTimer);
     labelTimer = setTimeout(() => {

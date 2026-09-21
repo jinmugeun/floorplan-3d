@@ -4,6 +4,10 @@
 // 피커·컨트롤은 콜백으로만 만진다(detachPicker·reattachPicker) — 이 모듈이 pick3d를 직접
 // import하지 않게. getMode가 필요한 이유: clearOrthoView가 1인칭에서는 궤도 조작을 되살리지
 // 않는다(controls.enabled = mode !== 'fp').
+// onCameraChange는 "활성 카메라가 바뀌었다"를 알린다(§15.12 · 리뷰 Important 1): 프리셋은
+// controls.enabled = false로 만들어 OrbitControls의 'change'가 더는 오지 않으므로, 이 콜백이
+// 없으면 정면·평면 도면의 라벨 visible이 직전 궤도 카메라로 잰 값 그대로 굳는다.
+// view3d가 여기에 같은 디바운스 컬링(scheduleLabelCull)을 건다.
 import * as THREE from 'three';
 import { activeFloor } from '../state/schema.js';
 import { orthoViewParams } from './pick3d.js';
@@ -11,7 +15,7 @@ import { orthoViewParams } from './pick3d.js';
 export function createOrthoView({
   container, store, controls, bounds,
   getMode = () => 'iso', onOrthoView = () => {}, requestRender = () => {},
-  detachPicker = () => {}, reattachPicker = () => {},
+  detachPicker = () => {}, reattachPicker = () => {}, onCameraChange = () => {},
 } = {}) {
   let ortho2 = null, useOrtho = false, orthoName = null;
   // 2D 투영(정면/배면/좌/우/평면/저면): 도면을 도면처럼 고정된 직교 카메라로 본다.
@@ -26,6 +30,7 @@ export function createOrthoView({
     useOrtho = true; orthoName = name; controls.enabled = false;  // 고정 뷰(도면처럼 본다)
     detachPicker();                                 // 편집할 수 없는 고정 뷰이므로 기즈모도 떼어 둔다
     onOrthoView(name);
+    onCameraChange();   // 활성 카메라가 ortho2로 바뀌었다 — 라벨 겹침을 이 카메라로 다시 잰다
     requestRender();
   }
   function clearOrthoView() {
@@ -33,6 +38,7 @@ export function createOrthoView({
     useOrtho = false; orthoName = null; controls.enabled = getMode() !== 'fp';
     reattachPicker();                                  // 투영에서 빠져나오면 선택한 아이템에 기즈모를 다시 붙인다
     onOrthoView(null);
+    onCameraChange();   // 궤도 카메라로 돌아왔다(첫 드래그를 기다리지 않고 다시 잰다)
     requestRender();
   }
   return {

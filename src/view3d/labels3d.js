@@ -18,6 +18,8 @@ export const LABEL_PAD_PX = 14;   // 좌우 여백 합
 export const LABEL_FONT_PX = 26;  // LABEL_H_PX 안에서 위아래 여백이 남는 글자 크기
 export const LABEL_DEBOUNCE_MS = 120;   // 카메라가 멈춘 뒤 이만큼 있다가 겹침을 다시 잰다
 export const LABEL3D_PRIORITY = ['equip', 'ductSize'];   // 설비 번호가 덕트 단면보다 높다
+export const LABEL_BOX_PX = 12;      // 카메라를 모를 때(투영 주입 등) 쓰는 상자 글자 크기
+export const LABEL_BOX_MIN_PX = 6;   // 아주 멀어도 상자가 0으로 사라지지 않게(겹침을 놓치지 않게)
 const LABEL_LIFT = 150;          // 설비 윗면·덕트 윗면에서 라벨까지(mm)
 
 export function labelTextureSize(text) {
@@ -118,17 +120,74 @@ export function cullSprites(entries, { priority = LABEL3D_PRIORITY } = {}) {
   return new Set(placeLabels(cands, { priority }).map(c => c.key));
 }
 
+// 스프라이트 한 점을 화면으로: [x px, y px, ndcZ]. ndcZ를 같이 주는 이유는 카메라 뒤 판정이다 —
+// 원근 카메라에서 카메라 뒤의 점은 w < 0이라 x·y 부호가 뒤집혀 NDC [-1,1] 안으로 거울 투영된다.
+// 보이지도 않는 그 라벨이 화면 안 라벨의 자리를 빼앗지 않게 후보에서 뺀다.
+export function projectSprite(p, camera, { width = 1, height = 1 } = {}) {
+  const v = p.clone().project(camera);
+  return [((v.x + 1) / 2) * width, ((1 - v.y) / 2) * height, v.z];
+}
+// 투영을 주입한 경우(z가 없다)는 화면 안으로 본다 — 주입한 쪽이 이미 화면 좌표를 정한 것이다.
+export const onScreen = z => z === undefined || z === null || (z >= -1 && z <= 1);
+
+// 스프라이트가 화면에서 차지하는 높이(px). 스프라이트는 늘 카메라를 마주보므로 월드 방향과
+// 무관하게 "보이는 절두체 높이 대비 스케일"이면 된다: 원근은 시선 방향 거리로, 직교는 절두체
+// 높이로 낸다(둘 다 camera.zoom을 나눈다 — updateProjectionMatrix가 그렇게 쓴다).
+export function spriteScreenHeight(sprite, camera, height = 1) {
+  const sy = Number(sprite?.scale?.y) || 0;
+  if (!sy || !camera || !(height > 0)) return 0;
+  const zoom = Number(camera.zoom) || 1;
+  let frustumH = 0;
+  if (camera.isOrthographicCamera) frustumH = Math.abs(camera.top - camera.bottom) / zoom;
+  else if (camera.isPerspectiveCamera) {
+    camera.updateMatrixWorld?.();
+    const fwd = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2).negate();   // 시선(-Z)
+    const d = new THREE.Vector3().subVectors(sprite.position, camera.position).dot(fwd);
+    frustumH = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * d) / zoom;
+  }
+  return frustumH > 0 ? (sy / frustumH) * height : 0;
+}
+// 겹침 상자는 labelBox가 글자 크기(px)로 재므로 화면 높이를 글자 크기로 환산해 넘긴다.
+// 고정 12 px이던 때는 한 줌에서만 맞았다: 줌인하면 라벨 간 화면 거리와 스프라이트 크기가 같이
+// 커지는데 상자만 그대로여서 겹침을 놓쳤다(감사 §11 재발). 이제 상자도 같이 커져 줌 불변이다.
+export function spriteLabelSize(sprite, camera, height = 1) {
+  const sh = spriteScreenHeight(sprite, camera, height);
+  return sh > 0 ? Math.max(LABEL_BOX_MIN_PX, (sh * LABEL_FONT_PX) / LABEL_H_PX) : LABEL_BOX_PX;
+}
+
+// 카메라가 실제로 움직였는지 본다(1인칭용). 1인칭은 매 프레임 requestRender를 걸므로 프레임마다
+// 디바운스를 다시 걸면 타이머가 영영 터지지 않는다 — "움직인 프레임"에만 걸어야 멈춘 뒤 1회가 된다.
+export function createCameraWatch(eps = 1e-4) {
+  const p = new THREE.Vector3(NaN, NaN, NaN), q = new THREE.Quaternion(0, 0, 0, NaN);
+  return camera => {
+    if (!camera) return false;
+    // NaN 초기값이라 첫 호출은 두 비교 모두 false → moved = true다(진입 시 한 번은 잰다).
+    const moved = !(p.distanceToSquared(camera.position) <= eps * eps)
+      || !(Math.abs(q.dot(camera.quaternion)) >= 1 - eps);
+    if (moved) { p.copy(camera.position); q.copy(camera.quaternion); }
+    return moved;
+  };
+}
+
 // 'labels' 그룹의 스프라이트를 화면에 투영해 visible을 맞춘다. 카메라가 멈춘 뒤 한 번만 부른다
-// (view3d가 LABEL_DEBOUNCE_MS 디바운스). project를 주면 그것으로 투영한다(테스트용).
+// (view3d가 LABEL_DEBOUNCE_MS 디바운스, 2D 투영 진입·이탈도 같은 디바운스로 다시 잰다).
+// project를 주면 그것으로 투영한다(테스트용).
 export function cullLabels(group, camera, { width = 1, height = 1, project = null } = {}) {
-  const toScreen = project ?? (p => {
-    const v = p.clone().project(camera);
-    return [((v.x + 1) / 2) * width, ((1 - v.y) / 2) * height];
-  });
   const sprites = (group?.children ?? []).filter(s => s.name === 'label');
-  const keep = cullSprites(sprites.map(s => ({
-    key: s.uuid, kind: s.userData.kind ?? 'ductSize', text: s.userData.text ?? '', sp: toScreen(s.position), size: 12,
-  })));
+  if (!sprites.length || (!camera && !project)) return new Set();
+  const toScreen = project ?? (p => projectSprite(p, camera, { width, height }));
+  const entries = [];
+  for (const s of sprites) {
+    const sp = toScreen(s.position);
+    if (!onScreen(sp?.[2])) continue;   // 카메라 뒤·절두체 밖 — 자리 경쟁에서 빼고 visible은 아래에서 false가 된다
+    entries.push({
+      // kind 폴백 'ductSize': buildLabels는 두 경로에서 늘 kind를 넣으므로 닿지 않는다. 밖에서 만든
+      // 스프라이트가 섞이면 조용히 낮은 우선순위로 둔다(설비 번호 자리를 빼앗지 않게).
+      key: s.uuid, kind: s.userData.kind ?? 'ductSize', text: s.userData.text ?? '', sp,
+      size: spriteLabelSize(s, camera, height),
+    });
+  }
+  const keep = cullSprites(entries);
   for (const s of sprites) s.visible = keep.has(s.uuid);
   return keep;
 }
