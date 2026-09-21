@@ -7,6 +7,8 @@ import { sub, norm, perp } from '../geom/vec.js';
 export const DUCT_COLORS = { ...FLOW_COLORS, sel: '#8b5cf6', locked: '#e5484d', label: '#5b6775', damper: '#f59e0b' };
 export const DUCT_FILL_ALPHA = 0.35;
 export const DUCT_HANDLE_PX = 7;
+export const DUCT_DOT_PX = 2.5;        // 꼭짓점 점 반지름(§11.5) — 선택 핸들보다 작다
+export const DUCT_DOT_ALPHA = 0.7;
 
 // 2D(v2)와 3D(v3)가 같은 규칙을 쓴다(itemVisible과 같은 자리).
 export const ductVisible = (duct, flags = {}) => !duct.hidden && flags.ducts !== false;
@@ -35,9 +37,11 @@ function drawDamper(ctx, v, duct, damper, showLabel) {
   if (showLabel) v.label(`${damper.type} ${Math.round(damper.w)}×${Math.round(damper.h)}`, [p[0] + n[0] * (half + 300), p[1] + n[1] * (half + 300)], { size: 10, color: DUCT_COLORS.damper, bg: '#fff' });
 }
 
-export function drawDucts(ctx, v, floor, { sel = null, flags = {} } = {}) {
+// labels는 뷰의 옵션이다(미니맵은 labels:false로 그린다 — 글자가 층 전체를 덮지 않게).
+// 보기 플래그 ductLabels는 그 위에서 덕트 라벨만 따로 끈다: 둘 중 하나라도 꺼지면 글자를 그리지 않는다.
+export function drawDucts(ctx, v, floor, { sel = null, flags = {}, labels = true } = {}) {
   const selId = sel?.type === 'duct' ? sel.id : null;
-  const showLabels = flags.ductLabels !== false;
+  const showLabels = labels && flags.ductLabels !== false;
   for (const duct of floor.ducts ?? []) {
     if (!ductVisible(duct, flags)) continue;
     const color = colorOf(duct);
@@ -46,6 +50,14 @@ export function drawDucts(ctx, v, floor, { sel = null, flags = {} } = {}) {
       path(ctx, v, quad);
       ctx.globalAlpha = DUCT_FILL_ALPHA; ctx.fillStyle = color; ctx.fill();
       ctx.globalAlpha = 1; ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+    }
+    // 꼭짓점 점(§11.5): 고른 덕트는 선택 도구가 큰 핸들을 그리므로 여기서는 나머지 덕트만 찍는다.
+    // 얕은 꺾임이나 겹친 덕트에서 "여기가 꼭짓점"이라는 유일한 신호다.
+    if (duct.id !== selId) {
+      ctx.save();
+      ctx.globalAlpha = DUCT_DOT_ALPHA; ctx.fillStyle = color;
+      for (const p of duct.points) { const s = v.toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], DUCT_DOT_PX, 0, Math.PI * 2); ctx.fill(); }
       ctx.restore();
     }
     // 설비에 연결된 꼭짓점은 작은 원으로 표시한다(연결됐다는 유일한 2D 신호다).

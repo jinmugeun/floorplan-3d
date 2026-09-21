@@ -102,6 +102,53 @@ describe('덕트 선택과 편집', () => {
     expect(ductMenuItems({ store, ui, sel: { type: 'duct', id: '없음' } })).toBeNull();
   });
 
+  test('연결된 꼭짓점을 설비에서 떼어 놓으면 연결이 끊긴다(한 단계로 되돌아간다)', () => {
+    const { store, ds, id, hood, floor } = setup();
+    ds.onDown([2000, 1500]);                       // 후드에 연결된 0번 점
+    ds.apply([3000.5, 3000.25]);                   // 풋프린트(1600×1200) 밖 + 접속점에서 300 mm 넘게
+    ds.finish();
+    expect(ductById(floor(), id).points[0]).toEqual([3001, 3000]);
+    expect(ductById(floor(), id).connections).toEqual([]);
+    store.undo();                                  // 드래그 + 연결 해제가 한 단계다
+    expect(ductById(floor(), id).points[0]).toEqual([2000, 1500]);
+    expect(ductById(floor(), id).connections).toEqual([{ point: 0, itemId: hood }]);
+  });
+
+  test('연결된 꼭짓점을 설비 안에서 조금만 옮기면 연결이 남는다', () => {
+    const { ds, id, hood, floor } = setup();
+    ds.onDown([2000, 1500]);
+    ds.apply([2200.5, 1600.25]);                   // 아직 후드 풋프린트 안
+    ds.finish();
+    expect(ductById(floor(), id).connections).toEqual([{ point: 0, itemId: hood }]);
+  });
+
+  test('연결된 꼭짓점을 다른 설비에 떨어뜨리면 그 설비로 옮겨 붙는다', () => {
+    const { store, ds, id, hood, floor } = setup();
+    const other = addItem(store, createItem(productById('hood-box'), { pos: [7000.5, 5000.25], z: 1700 }));
+    ds.onDown([2000, 1500]);
+    ds.apply([7000.5, 5000.25]);
+    ds.finish();
+    const conns = ductById(floor(), id).connections;
+    expect(conns).toEqual([{ point: 0, itemId: other }]);
+    expect(conns[0].itemId).not.toBe(hood);
+  });
+
+  test('점 삽입은 클릭이 구간에서 벗어나도 중심선 위에 점을 넣는다', () => {
+    const { store, ui, ds, id, floor } = setup();
+    // 구간 0은 [2000,1500]→[8000,1500], 폭 750이라 중심선에서 375 mm 벗어난 클릭도 같은 구간으로 잡힌다.
+    pickItem(ds.menuItems([5100.5, 1700.25]), '점 삽입').onSelect();
+    const pts = ductById(floor(), id).points;
+    expect(pts).toHaveLength(4);
+    expect(pts[1]).toEqual([5100.5, 1500]);
+    const cross = (pts[1][0] - pts[0][0]) * (pts[2][1] - pts[0][1]) - (pts[1][1] - pts[0][1]) * (pts[2][0] - pts[0][0]);
+    expect(cross).toBeCloseTo(0, 6);               // 세 점이 여전히 일직선
+    // 메뉴를 직접 부르는 다른 경로(3D 면 피커·키보드)도 같은 투영을 지난다
+    store.undo();
+    const sel = { type: 'duct', id, segment: 0, vertex: null };
+    pickItem(ductMenuItems({ store, ui, sel, at: [4000.25, 900.5] }), '점 삽입').onSelect();
+    expect(ductById(floor(), id).points[1]).toEqual([4000.25, 1500]);
+  });
+
   test('선택 도구는 아이템 다음·벽 앞에서 덕트를 잡는다', () => {
     const { ui, st, id } = setup();
     st.onPointerDown([5000, 1500]); st.onPointerUp([5000, 1500]);

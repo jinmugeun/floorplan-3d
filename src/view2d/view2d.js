@@ -116,7 +116,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     }
     // 단일 공간 모드에서는 그 방 밖의 아이템도 방·벽처럼 흐리게 그린다
     // 미니맵·캡처처럼 readonly로 그리는 캔버스에서는 충돌 계산을 건너뛴다.
-    drawDucts(ctx, api, f, { sel, flags: v2 });
+    drawDucts(ctx, api, f, { sel, flags: v2, labels });
     const collisions = readonly || v2.collision === false ? null : collidingIds(f.items);
     drawItems(ctx, api, f, { sel, flags: v2, collisions, labels: labels && !readonly, dim: soloRoom ? it => (pointInPolygon(it.pos, soloRoom.points) ? 1 : 0.25) : null });
     if (!readonly && v2.guides) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }

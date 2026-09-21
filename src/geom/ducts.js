@@ -33,6 +33,15 @@ export function ductPolygons(duct) {
   return out;
 }
 
+// 점 p가 구간 a→b에서 차지하는 비율(0..1로 자른다). 길이가 0이면 0이다.
+export function segmentT(a, b, p) {
+  const ab = sub(b, a), l2 = ab[0] * ab[0] + ab[1] * ab[1];
+  if (!l2) return 0;
+  return Math.min(1, Math.max(0, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / l2));
+}
+// 구간 위로 내린 수선의 발(끝점 밖은 끝점으로 자른다). 점 삽입이 구간을 벗어나지 않게 쓴다(DT-05).
+export const projectOnSegment = (a, b, p) => lerp(a, b, segmentT(a, b, p));
+
 // 꼭짓점이 구간보다 먼저다(아키텍처 §11.3). 두 단계로 나눠 도는 이유가 그것이다:
 // 한 번에 돌면 덕트 A의 구간이 덕트 B의 꼭짓점을 이긴다. 뒤에 그린 덕트가 먼저 잡힌다.
 // 구간 허용치는 띠 반폭과 tol 중 큰 쪽이다(가는 덕트도 클릭할 수 있게).
@@ -47,9 +56,7 @@ export function hitDuct(ducts, p, tol = 0) {
     for (let i = 0; i < d.points.length - 1; i++) {
       const a = d.points[i], b = d.points[i + 1];
       if (distToSegment(p, a, b) > Math.max(tol, (d.segments[i]?.w ?? 0) / 2)) continue;
-      const ab = sub(b, a), l2 = ab[0] * ab[0] + ab[1] * ab[1];
-      const t = l2 ? Math.min(1, Math.max(0, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / l2)) : 0;
-      return { ductId: d.id, segment: i, t };
+      return { ductId: d.id, segment: i, t: segmentT(a, b, p) };
     }
   }
   return null;

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { drawDucts, drawDuctSelection, ductVisible, sizeLabel, DUCT_COLORS, DUCT_HANDLE_PX } from '../src/view2d/ducts2d.js';
+import { drawDucts, drawDuctSelection, ductVisible, sizeLabel, DUCT_COLORS, DUCT_HANDLE_PX, DUCT_DOT_PX } from '../src/view2d/ducts2d.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
 import { FLOW_COLORS } from '../src/vent/equipment.js';
 
@@ -7,7 +7,7 @@ function fakeCtx() {
   const calls = [];
   const rec = name => (...args) => calls.push([name, ...args]);
   return { calls, save: rec('save'), restore: rec('restore'), beginPath: rec('beginPath'), moveTo: rec('moveTo'), lineTo: rec('lineTo'),
-    closePath: rec('closePath'), rect: rec('rect'), arc: rec('arc'), fill: rec('fill'), stroke: rec('stroke'), setLineDash: rec('setLineDash'),
+    closePath: rec('closePath'), rect: rec('rect'), arc: rec('arc'), fill: rec('fill'), stroke: rec('stroke'), setLineDash: rec('setLineDash'), fillText: rec('fillText'),
     canvas: { clientWidth: 800, clientHeight: 600 } };
 }
 const labels = [];
@@ -48,6 +48,28 @@ describe('2D 덕트', () => {
     drawDucts(ctx, view, { ducts: [duct] }, { flags: { ductLabels: false } });
     expect(labels).toHaveLength(0);
     expect(ctx.calls.some(c => c[0] === 'fill')).toBe(true);
+  });
+
+  test('뷰가 labels:false면(미니맵) 글자를 그리지 않는다', () => {
+    labels.length = 0;
+    const ctx = fakeCtx();
+    drawDucts(ctx, view, { ducts: [duct] }, { flags: {}, labels: false });
+    expect(labels).toHaveLength(0);
+    expect(ctx.calls.some(c => c[0] === 'fillText')).toBe(false);
+    expect(ctx.calls.some(c => c[0] === 'fill')).toBe(true);        // 띠는 남는다
+  });
+
+  test('고르지 않은 덕트도 꼭짓점 점을 찍는다(§11.5)', () => {
+    const ctx = fakeCtx();
+    drawDucts(ctx, view, { ducts: [duct] }, { flags: {} });
+    const arcs = ctx.calls.filter(c => c[0] === 'arc');
+    expect(arcs).toHaveLength(4);                                   // 점 3개 + 연결 원 1개
+    expect(arcs.filter(c => c[3] === DUCT_DOT_PX)).toHaveLength(3);
+    expect(arcs[2][1]).toBeCloseTo(3000.5 * 0.05, 9);               // 2번 점의 화면 x
+    // 고른 덕트는 선택 도구가 큰 핸들을 그리므로 점을 겹쳐 찍지 않는다(연결 원만 남는다)
+    const ctx2 = fakeCtx();
+    drawDucts(ctx2, view, { ducts: [duct] }, { flags: {}, sel: { type: 'duct', id: 'd1', segment: null, vertex: null } });
+    expect(ctx2.calls.filter(c => c[0] === 'arc')).toHaveLength(1);
   });
 
   test('선택 표시는 꼭짓점마다 네모 핸들을 그린다', () => {
