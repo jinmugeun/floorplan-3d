@@ -9,10 +9,11 @@ import { cameraDistance } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
 import { applyPerfMode } from './perfMode.js';
 import { headingDeg, toWorldXY } from './camera.js';
+import { createFirstPerson } from './firstPerson.js';
 import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js';
 import { createFacePicker } from './facePick.js';
 
-export function createView3D(container, store, ui, { onExitFp = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
+export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
@@ -29,17 +30,15 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
 
   let group = null, mode = 'iso', raf = 0, alive = true;
   const fp = new PointerLockControls(camera, renderer.domElement);
-  const keys = new Set(); let lastT = 0;
-  const typing = e => ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target?.tagName); // 입력란에 타이핑 중이면 걷지 않는다
-  const onKeyDown = e => { if (!typing(e)) keys.add(e.code); }, onKeyUp = e => keys.delete(e.code);
   // 브라우저가 Esc로 포인터 락을 풀면 ISO로 돌아간다. setMode가 먼저 mode를 바꾼 경우(1/2/3 키)는 여기서 아무것도 하지 않는다.
   fp.addEventListener('unlock', () => { if (!alive || mode !== 'fp') return; setMode('iso'); onExitFp(); });
-  function fpStep(t) {
-    const dt = Math.min(0.05, (t - lastT) / 1000 || 0); lastT = t; const v = 2 * dt;
-    if (keys.has('KeyW')) fp.moveForward(v); if (keys.has('KeyS')) fp.moveForward(-v);
-    if (keys.has('KeyA')) fp.moveRight(-v); if (keys.has('KeyD')) fp.moveRight(v);
-    if (keys.has('KeyQ')) camera.position.y -= v; if (keys.has('KeyE')) camera.position.y += v;
-  }
+  // 1인칭 조작은 firstPerson.js 한 곳에 있다(§15.1): 락이 거부돼도 드래그로 둘러보고 WASD로 걷는다.
+  // requestRender는 아래에서 함수 선언으로 만들어지므로 이 콜백이 실제로 도는 시점에는 이미 있다.
+  const fpCtl = createFirstPerson({
+    dom: renderer.domElement, controls: fp, camera: () => camera,
+    requestRender: () => requestRender(),
+    onFallback: on => onFpFallback(on),
+  });
   const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000 }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) }; };
   const center = () => bounds().center;
   let ortho2 = null, useOrtho = false, orthoName = null;
@@ -193,12 +192,12 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
       controls.enabled = false; const at = opts.at ?? center();
       camera.position.copy(toThree([at[0], at[1], 1500])); camera.lookAt(toThree([at[0], at[1] - 1000, 1500]));
       reattachPicker(); // 1인칭에는 기즈모가 없다: 아이템을 고른 채 들어오면 여기서 떼어 낸다(보이지 않는 편집 방지)
-      window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); fp.lock();
+      fpCtl.enter();   // 락을 걸어 보고, 실패하면 드래그로 둘러보는 1인칭으로 내려간다(§15.1)
       group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); showAllWalls();
       requestRender(); return;
     }
-    controls.enabled = true; window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); keys.clear();
-    if (fp.isLocked) fp.unlock(); // 1/2/3 키로 fp를 떠날 때도 포인터 락을 반드시 해제한다
+    controls.enabled = true;
+    fpCtl.exit();   // 리스너·키 집합·포인터 락을 한 곳에서 정리한다(1/2/3 키로 떠나는 경로 포함)
     group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = false; });
     controls.minPolarAngle = 0;
     controls.maxPolarAngle = m === 'plan' ? 0.05 : Math.PI / 2 - 0.02;
@@ -232,8 +231,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   function frame(t) {
     raf = 0; if (!alive) return;
     if (mode === 'fp') {
-      fpStep(t); showAllWalls(); renderer.render(scene, useOrtho ? ortho2 : camera);
-      raf = requestAnimationFrame(frame); return;
+      fpCtl.step(t); showAllWalls(); renderer.render(scene, useOrtho ? ortho2 : camera);
+      requestRender(); return;
     }
     controls.update();
     // 2D 투영은 정면·평면 도면이다: 궤도 카메라 기준의 컷어웨이로 벽을 지우면 도면이 비어 보인다.
@@ -270,5 +269,5 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView, clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); if (fp.isLocked) fp.unlock(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView, clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

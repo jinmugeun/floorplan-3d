@@ -39,3 +39,9 @@ export const savedAuto = (date = new Date()) => {
   const p = n => String(n).padStart(2, '0');
   return `${p(d.getHours())}:${p(d.getMinutes())} 자동 저장됨`;
 };
+
+// 1인칭(§15.1) — 락이 있든 없든 같은 안내가 상주하고, [나가기] 버튼과 [Esc]가 늘 ISO로 되돌린다.
+export const FP_BANNER = '1인칭 — WASD 이동 · 드래그로 둘러보기 · [Esc] 나가기';
+export const FP_EXIT = '나가기';
+// 포인터 락이 거부된 환경(감사 §8 ①)에서 한 번 알린다: 고장이 아니라 조작 방식이 다르다.
+export const FP_NO_LOCK = '마우스 잠금을 쓸 수 없어 드래그로 둘러봅니다';

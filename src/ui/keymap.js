@@ -91,6 +91,9 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
   const run = action => {
     if (action === 'escape') {
       const u = ui.get();
+      // 1인칭에서는 [Esc]가 "나가기"다(§15.1). 선택·도구는 건드리지 않는다: 1인칭에 들어가기 전
+      // 상태로 돌아가는 것이 기대한 일이고, 감사 §8 ③에서는 이것이 유일한 탈출 수단이 된다.
+      if (u.mode === 'fp') { setMode('iso'); return; }
       if (u.fpPick || u.soloRoom || u.selection || u.splitWall || u.matPick) ui.set({ fpPick: false, soloRoom: null, selection: null, splitWall: false, matPick: null });
       setTool('select'); return;
     }

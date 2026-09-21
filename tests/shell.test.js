@@ -761,3 +761,22 @@ test('실시간 충돌 감지를 끈 드래그 중에만 "빨간 테두리" 절�
   store.dispatch(d => { d.floors[0].items[0].pos = [1011, 1000]; }, { record: false });
   expect(banner.textContent).toContain(COLLISION_BANNER(2));         // 놓으면 바로 교정된다
 });
+
+// §15.1: 1인칭 중에는 화면에 안내가 하나도 없었다(#banner·#optionBar 모두 hidden — 감사 §8 ③).
+test('1인칭에서는 안내 배너와 [나가기] 버튼이 상주한다', () => {
+  const exits = [];
+  const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const shell = createShell(root, { store, ui, onExitFp: () => exits.push(1) });
+  ui.set({ mode: 'fp' });
+  const banner = root.querySelector('#banner');
+  expect(banner.hidden).toBe(false);
+  expect(banner.textContent).toContain('1인칭 — WASD 이동 · 드래그로 둘러보기 · [Esc] 나가기');
+  const exit = banner.querySelector('#btnExitFp');
+  expect(exit.textContent).toBe('나가기');
+  exit.click();
+  expect(exits).toEqual([1]);
+  ui.set({ mode: 'iso' });
+  expect(root.querySelector('#banner').hidden).toBe(true);
+  shell.destroy();
+});

@@ -61,7 +61,7 @@ test('in first-person mode tool letters and Delete are ignored but Escape and 1-
   a.key('d'); a.key('e'); a.key('f'); a.key('l'); a.key('m'); a.key('b'); a.key('Delete');
   expect(a.calls.setTool).toEqual([]); expect(a.calls.bg).toBe(0); expect(a.calls.del).toBe(0);
   a.key('2'); expect(a.calls.setMode).toEqual(['plan']);
-  a.key('Escape'); expect(a.calls.setTool).toEqual(['select']);
+  a.key('Escape'); expect(a.calls.setMode).toEqual(['plan', 'iso']); expect(a.calls.setTool).toEqual([]);
 });
 
 test('d calls deleteOrTool instead of setTool', () => {
@@ -354,4 +354,18 @@ test('R·C·O가 구조물 도구를 켠다', async () => {
   const h = createKeyHandler({ store, ui, view, setTool: n => calls.push(n), setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn() });
   for (const k of ['r', 'c', 'o']) h({ key: k, target: document.body, preventDefault() {} });
   expect(calls).toEqual(['column-square', 'column-round', 'opening']);
+});
+
+// §15.1: 감사 §8 ③ — Esc를 두 번 눌러도 mode가 fp에 남았다(탈출은 3 키나 하단 바뿐이었다).
+test('1인칭에서 [Esc] 한 번이 ISO로 되돌린다(선택은 건드리지 않는다)', () => {
+  const a = setup();
+  a.ui.set({ mode: 'fp', selection: { type: 'wall', id: 'w1' } });
+  a.key('Escape');
+  expect(a.calls.setMode).toEqual(['iso']);
+  expect(a.calls.setTool).toEqual([]);
+  expect(a.ui.get().selection).toEqual({ type: 'wall', id: 'w1' });   // 1인칭 탈출은 선택 취소가 아니다
+  a.ui.set({ mode: 'iso' });
+  a.key('Escape');                                                    // 2D·3D에서는 예전 규칙 그대로
+  expect(a.calls.setTool).toEqual(['select']);
+  expect(a.ui.get().selection).toBeNull();
 });

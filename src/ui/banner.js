@@ -4,16 +4,17 @@
 import { esc } from '../util/html.js';
 import { activeFloor } from '../state/schema.js';
 import { memoCollisions } from '../geom/collide.js';
-import { COLLISION_BANNER, COLLISION_BANNER_QUIET } from './messages.js';
+import { COLLISION_BANNER, COLLISION_BANNER_QUIET, FP_BANNER, FP_EXIT } from './messages.js';
 
 // 드래그가 끝났다고 볼 이벤트. lostpointercapture까지 받아 두면 캡처가 풀리는 경로도 놓치지 않는다.
 export const DRAG_END_EVENTS = ['pointerup', 'pointercancel', 'lostpointercapture'];
 
 // 배너는 한 번에 하나만 보인다: ui 상태(1인칭 찍기 · 마감재 적용 · 단일 공간 모드)가 도구 안내보다 앞선다.
 const exitSolo = '<button type="button" id="btnExitSolo">도면 전체 보기</button>';
+const exitFp = `<button type="button" id="btnExitFp">${FP_EXIT}</button>`;
 
 // el = #banner, stack = #canvasStack(드래그 감지), tool = 지금 켜진 도구를 돌려주는 함수.
-export function createBanner({ store, ui, el, stack = null, tool = () => null }) {
+export function createBanner({ store, ui, el, stack = null, tool = () => null, onExitFp = () => {} }) {
   // 캔버스 위에서 포인터를 누르고 있는 동안을 "드래그 중"으로 본다(아래 주석 참고).
   let dragging = false, pending = false, last = null;
   // 충돌은 드래그 밖에서도 알린다(§14.8). 계산은 memoCollisions의 캐시를 그대로 쓰므로(아이템 배열
@@ -31,6 +32,8 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null })
   const collisionText = n => (dragging && store.get().view?.v2?.collisionLive === false ? COLLISION_BANNER_QUIET : COLLISION_BANNER)(n);
   function html(s) {
     if (s.fpPick) return '👆 1인칭으로 확인할 위치를 클릭해주세요. [Esc]로 취소';
+    // 1인칭 중에는 이 배너가 상주한다(§15.1): 조작법과 탈출 수단이 화면에 늘 있어야 한다.
+    if (s.mode === 'fp') return `${esc(FP_BANNER)} ${exitFp}`;
     // 단일 공간 모드 중에도 모드를 빠져나갈 버튼을 남긴다.
     // 키 표기는 전역 규칙대로 [Esc] 한 가지다(예전 대문자 표기를 여기서 바로잡는다 — Task 10의
     // grep이 소스에 대문자 표기가 하나도 없음을 확인하므로 주석에도 쓰지 않는다).
@@ -55,6 +58,7 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null })
     el.hidden = !next;
     el.innerHTML = next;
     if (next.includes('btnExitSolo')) el.querySelector('#btnExitSolo').onclick = () => ui.set({ soloRoom: null });
+    if (next.includes('btnExitFp')) el.querySelector('#btnExitFp').onclick = () => onExitFp();
   }
   // 왜 "미루기"를 골랐나(Task 8 리뷰 Important 1): #banner는 #canvasWrap의 레이아웃 행이라 비면 행이
   // 접히고(계획 4) 캔버스가 그만큼 커진다. 그래서 제품을 끄는 중에 충돌이 생기거나 풀리면 캔버스
