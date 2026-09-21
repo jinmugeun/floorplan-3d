@@ -2,7 +2,7 @@
 export const V2_OPTIONS = [
   ['grid', '격자'], ['guides', '보조선'], ['floorItems', '지면 가구'], ['wallItems', '벽면 가구'], ['ceilingItems', '천장 가구'],
   ['structures', '건축/자재'], ['productCode', '제품 코드'], ['roomName', '공간 이름'], ['roomArea', '공간 면적'],
-  ['dims', '내벽 치수'], ['gapDims', '간격 치수'], ['measures', '측정선'], ['collision', '충돌 감지'], ['background', '배경 이미지'],
+  ['dims', '내벽 치수'], ['gapDims', '간격 치수'], ['measures', '측정선'], ['collision', '충돌 감지'], ['collisionLive', '실시간 충돌 감지'], ['background', '배경 이미지'],
   ['ducts', '덕트'], ['ductLabels', '덕트 라벨'], ['equipLabels', '설비 라벨'],
 ];
 export const V3_OPTIONS = [

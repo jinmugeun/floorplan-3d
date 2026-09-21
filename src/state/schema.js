@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS = { pyeong: false, showUnit: false, background: '#
 
 export const DEFAULT_VIEW = {
   cutaway: true, wallOpacity: 1, floorOpacity: 1, lockPlan: false,
-  v2: { grid: true, guides: true, floorItems: true, wallItems: true, ceilingItems: true, structures: true, productCode: false, roomName: true, roomArea: true, dims: true, gapDims: true, measures: true, collision: true, background: true, ducts: true, ductLabels: true, equipLabels: true },
+  v2: { grid: true, guides: true, floorItems: true, wallItems: true, ceilingItems: true, structures: true, productCode: false, roomName: true, roomArea: true, dims: true, gapDims: true, measures: true, collision: true, collisionLive: true, background: true, ducts: true, ductLabels: true, equipLabels: true },
   v3: { floorItems: true, wallItems: true, ceilingItems: true, structures: true, outerWalls: true, innerWalls: true, wallTransparent: false, dims: false, gapDims: false, measures: false, collision: true, itemEdges: true, ducts: true, ductLabels: true, equipLabels: true },
   display: 'normal', hiddenLine: false, perfMode: 'display',
   projection: 'perspective', cameraPreset: { elevation: 35, azimuth: 47, fov: 60 },

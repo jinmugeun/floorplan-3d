@@ -29,3 +29,17 @@ export function collidingIds(items, { tol = 1 } = {}) {
   }
   return out;
 }
+
+// 같은 아이템 배열을 여러 번 물어도 한 번만 계산한다(§13.5).
+// 스토어가 불변 스냅샷이라 "아이템 배열 참조가 같다 = 아이템이 하나도 안 바뀌었다"가 늘 참이다.
+// 2D는 매 프레임(패닝·줌·선택 표시 변화마다) 충돌을 물어보므로, 캐시 없이는 도면을 움직이기만 해도
+// SAT를 N² 번 돈다. WeakMap이라 옛 스냅샷은 GC가 알아서 가져간다.
+// tol마다 결과가 다르므로 배열 하나당 tol별로 따로 들고 있다(tol은 사실상 1뿐이라 칸이 늘지 않는다).
+const memo = new WeakMap();
+export function memoCollisions(items, { tol = 1 } = {}) {
+  if (!items || typeof items !== 'object') return collidingIds(items, { tol });
+  let byTol = memo.get(items);
+  if (!byTol) memo.set(items, (byTol = new Map()));
+  if (!byTol.has(tol)) byTol.set(tol, collidingIds(items, { tol }));
+  return byTol.get(tol);
+}

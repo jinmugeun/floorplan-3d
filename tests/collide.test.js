@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { obbOverlap, collidingIds } from '../src/geom/collide.js';
+import { obbOverlap, collidingIds, memoCollisions } from '../src/geom/collide.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 
@@ -39,5 +39,37 @@ describe('충돌 감지', () => {
     expect(collidingIds([table, box]).size).toBe(0);
     const under = mk('storage-box', { pos: [0, 0], z: 300 });
     expect(collidingIds([table, under]).size).toBe(2);
+  });
+});
+
+describe('충돌 계산 캐시(memoCollisions)', () => {
+  test('같은 배열 참조는 같은 Set을 그대로 돌려준다(§13.5)', () => {
+    const items = [mk('dining-4', { pos: [0.5, 0.25] }), mk('dining-4', { pos: [500.5, 0.25] }), mk('dining-4', { pos: [9000, 0] })];
+    const first = memoCollisions(items);
+    expect([...first].sort()).toEqual([items[0].id, items[1].id].sort());
+    expect(memoCollisions(items)).toBe(first);          // 두 번째 호출은 계산하지 않는다(같은 객체)
+    // 값은 collidingIds와 똑같다.
+    expect([...memoCollisions(items)].sort()).toEqual([...collidingIds(items)].sort());
+  });
+
+  test('배열이 새로 만들어지면 다시 계산한다(드래그 중 updateItems가 매번 새 배열을 만든다)', () => {
+    const a = mk('dining-4', { pos: [0, 0] }), b = mk('dining-4', { pos: [500, 0] });
+    const before = memoCollisions([a, b]);
+    const moved = [a, { ...b, pos: [9000, 0] }];        // 새 배열 + 멀리 옮긴 사본
+    const after = memoCollisions(moved);
+    expect(after).not.toBe(before);
+    expect([...after]).toEqual([]);
+  });
+
+  test('tol이 다르면 같은 배열이어도 다시 계산하고, null·undefined도 안전하다', () => {
+    const items = [mk('dining-4', { pos: [0, 0] }), mk('dining-4', { pos: [1196.5, 0] })];
+    const tight = memoCollisions(items, { tol: 1 });
+    expect(tight.size).toBe(2);
+    const loose = memoCollisions(items, { tol: 5 });    // 겹침 3.5 mm는 tol 5에서 "맞닿았다"
+    expect(loose).not.toBe(tight);
+    expect(loose.size).toBe(0);
+    expect(memoCollisions(items, { tol: 1 })).toBe(tight); // 원래 tol로 돌아오면 캐시가 그대로 있다
+    expect([...memoCollisions(null)]).toEqual([]);
+    expect([...memoCollisions(undefined)]).toEqual([]);
   });
 });

@@ -3,7 +3,7 @@ import { updateItems, movableItems, resizeItem } from '../../state/floorOps.js';
 import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, drawOrder, HANDLE_HIT_PX } from '../items2d.js';
-import { collidingIds } from '../../geom/collide.js';
+import { memoCollisions } from '../../geom/collide.js';
 
 // 아이템 드래그 한 묶음. selectTool은 "무엇을 잡았나"만 판단하고 나머지를 여기로 넘긴다.
 // drag.kind: 'items'(이동) | 'scale'(크기 핸들, Task 9) | 'rotate'(회전 핸들, Task 9)
@@ -88,9 +88,11 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
   }
 
   // 드래그당 한 번만 경고한다. 배치 자체는 막지 않는다.
+  // "실시간 충돌 감지"(v2.collisionLive)를 끄면 드래그 중에는 아무 신호도 내지 않는다(§13.5).
   function warn() {
-    if (drag.warned || flags().collision === false) return;
-    const bad = collidingIds(floor().items);
+    const fl = flags();
+    if (drag.warned || fl.collision === false || fl.collisionLive === false) return;
+    const bad = memoCollisions(floor().items);
     if (drag.ids.some(id => bad.has(id))) { drag.warned = true; toast('충돌이 발생중입니다'); }
   }
 

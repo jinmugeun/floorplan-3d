@@ -277,3 +277,22 @@ test('겹친 천장 제품이 바닥 제품보다 먼저 잡힌다(놓은 순서
   t.onPointerDown([2000.5, 1500.25], {}); t.onPointerUp([2000.5, 1500.25], {});
   expect(ui.get().selection).toEqual({ type: 'item', id: ids[1] }); // 조리기구
 });
+
+// §13.5: "충돌 감지"(표시)와 "실시간 충돌 감지"(드래그 중 경고·색)를 따로 끈다.
+test('실시간 충돌 감지를 끄면 드래그 중 경고 토스트가 없다(표시는 그대로)', () => {
+  const seen = [];
+  const a = setup([['dining-4', { pos: [1000, 1000] }], ['dining-4', { pos: [2600, 1000] }]], { toast: m => seen.push(m) });
+  a.store.dispatch(d => { d.view.v2.collisionLive = false; }, { record: false });
+  a.t.onPointerDown([2600, 1000], {});
+  a.t.onPointerMove([1200, 1000], { ctrlKey: true });
+  a.t.onPointerMove([1100, 1000], { ctrlKey: true });
+  a.t.onPointerUp([1100, 1000], {});
+  expect(seen).toEqual([]);                                     // 경고가 없다
+  expect(a.store.get().view.v2.collision).toBe(true);           // 빨간 테두리(표시)는 여전히 켜져 있다
+  // 다시 켜면 예전처럼 한 번 경고한다.
+  a.store.dispatch(d => { d.view.v2.collisionLive = true; }, { record: false });
+  a.t.onPointerDown([1100, 1000], {});
+  a.t.onPointerMove([1050, 1000], { ctrlKey: true });
+  a.t.onPointerUp([1050, 1000], {});
+  expect(seen).toEqual(['충돌이 발생중입니다']);
+});
