@@ -275,3 +275,44 @@ test('drawEmptyGuide는 빈 도면 + 선택 도구일 때만 그린다', () => {
   expect(drawEmptyGuide(ctx, v, { walls: [], items: [], ducts: [{ id: 'd1' }] }, {}, { toolName: 'select' })).toBe(false); // 덕트만 있어도 숨긴다
   expect(drawEmptyGuide(ctx, v, { walls: [], items: [], ducts: [] }, {}, { toolName: 'select' })).toBe(true); // 비어 있으면 다시 나타난다
 });
+
+// §13.5: "실시간 충돌 감지"를 끈 채로 아이템을 끌고 있는 동안에는 충돌 색이 나오지 않는다(view2d.js의 liveOff 분기).
+// 드래그를 놓으면(=드래그 중이 아니면) collisionLive가 꺼져 있어도 원래 겹친 아이템의 표시는 그대로다.
+test('collisionLive를 끄고 아이템을 끄는 동안에는 충돌 색이 숨고, 드래그가 끝나면 다시 보인다', async () => {
+  const store = createStore(createEmptyProject());
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  const sofa = productById('sofa-3'); // size [2100, 900, 800] — 50mm만 어긋나도 크게 겹친다
+  addItem(store, createItem(sofa, { pos: [2000.5, 1500.25] })); // 소수 좌표
+  addItem(store, createItem(sofa, { pos: [2050.75, 1500.25] }));
+  const strokes = [];
+  const c = makeCanvas();
+  c.getContext = () => new Proxy({}, {
+    get: (t, k) => (k in t ? t[k] : () => {}),
+    set: (t, k, v) => { if (k === 'strokeStyle') strokes.push(v); t[k] = v; return true; },
+  });
+  const v = createView2D(c, store, createUiState());
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  const dragTool = kind => ({ name: 't', opts: {}, onPointerDown() {}, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {}, getDrag: () => (kind ? { kind } : null) });
+
+  // collisionLive 기본값(true)에서 아이템 드래그 중 — 충돌 색이 보인다
+  v.setTool(dragTool('items'));
+  await frame(); await frame();
+  expect(strokes).toContain('#e5484d'); // ITEM_COLORS.locked
+
+  // 실시간 충돌 감지를 끄고 여전히 드래그 중 — 충돌 색이 사라진다
+  strokes.length = 0;
+  store.dispatch(d => { d.view.v2.collisionLive = false; }, { record: false });
+  v.setTool(dragTool('items'));
+  await frame(); await frame();
+  expect(strokes).not.toContain('#e5484d');
+
+  // 드래그를 놓으면(kind 없음) collisionLive가 꺼져 있어도 v2.collision 표시는 영향받지 않는다
+  strokes.length = 0;
+  v.setTool(dragTool(null));
+  await frame(); await frame();
+  expect(strokes).toContain('#e5484d');
+
+  v.destroy();
+});
