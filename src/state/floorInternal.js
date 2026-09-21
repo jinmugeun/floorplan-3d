@@ -66,7 +66,7 @@ export function seatCopies(drafts, ctx = {}) {
 // 흩어지지 않게 한 곳에서 걸러 낸다. updateItems 자체에는 넣지 않는다(setItemFlag의 잠금 해제가 막힌다).
 export const movable = items => (items ?? []).filter(i => !i.locked);
 
-export const ROOM_PROPS = ['name', 'type', 'height', 'floorOffset', 'hideCeiling', 'seats', 'floorColor', 'ceilingColor', 'matchWallHeight', 'floorMat', 'ceilingMat'];
+export const ROOM_PROPS = ['name', 'type', 'height', 'floorOffset', 'hideCeiling', 'seats', 'floorColor', 'ceilingColor', 'matchWallHeight', 'floorMat', 'ceilingMat', 'design'];
 // 값 하나를 옮길 때 객체(floorMat/ceilingMat 등)는 깊이 복사한다 — 참조를 그대로 옮기면
 // 사본을 나중에 제자리 수정(applyMaterial의 offset/angle 조정 등)할 때 원본도 함께 바뀐다.
 export const cloneProp = v => (v && typeof v === 'object' ? structuredClone(v) : v);

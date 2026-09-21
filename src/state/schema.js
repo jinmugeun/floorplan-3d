@@ -2,6 +2,7 @@ import { makeWall } from '../geom/walls.js';
 import { detectRooms, ROOM_FLOOR_COLOR, ROOM_CEILING_COLOR } from '../geom/rooms.js';
 import { materialById } from '../materials/catalog.js';
 import { normalizeEquipProps, hoodCmh } from '../vent/equipment.js';
+import { normalizeDuct } from './ductSchema.js';
 
 let counter = 0;
 export const SCHEMA_VERSION = 1;
@@ -135,6 +136,12 @@ export function normalizeRegion(r, { len = 0, height = 0 } = {}) {
   return { id: typeof src.id === 'string' && src.id ? src.id : uid('rg'), kind, u0, u1, z0, z1, mat };
 }
 
+// 방의 설계 풍량(명세 §11.3의 실별 풍량 표). 값이 없거나 이상하면 0으로 떨어뜨린다.
+export function normalizeRoomDesign(d) {
+  const src = obj(d);
+  return { EA: Math.round(num(src.EA, 0, 0, 1e7)), SA: Math.round(num(src.SA, 0, 0, 1e7)) };
+}
+
 // 카탈로그 제품에서 아이템을 만든다. 천장 부착의 z는 배치 도구가 층 높이에서 다시 계산한다.
 export function createItem(product, patch = {}) {
   return normalizeItem({
@@ -157,13 +164,15 @@ function normalizeFloor(f, index) {
     seats: Math.floor(num(r.seats, 0, 0, 999)), matchWallHeight: !!r.matchWallHeight,
     floorColor: color(r.floorColor, ROOM_FLOOR_COLOR), ceilingColor: color(r.ceilingColor, ROOM_CEILING_COLOR),
     floorMat: normalizeAssignment(r.floorMat), ceilingMat: normalizeAssignment(r.ceilingMat),
+    design: normalizeRoomDesign(r.design),
   }));
   return {
     ...base, ...src,
     id: str(src.id, base.id), name: str(src.name, base.name), height: num(src.height, base.height, 2000, 8000),
     slab: num(src.slab, base.slab, 0, 1000),
     walls, rooms: detectRooms(walls, rooms), // 면적 등 파생값을 항상 숫자로 다시 계산한다
-    items, ducts: arr(src.ducts), guides: arr(src.guides),
+    // 덕트는 점 2개 미만이면 버리고, 없는 설비를 가리키는 연결도 버린다.
+    items, ducts: arr(src.ducts).map(d => normalizeDuct(d, { itemIds })).filter(Boolean), guides: arr(src.guides),
     // 그룹은 실제로 있는 아이템만 가리키고, 2개 미만이면 그룹이 아니다.
     groups: arr(src.groups).filter(g => g && Array.isArray(g.itemIds)).map(g => ({ id: str(g.id, uid('g')), itemIds: g.itemIds.filter(x => typeof x === 'string' && itemIds.has(x)) })).filter(g => g.itemIds.length >= 2),
     measures: arr(src.measures).filter(m => m && typeof m === 'object' && Array.isArray(m.a) && Array.isArray(m.b)).map(m => ({ id: str(m.id, uid('m')), a: pair(m.a), b: pair(m.b) })),
