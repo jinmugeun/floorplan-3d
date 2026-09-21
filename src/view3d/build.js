@@ -98,11 +98,12 @@ function edgeWall(room, walls, i) {
 
 // 3D 씬을 다시 만들어야 하는지 가리는 서명. buildFloorGroup이 읽는 값만 담는다:
 // 여기 없는 값(sun, cameraPreset, projection, 벽 관련 v3 …)이 바뀌어도 씬을 다시 만들지 않는다. 아이템 표시 플래그(v3)는 아이템 메시를 만들 때 읽으므로 서명에 넣는다.
+// (성능 모드도 담는다: 라벨·윤곽선을 만들지 않는 모드라 값이 바뀌면 씬을 다시 지어야 한다 — §13.4.)
 export function sceneSignature(state) {
   const f = activeFloor(state) ?? { walls: [], rooms: [] }; // 활성 층이 없어도 구독자가 예외를 던지지 않게
   const v = state.view ?? {};
   const v3 = v.v3 ?? {};
-  return JSON.stringify([f.walls, f.rooms, f.items, f.ducts ?? [], state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity, v3.floorItems, v3.wallItems, v3.ceilingItems, v3.structures, v3.collision, v3.itemEdges, v3.ducts, v3.ductLabels, v3.equipLabels]);
+  return JSON.stringify([f.walls, f.rooms, f.items, f.ducts ?? [], state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity, v.perfMode, v3.floorItems, v3.wallItems, v3.ceilingItems, v3.structures, v3.collision, v3.itemEdges, v3.ducts, v3.ductLabels, v3.equipLabels]);
 }
 
 // 벽 면의 일부만 다른 재질로 덮는 영역(마감재 편집기). 벽면에서 2 mm 앞으로 띄워 z-파이팅을 피한다.

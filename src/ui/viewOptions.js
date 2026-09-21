@@ -24,7 +24,8 @@ export function viewPopoverHtml(view, mode) {
     ${cb('data-view', 'cutaway', '벽 컷어웨이', view.cutaway)}
     <h4>디스플레이 모드</h4><div class="pop-row">${sel('display', DISPLAY_MODES, view.display)}</div>
     ${cb('data-view', 'hiddenLine', '은선 색상', view.hiddenLine)}
-    <h4>성능 모드</h4><div class="pop-row">${sel('perfMode', PERF_MODES, view.perfMode)}</div>`;
+    <h4>성능 모드</h4><div class="pop-row">${sel('perfMode', PERF_MODES, view.perfMode)}</div>
+    <p class="hint">그림자·윤곽선·라벨을 끄고 픽셀 비율을 1로</p>`;
 }
 
 // [최소, 기본, 최대]

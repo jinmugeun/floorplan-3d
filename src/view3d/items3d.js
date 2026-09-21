@@ -5,6 +5,7 @@ import { itemVisible } from '../view2d/items2d.js';
 import { RAD } from '../geom/items.js';
 import { collidingIds } from '../geom/collide.js';
 import { shapeFor, itemMaterial, ITEM_EDGE_COLOR } from './itemShapes.js';
+import { perfSettings } from './perfMode.js';
 
 const M = v => v / 1000;
 export const itemVisible3 = (item, v3 = {}) => itemVisible(item, v3);
@@ -68,7 +69,7 @@ export function buildItems(floor, view = {}) {
   const g = new THREE.Group();
   g.name = 'items';
   const v3 = view.v3 ?? {};
-  const edges = v3.itemEdges !== false;
+  const edges = v3.itemEdges !== false && perfSettings(view.perfMode).edges;   // 성능 우선은 플래그를 그대로 두고 렌더에서만 생략(§13.4)
   const bad = v3.collision === false ? null : collidingIds(floor.items ?? []);
   for (const item of floor.items ?? []) {
     if (!itemVisible3(item, v3)) continue;

@@ -7,6 +7,7 @@ import { hiddenWallIds, cutawayMeshStyle, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
 import { cameraDistance } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
+import { applyPerfMode } from './perfMode.js';
 import { headingDeg, toWorldXY } from './camera.js';
 import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js';
 import { createFacePicker } from './facePick.js';
@@ -242,7 +243,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
   }
   function requestRender() { if (!raf) raf = requestAnimationFrame(frame); }
   controls.addEventListener('change', requestRender);
-  let lastPreset = null, lastSun = null;
+  let lastPreset = null, lastSun = null, lastPerf = null;
   function applyViewSettings() {
     const v = store.get().view;
     setProjection(v.projection);
@@ -250,6 +251,11 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, openMe
     if (ps !== lastPreset) { lastPreset = ps; applyCameraPreset(v.cameraPreset); } // 값이 실제로 바뀐 경우에만: 궤도 드래그를 되돌리지 않는다
     const ss = JSON.stringify(v.sun);
     if (ss !== lastSun) { lastSun = ss; applySun(v.sun); }
+    // 성능 모드(§13.4): 픽셀 비율·그림자는 렌더러에 바로 먹이고, 라벨·윤곽선은 sceneSignature가
+    // 바꿔 놓은 씬이 이미 빼고 지었다. 값이 바뀔 때만 만진다(슬라이더 드래그로 매번 부르지 않게).
+    // lastPerf = null이라 생성 시점의 첫 호출도 돌지만 생성자가 넣은 값과 같아 no-op이다(renderImage가 픽셀 비율을 1로 내렸다 되돌리므로 렌더샷이 도는 중에는 모드를 바꾸지 않는다).
+    const pm = v.perfMode ?? 'display';
+    if (pm !== lastPerf) { lastPerf = pm; applyPerfMode(pm, { renderer, sun, dpr: devicePixelRatio }); requestRender(); }
   }
   // 기하·표시 모드가 실제로 바뀐 경우에만 씬을 다시 만든다(슬라이더 드래그 같은 { record: false } 연속 dispatch로 재빌드하지 않게).
   let lastSig = null;

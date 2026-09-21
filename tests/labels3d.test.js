@@ -82,3 +82,17 @@ describe('보기 옵션', () => {
     expect(html3).toContain('data-v3="ducts"');
   });
 });
+
+// §13.4: 성능 우선에서는 설비·덕트 라벨 스프라이트를 아예 만들지 않는다(플래그는 그대로).
+test('성능 우선 모드는 라벨을 만들지 않고 빈 labels 그룹을 준다', async () => {
+  const { buildLabels } = await import('../src/view3d/labels3d.js');
+  const { createItem } = await import('../src/state/schema.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const hood = createItem(productById('hood-box'), { pos: [1000.5, 1000.25] });
+  const fl = { walls: [], rooms: [], items: [hood], ducts: [], height: 2300 };
+  const on = buildLabels(fl, { v3: { equipLabels: true } });
+  expect(on.children.length).toBeGreaterThan(0);
+  const off = buildLabels(fl, { v3: { equipLabels: true }, perfMode: 'performance' });
+  expect(off.name).toBe('labels');
+  expect(off.children).toHaveLength(0);
+});

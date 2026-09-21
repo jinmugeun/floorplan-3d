@@ -636,3 +636,14 @@ test('영역도 개구부를 피해 쪼개지고, 개구부 안에 잠긴 영역
   expect(g2.children.filter(c => c.name === 'wallRegion')).toHaveLength(1);
   disposeGroup(g); disposeGroup(g2);
 });
+
+// §13.4: 성능 모드는 라벨·윤곽선을 렌더에서 생략하므로 씬을 다시 지어야 한다.
+test('sceneSignature는 성능 모드가 바뀌면 달라진다', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const before = sceneSignature(store.get());
+  store.dispatch(d => { d.view.perfMode = 'performance'; }, { record: false });
+  expect(sceneSignature(store.get())).not.toBe(before);
+  store.dispatch(d => { d.view.perfMode = 'display'; }, { record: false });
+  expect(sceneSignature(store.get())).toBe(before);
+});

@@ -136,3 +136,15 @@ describe('3D 아이템', () => {
     expect(box.material.color.getHexString()).toBe('e5484d');
   });
 });
+
+// §13.4: 성능 우선에서는 제품 윤곽선을 만들지 않는다(v3.itemEdges 값은 그대로 둔다).
+test('성능 우선 모드는 제품 윤곽선을 붙이지 않는다', () => {
+  const items = [mk('sofa-3', { pos: [1000.5, 1000.25] })];
+  const edgeCount = g => { let n = 0; g.traverse(o => { if (o.name === 'itemEdge') n += 1; }); return n; };
+  const on = buildItems(floor(items), { v3: { itemEdges: true } });
+  expect(edgeCount(on)).toBeGreaterThan(0);
+  const off = buildItems(floor(items), { v3: { itemEdges: true }, perfMode: 'performance' });
+  expect(edgeCount(off)).toBe(0);
+  // 아이템 자체는 그대로 있다(형상만 남는다).
+  expect(off.children).toHaveLength(1);
+});

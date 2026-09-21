@@ -7,6 +7,7 @@ import { toThree } from './build.js';
 import { equipLabel, isEquip, FLOW_COLORS } from '../vent/equipment.js';
 import { itemVisible } from '../view2d/items2d.js';
 import { ductVisible, sizeLabel } from '../view2d/ducts2d.js';
+import { perfSettings } from './perfMode.js';
 
 export const LABEL_PX = 128;
 const LABEL_LIFT = 150;          // 설비 윗면·덕트 윗면에서 라벨까지(mm)
@@ -61,6 +62,7 @@ export function buildLabels(floor, view = {}) {
   const g = new THREE.Group();
   g.name = 'labels';
   const v3 = view.v3 ?? {};
+  if (!perfSettings(view.perfMode).labels) return g;   // 성능 우선: 빈 'labels' 그룹만 준다(§13.4)
   if (v3.equipLabels !== false) {
     for (const it of floor.items ?? []) {
       if (!isEquip(it) || !itemVisible(it, v3)) continue;

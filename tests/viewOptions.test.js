@@ -50,3 +50,12 @@ test('sun popover exposes month, hour, intensity, azimuth and ambient', () => {
   expect(html).toContain('월'); expect(html).toContain('시간'); expect(html).toContain('강도'); expect(html).toContain('환경광');
   expect(html).toContain('value="6"'); // 기본 월
 });
+
+// §13.4: 성능 모드가 무엇을 끄는지 한 줄로 알려 준다.
+test('3D 보기 팝오버의 성능 모드에 설명 한 줄이 붙는다', () => {
+  const html = viewPopoverHtml(DEFAULT_VIEW, 'iso');
+  expect(html).toContain('그림자·윤곽선·라벨을 끄고 픽셀 비율을 1로');
+  expect(viewPopoverHtml(DEFAULT_VIEW, '2d')).not.toContain('픽셀 비율');
+  expect(V2_OPTIONS.find(o => o[0] === 'collisionLive')[1]).toBe('실시간 충돌 감지');
+  expect(V3_OPTIONS.some(o => o[0] === 'collisionLive')).toBe(false);
+});
