@@ -129,18 +129,19 @@ describe('템플릿 배치', () => {
   // 아주 가늘고 긴 방에서는 일부가 생략될 수 있다 — 그래도 겹치지 않고, 최소 3개는 놓인다.
   const NEW_TEMPLATES = ['serve-line', 'cafe-bar', 'laundry', 'locker', 'meeting-8p', 'class-20p'];
   // 계획 6(§14.9)부터 몸통이 방 안쪽 bbox보다 큰 제품은 놓지 않는다: 폭 1.7 m짜리 방(ratio 0.25의
-  // 최소 면적)에 1.8 m 배식대가 벽에 묻지 않고 들어갈 자리는 아예 없다. 그런 조합에서만 "최소 3개"를
-  // "최소 1개"로 낮춘다 — 들어갈 수 있는 방에서는 예전 그대로 3개를 요구한다(묻어서 놓는 것보다 낫다).
-  const tooBigFor = (t, floor, room) => {
+  // 최소 면적)에 1.8 m 배식대가 벽에 묻지 않고 들어갈 자리는 아예 없다. 그런 칸에서만 하한을 너무 큰
+  // 제품 수만큼 낮춘다(Math.max(1, 3 - tooBigCount)) — 들어갈 수 있는 나머지 항목은 그대로 3개를
+  // 요구한다(묻어서 놓는 것보다 낫다).
+  const tooBigCount = (t, floor, room) => {
     const inner = roomInnerPolygon(room, floor.walls);
     const xs = inner.map(p => p[0]), ys = inner.map(p => p[1]);
     const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
-    return t.items.some(i => {
+    return t.items.filter(i => {
       const p = productById(i.productId);
       if (p.attach !== 'floor' && p.attach !== 'floorLay') return false;
       const [sw, sh] = ((i.rot ?? 0) / 90) % 2 ? [p.size[1], p.size[0]] : [p.size[0], p.size[1]];
       return sw > w || sh > h;
-    });
+    }).length;
   };
   test('새 템플릿 6종은 면적 3단 × 종횡비 6종에서 바닥 제품이 겹치지 않는다', () => {
     for (const id of NEW_TEMPLATES) {
@@ -152,7 +153,7 @@ describe('템플릿 배치', () => {
           const made = placeTemplate(r.floor, r.room, t);
           const label = `${id} @ ${area}m² ratio ${ratio}`;
           expect([...collidingIds(made)], label).toEqual([]);
-          expect(made.length, label).toBeGreaterThanOrEqual(tooBigFor(t, r.floor, r.room) ? 1 : 3);
+          expect(made.length, label).toBeGreaterThanOrEqual(Math.max(1, 3 - tooBigCount(t, r.floor, r.room)));
         }
       }
     }
