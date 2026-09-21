@@ -22,7 +22,7 @@ test('compactNext는 넘칠 때 접고 히스테리시스만큼 여유가 생겨
   expect(compactNext({ compact: true, scrollWidth: 700, clientWidth: 1041, fullWidth: 977 })).toBe(false);
 });
 
-test('넘치면 3D 전용 묶음이 더보기로 들어가고 여유가 생기면 제자리로 돌아온다', () => {
+test('접기 단계를 다 써도 묶음은 원래 순서로 더보기에 들어가고 여유가 생기면 제자리로 돌아온다', () => {
   const { bar, size, bottom, more } = setup({ scrollWidth: 900, clientWidth: 900 });
   expect(bar.isCompact()).toBe(false);
   expect(document.querySelector('#btnBottomMore').hidden).toBe(true);
@@ -124,16 +124,77 @@ test('더보기를 열면 포커스가 팝오버 안으로 들어가고 [Esc]로
   bar.destroy();
 });
 
-test('도면 잠금은 3D 전용이 아니므로 접히지 않는다', () => {
-  const { bar, size, bottom } = setup();
-  const lock = document.querySelector('#btnLock');
-  expect(lock.closest('[data-overflow]')).toBeNull();
-  size.scrollWidth = 1100; size.clientWidth = 900;
-  bar.sync();
-  expect(bar.isCompact()).toBe(true);
-  expect(lock.closest('#bottomMore')).toBeNull();
-  expect(bottom.contains(lock)).toBe(true);
+// §15.4 · 리뷰 I-1: 1100 px에서는 1단계(3D 전용) + 꼬리 아이콘화 뒤에도 133 px이 남아 sticky 꼬리가
+// #unitSeg를 94 px 덮었다. "겹침 0"의 동치 조건은 **압축이 끝난 뒤 넘치지 않고 꼬리가 아예 붙지 않는
+// 것**이다 → 꼬리가 붙기 전에 2단계(잠금)·3단계(단위)를 접는다.
+// 폭 스텁: 묶음마다 프로브 측정값에 맞춘 폭을 주고 **바에 남아 있는 묶음의 합**을 scrollWidth로 돌려준다
+// (팝오버로 옮긴 묶음은 빠진다). 꼬리는 압축되면 라벨이 아이콘이 되어 199 → 132 px이다(styles.css).
+const STUB = { seg3d: 132, segLock: 60, segCapture: 96, segPreset: 150, segGizmo: 62, unitSeg: 118 };
+function widthStub(bottom, viewport) {
+  const init = [...bottom.children];
+  const w0 = new Map(init.map((el, i) => [el, STUB[el.id] ?? (i === 0 ? 200 : 62)]));   // 0 = 모드, 1 = 보기
+  return () => {
+    let scrollWidth = 0;
+    for (const el of init) {
+      if (el.hidden || el.parentElement !== bottom) continue;
+      scrollWidth += el.id === 'bottomTail' ? (bottom.classList.contains('compact') ? 132 : 199) : w0.get(el);
+    }
+    return { scrollWidth, clientWidth: viewport.w };
+  };
+}
+function setup3d(clientWidth) {
+  document.body.innerHTML = shellHtml({ name: '테스트' });
+  const bottom = document.querySelector('#bottombar');
+  for (const id of ['#btnCam', '#btnSun', '#btnGizmoMode']) document.querySelector(id).hidden = false;
+  const viewport = { w: clientWidth };
+  const measure = widthStub(bottom, viewport);
+  return { bar: createBottomBar(document.body, { measure }), bottom, viewport, measure };
+}
+
+test('1366 px: 1단계로 넘침이 사라지므로 도면 잠금·단위는 바에 남는다', () => {
+  const { bar, bottom, measure } = setup3d(672);
+  expect(bar.tier()).toBe(1);
+  expect(bottom.contains(document.querySelector('#btnLock'))).toBe(true);
+  expect(document.querySelector('#unitSeg').parentElement).toBe(bottom);
+  expect(document.querySelector('#btnSun').closest('#bottomMore')).not.toBeNull();   // 3D 전용은 접혔다
+  expect(measure().scrollWidth).toBeLessThanOrEqual(672);
+  expect(bottom.classList.contains('tail-sticky')).toBe(false);                       // static 꼬리는 겹칠 수 없다
   bar.destroy();
+});
+
+test('1100 px: 꼬리가 붙기 전에 잠금·단위까지 접어 압축 뒤 넘침이 0이다 (fix wave 1)', () => {
+  const { bar, bottom, measure } = setup3d(506);
+  expect(bar.tier()).toBe(3);
+  const after = measure();
+  expect(after.scrollWidth).toBeLessThanOrEqual(after.clientWidth);                   // 압축 뒤 넘침 0
+  expect(bottom.classList.contains('tail-sticky')).toBe(false);                       // → 꼬리가 아예 붙지 않는다
+  for (const id of ['#btnLock', '#btnSun', '#btnGizmoMode']) expect(document.querySelector(id).closest('#bottomMore')).not.toBeNull();
+  expect(document.querySelector('#unitSeg').parentElement.id).toBe('bottomMore');
+  // 늘 보이는 것(모드·보기·줌·더보기·속성)은 그대로 바에 있다 — 두 번 클릭이 살아 있다.
+  for (const id of ['#btnFit', '#btnBottomMore', '#btnZoomIn']) expect(bottom.contains(document.querySelector(id))).toBe(true);
+  expect(document.querySelector('#btnBottomMore').hidden).toBe(false);
+  bar.destroy();
+});
+
+test('폭이 다시 넓어지면 3단계에서 곧바로 펼쳐진다(단계가 래칫으로 남지 않는다)', () => {
+  const { bar, bottom, viewport } = setup3d(506);
+  expect(bar.tier()).toBe(3);
+  viewport.w = 672; bar.sync();
+  expect(bar.tier()).toBe(1);                                    // 1단계부터 다시 셈한다
+  expect(bottom.contains(document.querySelector('#btnLock'))).toBe(true);
+  viewport.w = 1079 + BOTTOM_HYSTERESIS; bar.sync();
+  expect(bar.tier()).toBe(0);
+  expect(document.querySelector('#bottomMore').children).toHaveLength(0);
+  bar.destroy();
+});
+
+test('destroy()는 .compact와 .tail-sticky를 함께 지운다', () => {
+  const { bar, bottom } = setup3d(200);                          // 다 접어도 넘친다 → 꼬리가 붙는다
+  expect(bottom.classList.contains('tail-sticky')).toBe(true);
+  bar.destroy();
+  expect(bottom.classList.contains('compact')).toBe(false);
+  expect(bottom.classList.contains('tail-sticky')).toBe(false);
+  expect(bottom.contains(document.querySelector('#btnLock'))).toBe(true);
 });
 
 test('컨트롤이 드러나는 전환에서 묶음 hidden을 측정 전에 풀어 같은 sync()에서 접는다 (fix wave 2)', () => {

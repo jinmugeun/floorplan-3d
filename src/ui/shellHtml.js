@@ -72,11 +72,14 @@ export function shellHtml({ name = '' } = {}) {
       <div class="seg"><button data-mode="2d" class="on" title="2D 도면 [1]" aria-pressed="true">2D</button><button data-mode="plan" title="평면 뷰어 [2]" aria-pressed="false">평면 <kbd>2</kbd></button><button data-mode="iso" title="ISO 3D [3]" aria-pressed="false">3D <kbd>3</kbd></button><button data-mode="fp" title="1인칭 [4]" aria-pressed="false">1인칭 <kbd>4</kbd></button></div>
       <div class="seg"><button id="btnView" data-popover="view" aria-expanded="false">보기</button></div>
       <div class="seg" id="seg3d" data-overflow="1"><button id="btnCam" data-popover="cam" aria-expanded="false" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" aria-expanded="false" hidden>햇빛</button></div>
-      <div class="seg" id="segLock"><button id="btnLock" aria-pressed="false">도면 잠금</button></div>
+      <!-- data-overflow의 값은 접기 단계다(bottomBar.js): 1 = 3D 전용, 2 = 도면 잠금, 3 = 단위.
+           1100 px에서는 1단계 + 꼬리 라벨 아이콘화로도 133 px이 남아 sticky 꼬리가 단위 묶음을
+           94 px 덮었다(리뷰 I-1) — 꼬리가 붙기 전에 2·3단계를 접는 것이 "겹침 0"의 조건이다. -->
+      <div class="seg" id="segLock" data-overflow="2"><button id="btnLock" aria-pressed="false">도면 잠금</button></div>
       <div class="seg" id="segCapture" data-overflow="1"><button data-action="capture">스크린 캡쳐</button></div>
       <div class="seg" id="segPreset" data-overflow="1"><label class="muted">2D 투영 <select id="viewPreset" aria-label="2D 투영 뷰"><option value="">—</option><option value="front">정면</option><option value="back">배면</option><option value="left">좌측</option><option value="right">우측</option><option value="top">평면</option><option value="bottom">저면</option></select></label></div>
       <div class="seg" id="segGizmo" data-overflow="1"><button id="btnGizmoMode" aria-label="3D 기즈모 모드" aria-pressed="false" hidden>이동</button></div>
-      <div class="seg" id="unitSeg"><button data-units="mm" class="on" aria-pressed="true">mm</button><button data-units="ftin" aria-pressed="false">ft·in</button></div>
+      <div class="seg" id="unitSeg" data-overflow="3"><button data-units="mm" class="on" aria-pressed="true">mm</button><button data-units="ftin" aria-pressed="false">ft·in</button></div>
       <!-- 오른쪽 끝의 묶음들은 바가 가로로 넘쳐도 늘 보여야 한다(§14.3의 "두 번 클릭" 프로브):
            한 겹으로 감싸 sticky로 붙여 둔다 — 각각 sticky로 하면 서로 겹친다.
            줌도 여기 있다: §14.3이 "모드·보기·줌은 항상 보인다"로 못 박은 셋 중 줌만 스크롤 밖에
@@ -84,8 +87,10 @@ export function shellHtml({ name = '' } = {}) {
            덮이는 쪽은 이제 상대적으로 덜 급한 단위·잠금 묶음이다. -->
       <div id="bottomTail">
         <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit" title="화면 맞추기 [0]" aria-label="화면 맞추기"><span class="wide">화면 맞추기</span><span class="narrow" aria-hidden="true">⤢</span></button></div>
-        <div class="seg"><button id="btnBottomMore" aria-expanded="false" aria-controls="bottomMore" hidden>더보기 ▾</button></div>
-        <div class="seg" id="rightToggleSeg"><button id="btnRightPanel" hidden>속성 ▸</button></div>
+        <!-- 압축된 바에서는 꼬리 자신부터 줄인다(§15.4 · 리뷰 I-1의 1순위): 라벨을 아이콘으로 바꿔
+             꼬리 폭 ~199 px에서 ~67 px을 되찾는다. 이름은 title·aria-label에 남는다(#btnFit과 같은 패턴). -->
+        <div class="seg"><button id="btnBottomMore" title="더보기" aria-label="더보기" aria-expanded="false" aria-controls="bottomMore" hidden><span class="wide">더보기 ▾</span><span class="narrow" aria-hidden="true">▾</span></button></div>
+        <div class="seg" id="rightToggleSeg"><button id="btnRightPanel" title="속성 패널" aria-label="속성 패널" hidden><span class="wide">속성 ▸</span><span class="narrow" aria-hidden="true">▸</span></button></div>
       </div>
     </footer>
     <div id="bottomMore" class="bottom-more" hidden></div>

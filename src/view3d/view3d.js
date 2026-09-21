@@ -41,7 +41,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     requestRender: () => requestRender(),
     onFallback: on => onFpFallback(on),
   });
-  const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000 }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) }; };
+  // size는 두 변(mm)이다: fitDistance가 정사각 근사 대신 실제 직사각형 bbox로 거리를 잡는다.
+  const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000, size: [8000, 6000] }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const sx = Math.max(...xs) - Math.min(...xs), sy = Math.max(...ys) - Math.min(...ys); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(sx, sy), size: [sx, sy] }; };
   const center = () => bounds().center;
   // 2D 투영(정면/배면/좌/우/평면/저면)의 고정 직교 카메라는 orthoView.js에 있다(§15.12 Step 9a).
   // 피커는 콜백으로만 넘긴다: orthoView가 pick3d를 직접 import하지 않게.
@@ -124,20 +125,19 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   }
   // 도면 전체가 들어오도록 카메라를 다시 잡는다. 현재 모드(plan / iso)의 프레이밍을 그대로 쓴다.
   function frameScene() {
-    const c = center(), t = toThree([c[0], c[1], 0]); controls.target.copy(t);
+    const b = bounds(), t = toThree([b.center[0], b.center[1], 0]); controls.target.copy(t);
     const { elevation, azimuth, fov } = store.get().view.cameraPreset;
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
-    // 여백 비율 8%를 뷰포트 종횡비·카메라 고도에 맞춰 고정한다(§15.4): 2560 px에서 모델이
-    // 절반만 차던 것(감사 §12)과 좁은 뷰포트에서 도면이 잘리던 것이 한 식에서 온다.
-    // fov는 평면 모드에서도 프리셋 값 그대로다: 실제 카메라의 fov는 언제나 프리셋이 정하고
-    // (setProjection·applyCameraPreset, 기본 60), 여기서 50을 가정하면 60° 카메라에 50° 기준
-    // 거리를 주어 거리가 24% 과대해진다(tan25°/tan30° = 0.81) → 8% 여백이 깨진다.
-    // frustum()도 프리셋 fov로 직교 절두체를 만들므로 직교 투영에서도 이쪽이 일관된다.
-    const r = fitDistance(bounds().extent, {
-      aspect: w / h, height: activeFloor(store.get()).height,
-      fov, elevation: mode === 'plan' ? 90 : elevation,
+    // 거리 계산은 전부 fit.js에 있다(이 파일의 300줄 상한): bbox 8꼭짓점을 절두체에 넣는 닫힌 식이
+    // 종횡비·고도·방위를 함께 보아 여백 8%를 고정한다(§15.4 · 감사 §12의 "절반만 차던" 프레이밍).
+    // fov·azimuth·고도는 아래에서 실제로 쓰는 값을 **그대로** 넘겨야 한다: 50을 가정하면 60° 카메라에서
+    // 거리가 24% 과대해지고(tan25°/tan30°), 방위가 다르면 경사 보정이 빗나가 도면이 잘린다.
+    const r = fitDistance(b.extent, {
+      aspect: w / h, height: activeFloor(store.get()).height, width: b.size[0], depth: b.size[1],
+      fov, elevation: mode === 'plan' ? 90 : elevation, azimuth: mode === 'plan' ? 0 : azimuth,
     });
-    if (mode === 'plan') camera.position.set(t.x, r, t.z + 0.01);
+    // 평면 분기도 절두체를 갱신한다(m-1): resize()의 frustum()은 **옮기기 전** 거리로 계산돼 직교 투영에서 여백이 빠졌다.
+    if (mode === 'plan') { camera.position.set(t.x, r, t.z + 0.01); if (camera === ortho) frustum(); }
     else {
       const el = THREE.MathUtils.degToRad(elevation), az = THREE.MathUtils.degToRad(azimuth);
       camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), t.y + r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az));
