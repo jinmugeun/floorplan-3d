@@ -24,7 +24,7 @@ describe('패널 폭', () => {
     // 좁은 창에서는 저장된 폭이라도 최소 폭으로 줄인다(인라인 폭이 미디어 쿼리를 이기므로 CSS가 아니라 여기서 정한다).
     expect(fitPanelWidths({ panel: 400, right: 400 }, 1000)).toEqual({ panel: 260, right: 260 });
     expect(fitPanelWidths({ panel: 400, right: 400 }, 1600)).toEqual({ panel: 400, right: 400 });
-    expect(fitPanelWidths({ panel: 400, right: 400 }, 1280)).toEqual({ panel: 363, right: 363 }); // 캔버스 480을 지키려고 둘에서 같은 양씩 덜어 낸다
+    expect(fitPanelWidths({ panel: 400, right: 400 }, 1280)).toEqual({ panel: 323, right: 323 }); // 캔버스 560을 지키려고 둘에서 같은 양씩 덜어 낸다
   });
 
   test('저장된 값을 읽고 범위 밖·쓰레기 값은 기본값으로 떨어진다', () => {
@@ -207,8 +207,8 @@ describe('좁은 창 레이아웃(§14.1)', () => {
   });
 
   test('줄일 때 한쪽이 최소에 닿으면 남은 몫은 다른 쪽이 낸다', () => {
-    // 480 + 260이 712 px 몫을 28 px 넘긴다: 오른쪽은 이미 하한이라 왼쪽이 28 px를 다 낸다.
-    expect(fitPanelWidths({ panel: 480, right: 260 }, 1266)).toEqual({ panel: 452, right: 260 });
+    // 480 + 260이 632 px 몫을 108 px 넘긴다: 오른쪽은 이미 하한이라 왼쪽이 108 px를 다 낸다.
+    expect(fitPanelWidths({ panel: 480, right: 260 }, 1266)).toEqual({ panel: 372, right: 260 });
     expect(fitPanelWidths({ panel: 300, right: 300 }, 1000)).toEqual({ panel: 260, right: 260 });
     expect(fitPanelWidths(undefined, 1600)).toEqual({ panel: 320, right: 300 });   // 값이 없으면 기본 폭
   });
@@ -216,6 +216,23 @@ describe('좁은 창 레이아웃(§14.1)', () => {
   test('우측만 접으면 되는 창 폭에서는 좌측 패널을 접지 않는다', () => {
     expect(autoCollapse(PANEL_DEFAULT, 1000)).toEqual({ panel: false, right: true });
     expect(autoCollapse(PANEL_DEFAULT, 900)).toEqual({ panel: false, right: true });
+  });
+
+  // §15.4(감사 §23): 클램프가 1100 px 이하에서만 돌아 1366 px 노트북에서는 아무 일도 하지 않았다.
+  // 기준을 창 폭이 아니라 캔버스 폭(560 px)으로 바꾼다.
+  test('클램프 기준은 캔버스 560 px이고 480은 자동 접기 기준으로 남는다', async () => {
+    const { CANVAS_COMFORT } = await import('../src/ui/layout.js');
+    expect([CANVAS_COMFORT, CANVAS_MIN]).toEqual([560, 480]);
+    // 1366 px: 기본 폭으로도 캔버스가 672 px이라 줄일 필요가 없다.
+    expect(fitPanelWidths(PANEL_DEFAULT, 1366)).toEqual(PANEL_DEFAULT);
+    expect(canvasOf(fitPanelWidths(PANEL_DEFAULT, 1366), 1366)).toBe(672);
+    // 1244 px부터 줄이기 시작한다(620 몫 − 610 = 10 px).
+    expect(fitPanelWidths(PANEL_DEFAULT, 1244)).toEqual({ panel: 315, right: 295 });
+    expect(canvasOf(fitPanelWidths(PANEL_DEFAULT, 1244), 1244)).toBe(560);
+    // 더 좁아지면 하한(260)까지 줄이고, 그래도 480을 못 채우면 접는다.
+    expect(fitPanelWidths(PANEL_DEFAULT, 1100)).toEqual({ panel: 260, right: 260 });
+    expect(canvasOf(fitPanelWidths(PANEL_DEFAULT, 1100), 1100)).toBe(506);
+    expect(autoCollapse(PANEL_DEFAULT, 1100)).toEqual({ panel: false, right: false });
   });
 
   test('createResizeWatch는 120 ms 디바운스로 한 번만 부르고 destroy 뒤에는 조용하다', () => {

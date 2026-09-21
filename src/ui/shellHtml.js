@@ -82,7 +82,7 @@ export function shellHtml({ name = '' } = {}) {
            있었고, 불투명한 이 꼬리가 scrollLeft 0에서 바로 그 줌 묶음을 덮었다(Task 3의 87 px).
            덮이는 쪽은 이제 상대적으로 덜 급한 단위·잠금 묶음이다. -->
       <div id="bottomTail">
-        <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit">화면 맞추기</button></div>
+        <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit" title="화면 맞추기 [0]" aria-label="화면 맞추기"><span class="wide">화면 맞추기</span><span class="narrow" aria-hidden="true">⤢</span></button></div>
         <div class="seg"><button id="btnBottomMore" aria-expanded="false" aria-controls="bottomMore" hidden>더보기 ▾</button></div>
         <div class="seg" id="rightToggleSeg"><button id="btnRightPanel" hidden>속성 ▸</button></div>
       </div>

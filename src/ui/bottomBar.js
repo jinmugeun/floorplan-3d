@@ -84,6 +84,11 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
     const next = compactNext({ compact, scrollWidth, clientWidth, fullWidth, hysteresis });
     if (next !== compact) setCompact(next);
     syncMoreBtn(visible);
+    // 꼬리(줌·더보기·속성)는 압축 뒤에도 넘칠 때만 sticky다(§15.4): 넘치지 않는데 붙여 두면
+    // 늘 보여야 하는 단위·잠금 묶음을 불투명하게 덮는다(감사 §24의 75 px).
+    // sticky ↔ static은 flex 항목의 크기를 바꾸지 않으므로 이 판정이 폭을 다시 흔들지 않는다.
+    const after = size();
+    bar.classList.toggle('tail-sticky', after.scrollWidth > after.clientWidth);
   }
   const onBtn = () => {
     const open = !more.classList.contains('open');

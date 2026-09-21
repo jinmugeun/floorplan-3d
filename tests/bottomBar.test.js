@@ -163,3 +163,23 @@ test('#bottombar가 없어도 던지지 않는다', () => {
   bar.sync(); bar.closeMore(); bar.destroy();
   expect(bar.isCompact()).toBe(false);
 });
+
+// §15.4(감사 §24): compact가 켜진 뒤에도 747 > 672라 sticky 꼬리가 mm 버튼을 반쯤 덮었다.
+// 꼬리는 "압축 뒤에도 넘칠 때만" 붙는다.
+test('압축 뒤에도 넘치면 tail-sticky, 넘치지 않으면 떼어 낸다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  root.innerHTML = `<footer id="bottombar">
+    <div class="seg"><button>2D</button></div>
+    <div class="seg" data-overflow="1"><button id="btnCam">카메라</button></div>
+    <div id="bottomTail"><div class="seg"><button id="btnBottomMore" hidden>더보기 ▾</button></div></div>
+  </footer><div id="bottomMore" hidden></div>`;
+  let width = { scrollWidth: 900, clientWidth: 600 };
+  const bar = createBottomBar(root, { measure: () => width });
+  const el = root.querySelector('#bottombar');
+  expect(el.classList.contains('compact')).toBe(true);
+  expect(el.classList.contains('tail-sticky')).toBe(true);      // 접어도 넘친다 → 꼬리를 붙인다
+  width = { scrollWidth: 500, clientWidth: 600 };
+  bar.sync();
+  expect(el.classList.contains('tail-sticky')).toBe(false);     // 더는 넘치지 않는다 → 떼어 낸다
+  bar.destroy();
+});

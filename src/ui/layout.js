@@ -27,6 +27,10 @@ export function savePanelWidth(side, px) {
 
 // 그리드 고정 열: 레일 64 px + 세로 스플리터 5 px 둘. 캔버스 열은 최소 480 px를 지킨다(§14.1).
 export const CANVAS_MIN = 480;
+// 클램프는 창 폭 임계값이 아니라 **캔버스 폭**으로 판단한다(§15.4): 캔버스가 이 폭보다 좁아지면
+// 패널을 PANEL_MIN까지 줄인다. 480(CANVAS_MIN)만 보던 예전 규칙은 1366 px 노트북에서 한 번도
+// 돌지 않아 캔버스가 화면의 49%였다(감사 §23). 480은 "그래도 모자라면 접는다"의 기준으로 남는다.
+export const CANVAS_COMFORT = 560;
 export const RAIL_W = 64;
 export const SPLITTER_W = 5;
 
@@ -37,7 +41,7 @@ export const SPLITTER_W = 5;
 // 남은 몫은 다른 쪽이 낸다(그래서 320/300 같은 비대칭 기본값에서도 결과가 결정적이다).
 export function fitPanelWidths(widths, vw = (globalThis.innerWidth ?? 1280)) {
   const panel0 = clamp(widths?.panel ?? PANEL_DEFAULT.panel), right0 = clamp(widths?.right ?? PANEL_DEFAULT.right);
-  const over = panel0 + right0 - (vw - RAIL_W - SPLITTER_W * 2 - CANVAS_MIN);
+  const over = panel0 + right0 - (vw - RAIL_W - SPLITTER_W * 2 - CANVAS_COMFORT);
   if (!(over > 0)) return { panel: panel0, right: right0 };
   const panel1 = Math.max(PANEL_MIN, panel0 - Math.ceil(over / 2));
   const right = Math.max(PANEL_MIN, right0 - (over - (panel0 - panel1)));

@@ -5,7 +5,7 @@ import { activeFloor } from '../state/schema.js';
 import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPACITY } from './build.js';
 import { hiddenWallIds, cutawayMeshStyle, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
-import { cameraDistance } from './fit.js';
+import { cameraDistance, fitDistance } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
 import { applyPerfMode } from './perfMode.js';
 import { headingDeg, toWorldXY } from './camera.js';
@@ -124,10 +124,20 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   // 도면 전체가 들어오도록 카메라를 다시 잡는다. 현재 모드(plan / iso)의 프레이밍을 그대로 쓴다.
   function frameScene() {
     const c = center(), t = toThree([c[0], c[1], 0]); controls.target.copy(t);
-    const r = cameraDistance(bounds().extent); // 도면 크기에 맞춘 카메라 거리(m)
-    if (mode === 'plan') camera.position.set(t.x, r * 1.6, t.z + 0.01);
+    const { elevation, azimuth, fov } = store.get().view.cameraPreset;
+    const w = container.clientWidth || 1, h = container.clientHeight || 1;
+    // 여백 비율 8%를 뷰포트 종횡비·카메라 고도에 맞춰 고정한다(§15.4): 2560 px에서 모델이
+    // 절반만 차던 것(감사 §12)과 좁은 뷰포트에서 도면이 잘리던 것이 한 식에서 온다.
+    // fov는 평면 모드에서도 프리셋 값 그대로다: 실제 카메라의 fov는 언제나 프리셋이 정하고
+    // (setProjection·applyCameraPreset, 기본 60), 여기서 50을 가정하면 60° 카메라에 50° 기준
+    // 거리를 주어 거리가 24% 과대해진다(tan25°/tan30° = 0.81) → 8% 여백이 깨진다.
+    // frustum()도 프리셋 fov로 직교 절두체를 만들므로 직교 투영에서도 이쪽이 일관된다.
+    const r = fitDistance(bounds().extent, {
+      aspect: w / h, height: activeFloor(store.get()).height,
+      fov, elevation: mode === 'plan' ? 90 : elevation,
+    });
+    if (mode === 'plan') camera.position.set(t.x, r, t.z + 0.01);
     else {
-      const { elevation, azimuth, fov } = store.get().view.cameraPreset;
       const el = THREE.MathUtils.degToRad(elevation), az = THREE.MathUtils.degToRad(azimuth);
       camera.position.set(t.x - r * Math.cos(el) * Math.sin(az), t.y + r * Math.sin(el), t.z + r * Math.cos(el) * Math.cos(az));
       if (camera.isPerspectiveCamera) { camera.fov = fov; camera.updateProjectionMatrix(); } else frustum();

@@ -83,3 +83,12 @@ test('#banner는 캔버스 위에 뜨지 않는 레이아웃 행이다', () => {
   expect(rule).not.toMatch(/position:\s*(absolute|fixed)/);
   expect(rule).not.toMatch(/z-index/);
 });
+
+// §15.4: 좁은 바에서는 kbd 배지를 감추고 "화면 맞추기"를 아이콘으로 줄인다(title은 남는다).
+test('하단 바 압축 규칙과 조건부 sticky 꼬리', () => {
+  expect(CSS).toMatch(/#bottombar\.compact kbd[^{]*\{[^}]*display:\s*none/);
+  expect(CSS).toContain('#bottombar.compact #btnFit .wide');
+  expect(CSS).toContain('#bottombar:not(.compact) #btnFit .narrow');
+  // 꼬리의 기본 규칙은 sticky 그대로이고(아래 단정과 짝), 넘치지 않을 때만 static으로 되돌린다.
+  expect(CSS).toMatch(/#bottombar:not\(\.tail-sticky\) #bottomTail[^{]*\{[^}]*position:\s*static/);
+});
