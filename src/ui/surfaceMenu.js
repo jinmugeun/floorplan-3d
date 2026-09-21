@@ -4,7 +4,8 @@
 import { activeFloor } from '../state/schema.js';
 import { deleteWall, duplicateRoom } from '../state/floorOps.js';
 import { applyRoomWalls, assignmentOf } from '../state/materialOps.js';
-import { removeRoom } from '../app/deleteActions.js';
+// 방 삭제는 ui/ 안의 roomActions에서 가져온다: ui/는 view2d/·view3d/·app/을 import하지 않는다(아키텍처 §9).
+import { removeRoom } from './roomActions.js';
 
 const copyItem = (ui, mat) => ({
   label: '마감재 복사', disabled: !mat,

@@ -2,23 +2,15 @@
 // "방을 지울 때만 확인을 받는다"는 규칙을 한 자리에 모았다(§12.5 — 전에는 main.js 두 곳에
 // 같은 브라우저 확인창 문구가 따로 있었다).
 import { activeFloor } from '../state/schema.js';
-import { deleteWall, deleteWalls, deleteRoom, deleteItems } from '../state/floorOps.js';
+import { deleteWall, deleteWalls, deleteItems } from '../state/floorOps.js';
 import { deleteSelectedDuct } from '../view2d/tools/ductSelect.js';
 import { hitWall } from '../geom/walls.js';
 import { pointInPolygon } from '../geom/rooms.js';
-import { confirmDialog, CONFIRM_ROOM_DELETE } from '../ui/confirmDialog.js';
+import { removeRoom } from '../ui/roomActions.js';
 
-// 방 삭제는 벽까지 함께 사라지므로 늘 확인을 받는다. 대화상자가 열려 있는 동안 방이 사라질 수
-// 있어(undo·다른 경로) 확인 뒤에 다시 찾는다 — 이 재확인은 방을 지우는 모든 자리(삭제 도구·선택
-// 삭제·방 우클릭 메뉴)가 공유해야 하므로 여기 한 곳에 둔다(surfaceMenu.js도 이 함수를 쓴다).
-export async function removeRoom(store, ui, roomId) {
-  if (!(await confirmDialog(CONFIRM_ROOM_DELETE))) return false;
-  if (!activeFloor(store.get()).rooms.some(r => r.id === roomId)) return false;
-  deleteRoom(store, roomId);
-  const s = ui.get().selection;
-  if (s?.type === 'room' && s.id === roomId) ui.set({ selection: null });
-  return true;
-}
+// 방 삭제의 확인·재확인은 ui/roomActions.js의 removeRoom 한 곳이다(방 우클릭 메뉴도 그것을 쓴다 —
+// ui/는 app/을 import하지 않으므로 공용 함수가 ui/에 산다). 여기서는 그것을 부르기만 한다:
+// 다시 내보내면 같은 함수에 두 개의 import 경로가 생겨 "한 자리" 규칙이 흐려진다.
 
 export function createDeleteActions({ store, ui, view, toast = () => {}, setTool = () => {} }) {
   function deleteSelection() {
@@ -44,5 +36,7 @@ export function createDeleteActions({ store, ui, view, toast = () => {}, setTool
     };
   }
   const deleteOrTool = () => { if (ui.get().selection) deleteSelection(); else setTool('delete'); };
-  return { createDeleteTool, deleteSelection, deleteOrTool, removeRoom: roomId => removeRoom(store, ui, roomId) };
+  // removeRoom은 팩토리를 거치지 않는다: 부르는 자리(main.js·surfaceMenu.js)가 store·ui를 이미 쥐고
+  // 있어 감싼 것을 아무도 쓰지 않았다 — 죽은 표면을 남기지 않는다(필요하면 모듈에서 바로 가져다 쓴다).
+  return { createDeleteTool, deleteSelection, deleteOrTool };
 }

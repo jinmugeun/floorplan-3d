@@ -1,0 +1,31 @@
+// 아키텍처 §9의 두 규칙을 실측으로 지킨다. 사람이 세는 대신 테스트가 세게 두는 이유는,
+// 둘 다 "어겨도 앱은 잘 돈다"라서 리뷰에서만 잡히면 반드시 새기 때문이다.
+import { test, expect } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const SRC = new URL('../src', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+const walk = dir => readdirSync(dir, { withFileTypes: true })
+  .flatMap(e => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+const jsFiles = walk(SRC).filter(f => f.endsWith('.js'));
+const rel = f => f.slice(SRC.length + 1).replace(/\\/g, '/');
+
+test('src/**/*.js는 한 파일 300줄을 넘지 않는다', () => {
+  expect(jsFiles.length).toBeGreaterThan(50);       // 목록을 못 읽고 조용히 통과하지 않게
+  const over = jsFiles
+    .map(f => [rel(f), readFileSync(f, 'utf8').split('\n').length])
+    .filter(([, n]) => n > 300);
+  expect(over).toEqual([]);
+});
+
+// ui/는 화면 조각을 만드는 층이다: 뷰(view2d/·view3d/)와 배선(app/)은 ui/를 부르지만 그 반대는 없다.
+// 반대가 생기면 순환이 만들어지고, ui 테스트가 three·캔버스를 끌고 오게 된다.
+test('ui/는 view2d/·view3d/·app/을 import하지 않는다', () => {
+  const bad = [];
+  for (const f of jsFiles.filter(f => rel(f).startsWith('ui/'))) {
+    for (const m of readFileSync(f, 'utf8').matchAll(/from\s+'([^']+)'/g)) {
+      if (/^\.\.\/(view2d|view3d|app)\//.test(m[1])) bad.push(`${rel(f)} → ${m[1]}`);
+    }
+  }
+  expect(bad).toEqual([]);
+});
