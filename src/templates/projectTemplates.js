@@ -26,7 +26,7 @@ function buildStudio() {
 
 export const BUILTIN_TEMPLATES = [
   { id: 'builtin-empty', name: '빈 프로젝트', desc: '빈 화면에서 방과 벽을 직접 그립니다.', build: () => migrate(createEmptyProject()) },
-  { id: 'builtin-gangdang', name: '강당중 조리실', desc: '방 11개가 그려진 예제 도면으로 시작합니다.', build: () => buildSampleProject() },
+  { id: 'builtin-gangdang', name: '강당중 조리실', desc: '방 11개 · 환기 설비 39개 · 덕트 10계통이 그려진 예제 도면으로 시작합니다.', build: () => buildSampleProject() },
   { id: 'builtin-studio', name: '원룸 6평', desc: '침대·옷장·책상이 놓인 원룸 한 칸.', build: buildStudio },
 ];
 
