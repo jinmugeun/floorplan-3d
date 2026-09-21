@@ -63,8 +63,8 @@ export function openOnboarding({ store = null, onDone = () => {} } = {}) {
   // stopImmediatePropagation뿐이다). 그 "나머지"가 우리 것을 덮어쓰지 않게 여기서 끊는다.
   // 그렇다고 다른 오버레이와 충돌하지는 않는다: document 캡처 keydown을 쓰는 다른 것은
   // popover.js·contextMenu.js·confirmDialog.js 세 개뿐이고 모두 **포인터로만** 열린다(팝오버
-  // 버튼 클릭·우클릭·삭제 확인). 안내는 불투명한 .modal 백드롭(inset: 0, z-index: 50)으로
-  // 화면 전체를 덮어 그 포인터 입력을 먼저 받으므로, 안내가 떠 있는 동안에는 그 셋이 열릴 수
+  // 버튼 클릭·우클릭·삭제 확인). 안내는 .modal 백드롭(inset: 0, z-index: 50)으로 화면 전체를
+  // 덮는다 — 보기에는 반투명해도 포인터 입력은 그 백드롭이 받는다. 그래서 안내가 떠 있는 동안에는 그 셋이 열릴 수
   // 없다 → 우리가 끊을 캡처 리스너가 애초에 없다. 반대 순서(먼저 열린 대화상자 위에 안내)도
   // 없다: openOnboarding은 시작 화면 직후 한 번만 불린다.
   function onKey(ev) {
