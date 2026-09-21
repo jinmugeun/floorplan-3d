@@ -8,6 +8,7 @@ import { toast } from './toast.js';
 import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField } from './equipRows.js';
+import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 export { lenField, readLen, withUnit } from './fieldUtils.js';
@@ -135,6 +136,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <button type="button" name="delete" class="danger">제품 삭제</button>`;
       return;
     }
+    if (sel.type === 'duct') { container.innerHTML = ductPanelHtml(f, sel, { units, showUnit }); return; }
     if (sel.type === 'wall') {
       const w = f.walls.find(x => x.id === sel.id); if (!w) { container.innerHTML = ''; return; }
       const len = wallLength(w);
@@ -212,6 +214,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
     if (applyMaterialField(store, sel, el)) return;      // 마감재 오프셋·각도
     if (applyVentField(store, ui, sel, el)) return;       // 설비 속성 · 방 설계 풍량
+    if (applyDuctField(store, sel, el)) return;           // 덕트 종류·계통·구간 단면
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }
     if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }, { record: false }); return; }
     if (name === 'bgLocked') { store.dispatch(d => { d.background.locked = el.checked; }, { record: false }); return; }
@@ -248,6 +251,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
   };
   const onClick = ev => {
+    if (ductPanelClick(store, ui, ui.get().selection, ev.target)) return;  // 덕트 구간·댐퍼·연결·삭제
     if (ev.target.name === 'split') { ui.set({ splitWall: true }); return; }
     if (ev.target.name === 'matReplace') { surfaceActions.replaceMaterial?.(targetFor(ui.get().selection, ev.target.dataset.side)); return; }
     if (ev.target.name === 'matEditor') { surfaceActions.openEditor?.(ui.get().selection?.id, ev.target.dataset.side); return; }
