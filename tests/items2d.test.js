@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import { drawItem, drawItems, drawItemSelection, itemVisible, itemHandles, symbolOf, ROT_OFFSET_PX, drawOrder, ATTACH_ORDER, ITEM_DRAG_KINDS } from '../src/view2d/items2d.js';
+import { drawItem, drawItems, drawItemSelection, itemVisible, itemHandles, symbolOf, ROT_OFFSET_PX, drawOrder, ATTACH_ORDER, ITEM_DRAG_KINDS, drawnByWall, WALL_GAP_KINDS } from '../src/view2d/items2d.js';
+import { symbolParts, symbolSvg } from '../src/products/symbols.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { RAD } from '../src/geom/items.js';
@@ -148,5 +149,72 @@ describe('겹친 아이템의 그리기 순서(drawOrder)', () => {
     expect(drawOrder([hood, range]).map(i => i.id)).toEqual(['range', 'hood']);  // 천장이 마지막 = 위에 그려진다
     expect(ITEM_DRAG_KINDS.has('items')).toBe(true);
     expect(ITEM_DRAG_KINDS.has('box')).toBe(false);
+  });
+});
+
+// §14.4: 2D 벽이 문·창 자리를 비우고 창 유리선까지 그린 뒤로, 같은 자리에 심벌을 또 그리면
+// 유리선이 네 줄이 되고 개구부(심벌이 window다)는 창처럼 보인다.
+describe('벽이 그리는 자리는 심벌이 비켜 준다(창·개구부)', () => {
+  const w1 = { id: 'w1', a: [100.5, 200.25], b: [4100.5, 200.25], thickness: 200, height: 2300 };
+  const onWall = (id, patch = {}) => mk(id, { wallId: 'w1', t: 0.5, side: 1, pos: [2100.5, 200.25], ...patch });
+  const draw = (items, opt = {}) => { const ctx = fakeCtx(); drawItems(ctx, view, { walls: [w1], items, rooms: [] }, { flags: {}, ...opt }); return ctx; };
+  const shapes = ctx => ctx.calls.filter(c => ['rect', 'moveTo', 'lineTo', 'arc', 'circle', 'fill'].includes(c[0]));
+
+  test('벽에 앉은 창은 items2d가 유리선·채움을 그리지 않는다', () => {
+    const win = onWall('window-slide-1200');
+    expect(win.kind).toBe('window');
+    expect(drawnByWall(win, [w1])).toBe(true);
+    const ctx = draw([win]);
+    expect(shapes(ctx)).toHaveLength(0);
+    expect(ctx.calls.filter(c => c[0] === 'translate')).toHaveLength(0);   // 로컬 좌표계조차 세우지 않는다
+  });
+
+  test('개구부(opening-pass)는 벽 위에서 아무것도 그리지 않는다 — 빈 자리만이다', () => {
+    const op = onWall('opening-pass');
+    expect(op.kind).toBe('opening');
+    expect(symbolOf(op)).toBe('window');                                   // 카탈로그 심벌은 그대로(썸네일용)
+    expect(drawnByWall(op, [w1])).toBe(true);
+    expect(shapes(draw([op]))).toHaveLength(0);
+  });
+
+  test('문은 여닫이 호를 그대로 그린다(벽은 자리만 비운다)', () => {
+    const door = onWall('door-swing-900');
+    expect(door.kind).toBe('door');
+    expect(drawnByWall(door, [w1])).toBe(false);
+    const ctx = draw([door]);
+    expect(ctx.calls.filter(c => c[0] === 'arc')).toHaveLength(1);          // 열림 궤적
+    expect(ctx.calls.filter(c => c[0] === 'moveTo')).toHaveLength(3);       // 문틀 두 줄 + 문짝
+  });
+
+  test('벽에 앉지 않은 창(배치 미리보기·벽이 지워진 창)은 심벌이 남는다', () => {
+    const loose = mk('window-slide-1200', { pos: [1000.5, 1000.25] });      // wallId 없음
+    expect(drawnByWall(loose, [w1])).toBe(false);
+    expect(shapes(draw([loose])).length).toBeGreaterThan(0);
+    const orphan = onWall('window-slide-1200', { wallId: '없는벽' });        // 벽이 지워졌다 → 구멍이 없다
+    expect(drawnByWall(orphan, [w1])).toBe(false);
+    expect(shapes(draw([orphan])).length).toBeGreaterThan(0);
+    expect(WALL_GAP_KINDS.has('window') && WALL_GAP_KINDS.has('opening')).toBe(true);
+  });
+
+  test('선택한 창은 심벌이 없어도 외곽선이 남는다(고를 수 있다)', () => {
+    const win = onWall('window-slide-1200');
+    const ctx = draw([win], { sel: { type: 'item', id: win.id } });
+    // 남는 것은 strokePoly(itemCorners) 하나뿐: moveTo 1 + lineTo 3 + closePath, 심벌 도형은 없다.
+    expect(ctx.calls.filter(c => ['rect', 'arc', 'fill', 'translate'].includes(c[0]))).toHaveLength(0);
+    expect(ctx.calls.filter(c => c[0] === 'moveTo')).toHaveLength(1);
+    expect(ctx.calls.filter(c => c[0] === 'lineTo')).toHaveLength(3);
+    expect(ctx.calls.filter(c => c[0] === 'closePath')).toHaveLength(1);
+  });
+
+  test('라이브러리 썸네일은 창·개구부 모두 그대로 그린다(빈 타일이 되지 않는다)', () => {
+    for (const id of ['window-slide-1200', 'opening-pass']) {
+      const p = productById(id);
+      const parts = symbolParts(p.symbol, p.size[0], p.size[1]);
+      expect(parts.filter(x => x.t === 'line'), id).toHaveLength(2);        // 유리 두 줄은 썸네일에 남는다
+      const svg = symbolSvg(p.symbol, p.size[0], p.size[1], { box: 96, solid: p.color });
+      expect(svg, id).toContain('<line');
+      expect(svg, id).toContain('<rect');
+      expect(svg, id).not.toContain('NaN');
+    }
   });
 });

@@ -32,6 +32,18 @@ export function itemVisible(item, flags = {}) {
   return flags.floorItems !== false;
 }
 
+// 벽에 앉은 창·개구부는 평면에서 심벌을 그리지 않는다(§14.4): 벽 조각이 그 자리를 비우고
+// walls2d가 벽 두께 기준으로 유리 두 줄 + 양끝 눈금을 그린다. 심벌까지 그리면 같은 구멍에
+// body 채움 + ±깊이/6 유리선이 더해져 줄이 네 개가 되고(창), 개구부(kind 'opening')는 심벌이
+// window라서 "빈 자리만"이어야 할 통로가 창처럼 보인다. 문(kind 'door')은 호가 도면의 뜻이라 그대로다.
+// 라이브러리 썸네일(symbolSvg)과 3D(itemShapes)는 이 경로를 지나지 않아 그대로다.
+export const WALL_GAP_KINDS = new Set(['window', 'opening']);
+// 구멍을 뚫어 줄 벽이 실제로 있을 때만 건너뛴다. 벽이 지워져 wallId가 떠 있으면(구멍이 없다)
+// 심벌이 남아야 아이템이 평면에서 사라지지 않는다. 배치 미리보기(placeTool)는 floor에 없으므로
+// drawItems를 지나지 않고 — drawItem의 기본값 embedded = false로 심벌을 그대로 보여 준다.
+export const drawnByWall = (item, walls = []) => WALL_GAP_KINDS.has(item?.kind)
+  && item?.attach === 'wall' && !!item?.wallId && (walls ?? []).some(w => w?.id === item.wallId);
+
 function drawPart(ctx, p, color) {
   ctx.beginPath();
   if (p.t === 'rect') ctx.rect(p.x, p.y, p.w, p.h);
@@ -63,20 +75,23 @@ function strokePoly(ctx, v, pts, color, lw = 2, dash = null) {
 
 // 캔버스는 (translate → rotate → scale)로 아이템 로컬 mm 좌표계를 세운 뒤 심벌 부품을 그린다.
 // 월드→화면 변환이 회전 없는 균일 축척이라 이렇게 겹쳐도 어긋나지 않는다.
-export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = false, labels = true, equipLabels = true } = {}) {
+export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = false, labels = true, equipLabels = true, embedded = false } = {}) {
   const k = v.camera.scale, s = v.toScreen(item.pos);
   const showLabel = labels && equipLabels;
-  const parts = symbolParts(symbolOf(item), item.size[0], item.size[1], { text: showLabel ? equipLabel(item) : null });
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(s[0], s[1]);
-  ctx.rotate(RAD(item.rot));
-  ctx.scale((item.flipH ? -1 : 1) * k, (item.flipV ? -1 : 1) * k);
-  ctx.lineWidth = 1.4 / k;
-  ctx.strokeStyle = ITEM_COLORS.line;
-  for (const part of parts) if (part.t !== 'text') drawPart(ctx, part, item.color);
-  ctx.restore();
-  ctx.globalAlpha = 1;
+  // embedded = 벽이 이미 그린 자리(창·개구부): 부품은 하나도 없고 선택 외곽선·라벨만 남는다.
+  const parts = embedded ? [] : symbolParts(symbolOf(item), item.size[0], item.size[1], { text: showLabel ? equipLabel(item) : null });
+  if (parts.length) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(s[0], s[1]);
+    ctx.rotate(RAD(item.rot));
+    ctx.scale((item.flipH ? -1 : 1) * k, (item.flipV ? -1 : 1) * k);
+    ctx.lineWidth = 1.4 / k;
+    ctx.strokeStyle = ITEM_COLORS.line;
+    for (const part of parts) if (part.t !== 'text') drawPart(ctx, part, item.color);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
   if (showLabel) for (const part of parts) if (part.t === 'text') drawTextPart(ctx, v, item, part);
   if (outline) strokePoly(ctx, v, itemCorners(item), outline, 2);
   if (labels && showCode) {
@@ -92,7 +107,7 @@ export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = 
     const bad = collisions?.has(item.id);
     const on = selected.has(item.id);
     const outline = bad ? ITEM_COLORS.locked : on ? (item.locked ? ITEM_COLORS.locked : ITEM_COLORS.sel) : null;
-    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, equipLabels: flags.equipLabels !== false, alpha: dim ? dim(item) : 1 });
+    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, equipLabels: flags.equipLabels !== false, alpha: dim ? dim(item) : 1, embedded: drawnByWall(item, floor.walls) });
   }
 }
 

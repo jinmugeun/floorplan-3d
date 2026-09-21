@@ -43,10 +43,28 @@ describe('2D 벽 조각', () => {
     expect(spans[0].u1).toBeCloseTo(L / 2 - 600, 6);
     expect(spans[1].u0).toBeCloseTo(L / 2 + 600, 6);
     expect(spans[1].u1).toBeCloseTo(L, 6);
-    // 조각 사각형은 벽 축을 따르고 두께의 절반씩 양쪽으로 벌어진다.
+    // 조각 사각형은 벽 축을 따라 실제로 돈다: |q0-q3| = 두께 같은 회전 불변량은 축이 틀려도
+    // 통과하므로, 30° 회전 행렬을 직접 적용한 코너 좌표와 맞춘다(소수 시작점 포함).
+    const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6), h = w.thickness / 2;
+    // dir = [c, s], n = perp(dir) = [-s, c] → corner(u, side) = a + dir*u + n*(side*h)
+    const corner = (u, side) => [w.a[0] + c * u - s * side * h, w.a[1] + s * u + c * side * h];
+    const near = (got, want) => { expect(got[0]).toBeCloseTo(want[0], 4); expect(got[1]).toBeCloseTo(want[1], 4); };
     const q = spanQuad(w, spans[0]);
     expect(q).toHaveLength(4);
+    near(q[0], corner(0, 1));                        // [50.5, 286.8525…] — 벽 시작점에서 법선 +100
+    near(q[1], corner(L / 2 - 600, 1));              // [1262.93…, 986.85…]
+    near(q[2], corner(L / 2 - 600, -1));
+    near(q[3], corner(0, -1));                       // [150.5, 113.6474…]
+    expect(q[0][0]).toBeCloseTo(50.5, 4);            // 축이 0°나 90°면 여기서 깨진다
+    expect(q[0][1]).toBeCloseTo(286.852540, 4);
+    // q0→q1은 벽 방향과 평행하고(30°), q0·q3의 중점은 벽 중심선 위에 있다.
+    expect(Math.atan2(q[1][1] - q[0][1], q[1][0] - q[0][0]) * 180 / Math.PI).toBeCloseTo(30, 6);
+    near([(q[0][0] + q[3][0]) / 2, (q[0][1] + q[3][1]) / 2], w.a);
     expect(Math.hypot(q[0][0] - q[3][0], q[0][1] - q[3][1])).toBeCloseTo(200, 6);
+    // 오른쪽 조각도 같은 축을 따른다(개구부 끝에서 시작).
+    const q2 = spanQuad(w, spans[1]);
+    near(q2[0], corner(L / 2 + 600, 1));
+    near(q2[1], corner(L, 1));
   });
 
   test('보기에서 벽면 가구를 끄면 평면도 끊지 않는다', () => {
