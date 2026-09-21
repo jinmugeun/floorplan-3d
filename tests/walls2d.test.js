@@ -11,7 +11,7 @@ const on = (w, id, patch) => createItem(productById(id), { wallId: w.id, ...patc
 function fakeCtx() {
   const calls = [];
   const rec = name => (...args) => calls.push([name, ...args]);
-  return { calls, save: rec('save'), restore: rec('restore'), beginPath: rec('beginPath'),
+  return { calls, save: rec('save'), restore: rec('restore'), beginPath: rec('beginPath'), setLineDash: rec('setLineDash'),
     moveTo: rec('moveTo'), lineTo: rec('lineTo'), stroke: rec('stroke'), globalAlpha: 1 };
 }
 const fakeView = polys => ({
@@ -100,4 +100,21 @@ describe('2D 벽 조각', () => {
     expect(sel[0].fill).toBe('#14b8c4');
     expect(sel[0].pts).toHaveLength(4);
   });
+});
+
+// 계획 6 이월 · §15.14: 개구부(opening-pass)는 빈 자리만 남아 선택 전에는 표시가 없었다.
+test('개구부 자리에는 점선 테두리를 두른다(창은 유리 두 줄 그대로)', () => {
+  const w = wall();
+  const pass = on(w, 'opening-pass', { t: 0.5, pos: [2000, 0] });
+  const ctx = fakeCtx();
+  const polys = [];
+  drawWalls(ctx, fakeView(polys), { walls: [w], items: [pass], rooms: [] }, {});
+  // 점선 테두리는 v.poly(사각형, null, 선색)이다: 채움 없는 폴리곤이 하나 늘어난다.
+  expect(polys.some(p => p.fill === null)).toBe(true);
+  expect(ctx.calls.some(c => c[0] === 'setLineDash' && Array.isArray(c[1]) && c[1].length === 2)).toBe(true);
+  // 창은 점선이 아니라 실선 두 줄이다(예전 규칙 그대로).
+  const win = on(w, 'window-slide-1200', { t: 0.5, pos: [2000, 0] });
+  const ctx2 = fakeCtx();
+  drawWalls(ctx2, fakeView([]), { walls: [w], items: [win], rooms: [] }, {});
+  expect(ctx2.calls.some(c => c[0] === 'setLineDash')).toBe(false);
 });

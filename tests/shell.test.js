@@ -7,6 +7,7 @@ import { createShell, gizmoBtnVisible } from '../src/ui/shell.js';
 import { addItem } from '../src/state/floorOps.js';
 import { productById } from '../src/products/catalog.js';
 import { COLLISION_BANNER, COLLISION_BANNER_QUIET } from '../src/ui/messages.js';
+import { LAYOUT_DEBOUNCE_MS } from '../src/ui/layout.js';
 
 test('shell renders regions and option bar reflects tool opts', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
@@ -851,6 +852,16 @@ test('화면 맞추기 버튼은 넓은 라벨과 아이콘을 함께 갖고 이
   expect(fit.querySelector('.wide').textContent).toBe('화면 맞추기');
   expect(fit.querySelector('.narrow').textContent).toBe('⤢');
   expect(fit.querySelector('.narrow').getAttribute('aria-hidden')).toBe('true');
+  // 리뷰 I-1의 1순위: 꼬리의 나머지 두 라벨도 같은 패턴으로 줄인다(꼬리 폭 ~67 px 절약).
+  for (const [id, name, icon] of [['#btnBottomMore', '더보기', '▾'], ['#btnRightPanel', '속성 패널', '▸']]) {
+    const el = root.querySelector(id);
+    expect(el.closest('#bottomTail'), id).not.toBeNull();
+    expect(el.title, id).toBe(name);
+    expect(el.getAttribute('aria-label'), id).toBe(name);
+    expect(el.querySelector('.narrow').textContent, id).toBe(icon);
+    expect(el.querySelector('.narrow').getAttribute('aria-hidden'), id).toBe('true');
+    expect(el.querySelector('.wide').textContent, id).toContain(icon);   // 넓은 라벨은 이름 + 같은 화살표
+  }
   shell.destroy();
 });
 
@@ -869,4 +880,50 @@ test('#toasts가 셸 마크업에 상주하고 캔버스·미니맵에 이름이
   const mini = root.querySelector('#minimap canvas');
   expect(mini.getAttribute('aria-label')).toBe('미니맵 — 클릭하면 그 자리로 이동합니다');
   shell.destroy();
+});
+
+// §15.14(계획 6 이월): 스플리터가 클램프되지 않은 폭을 저장해, 좁은 창에서 끌면 화면과 다른
+// 폭이 kvp에 남았다. 저장은 "실제로 적용된 폭"이다.
+test('스플리터는 화면에 적용된 폭을 저장한다', () => {
+  localStorage.clear();
+  const vw = window.innerWidth;
+  window.innerWidth = 1100;                     // 두 패널이 260으로 클램프되는 폭
+  try {
+    const root = document.createElement('div'); document.body.appendChild(root);
+    const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+    const sp = root.querySelector('#panelSplitter');
+    sp.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: 300, bubbles: true, cancelable: true }));
+    sp.dispatchEvent(new MouseEvent('pointermove', { clientX: 460, bubbles: true }));   // 480까지 끌었다
+    sp.dispatchEvent(new MouseEvent('pointerup', { clientX: 460, bubbles: true }));
+    expect(localStorage.getItem('kvp.panelW')).toBe('260');   // 적용된 폭이 저장된다
+    shell.destroy();
+  } finally { localStorage.clear(); window.innerWidth = vw; }
+});
+
+// §15.14: 사용자가 직접 연 우측 패널은 다음 리사이즈에서 다시 접히지 않는다(계획 6 결정 6을
+// 이렇게 좁힌다 — 손으로 연 것을 즉시 다시 접으면 조작이 먹지 않는 것처럼 보인다).
+test('사용자가 연 우측 패널은 다음 자동 접힘에서 제외된다', () => {
+  vi.useFakeTimers();
+  const vw = window.innerWidth;
+  window.innerWidth = 1000;                     // 우측이 자동으로 접히는 폭
+  try {
+    const root = document.createElement('div'); document.body.appendChild(root);
+    const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+    const layout = root.querySelector('#layout');
+    expect(layout.classList.contains('right-off')).toBe(true);
+    root.querySelector('#btnRightPanel').click();             // 사용자가 직접 펴 준다
+    expect(layout.classList.contains('right-off')).toBe(false);
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(LAYOUT_DEBOUNCE_MS + 1);           // relayout()이 실제로 돈다
+    expect(layout.classList.contains('right-off')).toBe(false); // 다시 접지 않는다
+    // 창이 넓어져 접을 이유가 사라지면 예외도 끝난다.
+    window.innerWidth = 1600;
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(LAYOUT_DEBOUNCE_MS + 1);
+    window.innerWidth = 1000;
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(LAYOUT_DEBOUNCE_MS + 1);
+    expect(layout.classList.contains('right-off')).toBe(true);
+    shell.destroy();
+  } finally { vi.useRealTimers(); window.innerWidth = vw; }
 });

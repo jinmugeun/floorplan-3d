@@ -8,6 +8,7 @@ import { fmtLen } from '../../util/units.js';
 import { createItemDragger } from './itemDrag.js';
 import { createDuctSelect } from './ductSelect.js';
 import { drawItemSelection, ITEM_COLORS } from '../items2d.js';
+import { LABEL_BG } from '../ducts2d.js';
 import { itemMenuItems } from '../../ui/itemMenu.js';
 import { wallMenuItems, roomMenuItems } from '../../ui/surfaceMenu.js';
 import { pickAt } from './pick.js';
@@ -267,7 +268,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         const others = f.walls.filter(x => x.id !== w.id);
         // 보기 옵션 "치수"가 켜져 있으면 뷰가 이미 그린다(라벨 두 장 방지). 단, 뷰가 LOD로 생략하는 짧은 벽(40px 미만)은 여기서 그린다.
         const showLen = !store.get().view?.v2?.dims || dist(w.a, w.b) * view.camera.scale < 40;
-        if (showLen) v.label(fmtLen(dist(w.a, w.b), v.units, { unit: v.showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { bg: '#fff', color: v.COLORS.dim });
+        if (showLen) v.label(fmtLen(dist(w.a, w.b), v.units, { unit: v.showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { bg: LABEL_BG, color: v.COLORS.dim });
         for (const q of [w.a, w.b]) { const n = others.find(x => eq(x.a, q) || eq(x.b, q)); if (!n) { const s = v.toScreen(q); ctx.fillStyle = v.COLORS.guide; ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); } }
       }
     },

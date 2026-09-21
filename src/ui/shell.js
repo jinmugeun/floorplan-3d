@@ -26,6 +26,10 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   const widths = loadPanelWidths();
   // 사용자가 접은 것과 자동 접힘을 구분한다: 창이 넓어질 때 다시 펴지는 것은 자동 접힘뿐이다.
   const autoOff = { panel: false, right: false };
+  // 사용자가 직접 연 패널은 다음 자동 접힘에서 제외한다(§15.14 — 계획 6 결정 6을 이렇게 좁힌다):
+  // 손으로 연 것을 리사이즈가 즉시 다시 접으면 조작이 먹지 않는 것처럼 보인다. 창이 다시
+  // 넓어져 자동 접힘이 필요 없어지면(want[side] === false) 플래그도 함께 풀린다.
+  const userOpen = { panel: false, right: false };
   // 하단 바 접기(§14.3). relayout()이 첫 배치에서 먼저 돌므로 선언은 그 위에 두고, 실제 생성은
   // 마크업이 붙은 뒤(relayout() 다음) 한다 — 그 사이의 sync()는 ?.로 조용히 건너뛴다.
   let bottom = null;
@@ -55,8 +59,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     for (const side of ['panel', 'right']) {
       const el = q(side === 'right' ? '#right' : '#panel');
       const off = el.classList.contains('collapsed');
-      if (want[side] && !off) { togglePanel(layout, side, true); autoOff[side] = true; }
+      if (want[side] && !off && !userOpen[side]) { togglePanel(layout, side, true); autoOff[side] = true; }
       else if (!want[side] && off && autoOff[side]) { togglePanel(layout, side, false); autoOff[side] = false; }
+      if (!want[side]) userOpen[side] = false;   // 접을 이유가 사라지면 예외도 끝난다
     }
     // 우측 패널이 접혀 있을 때만 하단 바 오른쪽 끝에 "속성 ▸"이 보인다(다시 펴는 유일한 길이다).
     q('#btnRightPanel').hidden = !q('#right').classList.contains('collapsed');
@@ -73,18 +78,20 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // pop은 아래에서 만들지만 이 콜백은 클릭 때 비로소 돌아 TDZ에 걸리지 않는다.
   bottom = createBottomBar(root, { onOpen: () => pop.close() });
   const resizeWatch = createResizeWatch(layout, relayout);
-  q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; syncBottom(true); onMinimapResize(); });
+  q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; userOpen.right = true; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; syncBottom(true); onMinimapResize(); });
   const splitters = [
     createSplitter(q('#panelSplitter'), {
       get: () => widths.panel,
       set: w => { widths.panel = w; relayout(); },
-      onEnd: w => savePanelWidth('panel', w),
+      // 화면에 적용된 폭을 저장한다(§15.14 — 계획 6 이월): 좁은 창에서 끌면 클램프된 폭만
+      // 보이는데 kvp에는 끌던 값이 남아, 창을 넓히면 만진 적 없는 폭이 튀어나왔다.
+      onEnd: () => savePanelWidth('panel', fitPanelWidths(widths, globalThis.innerWidth ?? 1280).panel),
     }),
     createSplitter(q('#rightSplitter'), {
       invert: true,   // 오른쪽 패널은 왼쪽으로 끌 때 넓어진다
       get: () => widths.right,
       set: w => { widths.right = w; relayout(); },
-      onEnd: w => savePanelWidth('right', w),
+      onEnd: () => savePanelWidth('right', fitPanelWidths(widths, globalThis.innerWidth ?? 1280).right),
     }),
   ];
   const strip = q('#imageStrip');
@@ -105,7 +112,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   miniRo?.observe(mini);
 
   function showPanel(name) {
-    autoOff.panel = false;
+    autoOff.panel = false; userOpen.panel = true;
     togglePanel(layout, 'panel', false);   // 코드에서 패널을 열 때는 접힘을 함께 푼다(교체 모드 등)
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== name);

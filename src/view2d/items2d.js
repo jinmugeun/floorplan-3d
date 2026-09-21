@@ -3,6 +3,7 @@ import { symbolParts } from '../products/symbols.js';
 import { productById } from '../products/catalog.js';
 import { norm, sub, add, mul } from '../geom/vec.js';
 import { equipLabel } from '../vent/equipment.js';
+import { LABEL_BG } from './ducts2d.js';
 
 export const ITEM_COLORS = { line: '#3a4351', body: '#eef1f4', sel: '#8b5cf6', locked: '#e5484d', label: '#5b6775', rot: '#1f5fd0' };
 export const HANDLE_PX = 7;      // 크기 핸들 한 변(화면 px)
@@ -102,7 +103,7 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
   if (outline) strokePoly(ctx, v, itemCorners(item), outline, 2);
   if (labels && showCode) {
     const box = itemAABB(item);
-    v.label(`${item.name} ${item.code}`.trim(), [item.pos[0], box.max[1] + 12 / k], { size: 11, color: ITEM_COLORS.label, bg: '#fff' });
+    v.label(`${item.name} ${item.code}`.trim(), [item.pos[0], box.max[1] + 12 / k], { size: 11, color: ITEM_COLORS.label, bg: LABEL_BG });
   }
 }
 

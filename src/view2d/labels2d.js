@@ -26,6 +26,19 @@ export const LOD_SCALE = 0.02;      // px/mm. 이보다 작으면 공간 이름�
 export const ROOM_NAME_DY = 16;     // 방 중심에서 위로(화면 px)
 export const ROOM_AREA_DY = 4;      // 방 중심에서 아래로(화면 px)
 export const WALL_DIM_MIN_PX = 40;  // 이보다 짧게 보이는 벽에는 치수를 쓰지 않는다(기존 LOD 규칙)
+export const DIM_DEDUPE_PX = 48;   // 이만큼 가까운 같은 치수 글자는 한 번만 쓴다
+// 같은 길이 글자가 가까이 여러 번 찍히는 것을 줄인다(감사 "2D 치수 라벨이 중복된다": 같은 벽
+// 구간의 10400이 세로로 네 번). placeLabels의 겹침 판정으로는 지워지지 않는다 — 나란히
+// 떨어져 있어 상자가 겹치지 않기 때문이다. 멀리 떨어진 같은 길이는 남긴다: 서로 다른 벽의
+// 치수를 지우면 도면을 읽을 수 없다.
+export function dedupeDims(cands, px = DIM_DEDUPE_PX) {
+  const out = [];
+  for (const c of cands ?? []) {
+    if (out.some(o => o.text === c.text && Math.abs(o.sp[0] - c.sp[0]) <= px && Math.abs(o.sp[1] - c.sp[1]) <= px)) continue;
+    out.push(c);
+  }
+  return out;
+}
 
 // v.label이 그리는 배경 상자와 근사한 크기로 잰다(폭 = Σ글자폭 + 8, 높이 = size + 6 — v.label은
 // ctx.measureText를 쓰므로 "같은" 크기가 아니라 근사다).
@@ -79,10 +92,14 @@ export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = f
   if (flags.measures) for (const m of floor.measures ?? []) {
     out.push(cand(`measure:${m.id}`, 'measure', fmtLen(dist(m.a, m.b), units, { unit: showUnit }), [(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2], { size: 12, color: v.COLORS.dim, bg: LABEL_BG }));
   }
-  if (flags.dims) for (const w of floor.walls ?? []) {
-    const len = wallLength(w);
-    if (len * (v.camera.scale || 1) < WALL_DIM_MIN_PX) continue;
-    out.push(cand(`wall:${w.id}`, 'wallDim', fmtLen(len, units, { unit: showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { size: 11, color: v.COLORS.dim, bg: LABEL_BG }));
+  if (flags.dims) {
+    const dims = [];
+    for (const w of floor.walls ?? []) {
+      const len = wallLength(w);
+      if (len * (v.camera.scale || 1) < WALL_DIM_MIN_PX) continue;
+      dims.push(cand(`wall:${w.id}`, 'wallDim', fmtLen(len, units, { unit: showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { size: 11, color: v.COLORS.dim, bg: LABEL_BG }));
+    }
+    out.push(...dedupeDims(dims));   // 가까이 반복되는 같은 치수는 한 번만(§15.14)
   }
   if (flags.ductLabels !== false) for (const d of floor.ducts ?? []) {
     if (!ductVisible(d, flags)) continue;

@@ -39,7 +39,7 @@ export function materialRowsHtml(floor, sel, { detailsOpen = null } = {}) {
         <span class="mat-text"><b>${m ? esc(m.name) : '미지정'}</b><span class="muted">${m ? esc(`${m.maker} · ${m.code}`) : '재질을 고르면 색 대신 무늬가 보입니다'}</span></span>
       </div>
       <div class="row"><button type="button" name="matReplace" data-side="${k}">교체</button>${editor}</div>
-      <details ${matDetailsOpen ? 'open' : ''}><summary>상세 설정</summary>
+      <details ${matDetailsOpen ? 'open' : ''}><summary>${label} 상세 설정</summary>
         ${numRow(`matU-${k}`, '수평 오프셋 (mm)', a?.offset[0] ?? 0, 0, 1000)}
         ${numRow(`matV-${k}`, '수직 오프셋 (mm)', a?.offset[1] ?? 0, 0, 1000)}
         ${numRow(`matA-${k}`, '각도 (°)', a?.angle ?? 0, 0, 360)}

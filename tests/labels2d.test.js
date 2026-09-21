@@ -165,3 +165,19 @@ describe('라벨 후보 수집(collectLabels)', () => {
     expect(calls).toHaveLength(2);
   });
 });
+
+// 감사 "2D 치수 라벨이 중복된다": 같은 벽 구간의 10400이 세로로 네 번, 5600·5200이 두 번씩.
+test('가까이 겹쳐 찍히는 같은 치수는 하나만 남고 멀리 있는 같은 치수는 남는다', async () => {
+  const { dedupeDims, DIM_DEDUPE_PX } = await import('../src/view2d/labels2d.js');
+  expect(DIM_DEDUPE_PX).toBe(48);
+  const c = (text, sp) => ({ key: `w${sp[0]}:${sp[1]}`, kind: 'wallDim', text, sp, size: 11 });
+  const kept = dedupeDims([
+    c('10400', [100, 100]),
+    c('10400', [110.5, 120.25]),   // 48 px 안 → 생략
+    c('10400', [100, 400]),        // 멀다 → 남는다
+    c('5600', [104, 104]),         // 글자가 다르다 → 남는다
+  ]);
+  expect(kept.map(x => x.sp)).toEqual([[100, 100], [100, 400], [104, 104]]);
+  expect(dedupeDims([])).toEqual([]);
+  expect(dedupeDims(undefined)).toEqual([]);
+});

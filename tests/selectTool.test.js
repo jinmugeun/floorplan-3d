@@ -5,6 +5,7 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
+import { CURVED_WALL_TITLE } from '../src/ui/messages.js';
 
 const fakeView = { camera: { scale: 0.1 }, fit: () => {} };
 function setup() {
@@ -232,7 +233,7 @@ test('context menu items depend on what is under the cursor', () => {
   expect(wallItems.map(i => (i === 'sep' ? 'sep' : i.label)))
     .toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '타일 배치', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', 'sep', '삭제']);
   expect(pick(wallItems, '곡선벽 전환').disabled).toBe(true);
-  expect(pick(wallItems, '곡선벽 전환').title).toBe('미지원');
+  expect(pick(wallItems, '곡선벽 전환').title).toBe(CURVED_WALL_TITLE);   // §15.14: 사유를 말한다
   pick(wallItems, '벽 나누기').onSelect();
   expect(ui.get().splitWall).toBe(true);
   // '재질 교체'는 이제 focusField가 아니라 surfaceActions.replaceMaterial을 부른다(재질 교체 패널이 담당).

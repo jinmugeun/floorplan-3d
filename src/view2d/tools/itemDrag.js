@@ -4,6 +4,7 @@ import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, drawOrder, HANDLE_HIT_PX } from '../items2d.js';
 import { collidingFor } from '../../geom/collide.js';
+import { LABEL_BG } from '../ducts2d.js';   // 라벨 상자 색은 한 곳에서 온다(§15.14 — 라벨 패스와 같은 값)
 
 // 아이템 드래그 한 묶음. selectTool은 "무엇을 잡았나"만 판단하고 나머지를 여기로 넘긴다.
 // drag.kind: 'items'(이동) | 'scale'(크기 핸들, Task 9) | 'rotate'(회전 핸들, Task 9)
@@ -160,7 +161,7 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
       };
       for (const k of ['left', 'right', 'up', 'down']) {
         if (d.gaps[k] === null) continue;
-        v.label(`${Math.round(d.gaps[k])}`, spots[k], { size: 11, bg: '#fff', color: v.COLORS.dim });
+        v.label(`${Math.round(d.gaps[k])}`, spots[k], { size: 11, bg: LABEL_BG, color: v.COLORS.dim });
       }
     }
   }

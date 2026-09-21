@@ -57,6 +57,17 @@ function drawWindow(ctx, v, wall, o) {
   ctx.restore();
 }
 
+// 개구부(opening-pass)는 빈 자리만 남아 선택 전에는 아무 표시가 없었다(계획 6 이월 · §15.14).
+// 오늘의집처럼 점선 테두리를 둘러 "여기가 통로"라는 것을 보이게 한다 — 벽을 다시 칠하지는
+// 않으므로 평면의 뜻(벽이 없다)은 그대로다.
+function drawPass(ctx, v, wall, o) {
+  ctx.save();
+  ctx.setLineDash([6, 4]);
+  v.poly(spanQuad(wall, { u0: o.u0, u1: o.u1 }), null, v.COLORS.wall, 1);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 // 벽마다 조각을 칠한다. 선택된 벽은 조각이 아니라 원래 사각형을 통짜로 강조한다(§14.4):
 // 클릭 대상이 벽 전체(hitWall)이므로 강조도 벽 전체여야 한다.
 export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags = {} } = {}) {
@@ -75,7 +86,11 @@ export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags =
     }
     const holes = openingsOnWall(shown, wl);
     for (const span of wallSpans(wl, floor.walls, shown, { flags, openings: holes })) v.poly(spanQuad(wl, span), v.COLORS.wall, null);
-    for (const o of holes) if (byId.get(o.itemId)?.kind === 'window') drawWindow(ctx, v, wl, o);
+    for (const o of holes) {
+      const kind = byId.get(o.itemId)?.kind;
+      if (kind === 'window') drawWindow(ctx, v, wl, o);
+      else if (kind === 'opening') drawPass(ctx, v, wl, o);   // §15.14: 통로는 점선 테두리
+    }
     ctx.globalAlpha = 1;
   }
 }
