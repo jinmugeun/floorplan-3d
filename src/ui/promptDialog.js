@@ -34,14 +34,14 @@ export function promptDialog({ title = '이름 입력', label = '이름', value 
       if (ev.key === 'Escape') { ev.preventDefault(); close(null); return; }
       if (ev.key !== 'Enter') return;      // 글자 키는 입력란이 그대로 받는다(막지 않는다)
       ev.preventDefault();
-      if (check(root)) return;
+      if (check(root)) { root.querySelector('[name="text"]').focus(); return; }
       close(read(root));
     },
     onClick(ev, { root, close }) {
       const name = ev.target?.name;
       if (name === 'cancel') { close(null); return; }
       if (name !== 'ok') return;
-      if (check(root)) return;
+      if (check(root)) { root.querySelector('[name="text"]').focus(); return; }
       close(read(root));
     },
   });

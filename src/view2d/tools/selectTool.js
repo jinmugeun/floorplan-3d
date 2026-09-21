@@ -11,6 +11,7 @@ import { drawItemSelection, ITEM_COLORS } from '../items2d.js';
 import { itemMenuItems } from '../../ui/itemMenu.js';
 import { wallMenuItems, roomMenuItems } from '../../ui/surfaceMenu.js';
 import { pickAt } from './pick.js';
+import { MATERIAL_BOTH_SIDES } from '../../ui/messages.js';
 
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
@@ -41,6 +42,8 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
           applyMaterial(store, { kind: 'wall', id: hitW.id, side: 'in' }, pick.assignment, { record: false });
           applyMaterial(store, { kind: 'wall', id: hitW.id, side: 'out' }, pick.assignment, { record: false });
           store.endTransaction();
+          // 2D에서는 면을 가릴 수 없다(면 구분은 3D에서만 된다): 두 면에 발렸다는 것을 알린다(§14.10).
+          toast(MATERIAL_BOTH_SIDES);
           return;
         }
         const hitR = f.rooms.find(x => pointInPolygon(p, x.points));

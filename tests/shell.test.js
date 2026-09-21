@@ -616,3 +616,35 @@ test('충돌이 사라지면 배너도 사라진다', () => {
   store.dispatch(d => { const f = d.floors[0]; f.items = f.items.filter(i => i.id !== a); });
   expect(root.querySelector('#banner').hidden).toBe(true);
 });
+
+// §14.10: 활성 상태가 색으로만 전달됐다(aria-pressed·title이 하나도 없었다).
+test('도구·모드·레일·단위·잠금 토글이 aria-pressed와 title을 갖고 팝오버는 aria-expanded를 쓴다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  createShell(root, { store, ui });
+  const tools = [...root.querySelectorAll('[data-tool]')];
+  expect(tools).toHaveLength(10);
+  expect(tools.every(b => b.title && b.hasAttribute('aria-pressed'))).toBe(true);
+  expect(root.querySelector('[data-tool="wall"]').title).toBe('벽 그리기 [L]');
+  ui.set({ tool: 'wall' });
+  expect(root.querySelector('[data-tool="wall"]').getAttribute('aria-pressed')).toBe('true');
+  expect(root.querySelector('[data-tool="room"]').getAttribute('aria-pressed')).toBe('false');
+  ui.set({ mode: 'iso' });
+  expect(root.querySelector('[data-mode="iso"]').getAttribute('aria-pressed')).toBe('true');
+  expect(root.querySelector('[data-mode="2d"]').getAttribute('aria-pressed')).toBe('false');
+  const rail = [...root.querySelectorAll('#rail button')];
+  expect(rail.every(b => b.hasAttribute('aria-pressed'))).toBe(true);
+  root.querySelector('#rail [data-panel="products"]').click();
+  expect(root.querySelector('#rail [data-panel="products"]').getAttribute('aria-pressed')).toBe('true');
+  expect(root.querySelector('#rail [data-panel="draw"]').getAttribute('aria-pressed')).toBe('false');
+  store.dispatch(d => { d.units = 'ftin'; d.view.lockPlan = true; }, { record: false });
+  expect(root.querySelector('[data-units="ftin"]').getAttribute('aria-pressed')).toBe('true');
+  expect(root.querySelector('#btnLock').getAttribute('aria-pressed')).toBe('true');
+  const view = root.querySelector('#btnView');
+  expect(view.getAttribute('aria-expanded')).toBe('false');
+  view.click();
+  expect(view.getAttribute('aria-expanded')).toBe('true');
+  view.click();
+  expect(view.getAttribute('aria-expanded')).toBe('false');
+});

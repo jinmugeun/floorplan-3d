@@ -42,3 +42,13 @@ test('.primary 블록은 .primary가 아닌 선택자 뒤에 온다(뒤에 오�
   expect(CSS.indexOf('#topbar button:not(.primary)')).toBeLessThan(primaryAt);
   expect(CSS.indexOf('.tpl-card button:not(.primary)')).toBeLessThan(primaryAt);
 });
+
+// §14.10: 활성 버튼(파란 바탕)의 kbd가 muted 회색을 물려받아 빈 상자로 읽혔다(감사 #31).
+// 하위 카테고리 버튼은 #panel button의 width:100%에 눌려 목록처럼 쌓였다(감사 #15).
+test('활성 버튼의 kbd는 currentColor를 쓰고 하위 카테고리는 칩이다', () => {
+  expect(CSS).toMatch(/\.seg button\.on kbd[^{]*\{[^}]*color:\s*currentColor/);
+  expect(CSS).toContain('#panel .subs button');
+  expect(CSS).toMatch(/#panel \.subs button[^{]*\{[^}]*width:\s*auto/);
+  // §14.8: 맨 .error 규칙이 있어야 속성 패널의 충돌 한 줄이 경고 색으로 보인다(.modal .error만으로는 안 된다).
+  expect(CSS).toMatch(/^\.error\s*\{[^}]*color:\s*var\(--exhaust\)/m);
+});

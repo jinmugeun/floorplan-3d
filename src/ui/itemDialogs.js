@@ -45,7 +45,7 @@ export function openArrayDialog(kind, opts = {}) {
   // 간격 기본값은 호출자가 넘기는 length(선택 아이템의 긴 변)이고, 개수 0은 "간격으로 채우기"다.
   if (kind === 'path') {
     const step = Math.max(MIN_SPACING, Math.round(Number(opts.length) || 600));
-    const body = `${num('spacing', '간격 (mm)', step, MIN_SPACING, 100000, MIN_SPACING)}${num('count', `개수 (0 = 간격으로 채우기, 최대 ${MAX_COUNT})`, 0, 0, MAX_COUNT)}
+    const body = `${num('spacing', '간격 (mm)', step, MIN_SPACING, 100000, 'any')}${num('count', `개수 (0 = 간격으로 채우기, 최대 ${MAX_COUNT})`, 0, 0, MAX_COUNT)}
       <label class="check"><input type="checkbox" name="follow" checked> 경로 방향으로 회전</label>`;
     return openDialog('path', body, root => ({
       spacing: clamp(root.querySelector('[name="spacing"]'), step),

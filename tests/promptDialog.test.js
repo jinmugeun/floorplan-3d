@@ -123,3 +123,20 @@ describe('대화상자 뼈대', () => {
     expect(prevented).toBe(4);
   });
 });
+
+// 계획 4·5 이월(§14.10): 대화상자를 닫으면 포커스가 부른 버튼으로 돌아오고,
+// validate가 막으면 고칠 수 있게 입력란으로 간다.
+test('닫으면 포커스가 돌아오고 validate 실패 뒤에는 입력란에 포커스가 간다', async () => {
+  const opener = document.createElement('button'); document.body.appendChild(opener); opener.focus();
+  const p = promptDialog({ title: '템플릿으로 저장', value: '', validate: t => (t.trim() ? null : '이름을 입력해주세요') });
+  const modal = document.querySelector('.modal.prompt');
+  modal.querySelector('[name="ok"]').focus();
+  modal.querySelector('[name="ok"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(modal.querySelector('.error').textContent).toBe('이름을 입력해주세요');
+  expect(document.activeElement).toBe(modal.querySelector('[name="text"]'));
+  modal.querySelector('[name="text"]').value = '내 템플릿';
+  modal.querySelector('[name="ok"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(await p).toBe('내 템플릿');
+  expect(document.activeElement).toBe(opener);
+  opener.remove();
+});

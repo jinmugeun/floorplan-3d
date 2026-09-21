@@ -171,3 +171,11 @@ describe('타일 배치와 타일 크기', () => {
     expect(ui.get().matPick).toEqual({ assignment: { id: 'tile-white-300', offset: [0, 0], angle: 0, scale: [300, 300] }, category: '타일' });
   });
 });
+
+// §14.10: "타일 배치"가 조용한 패널 전환이라 좌측 패널이 접혀 있으면 아무 변화도 보이지 않았다(감사 #17).
+test('placeTile은 타일 크기 칸에 포커스를 준다', () => {
+  const a = setup();
+  const m = a.panel.placeTile();
+  expect(m).toBeTruthy();
+  expect(document.activeElement).toBe(a.el.querySelector('[name="scaleW"]'));
+});

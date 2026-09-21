@@ -5,7 +5,7 @@ import { createEmptyProject, activeFloor, createItem } from '../src/state/schema
 import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { createPathArrayTool } from '../src/view2d/tools/pathArrayTool.js';
+import { createPathArrayTool, PATH_SNAP_TOL } from '../src/view2d/tools/pathArrayTool.js';
 
 const fakeView = { camera: { scale: 0.1 }, requestRender: () => {} };
 function setup() {
@@ -13,8 +13,9 @@ function setup() {
   addWalls(store, rectWalls([0, 0], [8000, 6000], 200));
   const id = addItem(store, createItem(productById('chair-dining'), { pos: [1000.5, 1000.25] }));
   const done = [];
-  const t = createPathArrayTool({ store, ui, view: fakeView, ids: [id], onDone: p => done.push(p) });
-  return { store, ui, id, t, done, floor: () => activeFloor(store.get()) };
+  const toasts = [];
+  const t = createPathArrayTool({ store, ui, view: fakeView, ids: [id], onDone: p => done.push(p), toast: m => toasts.push(m) });
+  return { store, ui, id, t, done, toasts, floor: () => activeFloor(store.get()) };
 }
 const key = (t, k, extra = {}) => t.onKey({ key: k, preventDefault() {}, ...extra });
 
@@ -33,11 +34,14 @@ describe('경로 배열 도구', () => {
     expect(a.t.getPreview().points).toEqual([]);        // 끝나면 비워진다
   });
 
-  test('점이 하나뿐이면 [Enter]도 null을 넘긴다(배열할 경로가 아니다)', () => {
+  // §14.10 이월: 점 하나로 [Enter]를 누르면 도구를 끄지 않고 알려 준다(onDone 계약 불변).
+  test('점이 하나뿐이면 [Enter]는 도구를 유지하고 알려 준다', () => {
     const a = setup();
     a.t.onPointerDown([2000, 1000], {});
-    key(a.t, 'Enter');
-    expect(a.done).toEqual([null]);
+    expect(key(a.t, 'Enter')).toBe(true);
+    expect(a.done).toEqual([]);
+    expect(a.toasts).toEqual(['점을 2개 이상 찍어 주세요']);
+    expect(a.t.getPreview().points).toEqual([[2000, 1000]]);
   });
 
   test('[Esc]는 취소이고 선택은 건드리지 않는다', () => {
@@ -92,4 +96,15 @@ describe('경로 배열 도구', () => {
     expect(a.t.hint).toContain('[Enter]');
     expect(a.t.hint).toContain('[Shift]');
   });
+});
+
+// §14.10 이월: 점 스냅 허용오차를 150 → 50 mm로 좁힌다(150 mm면 가까운 두 점을 따로 찍을 수 없었다).
+test('점 스냅 허용오차는 50 mm다', () => {
+  const a = setup();
+  expect(PATH_SNAP_TOL).toBe(50);
+  a.t.onPointerDown([2000, 1000], {});
+  a.t.onPointerMove([2000, 1120], {});                  // 120 mm 떨어진 자리: 예전에는 앞 점으로 붙었다
+  expect(a.t.getPreview().cursor).toEqual([2000, 1120]);
+  a.t.onPointerMove([2000, 1030], {});                  // 30 mm: 여전히 붙는다
+  expect(a.t.getPreview().cursor).toEqual([2000, 1000]);
 });

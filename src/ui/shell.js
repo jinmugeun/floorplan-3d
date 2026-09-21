@@ -88,7 +88,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   function showPanel(name) {
     autoOff.panel = false;
     togglePanel(layout, 'panel', false);   // 코드에서 패널을 열 때는 접힘을 함께 푼다(교체 모드 등)
-    root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
+    root.querySelectorAll('#rail button').forEach(x => { const on = x.dataset.panel === name; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== name);
   }
   // 레일 버튼: 지금 열려 있는 탭을 다시 누르면 패널을 접는다(캔버스가 넓어진다 — §12.2).
@@ -103,7 +103,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   q('#btnLock').addEventListener('click', () => store.dispatch(d => { d.view.lockPlan = !d.view.lockPlan; }, { record: false }));
   // 3D 기즈모 모드 토글(이동 ↔ 회전). R은 1인칭이 쓰므로 단축키 없이 버튼으로만 바꾼다.
   let gizmoMode = 'translate';
-  const syncGizmoBtn = () => { const b = q('#btnGizmoMode'); b.textContent = gizmoMode === 'rotate' ? '회전' : '이동'; b.classList.toggle('on', gizmoMode === 'rotate'); };
+  const syncGizmoBtn = () => { const b = q('#btnGizmoMode'); b.textContent = gizmoMode === 'rotate' ? '회전' : '이동'; b.classList.toggle('on', gizmoMode === 'rotate'); b.setAttribute('aria-pressed', String(gizmoMode === 'rotate')); };
   q('#btnGizmoMode').addEventListener('click', () => { gizmoMode = gizmoMode === 'rotate' ? 'translate' : 'rotate'; syncGizmoBtn(); onGizmoMode(gizmoMode); });
   syncGizmoBtn();
 
@@ -122,13 +122,16 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // display: none이 되어 rect가 0이 되므로(팝오버가 좌상단으로 튄다) 늘 보이는 "더보기 ▾"를
   // 앵커로 삼는다 — 팝오버는 접힌 바에서도 버튼 근처에 뜬다.
   const anchorFor = el => (el?.closest?.('#bottomMore') ? q('#btnBottomMore') : el);
-  const popHandlers = { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; } };
+  // 팝오버 버튼은 눌린 상태가 아니라 "열려 있는지"를 알린다(§14.10).
+  const syncPopButtons = () => root.querySelectorAll('[data-popover]').forEach(b => b.setAttribute('aria-expanded', String(pop.isOpen() && popKind === b.dataset.popover)));
+  const popHandlers = { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; syncPopButtons(); } };
   function openPopover(kind, anchor) {
     const at = anchorFor(anchor);
     bottom?.closeMore();                 // 팝오버는 한 번에 하나만 열린다
-    if (pop.isOpen() && popKind === kind) { pop.close(); popKind = null; return; }
+    if (pop.isOpen() && popKind === kind) { pop.close(); popKind = null; syncPopButtons(); return; }
     popKind = kind;
     pop.open(at, popHtml(kind), popHandlers);
+    syncPopButtons();
   }
   function refreshPopover() { if (pop.isOpen() && popKind) pop.open(anchorFor(root.querySelector(`[data-popover="${popKind}"]`)), popHtml(popKind), popHandlers); }
   const setPath = (o, path, v) => { const ks = path.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = t[k]; t[ks.at(-1)] = v; };
@@ -225,8 +228,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   const setOrtho = name => { orthoName = name ?? null; syncGizmoVisible(); bottom?.sync(); };
 
   ui.subscribe(s => {
-    root.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === s.tool));
-    root.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === s.mode));
+    root.querySelectorAll('[data-tool]').forEach(b => { const on = b.dataset.tool === s.tool; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    root.querySelectorAll('[data-mode]').forEach(b => { const on = b.dataset.mode === s.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     els.canvas2d.hidden = s.mode !== '2d'; els.view3d.hidden = s.mode === '2d';
     const isIso = s.mode === 'iso';   // 평면 뷰어·1인칭에는 궤도 카메라·햇빛 조절이 뜻이 없다
     q('#btnCam').hidden = !isIso; q('#btnSun').hidden = !isIso;
@@ -243,8 +246,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     const u = s.units ?? 'mm';
     if (u !== lastUnits) { lastUnits = u; if (currentTool) renderOptions(); } // 단위가 바뀌면 옵션 바 라벨도 다시 그린다(바뀔 때만: 타이핑 중 입력을 지우지 않게)
     if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
-    root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
-    q('#btnLock').classList.toggle('on', !!s.view.lockPlan);
+    root.querySelectorAll('[data-units]').forEach(b => { const on = b.dataset.units === (s.units ?? 'mm'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    q('#btnLock').classList.toggle('on', !!s.view.lockPlan); q('#btnLock').setAttribute('aria-pressed', String(!!s.view.lockPlan));
     const bg = s.background;
     strip.hidden = !bg || ui.get().mode !== '2d'; // 이미지 세팅은 2D에서만
     if (bg) {

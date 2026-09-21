@@ -310,3 +310,18 @@ test('the selected wall length label is left to the view when 치수 is on', () 
   t.draw(ctx, v);
   expect(labels.length).toBeGreaterThan(0);
 });
+
+// §14.10: 2D에서 벽을 클릭하면 내벽·외벽 두 면에 동시에 발리는데 알려 주는 표시가 없었다(감사 #16).
+test('2D 재질 적용은 내·외벽 모두 적용임을 토스트로 알린다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const toasts = [];
+  const t = createSelectTool({ store, ui, view: fakeView, toast: m => toasts.push(m) });
+  ui.set({ matPick: { assignment: { id: 'tile-white-300', offset: [0, 0], angle: 0 } } });
+  t.onPointerDown([2000, 0.25], {});
+  const w = activeFloor(store.get()).walls.find(x => x.a[1] === 0 && x.b[1] === 0);   // 위쪽 벽
+  expect(w.matIn.id).toBe('tile-white-300');
+  expect(w.matOut.id).toBe('tile-white-300');
+  expect(toasts).toEqual(['내·외벽 모두 적용']);
+  expect(store.canUndo()).toBe(true);          // 두 면이 한 단계다
+});

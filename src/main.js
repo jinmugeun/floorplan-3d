@@ -37,7 +37,7 @@ import { confirmDialog } from './ui/confirmDialog.js';
 import { promptDialog } from './ui/promptDialog.js';
 import { openStartScreen } from './ui/startScreen.js';
 import { openOnboarding, isOnboarded } from './ui/onboarding.js';
-import { createTopbar, projectIsEmpty, confirmLeave } from './app/topbar.js';
+import { createTopbar, projectIsEmpty, confirmLeave, savedLabel, showSaved } from './app/topbar.js';
 import { templateProject, saveTemplate, listTemplates, BUILTIN_TEMPLATES } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
 import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
@@ -108,7 +108,7 @@ const materials = createMaterialPanel(shell.els.materials, {
 surfaceActions.replaceMaterial = target => { materials.setMode('replace', { target }); shell.showPanel('materials'); };
 surfaceActions.openEditor = (wallId, side) => { if (wallId) openMaterialEditor({ store, wallId, side }); };
 surfaceActions.applyTemplate = roomId => { if (roomId) openRoomTemplateDialog({ store, roomId }); };
-surfaceActions.placeTile = () => { materials.placeTile(); shell.showPanel('materials'); };
+surfaceActions.placeTile = () => { shell.showPanel('materials'); materials.placeTile(); };
 // 라이브러리·마감재 "교체 모드"를 끄는 한 곳. Esc·도구 전환·다른 패널로 이동이 모두 이것을 부른다(배너 문구와 동작을 맞춘다).
 // 레일 탭을 누른 경우에는 그 탭의 패널만 자기 모드를 지킨다(panelModes.js) — 제품↔마감재를 오가도 상대 패널이 꺼진다.
 const cancelReplace = (clickedPanel = null) => {
@@ -204,8 +204,8 @@ const restored = loadAutosave();
 const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store }); };
 if (projectIsEmpty(store.get())) showStart({ restored, onClose: maybeOnboard });
 else maybeOnboard();
-const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
-document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
+const auto = startAutosave(store, { onSaved: t => showSaved(savedLabel(t)) });
+document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); showSaved(savedLabel(new Date(), { manual: true })); shell.toast(savedLabel(new Date(), { manual: true })); });
 // 더보기 메뉴의 "템플릿으로 저장". 이름은 프로젝트 이름을 기본값으로 묻고, 이미 있는 이름은 막는다
 // (saveTemplate은 같은 이름을 조용히 덮어쓴다 — 실수로 저장해 둔 템플릿을 지우지 않게 여기서 거른다).
 async function saveAsTemplate() {

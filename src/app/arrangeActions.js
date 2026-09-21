@@ -69,6 +69,6 @@ export function createArrangeActions({ store, ui, view, toast = () => {}, setToo
 
   return {
     pathArray,
-    createPathTool: () => createPathArrayTool({ store, ui, view, ids, onDone: done }),
+    createPathTool: () => createPathArrayTool({ store, ui, view, ids, onDone: done, toast }),
   };
 }

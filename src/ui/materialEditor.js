@@ -24,13 +24,15 @@ export function validateRegion(r, { len, height }) {
   return null;
 }
 
-const numCell = (name, value, min, max) => `<input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="any" aria-label="${name}">`;
+// 숫자 칸의 접근 가능한 이름(§14.10 이월): 예전에는 aria-label이 'u0'·'scaleW' 같은 내부 이름이었다.
+const CELL_LABELS = { u0: '가로 시작', u1: '가로 끝', z0: '높이 시작', z1: '높이 끝', scaleW: '타일 너비', scaleH: '타일 높이' };
+const numCell = (name, value, min, max) => `<input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="any" aria-label="${CELL_LABELS[name] ?? name}">`;
 const matOptions = id => MATERIALS.map(m => `<option value="${m.id}" ${m.id === id ? 'selected' : ''}>${esc(`${m.category} · ${m.name}`)}</option>`).join('');
 // 영역(면 단위) 타일 크기(§13.3). 값이 없으면 그 재질의 기본 scale을 보여 준다.
 const clampScale = v => Math.min(MAT_RANGE.scale[1], Math.max(MAT_RANGE.scale[0], Math.round(Number(v) || MAT_RANGE.scale[0])));
 const scaleOf = r => r.mat.scale ?? materialById(r.mat.id)?.scale ?? [1000, 1000];
 
-export function openMaterialEditor({ store, wallId, side = 'in', onClose = () => {} }) {
+export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = true, onClose = () => {} }) {
   const existing = document.querySelector('.modal.mat-editor');
   if (existing) existing.remove();                       // 두 개를 띄우지 않는다
   const s = side === 'out' ? 'out' : 'in';
@@ -40,6 +42,10 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
   const len = wallLength(w0), height = w0.height;
   // 편집 중 목록은 대화상자가 들고 있다([적용]에서 한 번에 저장한다).
   let rows = regionsOf(activeFloor(store.get()), { kind: 'wall', id: wallId, side: s }).map(r => ({ ...r, mat: { ...r.mat, offset: [...r.mat.offset], ...(r.mat.scale ? { scale: [...r.mat.scale] } : {}) } }));
+  // 빈 캔버스 + "영역이 없습니다"로 열리면 무엇을 편집하는지 알 수 없다(감사 #18):
+  // 아직 영역이 없으면 벽 아래쪽 띠 하나를 만든 채 연다(§14.10).
+  // seedDefault:false는 "행을 더하는 동작 자체"를 보는 테스트용 문이다(씨앗이 인덱스를 밀지 않게).
+  if (seedDefault && !rows.length) rows = [newRow('band', { len, height })];
 
   const root = document.createElement('div');
   root.className = 'modal mat-editor';
@@ -83,6 +89,9 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
     const pad = 10, W = c.width - pad * 2, H = c.height - pad * 2;
     ctx.fillStyle = '#eef1f4'; ctx.fillRect(pad, pad, W, H);
     ctx.strokeStyle = '#3a4351'; ctx.strokeRect(pad, pad, W, H);
+    // 바탕: 지금 이 면에 발려 있는 재질(§14.10). 영역은 그 위에 얹힌다 — 무엇을 덮어쓰는지 보인다.
+    const base = materialById((s === 'out' ? wall()?.matOut : wall()?.matIn)?.id);
+    if (base) { ctx.save(); ctx.beginPath(); ctx.rect(pad, pad, W, H); ctx.clip(); ctx.translate(pad, pad); drawPattern(ctx, base, Math.max(W, H)); ctx.restore(); }
     for (const r of rows) {
       const m = materialById(r.mat.id);
       const u0 = r.kind === 'band' ? 0 : r.u0, u1 = r.kind === 'band' ? len : r.u1;
@@ -97,13 +106,16 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
   const render = () => { renderRows(); renderPreview(); };
 
   const close = () => { root.remove(); onClose(); };
+  // 새 영역 하나. wallLength가 float라(예: 4000 mm 벽이 3999.9999999999995) 기본 u1을 반올림해
+  // 넣는다 — validateRegion도 이 값을 범위 안으로 받아들인다.
+  function newRow(kind, { len: L, height: H }) {
+    const lenR = Math.round(L);
+    return kind === 'band'
+      ? { id: uid('rg'), kind: 'band', u0: 0, u1: lenR, z0: 0, z1: Math.min(1200, H), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } }
+      : { id: uid('rg'), kind: 'rect', u0: 0, u1: Math.min(1000, lenR), z0: 0, z1: Math.min(1000, H), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } };
+  }
   const addRow = kind => {
-    // wallLength가 float라(예: 4000 mm 벽이 3999.9999999999995) 기본 u1을 그대로 넣으면 입력칸에
-    // 지저분한 소수가 보인다. 반올림해서 넣는다 — validateRegion도 이 값을 범위 안으로 받아들인다.
-    const lenR = Math.round(len);
-    rows.push(kind === 'band'
-      ? { id: uid('rg'), kind: 'band', u0: 0, u1: lenR, z0: 0, z1: Math.min(1200, height), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } }
-      : { id: uid('rg'), kind: 'rect', u0: 0, u1: Math.min(1000, lenR), z0: 0, z1: Math.min(1000, height), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } });
+    rows.push(newRow(kind, { len, height }));
     part('error').textContent = '';
     render();
   };

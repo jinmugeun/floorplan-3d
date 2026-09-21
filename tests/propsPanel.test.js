@@ -630,3 +630,32 @@ test('비율 유지 체크박스와 applyNumber가 같은 칸을 본다', () => 
   expect(it.size[1]).toBe(450);
   setKeepRatio(false);
 });
+
+// §14.10: 벽 높이에 23003을 치면 말없이 8000이 됐다(감사 #7).
+test('범위를 벗어난 입력은 잘린 사실을 토스트로 알린다', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const ui = createUiState();
+  const wall = activeFloor(store.get()).walls[0];
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'wall', id: wall.id } });
+  const h = el.querySelector('[name="height"]');
+  h.value = '23003'; h.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).height).toBe(8000);
+  // 이 파일에는 beforeEach가 없어 앞 테스트의 토스트가 남아 있다: 목록에 들어 있는지만 본다.
+  expect([...document.querySelectorAll('.toast')].map(t => t.textContent)).toContain('최대 8000 mm까지');
+});
+
+// §14.10: 층이 하나뿐인데도 빨간 "층 삭제"가 활성이었다(감사 #8).
+test('층이 하나면 층 삭제 버튼이 disabled + title이다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  const btn = el.querySelector('[name="floorDelete"]');
+  expect(btn.disabled).toBe(true);
+  expect(btn.title).toBe('층이 하나뿐입니다');
+  store.dispatch(d => { d.floors.push(structuredClone(d.floors[0])); });
+  expect(el.querySelector('[name="floorDelete"]').disabled).toBe(false);
+});

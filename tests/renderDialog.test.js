@@ -65,3 +65,19 @@ describe('갤러리 대화상자', () => {
     await vi.waitFor(() => expect(root.textContent).toContain('저장된 렌더샷이 없습니다'));
   });
 });
+
+// §14.10: 렌더 뒤 "갤러리에 저장했습니다."만 남고 내려받기·갤러리로 가는 길이 없었다(감사 #19).
+test('렌더 전에는 내려받기가 숨어 있고 렌더 뒤에 내려받기·갤러리 열기가 동작한다', async () => {
+  const store = createStore(createEmptyProject());
+  const dlg = openRenderDialog({ store, view3d: { renderImage: () => 'data:image/png;base64,AAA' } });
+  const modal = document.querySelector('.modal.render');
+  expect(modal.querySelector('[name="download"]').hidden).toBe(true);
+  expect(modal.querySelector('[name="gallery"]')).toBeTruthy();
+  modal.querySelector('[name="render"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 0));
+  expect(modal.querySelector('[name="download"]').hidden).toBe(false);
+  modal.querySelector('[name="gallery"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(document.querySelector('.modal.gallery')).toBeTruthy();
+  document.querySelector('.modal.gallery')?.remove();
+  dlg.close();
+});

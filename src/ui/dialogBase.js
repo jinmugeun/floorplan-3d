@@ -23,6 +23,7 @@ export function trapTab(ev, list) {
 // key: 'confirm' | 'prompt'. html은 .modal-card 한 장, focus는 열릴 때 포커스를 줄 요소의 선택자다.
 export function openModal(key, { className = 'modal', html = '', focus = 'button', onKey = () => {}, onClick = () => {} } = {}) {
   if (current) { current.focus(); return current.promise; }
+  const opener = document.activeElement;   // 닫을 때 포커스를 여기로 되돌린다(계획 4·5 이월 — §14.10)
   const root = document.createElement('div');
   root.className = className;
   root.innerHTML = html;
@@ -41,6 +42,7 @@ export function openModal(key, { className = 'modal', html = '', focus = 'button
       document.removeEventListener('keydown', handler, true);
       root.remove();
       current = null;
+      opener?.focus?.();                   // 대화상자가 사라진 뒤 부른 버튼이 다시 포커스를 갖는다
       resolve(value);
     };
     const focusables = () => [...root.querySelectorAll('input, button')];

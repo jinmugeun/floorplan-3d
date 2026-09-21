@@ -84,7 +84,7 @@ test('경로 배열 간격은 10 mm 아래로 못 내려가고 개수는 500에�
   openArrayDialog('path', { length: 450.5, onApply: v => got.push(v) });
   const root = document.querySelector('.modal');
   expect(root.querySelector('[name="spacing"]').min).toBe('10');
-  expect(root.querySelector('[name="spacing"]').step).toBe('10');
+  expect(root.querySelector('[name="spacing"]').step).toBe('any');
   expect(root.querySelector('[name="count"]').max).toBe('500');
   expect(root.querySelector('[name="spacing"]').value).toBe('451');  // 긴 변을 mm 정수로 반올림
   root.querySelector('[name="spacing"]').value = '1';
@@ -120,4 +120,13 @@ test('경로 배열 대화상자는 간격·개수·회전 체크를 모으고 �
   r2.querySelector('[name="follow"]').checked = false;
   r2.querySelector('[name="apply"]').click();
   expect(got[1]).toEqual({ spacing: 1200, count: 5, follow: false });
+});
+
+// 계획 4·5 이월(§14.10): 간격은 10 mm 단위로만 오르내려 소수 간격을 칠 수 없었다(min 10은 유지).
+test('경로 배열 간격 입력은 step="any"이고 최솟값은 10이다', () => {
+  const dlg = openArrayDialog('path', { length: 500 });
+  const el = document.querySelector('[name="spacing"]');
+  expect(el.getAttribute('step')).toBe('any');
+  expect(el.getAttribute('min')).toBe('10');
+  dlg.close();
 });

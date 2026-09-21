@@ -59,3 +59,11 @@ test('3D 보기 팝오버의 성능 모드에 설명 한 줄이 붙는다', () =
   expect(V2_OPTIONS.find(o => o[0] === 'collisionLive')[1]).toBe('실시간 충돌 감지');
   expect(V3_OPTIONS.some(o => o[0] === 'collisionLive')).toBe(false);
 });
+
+// §14.10: 팝오버의 select에 접근 가능한 이름이 없어 앞의 <h4>로만 구분됐다.
+test('보기·카메라 팝오버의 select에 aria-label이 있다', () => {
+  const html = viewPopoverHtml(DEFAULT_VIEW, '3d');
+  expect(html).toContain('aria-label="디스플레이 모드"');
+  expect(html).toContain('aria-label="성능 모드"');
+  expect(cameraPopoverHtml(DEFAULT_VIEW)).toContain('aria-label="카메라 타입"');
+});

@@ -15,7 +15,7 @@ import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
 import { memoCollisions } from '../geom/collide.js';
-import { COLLISION_ITEM } from './messages.js';
+import { COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE } from './messages.js';
 export { lenField, readLen, withUnit } from './fieldUtils.js';
 export { applyNumber };
 
@@ -50,7 +50,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       container.innerHTML = `<h2>층 관리</h2>
         ${field('현재 층', `<select name="floorSelect">${p.floors.map((fl, i) => `<option value="${i}" ${i === idx ? 'selected' : ''}>${esc(fl.name)}</option>`).join('')}</select>`)}
         <div class="row"><button type="button" name="floorAdd">층 추가하기</button><button type="button" name="floorRename">이름 변경</button></div>
-        <button type="button" name="floorDelete" class="danger">층 삭제</button>
+        <button type="button" name="floorDelete" class="danger" ${p.floors.length <= 1 ? `disabled title="${LAST_FLOOR_TITLE}"` : ''}>층 삭제</button>
         ${lenField(withUnit('층 높이', units, showUnit), 'floorHeight', f.height, 2000, 8000, false, units, 10)}
         <details ${detailsOpen ? 'open' : ''}><summary>상세 설정</summary>
           ${field('실면적 기준', `<select name="areaMode"><option value="net" ${p.areaMode !== 'gross' ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option></select>`)}
@@ -178,13 +178,15 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (name === 'wallOpacity' || name === 'floorOpacity') { store.dispatch(d => { d.view[name] = Number(el.value); }, { record: false }); return; }
     if (name === 'keepRatio') { setKeepRatio(el.checked); return; }
     if (name === 'color' && sel?.type === 'item') { updateItem(store, sel.id, { color: el.value }); return; }
+    // 범위를 벗어난 입력이 말없이 잘리던 것을 알린다(§14.10 — 감사 #7).
+    const onClamp = (v, { max }) => toast(v === max ? CLAMP_MAX(max) : CLAMP_MIN(v));
     if (el.dataset.len) {
-      const v = readLen(el, store.get().units ?? 'mm');
+      const v = readLen(el, store.get().units ?? 'mm', { onClamp });
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
       applyNumber(store, sel, name, v); return;
     }
     if (el.type === 'number') {
-      const v = numValue(el);
+      const v = numValue(el, { onClamp });
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
       applyNumber(store, sel, name, v); return;
     }
@@ -223,7 +225,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (ev.target.name === 'floorRename') { openFloorDialog({ store, mode: 'rename', index: store.get().activeFloor ?? 0 }); return; }
     if (ev.target.name === 'floorDelete') {
       const p = store.get();
-      if (p.floors.length <= 1) { toast('마지막 층은 삭제할 수 없습니다'); return; }
+      if (p.floors.length <= 1) { toast(LAST_FLOOR); return; }
       const idx = p.activeFloor ?? 0;
       const { id, name } = p.floors[idx];
       // 대화상자가 열려 있는 동안 층 목록이 바뀔 수 있다: 확인 뒤에 마지막 층 규칙을 다시 보고,

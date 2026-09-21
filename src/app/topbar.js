@@ -4,6 +4,12 @@ import { openGalleryDialog } from '../ui/galleryDialog.js';
 import { openEstimateDialog } from '../ui/estimateDialog.js';
 import { openSpecDialog } from '../ui/specDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
+import { SAVED_MANUAL, savedAuto } from '../ui/messages.js';
+
+// 저장 표시 한 곳(§14.10). 예전에는 Ctrl+S 뒤에도 "자동 저장됨"이 적혔고, 시(hour)에 0 채움이
+// 없어 "1:02"가 새벽인지 오후인지 알 수 없었다. 문구는 messages.js에서 온다.
+export const savedLabel = (date = new Date(), { manual = false } = {}) => (manual ? SAVED_MANUAL : savedAuto(date));
+export function showSaved(text) { const el = document.getElementById('savedAt'); if (el) el.textContent = text; }
 
 // 벽도 배경 도면도 없으면 잃을 것이 없는 프로젝트다(시작 화면을 바로 띄워도 된다).
 export const projectIsEmpty = p => ((p?.floors ?? []).every(f => !f.walls.length) && !p?.background);

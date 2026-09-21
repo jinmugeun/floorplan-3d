@@ -12,7 +12,7 @@ function setup(side = 'in') {
   addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
   const f = activeFloor(store.get());
   const wallId = f.walls[0].id;
-  const dlg = openMaterialEditor({ store, wallId, side });
+  const dlg = openMaterialEditor({ store, wallId, side, seedDefault: false });
   const root = document.querySelector('.modal.mat-editor');
   return { store, wallId, dlg, root, wall: () => activeFloor(store.get()).walls.find(w => w.id === wallId), q: s => root.querySelector(s) };
 }
@@ -207,4 +207,18 @@ test('영역 행마다 타일 크기 두 칸이 있고 값이 저장된다', () 
   const saved = a.wall().regions.in[0];
   expect(saved.mat.id).toBe(first);
   expect(saved.mat.scale).toEqual([250, 2000]);          // 100~2000 mm로 잘린다
+});
+
+// §14.10: 열면 빈 캔버스 + "영역이 없습니다"만 보여 무엇을 편집하는지 알 수 없었다(감사 #18).
+test('편집기는 기본 영역 하나를 갖고 열리고 숫자 칸 이름이 한국어다', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const wallId = activeFloor(store.get()).walls[0].id;
+  const dlg = openMaterialEditor({ store, wallId, side: 'in' });      // 씨앗 기본값 = 켜짐
+  const modal = document.querySelector('.modal.mat-editor');
+  expect(modal.querySelectorAll('[data-region]')).toHaveLength(1);
+  expect(modal.textContent).not.toContain('영역이 없습니다');
+  const labels = [...modal.querySelectorAll('[data-region] input')].map(i => i.getAttribute('aria-label'));
+  expect(labels).toEqual(['가로 시작', '가로 끝', '높이 시작', '높이 끝', '타일 너비', '타일 높이']);
+  dlg.close();
 });

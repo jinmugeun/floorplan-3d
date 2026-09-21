@@ -7,7 +7,7 @@ import { createShell } from '../src/ui/shell.js';
 import { createContextMenu } from '../src/ui/contextMenu.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { createTopbar, projectIsEmpty, confirmLeave } from '../src/app/topbar.js';
+import { createTopbar, projectIsEmpty, confirmLeave, savedLabel, showSaved } from '../src/app/topbar.js';
 
 function setup(actions = {}) {
   const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
@@ -101,4 +101,15 @@ describe('나가기 가드', () => {
     p.background = { url: 'x', opacity: 1, visible: true };
     expect(projectIsEmpty(p)).toBe(false);
   });
+});
+
+// §14.10: Ctrl+S 뒤에도 "자동 저장됨"이라고 적혔고 시(hour)에 0 채움이 없었다(감사 #24).
+test('저장 표시는 수동·자동을 가르고 시각을 0으로 채운다', () => {
+  document.body.innerHTML = '<span id="savedAt">저장 이력 없음</span>';
+  expect(savedLabel(new Date(2026, 8, 22, 1, 2))).toBe('01:02 자동 저장됨');
+  expect(savedLabel(new Date(2026, 8, 22, 1, 2), { manual: true })).toBe('파일로 저장했습니다');
+  showSaved(savedLabel(new Date(2026, 8, 22, 13, 5)));
+  expect(document.getElementById('savedAt').textContent).toBe('13:05 자동 저장됨');
+  document.body.innerHTML = '';
+  expect(() => showSaved('없어도 던지지 않는다')).not.toThrow();
 });

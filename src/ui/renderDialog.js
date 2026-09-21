@@ -2,6 +2,7 @@
 // 클라우드 렌더는 범위 밖이라 실시간 three 렌더를 고해상도로 한 장 뽑는 것으로 갈음한다.
 import { addShot } from '../io/gallery.js';
 import { downloadDataUrl, filenameFor } from '../io/file.js';
+import { openGalleryDialog } from './galleryDialog.js';
 
 export const RENDER_SIZES = [[1280, 720], [1920, 1080], [3840, 2160]];
 export const RENDER_VIEWS = [['', '현재 카메라'], ['front', '정면'], ['back', '배면'], ['left', '좌측'], ['right', '우측'], ['top', '평면']];
@@ -20,11 +21,12 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
     </div>
     <img data-part="preview" alt="렌더 결과 미리보기" hidden>
     <p class="hint" data-part="msg">해상도가 높으면 몇 초 걸릴 수 있습니다.</p>
-    <div class="toolbar"><button type="button" name="render" class="primary">렌더</button></div>
+    <div class="toolbar"><button type="button" name="download" hidden>내려받기</button><button type="button" name="gallery">갤러리 열기</button><button type="button" name="render" class="primary">렌더</button></div>
   </div>`;
   document.body.appendChild(root);
   const part = n => root.querySelector(`[data-part="${n}"]`);
   const close = () => { root.remove(); onClose(); };
+  let lastUrl = null;   // 방금 렌더한 이미지(내려받기 버튼이 쓴다 — §14.10)
 
   async function render() {
     const [w, h] = st.size.split('×').map(Number);
@@ -39,9 +41,13 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
       onSaved(shot);
     } catch (e) { part('msg').textContent = `갤러리에 저장하지 못했습니다: ${e.message}`; }
     downloadDataUrl(filenameFor(store.get()).replace(/\.json$/, `-${w}x${h}.png`), url);
+    lastUrl = url;
+    root.querySelector('[name="download"]').hidden = false;
   }
   root.addEventListener('click', ev => {
     if (ev.target.name === 'close') { close(); return; }
+    if (ev.target.name === 'gallery') { openGalleryDialog({}); return; }
+    if (ev.target.name === 'download' && lastUrl) { downloadDataUrl(filenameFor(store.get()).replace(/\.json$/, '.png'), lastUrl); return; }
     if (ev.target.name === 'render') render();
   });
   root.addEventListener('change', ev => { if (ev.target.name in st) st[ev.target.name] = ev.target.value; });

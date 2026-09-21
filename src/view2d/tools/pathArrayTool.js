@@ -6,8 +6,13 @@ import { activeFloor } from '../../state/schema.js';
 import { snapPoint } from '../../geom/snap.js';
 import { dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
+import { PATH_MIN_POINTS } from '../../ui/messages.js';
 
-export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => {} }) {
+// 점 스냅 허용오차(§14.10 이월). snapPoint의 기본값 150 mm는 이 도구에서는 너무 넓었다:
+// 가까운 두 점을 따로 찍을 수 없고, "마지막 점을 다시 클릭 = 완료"가 의도보다 자주 걸렸다.
+export const PATH_SNAP_TOL = 50;
+
+export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => {}, toast = () => {} }) {
   const floor = () => activeFloor(store.get());
   let points = [], cursor = null, guides = [];
   const last = () => points[points.length - 1] ?? null;
@@ -17,11 +22,13 @@ export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => 
   // 이 도구에는 옵션 바가 없다). 점·보조선·벽 스냅은 늘 켜져 있다.
   const resolve = (p, ev) => snapPoint(p, {
     points, guides: floor().guides, walls: floor().walls,
-    anchor: last(), ortho: !!ev?.shiftKey, snap: true,
+    anchor: last(), ortho: !!ev?.shiftKey, snap: true, tol: PATH_SNAP_TOL,
   });
 
   function finish() {
-    const out = points.length >= 2 ? points.map(q => [q[0], q[1]]) : null;
+    // 점이 하나뿐이면 도구를 끄지 않는다(계획 4·5 이월): 왜 아무 일도 없는지 알려 주고 계속 찍게 둔다.
+    if (points.length < 2) { toast(PATH_MIN_POINTS); return; }
+    const out = points.map(q => [q[0], q[1]]);
     reset();
     onDone(out);
   }

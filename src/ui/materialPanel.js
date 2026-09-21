@@ -152,6 +152,10 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
       const q = container.querySelector('[name="q"]');
       if (q) q.value = '';
       render();
+      // 좌측 패널을 펴는 것은 호출자(main의 surfaceActions.placeTile → shell.showPanel)가 하고,
+      // 여기서는 방금 보인 타일 크기 칸에 포커스를 준다(§14.10 — 감사 #17).
+      const w = container.querySelector('[name="scaleW"]');
+      w?.focus(); w?.select?.();
       if (m) ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0, scale: [...st.scale] }, category: TILE_CATEGORY } });
       return m;
     },
