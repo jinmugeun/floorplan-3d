@@ -127,4 +127,25 @@ describe('라이브러리 패널', () => {
     const svg = thumb.querySelector('svg');
     expect(svg.getAttribute('width')).toBe('96');
   });
+
+  // §14.11: 처음 쓰는 사람은 썸네일을 거의 반드시 한 번 끌어 본다(감사 #11: draggable=false, 아무 일도 없음).
+  test('타일을 끌면 제품 id를 dataTransfer와 ui에 싣고 끝나면 지운다', () => {
+    const { el, ui } = setup();
+    click(el, '[data-cat="소파"]');
+    const tile = el.querySelector('.tile');
+    expect(tile.draggable).toBe(true);
+    const data = new Map();
+    const dt = { setData: (k, v) => data.set(k, v), effectAllowed: '' };
+    const start = new Event('dragstart', { bubbles: true }); start.dataTransfer = dt;
+    tile.dispatchEvent(start);
+    expect(data.get('text/x-product')).toBe(tile.dataset.id);
+    expect(dt.effectAllowed).toBe('copy');
+    expect(ui.get().dragProduct).toBe(tile.dataset.id);
+    const end = new Event('dragend', { bubbles: true }); end.dataTransfer = dt;
+    tile.dispatchEvent(end);
+    expect(ui.get().dragProduct).toBeNull();
+    // 타일이 아닌 곳에서 시작한 드래그는 아무것도 싣지 않는다.
+    const bare = new Event('dragstart', { bubbles: true }); bare.dataTransfer = { setData: () => { throw new Error('부르면 안 된다'); } };
+    expect(() => el.querySelector('[data-part="tabs"]').dispatchEvent(bare)).not.toThrow();
+  });
 });

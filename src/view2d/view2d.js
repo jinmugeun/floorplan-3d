@@ -34,7 +34,7 @@ export function drawEmptyGuide(ctx, v, floor, state, { toolName = null } = {}) {
   return true;
 }
 
-export function createView2D(canvas, store, ui, { readonly = false, labels = true, overlay = null, onPick = null, menu = null, onCameraChange = null } = {}) {
+export function createView2D(canvas, store, ui, { readonly = false, labels = true, overlay = null, onPick = null, menu = null, onCameraChange = null, onDragOver = null, onDrop = null, onDragLeave = null } = {}) {
   const ctx = canvas.getContext('2d');
   const camera = { cx: 4000, cy: 3000, scale: 0.08 };
   let tool = null, dirty = true, raf = 0, panning = null, dpr = 1, picking = false;
@@ -194,6 +194,25 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (menu && Array.isArray(items) && items.length) menu.open(ev.clientX, ev.clientY, items);
     requestRender();
   };
+  // HTML5 드래그 배치(§14.11). dragover에서 preventDefault를 부르지 않으면 브라우저가 drop을
+  // 주지 않는다. 좌표만 월드로 바꿔 넘기고 "무엇을 놓을지"는 배선(app/dndActions.js)이 안다.
+  // stopPropagation은 부르지 않는다: 같은 드롭이 바깥 #canvasWrap의 파일 드롭 경로까지 가야 한다.
+  const onDragOverEv = ev => {
+    if (readonly) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+    onDragOver?.(toWorld(pos(ev)), ev);
+    requestRender();
+  };
+  const onDropEv = ev => {
+    if (readonly) return;
+    ev.preventDefault();
+    onDrop?.(toWorld(pos(ev)), ev);
+    requestRender();
+  };
+  // 드롭 없이 끝난 드래그(캔버스를 벗어남·Esc 취소)에서 고스트를 지울 기회를 준다.
+  const onDragLeaveEv = () => { if (readonly) return; onDragLeave?.(); requestRender(); };
+  if (onDrop) { canvas.addEventListener('dragover', onDragOverEv); canvas.addEventListener('drop', onDropEv); canvas.addEventListener('dragleave', onDragLeaveEv); canvas.addEventListener('dragend', onDragLeaveEv); }
   canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointermove', onMove);
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, onUp);
   canvas.addEventListener('wheel', onWheel, { passive: false }); canvas.addEventListener('contextmenu', onMenu);
@@ -207,7 +226,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     get showUnit() { return !!store.get().settings?.showUnit; },
     get tool() { return tool; },
     setTool(t) { tool?.cancel?.(); tool = t; requestRender(); },
-    destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; ro?.disconnect(); window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); } };
+    destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; ro?.disconnect(); window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); canvas.removeEventListener('dragover', onDragOverEv); canvas.removeEventListener('drop', onDropEv); canvas.removeEventListener('dragleave', onDragLeaveEv); canvas.removeEventListener('dragend', onDragLeaveEv); } };
   requestRender();
   return api;
 }

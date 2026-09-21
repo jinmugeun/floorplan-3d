@@ -318,3 +318,58 @@ test('collisionLive를 끄고 아이템을 끄는 동안에는 충돌 색이 숨
 
   v.destroy();
 });
+
+// §14.11: 캔버스가 드래그를 받는다(dragover에서 미리보기, drop에서 배치).
+test('dragover·drop이 월드 좌표를 넘기고 기본 동작을 막는다', () => {
+  const store = createStore(createEmptyProject());
+  const canvas = makeCanvas();
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  // #canvasWrap(파일 드롭)과 그 안의 #c2d(제품 드롭)에 각각 리스너가 붙으므로 한 드롭이 두 경로를
+  // 지난다: 캔버스 리스너는 stopPropagation을 부르지 않아야 한다(둘 다 자기 페이로드만 본다).
+  const wrap = document.createElement('div'); document.body.appendChild(wrap); wrap.appendChild(canvas);
+  const wrapDrops = [];
+  wrap.addEventListener('drop', () => wrapDrops.push(1));
+  const over = [], dropped = [];
+  const v = createView2D(canvas, store, createUiState(), { onDragOver: p => over.push(p), onDrop: p => dropped.push(p) });
+  v.fit(0);
+  const fire = type => {
+    const ev = new Event(type, { bubbles: true, cancelable: true });
+    ev.clientX = 400; ev.clientY = 300; ev.dataTransfer = { dropEffect: '' };
+    canvas.dispatchEvent(ev);
+    return ev;
+  };
+  const a = fire('dragover');
+  expect(a.defaultPrevented).toBe(true);                 // 막지 않으면 브라우저가 drop을 주지 않는다
+  expect(a.dataTransfer.dropEffect).toBe('copy');
+  expect(over).toHaveLength(1);
+  const b = fire('drop');
+  expect(b.defaultPrevented).toBe(true);
+  expect(dropped[0][0]).toBeCloseTo(over[0][0], 6);
+  expect(wrapDrops).toHaveLength(1);                     // 바깥 파일 드롭 경로까지 버블링된다
+  v.destroy();
+  wrap.remove();
+  // onDrop을 주지 않으면 리스너를 달지 않는다(미니맵·캡처는 드래그를 받지 않는다).
+  const bare = makeCanvas();
+  bare.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  const plain = createView2D(bare, store, createUiState(), {});
+  const c = new Event('dragover', { bubbles: true, cancelable: true });
+  c.clientX = 10; c.clientY = 10; c.dataTransfer = { dropEffect: '' };
+  bare.dispatchEvent(c);
+  expect(c.defaultPrevented).toBe(false);
+  plain.destroy();
+});
+
+// §14.11 보강: 드래그가 드롭 없이 끝나면(캔버스를 벗어나거나 취소) 고스트를 지울 기회를 준다.
+test('dragleave·dragend가 onDragLeave를 부르고 destroy가 리스너를 뗀다', () => {
+  const store = createStore(createEmptyProject());
+  const canvas = makeCanvas();
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+  let left = 0;
+  const v = createView2D(canvas, store, createUiState(), { onDrop: () => {}, onDragLeave: () => { left += 1; } });
+  canvas.dispatchEvent(new Event('dragleave', { bubbles: true }));
+  canvas.dispatchEvent(new Event('dragend', { bubbles: true }));
+  expect(left).toBe(2);
+  v.destroy();
+  canvas.dispatchEvent(new Event('dragleave', { bubbles: true }));
+  expect(left).toBe(2);
+});

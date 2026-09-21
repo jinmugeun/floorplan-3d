@@ -109,3 +109,19 @@ describe('배치 도구', () => {
     expect(floor().items).toHaveLength(0);
   });
 });
+
+// §14.11: 드롭은 배치 도구의 클릭 경로를 그대로 지난다(벽 스냅·천장 z·undo 한 단계가 같다).
+test('onPointerMove + onPointerDown 한 번이 한 개를 놓고 되돌림도 한 단계다', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [6000.5, 4000.25], 200));
+  const ui = createUiState();
+  const t = createPlaceTool({ store, ui, view: fakeView, product: productById('hood-wall'), onDone: () => {} });
+  t.onPointerMove([3000.5, 120.25], {});                 // 위쪽 벽 근처
+  t.onPointerDown([3000.5, 120.25], {});
+  const items = activeFloor(store.get()).items;
+  expect(items).toHaveLength(1);
+  expect(items[0].wallId).toBeTruthy();                  // 벽 스냅이 걸렸다
+  expect(ui.get().selection).toEqual({ type: 'item', id: items[0].id });
+  store.undo();
+  expect(activeFloor(store.get()).items).toHaveLength(0);
+});

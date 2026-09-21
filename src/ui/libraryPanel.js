@@ -39,7 +39,7 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {} }) 
   }
   function tileHtml(p, count) {
     const tint = CATEGORY_COLORS[p.category] ?? '#f4f6f8';
-    return `<button type="button" class="tile" data-id="${p.id}" title="${esc(`${p.name} · ${ATTACH_LABELS[p.attach]}`)}">
+    return `<button type="button" class="tile" draggable="true" data-id="${p.id}" title="${esc(`${p.name} · ${ATTACH_LABELS[p.attach]}`)}">
       <span class="tile-thumb" style="background:${esc(tint)}">${symbolSvg(p.symbol, p.size[0], p.size[1], { box: 96, solid: p.color })}</span>
       <span class="tile-name">${esc(p.name)}</span>
       <span class="tile-code muted">${esc(p.code)}${count ? ` · ${count}개` : ''}</span>
@@ -98,13 +98,26 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {} }) 
     if (ev.target.name === 'q') { st.q = ev.target.value; renderCrumbs(); renderList(); return; } // 입력란은 다시 그리지 않아 포커스가 유지된다
     if (ev.target.name === 'sort') { st.sort = ev.target.value; renderList(); }
   };
+  // §14.11: 끌어 놓기도 배치다. 드래그 중에는 무엇을 끌고 있는지 dataTransfer에서 읽을 수 없으므로
+  // (dragover에서는 getData가 막혀 있다) ui 상태에 id를 실어 캔버스가 고스트를 그리게 한다.
+  const onDragStart = ev => {
+    const tile = ev.target.closest?.('.tile');
+    const p = tile && PRODUCTS.find(x => x.id === tile.dataset.id);
+    if (!p) return;
+    ev.dataTransfer?.setData('text/x-product', p.id);
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'copy';
+    ui.set({ dragProduct: p.id });
+  };
+  const onDragEnd = () => { if (ui.get().dragProduct) ui.set({ dragProduct: null }); };
   container.addEventListener('click', onClick);
   container.addEventListener('input', onInput);
   container.addEventListener('change', onInput);
+  container.addEventListener('dragstart', onDragStart);
+  container.addEventListener('dragend', onDragEnd);
   const unsub = store.subscribe(() => { if (st.tab === 'placed') renderList(); });
   render();
   return {
-    destroy() { unsub(); container.removeEventListener('click', onClick); container.removeEventListener('input', onInput); container.removeEventListener('change', onInput); container.innerHTML = ''; },
+    destroy() { unsub(); container.removeEventListener('click', onClick); container.removeEventListener('input', onInput); container.removeEventListener('change', onInput); container.removeEventListener('dragstart', onDragStart); container.removeEventListener('dragend', onDragEnd); container.innerHTML = ''; },
     setMode(mode, { itemIds = [] } = {}) { st.mode = mode; st.replaceIds = itemIds; renderTabs(); },
     get state() { return { ...st }; },
   };

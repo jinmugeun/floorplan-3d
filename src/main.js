@@ -32,6 +32,7 @@ import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { createDeleteActions } from './app/deleteActions.js';
 import { createArrangeActions } from './app/arrangeActions.js';
+import { createDndActions } from './app/dndActions.js';
 import { confirmDialog } from './ui/confirmDialog.js';
 import { promptDialog } from './ui/promptDialog.js';
 import { openStartScreen } from './ui/startScreen.js';
@@ -46,8 +47,9 @@ const ui = createUiState();
 const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m), onMinimapResize: () => minimap?.requestRender(), onOpenKeymap: () => openSettingsDialog({ store, tab: 'keys' }) });
 const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D 투영 선택(view3d가 상태를 되돌려 준다)
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
+let dnd = null;     // 같은 이유로 여기서 선언한다(드래그 옵션이 닫아서 읽는다 — 배선은 startPlace 다음에 만든다)
 const menu = createContextMenu(document.body);
-const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender() }); // 태스크 5의 onCameraChange를 유지한다
+const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender(), onDragOver: p => dnd?.onDragOver(p), onDrop: p => dnd?.onDrop(p), onDragLeave: () => dnd?.onDragLeave() }); // 태스크 5의 onCameraChange를 유지한다
 const { createDeleteTool, deleteSelection, deleteOrTool } = createDeleteActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const arrange = createArrangeActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
@@ -158,6 +160,8 @@ const tools = {
 function setTool(name) { cancelReplace(); const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
 // 라이브러리에서 제품을 고르면 배치 도구를 켠다(오늘의집과 같은 동작: 한 번 배치하면 선택 도구로 돌아간다).
 function startPlace(product) { pendingProduct = product; setTool('place'); }
+// 타일을 캔버스로 끌어 놓는 배치(§14.11). 규칙은 app/dndActions.js 한 자리에 있다.
+dnd = createDndActions({ ui, view, startPlace, pending: () => pendingProduct, setTool });
 function setMode(mode, opts) {
   if (mode === 'fp') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ fpPick: true, mode: '2d' }); return; }
   ui.set({ mode, fpPick: false });
