@@ -73,13 +73,16 @@ export function shellHtml({ name = '' } = {}) {
       <div class="seg" id="seg3d" data-overflow="1"><button id="btnCam" data-popover="cam" aria-expanded="false" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" aria-expanded="false" hidden>햇빛</button></div>
       <div class="seg" id="segLock"><button id="btnLock" aria-pressed="false">도면 잠금</button></div>
       <div class="seg" id="segCapture" data-overflow="1"><button data-action="capture">스크린 캡쳐</button></div>
-      <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit">화면 맞추기</button></div>
       <div class="seg" id="segPreset" data-overflow="1"><label class="muted">2D 투영 <select id="viewPreset" aria-label="2D 투영 뷰"><option value="">—</option><option value="front">정면</option><option value="back">배면</option><option value="left">좌측</option><option value="right">우측</option><option value="top">평면</option><option value="bottom">저면</option></select></label></div>
       <div class="seg" id="segGizmo" data-overflow="1"><button id="btnGizmoMode" aria-label="3D 기즈모 모드" aria-pressed="false" hidden>이동</button></div>
       <div class="seg" id="unitSeg"><button data-units="mm" class="on" aria-pressed="true">mm</button><button data-units="ftin" aria-pressed="false">ft·in</button></div>
-      <!-- 오른쪽 끝의 두 묶음은 바가 가로로 넘쳐도 늘 보여야 한다(§14.3의 "두 번 클릭" 프로브):
-           한 겹으로 감싸 sticky로 붙여 둔다 — 각각 sticky로 하면 서로 겹친다. -->
+      <!-- 오른쪽 끝의 묶음들은 바가 가로로 넘쳐도 늘 보여야 한다(§14.3의 "두 번 클릭" 프로브):
+           한 겹으로 감싸 sticky로 붙여 둔다 — 각각 sticky로 하면 서로 겹친다.
+           줌도 여기 있다: §14.3이 "모드·보기·줌은 항상 보인다"로 못 박은 셋 중 줌만 스크롤 밖에
+           있었고, 불투명한 이 꼬리가 scrollLeft 0에서 바로 그 줌 묶음을 덮었다(Task 3의 87 px).
+           덮이는 쪽은 이제 상대적으로 덜 급한 단위·잠금 묶음이다. -->
       <div id="bottomTail">
+        <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit">화면 맞추기</button></div>
         <div class="seg"><button id="btnBottomMore" aria-expanded="false" aria-controls="bottomMore" hidden>더보기 ▾</button></div>
         <div class="seg" id="rightToggleSeg"><button id="btnRightPanel" hidden>속성 ▸</button></div>
       </div>

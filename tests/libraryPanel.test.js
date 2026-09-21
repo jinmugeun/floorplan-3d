@@ -10,9 +10,9 @@ import { createLibraryPanel, isFav, toggleFav } from '../src/ui/libraryPanel.js'
 function setup() {
   const store = createStore(createEmptyProject()), ui = createUiState();
   const el = document.createElement('div'); document.body.appendChild(el);
-  const picked = [];
-  const panel = createLibraryPanel(el, { store, ui, onPick: (p, opts) => picked.push([p.id, opts?.mode]) });
-  return { store, ui, el, panel, picked };
+  const picked = [], dragEnds = [];
+  const panel = createLibraryPanel(el, { store, ui, onPick: (p, opts) => picked.push([p.id, opts?.mode]), onDragEnd: () => dragEnds.push(1) });
+  return { store, ui, el, panel, picked, dragEnds };
 }
 const click = (el, sel) => el.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
@@ -130,7 +130,7 @@ describe('라이브러리 패널', () => {
 
   // §14.11: 처음 쓰는 사람은 썸네일을 거의 반드시 한 번 끌어 본다(감사 #11: draggable=false, 아무 일도 없음).
   test('타일을 끌면 제품 id를 dataTransfer와 ui에 싣고 끝나면 지운다', () => {
-    const { el, ui } = setup();
+    const { el, ui, dragEnds } = setup();
     click(el, '[data-cat="소파"]');
     const tile = el.querySelector('.tile');
     expect(tile.draggable).toBe(true);
@@ -141,8 +141,11 @@ describe('라이브러리 패널', () => {
     expect(data.get('text/x-product')).toBe(tile.dataset.id);
     expect(dt.effectAllowed).toBe('copy');
     expect(ui.get().dragProduct).toBe(tile.dataset.id);
+    // dragend는 드래그 소스(타일)에서만 일어난다: 캔버스는 받을 수 없으므로 배치 배선의 취소
+    // 경로(dnd.onDragEnd)는 여기에서만 불린다 — 캔버스 위에서 [Esc]로 취소한 드래그도 이 길이다.
     const end = new Event('dragend', { bubbles: true }); end.dataTransfer = dt;
     tile.dispatchEvent(end);
+    expect(dragEnds).toHaveLength(1);
     expect(ui.get().dragProduct).toBeNull();
     // 타일이 아닌 곳에서 시작한 드래그는 아무것도 싣지 않는다.
     const bare = new Event('dragstart', { bubbles: true }); bare.dataTransfer = { setData: () => { throw new Error('부르면 안 된다'); } };

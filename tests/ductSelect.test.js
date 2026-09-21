@@ -8,10 +8,17 @@ import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 import { createDuctSelect, deleteSelectedDuct } from '../src/view2d/tools/ductSelect.js';
+import { pickAt } from '../src/view2d/tools/pick.js';
 import { ductMenuItems } from '../src/ui/ductMenu.js';
 
 const fakeView = { camera: { scale: 0.05 }, fit: () => {} };
 const pickItem = (items, label) => items.find(x => x !== 'sep' && x.label === label);
+
+// §14.6: 히트 판정은 pick.pickAt 한 곳에만 있다. ductSelect는 그 결과를 받아 선택·드래그·메뉴로
+// 바꾸는 쪽이므로, 예전의 ds.onDown(p)·ds.menuItems(p)(자체 피커) 대신 캔버스와 같은 순서로 부른다.
+const hitAt = (store, ui, p) => pickAt(store, ui, p, { scale: fakeView.camera.scale });
+const down = (store, ui, ds, p) => { const h = hitAt(store, ui, p); return h?.type === 'duct' ? ds.begin(h, p) : false; };
+const menuAt = (store, ui, ds, p) => { const h = hitAt(store, ui, p); return h?.type === 'duct' ? ds.menuFor(h) : null; };
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -23,32 +30,34 @@ function setup() {
     segments: [{ w: 750, h: 400, z: 2650 }], connections: [{ point: 0, itemId: hood }],
   });
   const toasts = [];
-  return { store, ui, id, hood, toasts, floor: () => activeFloor(store.get()),
-    ds: createDuctSelect({ store, ui, view: fakeView, toast: m => toasts.push(m) }),
+  const ds = createDuctSelect({ store, ui, toast: m => toasts.push(m) });
+  return { store, ui, id, hood, toasts, ds, floor: () => activeFloor(store.get()),
+    down: p => down(store, ui, ds, p),
+    menu: p => menuAt(store, ui, ds, p),
     st: createSelectTool({ store, ui, view: fakeView, toast: m => toasts.push(m) }) };
 }
 
 describe('덕트 선택과 편집', () => {
   test('구간을 누르면 덕트가, 꼭짓점을 누르면 그 점이 선택된다', () => {
-    const { ui, ds, id } = setup();
-    ds.onDown([5000, 1500]);
+    const { ui, ds, down, id } = setup();
+    down([5000, 1500]);
     expect(ui.get().selection).toEqual({ type: 'duct', id, segment: 0, vertex: null });
     ds.finish();
-    ds.onDown([8000, 1500]);
+    down([8000, 1500]);
     expect(ui.get().selection).toEqual({ type: 'duct', id, segment: null, vertex: 1 });
     ds.finish();
   });
 
   test('꼭짓점 드래그는 한 단계, 구간 드래그는 폴리라인 전체 평행 이동이다', () => {
-    const { store, ds, id, floor } = setup();
-    ds.onDown([8000, 1500]);
+    const { store, ds, down, id, floor } = setup();
+    down([8000, 1500]);
     ds.apply([8500.5, 1200.25]);
     ds.apply([9000, 1000]);
     ds.finish();
     expect(ductById(floor(), id).points[1]).toEqual([9000, 1000]);
     store.undo();
     expect(ductById(floor(), id).points[1]).toEqual([8000, 1500]);
-    ds.onDown([5000, 1500]);
+    down([5000, 1500]);
     ds.apply([5100.5, 1700.25]);
     ds.finish();
     expect(ductById(floor(), id).points).toEqual([[2101, 1700], [8101, 1700], [8101, 6200]]);
@@ -60,9 +69,9 @@ describe('덕트 선택과 편집', () => {
   });
 
   test('잠긴 덕트는 골라도 움직이지 않고 토스트로 알린다', () => {
-    const { store, ui, ds, id, toasts, floor } = setup();
+    const { store, ui, ds, down, id, toasts, floor } = setup();
     store.dispatch(s => { activeFloor(s).ducts[0].locked = true; });
-    ds.onDown([5000, 1500]);
+    down([5000, 1500]);
     ds.apply([6000, 3000]);
     ds.finish();
     expect(ui.get().selection.id).toBe(id);
@@ -83,28 +92,28 @@ describe('덕트 선택과 편집', () => {
   });
 
   test('우클릭 메뉴 항목이 상황에 따라 켜지고 꺼진다', () => {
-    const { store, ui, ds, id, floor } = setup();
-    const onSeg = ds.menuItems([5000, 1500]);
+    const { store, ui, menu, id, floor } = setup();
+    const onSeg = menu([5000, 1500]);
     expect(pickItem(onSeg, '점 삽입').disabled).toBe(false);
     expect(pickItem(onSeg, '댐퍼 추가').disabled).toBe(false);
     expect(pickItem(onSeg, '점 삭제').disabled).toBe(true);
     expect(pickItem(onSeg, '급기로 전환')).toBeTruthy();
     pickItem(onSeg, '댐퍼 추가').onSelect();
     expect(ductById(floor(), id).dampers[0]).toMatchObject({ segment: 0, type: 'VD', w: 750, h: 400 });
-    const onVtx = ds.menuItems([2000, 1500]);
+    const onVtx = menu([2000, 1500]);
     expect(pickItem(onVtx, '점 삭제').disabled).toBe(false);
     expect(pickItem(onVtx, '설비 연결 해제').disabled).toBe(false);
     pickItem(onVtx, '설비 연결 해제').onSelect();
     expect(ductById(floor(), id).connections).toEqual([]);
-    expect(ds.menuItems([9999, 9999])).toBeNull();
-    pickItem(ds.menuItems([5000, 1500]), '잠금').onSelect();
+    expect(menu([9999, 9999])).toBeNull();
+    pickItem(menu([5000, 1500]), '잠금').onSelect();
     expect(ductById(floor(), id).locked).toBe(true);
     expect(ductMenuItems({ store, ui, sel: { type: 'duct', id: '없음' } })).toBeNull();
   });
 
   test('연결된 꼭짓점을 설비에서 떼어 놓으면 연결이 끊긴다(한 단계로 되돌아간다)', () => {
-    const { store, ds, id, hood, floor } = setup();
-    ds.onDown([2000, 1500]);                       // 후드에 연결된 0번 점
+    const { store, ds, down, id, hood, floor } = setup();
+    down([2000, 1500]);                       // 후드에 연결된 0번 점
     ds.apply([3000.5, 3000.25]);                   // 풋프린트(1600×1200) 밖 + 접속점에서 300 mm 넘게
     ds.finish();
     expect(ductById(floor(), id).points[0]).toEqual([3001, 3000]);
@@ -115,17 +124,17 @@ describe('덕트 선택과 편집', () => {
   });
 
   test('연결된 꼭짓점을 설비 안에서 조금만 옮기면 연결이 남는다', () => {
-    const { ds, id, hood, floor } = setup();
-    ds.onDown([2000, 1500]);
+    const { ds, down, id, hood, floor } = setup();
+    down([2000, 1500]);
     ds.apply([2200.5, 1600.25]);                   // 아직 후드 풋프린트 안
     ds.finish();
     expect(ductById(floor(), id).connections).toEqual([{ point: 0, itemId: hood }]);
   });
 
   test('연결된 꼭짓점을 다른 설비에 떨어뜨리면 그 설비로 옮겨 붙는다', () => {
-    const { store, ds, id, hood, floor } = setup();
+    const { store, ds, down, id, hood, floor } = setup();
     const other = addItem(store, createItem(productById('hood-box'), { pos: [7000.5, 5000.25], z: 1700 }));
-    ds.onDown([2000, 1500]);
+    down([2000, 1500]);
     ds.apply([7000.5, 5000.25]);
     ds.finish();
     const conns = ductById(floor(), id).connections;
@@ -134,9 +143,9 @@ describe('덕트 선택과 편집', () => {
   });
 
   test('점 삽입은 클릭이 구간에서 벗어나도 중심선 위에 점을 넣는다', () => {
-    const { store, ui, ds, id, floor } = setup();
+    const { store, ui, menu, id, floor } = setup();
     // 구간 0은 [2000,1500]→[8000,1500], 폭 750이라 중심선에서 375 mm 벗어난 클릭도 같은 구간으로 잡힌다.
-    pickItem(ds.menuItems([5100.5, 1700.25]), '점 삽입').onSelect();
+    pickItem(menu([5100.5, 1700.25]), '점 삽입').onSelect();
     const pts = ductById(floor(), id).points;
     expect(pts).toHaveLength(4);
     expect(pts[1]).toEqual([5100.5, 1500]);

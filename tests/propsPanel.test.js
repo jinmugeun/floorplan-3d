@@ -10,6 +10,7 @@ import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { createPropsPanel, applyNumber, lenField, withUnit, readLen } from '../src/ui/propsPanel.js';
 import { getKeepRatio, setKeepRatio } from '../src/ui/propsApply.js';
 import { applyMaterial, assignmentOf } from '../src/state/materialOps.js';
+import { fmtLen } from '../src/util/units.js';
 
 test('wall panel edits thickness; room panel edits name', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
@@ -645,6 +646,25 @@ test('범위를 벗어난 입력은 잘린 사실을 토스트로 알린다', ()
   expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).height).toBe(8000);
   // 이 파일에는 beforeEach가 없어 앞 테스트의 토스트가 남아 있다: 목록에 들어 있는지만 본다.
   expect([...document.querySelectorAll('.toast')].map(t => t.textContent)).toContain('최대 8000 mm까지');
+});
+
+// m-6: ft·in 모드의 길이 칸에서도 "최대 8000 mm까지"가 떴다 — 화면에 mm는 하나도 없는데.
+test('ft·in 모드의 클램프 문구는 ft·in 표기로 말한다', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  const ui = createUiState();
+  const wall = activeFloor(store.get()).walls[0];
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'wall', id: wall.id } });
+  const h = el.querySelector('[name="height"]');
+  expect(h.dataset.len).toBe('1');                       // ft·in 길이 칸은 텍스트 입력이다
+  h.value = '80\''; h.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === wall.id).height).toBe(8000);
+  const texts = [...document.querySelectorAll('.toast')].map(t => t.textContent);
+  expect(texts).toContain(`최대 ${fmtLen(8000, 'ftin')}까지`);   // 예: 최대 26' 3"까지
+  expect(texts.at(-1)).not.toContain('mm');
 });
 
 // §14.10: 층이 하나뿐인데도 빨간 "층 삭제"가 활성이었다(감사 #8).

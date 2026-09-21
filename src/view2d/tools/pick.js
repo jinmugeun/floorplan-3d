@@ -12,11 +12,11 @@ import { pointInItem } from '../../geom/items.js';
 import { dist } from '../../geom/vec.js';
 import { drawOrder, itemVisible } from '../items2d.js';
 import { ductVisible } from '../ducts2d.js';
-import { DUCT_HANDLE_HIT_PX } from './ductSelect.js';
 
 // 히트 허용치는 종류마다 다르다(화면 px): 벽은 두께 밖 6 px, 아이템은 윤곽 밖 2 px,
 // 덕트는 띠 반폭 또는 8 px, 고른 덕트의 꼭짓점 핸들은 벽 꼭짓점과 같은 8 px.
-export const PICK_TOL_PX = { wall: 6, item: 2, duct: 8, handle: DUCT_HANDLE_HIT_PX };
+// 허용치의 유일한 자리다(§14.6): ductSelect.js에 있던 리터럴 px(8)·DUCT_HANDLE_HIT_PX는 지웠다.
+export const PICK_TOL_PX = { wall: 6, item: 2, duct: 8, handle: 8 };
 
 export function pickAt(store, ui, p, { scale = 1 } = {}) {
   const f = activeFloor(store.get());

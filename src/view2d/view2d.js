@@ -1,8 +1,7 @@
 import { activeFloor } from '../state/schema.js';
 import { endpoints } from '../geom/walls.js';
 import { roomInnerPolygon, pointInPolygon } from '../geom/rooms.js';
-import { fmtLen, fmtArea } from '../util/units.js';
-import { dist } from '../geom/vec.js';
+import { fmtLen, fmtArea } from '../util/units.js';   // api로 도구·라벨에 넘긴다
 import { drawItems, ITEM_DRAG_KINDS } from './items2d.js';
 import { drawDucts } from './ducts2d.js';
 import { memoCollisions } from '../geom/collide.js';
@@ -127,7 +126,10 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
     // 라벨은 맨 마지막에 한 패스로 그린다(§14.5): 우선순위가 높은 것부터 화면 AABB로 자리를 잡고
     // 겹치는 것은 생략한다. 여기서 먼저 걸러 두어야 덕트·아이템이 자기 라벨을 그릴지 알 수 있다.
-    const placedLabels = labels ? placeLabels(collectLabels(api, f, { flags: v2, units, showUnit, pyeong }), { scale: camera.scale }) : [];
+    // 제품 코드 라벨은 대화형 캔버스에만 그린다(미니맵·캡처는 예전부터 drawItems의 labels && !readonly로
+    // 빠져 있었다 — 라벨 패스로 옮기면서 같은 규칙을 플래그로 넘긴다).
+    const lflags = readonly ? { ...v2, productCode: false } : v2;
+    const placedLabels = labels ? placeLabels(collectLabels(api, f, { flags: lflags, units, showUnit, pyeong }), { scale: camera.scale }) : [];
     // shown은 "라벨 패스가 맡았다"는 표시다(내용이 아니라 있고 없음만 본다 — ducts2d·items2d가
     // `!shown`으로 검사한다). key는 후보를 테스트에서 지목하고 겹침 진단을 읽기 위한 이름이다.
     const shown = labels ? new Set(placedLabels.map(c => c.key)) : null;
@@ -156,7 +158,8 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (v2.measures) for (const m of f.measures) {
       const s0 = toScreen(m.a), s1 = toScreen(m.b);
       ctx.strokeStyle = COLORS.guide; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.stroke(); ctx.lineWidth = 1;
-      if (labels) label(fmtLen(dist(m.a, m.b), units, { unit: showUnit }), [(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2], { bg: '#fff', color: COLORS.dim });
+      // 길이 라벨은 여기서 그리지 않는다: 라벨 패스(collectLabels의 'measure')가 우선순위·겹침
+      // 판정을 지나 그린다(m-3). 라벨을 끈 캔버스에서는 예전에도 이 라벨이 없었다.
     }
     if (!readonly && labels) drawEmptyGuide(ctx, api, f, state, { toolName: tool?.name ?? null });
     if (tool && !readonly) tool.draw(ctx, api);
@@ -216,9 +219,11 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     onDrop?.(toWorld(pos(ev)), ev);
     requestRender();
   };
-  // 드롭 없이 끝난 드래그(캔버스를 벗어남·Esc 취소)에서 고스트를 지울 기회를 준다.
+  // 캔버스를 벗어난 드래그에서 고스트를 지울 기회를 준다. dragend는 여기서 듣지 않는다(§14.11):
+  // 그 이벤트는 드래그 **소스**(라이브러리 타일)에서만 일어나 캔버스 리스너는 실제 브라우저에서
+  // 한 번도 불리지 않았다 — [Esc] 취소는 libraryPanel의 dragend → dnd.onDragEnd이 맡는다.
   const onDragLeaveEv = () => { if (readonly) return; onDragLeave?.(); requestRender(); };
-  if (onDrop) { canvas.addEventListener('dragover', onDragOverEv); canvas.addEventListener('drop', onDropEv); canvas.addEventListener('dragleave', onDragLeaveEv); canvas.addEventListener('dragend', onDragLeaveEv); }
+  if (onDrop) { canvas.addEventListener('dragover', onDragOverEv); canvas.addEventListener('drop', onDropEv); canvas.addEventListener('dragleave', onDragLeaveEv); }
   canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointermove', onMove);
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, onUp);
   canvas.addEventListener('wheel', onWheel, { passive: false }); canvas.addEventListener('contextmenu', onMenu);
@@ -232,7 +237,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     get showUnit() { return !!store.get().settings?.showUnit; },
     get tool() { return tool; },
     setTool(t) { tool?.cancel?.(); tool = t; requestRender(); },
-    destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; ro?.disconnect(); window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); canvas.removeEventListener('dragover', onDragOverEv); canvas.removeEventListener('drop', onDropEv); canvas.removeEventListener('dragleave', onDragLeaveEv); canvas.removeEventListener('dragend', onDragLeaveEv); } };
+    destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; ro?.disconnect(); window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); canvas.removeEventListener('dragover', onDragOverEv); canvas.removeEventListener('drop', onDropEv); canvas.removeEventListener('dragleave', onDragLeaveEv); } };
   requestRender();
   return api;
 }

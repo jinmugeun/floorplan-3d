@@ -11,7 +11,7 @@ export const favProducts = () => PRODUCTS.filter(p => isFav(p.id));
 
 const TABS = [['ohouse', '오늘의집 제품'], ['fav', '즐겨찾기'], ['placed', '배치된 제품']];
 
-export function createLibraryPanel(container, { store, ui, onPick = () => {} }) {
+export function createLibraryPanel(container, { store, ui, onPick = () => {}, onDragEnd = () => {} }) {
   const st = { tab: 'ohouse', category: null, sub: null, q: '', sort: 'name', mode: 'place', replaceIds: [] };
   container.innerHTML = `
     <div class="tabs" data-part="tabs"></div>
@@ -108,16 +108,19 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {} }) 
     if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'copy';
     ui.set({ dragProduct: p.id });
   };
-  const onDragEnd = () => { if (ui.get().dragProduct) ui.set({ dragProduct: null }); };
+  // dragend는 드롭 성공·실패·[Esc] 취소를 가리지 않고 드래그 **소스**(이 타일)에서 일어난다.
+  // 캔버스는 이 이벤트를 받을 수 없으므로(그래서 예전 view2d의 dragend 리스너는 죽은 코드였다)
+  // 배선(app/dndActions.onDragEnd)에 알려 고스트·도구를 되돌릴 기회를 주고 나서 상태를 지운다.
+  const onDragDone = () => { onDragEnd(); if (ui.get().dragProduct) ui.set({ dragProduct: null }); };
   container.addEventListener('click', onClick);
   container.addEventListener('input', onInput);
   container.addEventListener('change', onInput);
   container.addEventListener('dragstart', onDragStart);
-  container.addEventListener('dragend', onDragEnd);
+  container.addEventListener('dragend', onDragDone);
   const unsub = store.subscribe(() => { if (st.tab === 'placed') renderList(); });
   render();
   return {
-    destroy() { unsub(); container.removeEventListener('click', onClick); container.removeEventListener('input', onInput); container.removeEventListener('change', onInput); container.removeEventListener('dragstart', onDragStart); container.removeEventListener('dragend', onDragEnd); container.innerHTML = ''; },
+    destroy() { unsub(); container.removeEventListener('click', onClick); container.removeEventListener('input', onInput); container.removeEventListener('change', onInput); container.removeEventListener('dragstart', onDragStart); container.removeEventListener('dragend', onDragDone); container.innerHTML = ''; },
     setMode(mode, { itemIds = [] } = {}) { st.mode = mode; st.replaceIds = itemIds; renderTabs(); },
     get state() { return { ...st }; },
   };

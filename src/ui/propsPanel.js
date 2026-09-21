@@ -1,7 +1,7 @@
 import { activeFloor } from '../state/schema.js';
 import { updateRoom, setActiveFloor, deleteFloor, totalArea, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
 import { wallLength } from '../geom/walls.js';
-import { fmtArea } from '../util/units.js';
+import { fmtArea, fmtLen } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
 import { esc } from '../util/html.js';
 import { confirmDialog } from './confirmDialog.js';
@@ -181,7 +181,11 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     // 범위를 벗어난 입력이 말없이 잘리던 것을 알린다(§14.10 — 감사 #7).
     const onClamp = (v, { max }) => toast(v === max ? CLAMP_MAX(max) : CLAMP_MIN(v));
     if (el.dataset.len) {
-      const v = readLen(el, store.get().units ?? 'mm', { onClamp });
+      // data-len 입력은 ft·in 모드의 길이 칸이다: 한계도 그 표기로 말한다("최대 8000 mm까지"가
+      // ft·in 화면에 뜨던 것이 m-6이다). 단위 인자를 비워 값에 mm가 덧붙지 않게 한다.
+      const units = store.get().units ?? 'mm';
+      const onClampLen = (v, { max }) => toast((v === max ? CLAMP_MAX : CLAMP_MIN)(fmtLen(v, units), ''));
+      const v = readLen(el, units, { onClamp: onClampLen });
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
       applyNumber(store, sel, name, v); return;
     }

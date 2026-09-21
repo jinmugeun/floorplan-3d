@@ -386,19 +386,22 @@ test('dragover·drop이 월드 좌표를 넘기고 기본 동작을 막는다', 
   plain.destroy();
 });
 
-// §14.11 보강: 드래그가 드롭 없이 끝나면(캔버스를 벗어나거나 취소) 고스트를 지울 기회를 준다.
-test('dragleave·dragend가 onDragLeave를 부르고 destroy가 리스너를 뗀다', () => {
+// §14.11 보강: 드래그가 캔버스를 벗어나면 고스트를 지울 기회를 준다. 캔버스가 받는 취소 신호는
+// dragleave뿐이다 — dragend는 드래그 소스(라이브러리 타일)에서만 일어나므로 캔버스에 리스너를
+// 달아도 실제 브라우저에서는 한 번도 불리지 않는다([Esc] 취소 경로는 libraryPanel.test.js가 본다).
+test('캔버스는 dragleave만 onDragLeave로 넘기고 destroy가 리스너를 뗀다', () => {
   const store = createStore(createEmptyProject());
   const canvas = makeCanvas();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
   let left = 0;
   const v = createView2D(canvas, store, createUiState(), { onDrop: () => {}, onDragLeave: () => { left += 1; } });
   canvas.dispatchEvent(new Event('dragleave', { bubbles: true }));
+  expect(left).toBe(1);
   canvas.dispatchEvent(new Event('dragend', { bubbles: true }));
-  expect(left).toBe(2);
+  expect(left).toBe(1);                                    // 캔버스의 dragend는 듣지 않는다(죽은 경로였다)
   v.destroy();
   canvas.dispatchEvent(new Event('dragleave', { bubbles: true }));
-  expect(left).toBe(2);
+  expect(left).toBe(1);
 });
 
 // §14.7: 도구의 hint가 단계마다 바뀌므로, 렌더 중에 달라진 것을 알려 배너를 다시 그리게 한다.

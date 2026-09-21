@@ -19,7 +19,8 @@ const cand = (kind, key, sp, text = '가나다', size = 12) => ({ kind, key, tex
 
 describe('라벨 배치(placeLabels)', () => {
   test('상수와 화면 AABB', () => {
-    expect(LABEL_PRIORITY).toEqual(['roomName', 'roomArea', 'wallDim', 'ductSize', 'damper', 'equip']);
+    // measure는 사람이 직접 그은 치수라 높고, productCode는 가장 길어 가장 먼저 생략된다(m-3).
+    expect(LABEL_PRIORITY).toEqual(['roomName', 'roomArea', 'measure', 'wallDim', 'ductSize', 'damper', 'equip', 'productCode']);
     expect([LOD_SCALE, ROOM_NAME_DY, ROOM_AREA_DY, WALL_DIM_MIN_PX]).toEqual([0.02, 16, 4, 40]);
     // 폭은 글자별로 잰다(높이 = size + 6): 한글·전각·원문자는 size당 1.0, ASCII·숫자는 0.62.
     // 실측(Chromium, IBM Plex Sans KR)은 한글 0.892·① 1.0·ASCII 0.50~0.60이며, 한글을 넉넉히
@@ -116,6 +117,38 @@ describe('라벨 후보 수집(collectLabels)', () => {
     expect(collectLabels(v, floor(), { flags: { ducts: false } }).some(c => c.kind === 'damper')).toBe(false);
     expect(collectLabels(v, floor(), { flags: { equipLabels: false } }).some(c => c.kind === 'equip')).toBe(false);
     expect(collectLabels(v, floor(), { flags: { ceilingItems: false } }).some(c => c.kind === 'equip')).toBe(false);
+  });
+
+  // m-3: 제품 코드 라벨과 측정선 라벨이 LOD 패스 밖에 있어 "제품 코드" 보기를 켜면 겹쳤다(감사 #22).
+  test('제품 코드·측정선 라벨도 후보로 들어오고 겹치면 코드가 먼저 생략된다', () => {
+    const { store, floor, hood } = setup();
+    store.dispatch(d => { activeFloor(d).measures.push({ id: 'm1', a: [500.5, 2500.25], b: [3500.5, 2500.25] }); });
+    const v = fakeView(0.05);
+    const all = collectLabels(v, floor(), { flags: { productCode: true, measures: true } });
+    const code = all.find(c => c.kind === 'productCode');
+    expect(code.key).toBe(`item:${hood}:code`);
+    expect(code.bg).toBe(LABEL_BG);                    // 불투명 흰 상자가 아니다(§14.5)
+    const mm = all.find(c => c.kind === 'measure');
+    expect(mm.key).toBe('measure:m1');
+    expect(mm.text).toBe('3000');
+    // 보기 플래그를 끄면 후보도 없다(그리는 쪽과 판정이 하나다).
+    expect(collectLabels(v, floor(), { flags: {} }).some(c => c.kind === 'productCode' || c.kind === 'measure')).toBe(false);
+    // 같은 자리에 겹치면 우선순위가 낮은 제품 코드가 빠진다.
+    const same = [{ kind: 'measure', key: 'measure:m1', text: '3000', size: 12, sp: [200, 200], at: [0, 0] },
+      { kind: 'productCode', key: 'item:i1:code', text: '후드 HD-1', size: 11, sp: [204, 202], at: [0, 0] }];
+    expect(placeLabels(same).map(c => c.kind)).toEqual(['measure']);
+  });
+
+  // m-2: 겹침 판정을 y 밴드로 잘라도 결과는 전수 비교와 같아야 한다(밴드 높이보다 큰 상자·음수 y 포함).
+  test('y 밴드 버킷은 전수 비교와 같은 결과를 준다', () => {
+    const boxes = [
+      cand('roomName', 'a', [100.5, -40.25], '가나다라마바사', 24),   // 밴드(16 px)보다 높은 상자, 음수 y
+      cand('roomArea', 'b', [120.5, -36.25], '12.5 m²', 13),          // a와 겹친다
+      cand('wallDim', 'c', [120.5, 300.75], '4001', 11),
+      cand('ductSize', 'd', [121.5, 303.75], '750×400', 11),          // c와 겹친다
+      cand('equip', 'e', [900, 900], '①', 10),
+    ];
+    expect(placeLabels(boxes).map(c => c.key)).toEqual(['a', 'c', 'e']);
   });
 
   test('drawLabels는 놓인 라벨만 뷰의 label로 그리고 알파는 건드리지 않는다', () => {

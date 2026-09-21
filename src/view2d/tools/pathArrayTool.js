@@ -40,7 +40,7 @@ export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => 
       const r = resolve(p, ev);
       cursor = r.point; guides = r.guides;
       // 마지막 점을 다시 클릭하면 완료다(브라우저 더블클릭의 두 번째 pointerdown도 여기로 온다).
-      // 실제 판정 거리는 점 스냅 허용오차(snap.js 기본 150 mm)다: 그 안을 클릭하면 cursor가 마지막
+      // 실제 판정 거리는 이 도구의 점 스냅 허용오차(PATH_SNAP_TOL = 50 mm)다: 그 안을 클릭하면 cursor가 마지막
       // 점으로 붙어 거리가 0이 되므로, 아래 10 mm 비교는 스냅이 꺼진 경우를 위한 여유다.
       if (last() && dist(cursor, last()) < 10) { finish(); return; }
       points.push(cursor);

@@ -22,12 +22,15 @@ export function wallRange(wall, walls = []) {
 // 개구부를 뺀 조각의 u 구간. 평면도는 벽을 위에서 내려다본 그림이라 개구부의 높이(sill·lintel)는
 // 뜻이 없다: 개구부의 z 구간을 벽 전체 높이로 눌러 wallPieces에 넘기면 창 밑·문 위 조각이 생기지
 // 않고 좌·우 조각만 남는다(= u 구간만 비운 것과 같다).
-export function wallSpans(wall, walls = [], items = [], { flags = null } = {}) {
+// openings를 주면 그 벽의 개구부를 다시 구하지 않는다(그리는 쪽이 이미 한 번 구했다 — m-1).
+// 그때는 items 필터도 부르는 쪽이 이미 지난 것으로 본다.
+export function wallSpans(wall, walls = [], items = [], { flags = null, openings = null } = {}) {
   const { start, end } = wallRange(wall, walls);
   // 보기 옵션으로 문·창·개구부를 숨겼으면 평면도 끊지 않는다(심벌은 없는데 구멍만 남으면
   // 도면을 잘못 읽는다 — 결정 38). flags를 주지 않으면 예전처럼 hidden만 본다.
   const shownItem = it => !flags || itemVisible(it, flags);
-  const holes = openingsOnWall(items.filter(shownItem), wall).map(o => ({ ...o, z0: 0, z1: wall.height }));
+  const found = openings ?? openingsOnWall(items.filter(shownItem), wall);
+  const holes = found.map(o => ({ ...o, z0: 0, z1: wall.height }));
   return wallPieces(wall, holes, { start, end }).map(({ u0, u1 }) => ({ u0, u1 }));
 }
 
@@ -58,6 +61,11 @@ function drawWindow(ctx, v, wall, o) {
 // 클릭 대상이 벽 전체(hitWall)이므로 강조도 벽 전체여야 한다.
 export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags = {} } = {}) {
   const items = floor.items ?? [];
+  // 프레임마다 벽 하나당 items.filter와 openingsOnWall을 두 번씩 돌고, 개구부마다 items.find로
+  // 선형 탐색했다 — 벽 200·아이템 500 도면이면 프레임당 20만 번이 된다(m-1). 보이는 아이템과
+  // id 색인은 루프 밖에서 한 번 만들고, 개구부는 벽마다 한 번만 구해 wallSpans에 넘긴다.
+  const shown = items.filter(it => itemVisible(it, flags));
+  const byId = new Map(items.map(it => [it.id, it]));
   for (const wl of floor.walls ?? []) {
     ctx.globalAlpha = soloWalls && !soloWalls.has(wl.id) ? 0.25 : 1;
     if (sel?.type === 'wall' && sel.id === wl.id) {
@@ -65,10 +73,9 @@ export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags =
       ctx.globalAlpha = 1;
       continue;
     }
-    for (const span of wallSpans(wl, floor.walls, items, { flags })) v.poly(spanQuad(wl, span), v.COLORS.wall, null);
-    for (const o of openingsOnWall(items.filter(it => itemVisible(it, flags)), wl)) {
-      if (items.find(x => x.id === o.itemId)?.kind === 'window') drawWindow(ctx, v, wl, o);
-    }
+    const holes = openingsOnWall(shown, wl);
+    for (const span of wallSpans(wl, floor.walls, shown, { flags, openings: holes })) v.poly(spanQuad(wl, span), v.COLORS.wall, null);
+    for (const o of holes) if (byId.get(o.itemId)?.kind === 'window') drawWindow(ctx, v, wl, o);
     ctx.globalAlpha = 1;
   }
 }

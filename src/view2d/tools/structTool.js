@@ -40,7 +40,10 @@ export function ensureStructuresVisible(store) {
 // ("0"은 기본값이 아니라 0이므로 400이 아니라 10이 된다 — M-7).
 const int = (v, def) => { const n = Number(v); return Math.max(10, Math.round(Number.isFinite(n) ? n : def)); };
 
-export function createStructTool({ store, ui, view, kind = 'column-square', opts: given = null, onDone = () => {}, toast = () => {} }) {
+// onDone = 도구를 끝내는 경로([Esc]·안내 클릭·우클릭), onPlaced = 하나를 놓은 직후.
+// 둘을 가른 이유(m-7): §14.7의 "그린 뒤 도구 유지" 설정은 놓은 **뒤**에만 뜻이 있다. onDone을
+// 그 설정에 걸면 설정이 켜진 동안 [Esc]로 도구를 끌 수 없게 된다.
+export function createStructTool({ store, ui, view, kind = 'column-square', opts: given = null, onDone = () => {}, onPlaced = () => {}, toast = () => {} }) {
   const k = STRUCT_KINDS.includes(kind) ? kind : 'column-square';
   const floor = () => activeFloor(store.get());
   const opts = given ?? structDefaults(k, floor().height);
@@ -86,7 +89,9 @@ export function createStructTool({ store, ui, view, kind = 'column-square', opts
       const item = { ...ghost.item, pos: [Math.round(ghost.item.pos[0]), Math.round(ghost.item.pos[1])] };
       addItem(store, item);
       ui.set({ selection: { type: 'item', id: item.id } });
-      // 도구는 끄지 않는다 — 연속 배치가 이 도구의 요점이다(§13.2).
+      // 도구를 켠 채로 둘지는 배선이 정한다(§14.7의 "그린 뒤 도구 유지"): 기본은 연속 배치이고
+      // 그것이 이 도구의 요점이지만(§13.2), 설정을 끄면 방·벽과 마찬가지로 한 번 놓고 선택으로 돌아간다.
+      onPlaced();
     },
     onPointerUp() {},
     onKey(ev) { if (ev.key === 'Escape') { onDone(); return true; } return false; },

@@ -134,6 +134,8 @@ test('the bottom bar has zoom, lock and capture controls and the lock button fol
   createShell(root, { store, ui: createUiState() });
   expect(root.querySelector('#btnZoomIn')).not.toBeNull();
   expect(root.querySelector('#btnZoomOut')).not.toBeNull();
+  // §14.3: 모드·보기·줌은 항상 보인다 → 줌은 sticky 꼬리 안에 있어야 한다(꼬리가 덮던 자리다).
+  for (const id of ['#btnZoomIn', '#btnZoomOut', '#btnFit']) expect(root.querySelector(`#bottomTail ${id}`)).not.toBeNull();
   expect(root.querySelectorAll('[data-action="capture"]')).toHaveLength(2); // 상단 바 + 하단 바
   root.querySelector('#btnLock').click();
   expect(store.get().view.lockPlan).toBe(true);
@@ -276,6 +278,25 @@ test('기즈모 모드 버튼은 2D 투영 뷰에서 숨고 투영을 벗어나�
   expect(btn.hidden).toBe(true);
   shell.setOrtho(null);
   expect(btn.hidden).toBe(false);
+});
+
+// I-4: gizmoBtnVisible이 읽는 것(locked·attach·wallId)은 전부 **스토어** 상태다. 속성 패널·우클릭
+// 메뉴로 고른 아이템을 잠그면 ui는 그대로이므로 ui.subscribe가 돌지 않는다 — 스토어 구독에서도
+// 다시 맞춰야 버튼이 낡지 않는다(같은 이유로 하단 바 접기 판정도 다시 한다).
+test('스토어만 바뀌는 경로(고른 아이템 잠금·벽 부착)에서도 기즈모 버튼이 다시 동기화된다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState(); const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.floors[0].items = [{ id: 'i1', attach: 'floor', wallId: null, locked: false, pos: [0.5, 0.25], size: [600, 600, 600] }]; });
+  createShell(root, { store, ui });
+  const btn = root.querySelector('#btnGizmoMode');
+  ui.set({ mode: 'iso', selection: { type: 'item', id: 'i1' } });
+  expect(btn.hidden).toBe(false);
+  store.dispatch(d => { d.floors[0].items[0].locked = true; });      // 잠금 = 스토어만 바뀐다
+  expect(btn.hidden).toBe(true);
+  store.dispatch(d => { d.floors[0].items[0].locked = false; });
+  expect(btn.hidden).toBe(false);
+  store.dispatch(d => { Object.assign(d.floors[0].items[0], { attach: 'wall', wallId: 'w1' }); }); // 끌어서 벽에 붙은 경우
+  expect(btn.hidden).toBe(true);
 });
 
 test('gizmoBtnVisible은 모드·투영·아이템 상태를 함께 본다', () => {
@@ -487,9 +508,26 @@ test('레일 버튼을 같은 탭에서 다시 누르면 패널이 접히고 다
   expect(panel.classList.contains('collapsed')).toBe(false);
   rail('products').click();
   expect(panel.classList.contains('collapsed')).toBe(true);
+  // m-9: 접혀 있으면 눌린 것이 아니다 — `.on`(어느 탭인가)과 aria-pressed(열려 있는가)를 가른다.
+  expect(rail('products').classList.contains('on')).toBe(true);
+  expect(rail('products').getAttribute('aria-pressed')).toBe('false');
   shell.showPanel('materials');                             // 코드에서 패널을 열면 접힘도 풀린다
   expect(panel.classList.contains('collapsed')).toBe(false);
   expect(root.querySelector('#panel section[data-panel="materials"]').hidden).toBe(false);
+  expect(rail('materials').getAttribute('aria-pressed')).toBe('true');
+  expect(rail('products').getAttribute('aria-pressed')).toBe('false');
+});
+
+// m-8: destroy()가 구독을 떼지 않으면 셸을 버린 뒤의 스토어 변경이 사라진 #btnUndo에서 던진다.
+test('destroy()는 스토어·ui 구독까지 뗀다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  shell.destroy();
+  root.innerHTML = '';                                      // 셸 마크업이 사라진 뒤
+  expect(() => store.dispatch(d => { d.name = '다음'; }, { record: false })).not.toThrow();
+  expect(() => ui.set({ mode: 'iso' })).not.toThrow();
 });
 
 test('옵션 바 길이 입력은 [Enter]로도 반영된다', () => {

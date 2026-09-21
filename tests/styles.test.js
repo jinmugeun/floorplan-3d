@@ -9,7 +9,9 @@ const CSS = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.
 const lines = CSS.split('\n');
 
 test('.primary는 파일 마지막 200줄 안에 있고 배경과 글자색을 함께 선언한다', () => {
-  const at = lines.findIndex(l => /^\s*\.primary\s*\{/.test(l));
+  // 토큰은 `button.primary, .primary`다(m-5): .primary 하나(0,1,0)는 `.pop-row button`·`.seg button`
+  // 같은 컨텍스트 규칙(0,1,1)에 져서 그 안에 주 동작 버튼이 하나 생기면 감사 #23이 되살아났다.
+  const at = lines.findIndex(l => /^\s*(button\.primary,\s*)?\.primary\s*\{/.test(l));
   expect(at).toBeGreaterThan(-1);
   expect(lines.length - at).toBeLessThanOrEqual(200);
   const block = lines[at];
@@ -24,6 +26,23 @@ test('컨텍스트 규칙은 .primary가 아닌 버튼에만 배경을 준다', 
   // :not(.primary) 없이 배경을 주는 옛 규칙이 남아 있으면 특이도 경쟁이 되살아난다.
   expect(CSS).not.toMatch(/#topbar button\s*\{/);
   expect(CSS).not.toMatch(/\.tpl-card button\s*\{/);
+});
+
+// m-5: 위의 두 단정은 자리를 아는 규칙만 막는다. 새로 더한 `… button { background: … }` 규칙은
+// 특이도(0,1,1 이상)로 파일 맨 뒤의 `.primary`(0,1,0~0,1,1)를 이길 수 있으므로, 배경을 주는 버튼
+// 규칙은 **전부** 글자색을 함께 정하거나 `:not(.primary)`로 자기 몫만 칠해야 한다.
+test('버튼 배경을 주는 규칙은 모두 글자색을 함께 정하거나 .primary를 비껴간다', () => {
+  const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, '');   // 주석 안의 예시 규칙은 세지 않는다
+  const offenders = [];
+  for (const [, sel, body] of bare.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    if (!/(^|[\s;])background:/.test(body)) continue;
+    if (/(^|[\s;])color:/.test(body)) continue;
+    for (const one of sel.split(',')) {
+      const t = one.trim();
+      if (/\bbutton$/.test(t) && !/:not\(\.primary\)/.test(t)) offenders.push(t);
+    }
+  }
+  expect(offenders).toEqual([]);
 });
 
 // §14.3: 1100 px에서 하단 바는 캔버스 열(480 px)만 차지해 접은 뒤에도 넘친다.

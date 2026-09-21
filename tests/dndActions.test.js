@@ -10,6 +10,7 @@ import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createPlaceTool } from '../src/view2d/tools/placeTool.js';
 import { createDndActions } from '../src/app/dndActions.js';
+import { DROP_NEEDS_WALL } from '../src/ui/messages.js';
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -24,9 +25,10 @@ function setup() {
     ui.set({ tool: name });
   };
   const startPlace = p => { pendingProduct = p; setTool('place'); };
-  const dnd = createDndActions({ ui, view, startPlace, pending: () => pendingProduct, setTool });
+  const toasts = [];
+  const dnd = createDndActions({ ui, view, startPlace, pending: () => pendingProduct, setTool, toast: m => toasts.push(m) });
   setTool('select');
-  return { store, ui, dnd, view, setTool, startPlace, pending: () => pendingProduct, renders: () => renders };
+  return { store, ui, dnd, view, setTool, startPlace, toasts, pending: () => pendingProduct, renders: () => renders };
 }
 
 describe('드래그 배치 배선', () => {
@@ -50,8 +52,8 @@ describe('드래그 배치 배선', () => {
     expect(store.get()).toBe(before);                           // 되돌림 한 번에 드롭 직전 상태 그대로다(한 단계였다)
   });
 
-  test('놓을 자리가 없으면(벽 부착 제품이 벽에서 멀면) 아무것도 놓지 않고 스토어를 건드리지 않는다', () => {
-    const { store, ui, dnd, view } = setup();
+  test('놓을 자리가 없으면(벽 부착 제품이 벽에서 멀면) 규칙을 토스트로 알리고 스토어를 건드리지 않는다', () => {
+    const { store, ui, dnd, view, toasts } = setup();
     let dispatches = 0;
     store.subscribe(() => { dispatches += 1; });
     const before = store.get();
@@ -64,6 +66,15 @@ describe('드래그 배치 배선', () => {
     expect(ui.get().tool).toBe('select');                       // 고스트도 남지 않는다
     expect(view.tool.name).toBe('select');
     expect(ui.get().dragProduct).toBeNull();
+    expect(toasts).toEqual([DROP_NEEDS_WALL]);                  // 조용한 무동작이 아니다(감사 #11)
+  });
+
+  test('놓은 드롭은 토스트를 띄우지 않는다', () => {
+    const { ui, dnd, toasts } = setup();
+    ui.set({ dragProduct: 'hood-wall' });
+    dnd.onDragOver([3000.5, 120.25]);
+    dnd.onDrop([3000.5, 120.25]);
+    expect(toasts).toEqual([]);
   });
 
   test('바닥 제품은 방 가운데에도 놓인다', () => {

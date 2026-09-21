@@ -98,7 +98,9 @@ function replaceProductOf(itemIds, product) {
   replaceProduct(store, live, product);
   shell.toast(`제품 ${live.length}개를 교체했습니다`);
 }
-const library = createLibraryPanel(shell.els.library, { store, ui, onPick: (p, { mode } = {}) => { if (mode === 'replace') replaceProductOf(selectedItemIds(), p); else startPlace(p); } });
+// onDragEnd는 라이브러리 타일(드래그 소스)에서만 온다 — dragend는 캔버스에서 일어나지 않으므로
+// 캔버스 위에서 [Esc]로 취소한 드래그를 되돌릴 수 있는 유일한 경로다(§14.11).
+const library = createLibraryPanel(shell.els.library, { store, ui, onDragEnd: () => dnd?.onDragEnd(), onPick: (p, { mode } = {}) => { if (mode === 'replace') replaceProductOf(selectedItemIds(), p); else startPlace(p); } });
 const materials = createMaterialPanel(shell.els.materials, {
   store, ui,
   onPick: (m, { mode, target } = {}) => {
@@ -133,7 +135,9 @@ store.subscribe(s => {
 });
 
 // §14.7: 방·벽 도구는 커밋 뒤에도 켜진 채다(kvp.stickyTools, 기본 켜짐). [Esc]가 선택으로 돌아간다.
-// 기둥·개구부(structTool)는 계획 5부터 이미 연속 배치이고, onDone은 [Esc] 경로다.
+// 기둥·개구부(structTool)도 같은 설정을 따른다(m-7): 그 도구는 놓은 뒤(onPlaced)와 끝내는 경로
+// (onDone = [Esc]·안내 클릭·우클릭)가 나뉘어 있어, 설정은 onPlaced에만 걸린다 — onDone에 걸면
+// 설정이 켜진 동안 [Esc]로 도구를 끌 수 없다.
 const stickyDone = () => { if (!stickyTools()) setTool('select'); };
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS }, duct: { ...DUCT_TOOL_DEFAULTS } };
@@ -145,7 +149,7 @@ const structTool = kind => () => {
   const key = structOptsKey(store.get());
   if (key !== structKey) { structKey = key; for (const k of Object.keys(structOpts)) delete structOpts[k]; }
   if (ensureStructuresVisible(store)) shell.toast('"건축/자재" 보기를 다시 켰습니다'); // 꺼져 있으면 놓아도 보이지 않는다(M-9)
-  return createStructTool({ store, ui, view, kind, opts: (structOpts[kind] ??= structDefaults(kind, activeFloor(store.get()).height)), onDone: () => setTool('select'), toast: shell.toast });
+  return createStructTool({ store, ui, view, kind, opts: (structOpts[kind] ??= structDefaults(kind, activeFloor(store.get()).height)), onDone: () => setTool('select'), onPlaced: stickyDone, toast: shell.toast });
 };
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
@@ -166,7 +170,7 @@ function setTool(name) { cancelReplace(); const t = tools[name](); ui.set({ tool
 // 라이브러리에서 제품을 고르면 배치 도구를 켠다(오늘의집과 같은 동작: 한 번 배치하면 선택 도구로 돌아간다).
 function startPlace(product) { pendingProduct = product; setTool('place'); }
 // 타일을 캔버스로 끌어 놓는 배치(§14.11). 규칙은 app/dndActions.js 한 자리에 있다.
-dnd = createDndActions({ ui, view, startPlace, pending: () => pendingProduct, setTool });
+dnd = createDndActions({ ui, view, startPlace, pending: () => pendingProduct, setTool, toast: shell.toast });
 function setMode(mode, opts) {
   if (mode === 'fp') { if (view3d.getMode() === 'fp') view3d.setMode('iso'); ui.set({ fpPick: true, mode: '2d' }); return; }
   ui.set({ mode, fpPick: false });

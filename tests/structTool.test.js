@@ -11,9 +11,9 @@ function setup(kind = 'column-square', height = null) {
   const store = createStore(createEmptyProject()), ui = createUiState();
   addWalls(store, rectWalls([0, 0], [6000, 4000], 200));
   if (height) store.dispatch(d => { activeFloor(d).height = height; });
-  const done = [], toasts = [];
-  const t = createStructTool({ store, ui, view: fakeView, kind, onDone: () => done.push(kind), toast: m => toasts.push(m) });
-  return { store, ui, t, done, toasts, floor: () => activeFloor(store.get()) };
+  const done = [], placed = [], toasts = [];
+  const t = createStructTool({ store, ui, view: fakeView, kind, onDone: () => done.push(kind), onPlaced: () => placed.push(kind), toast: m => toasts.push(m) });
+  return { store, ui, t, done, placed, toasts, floor: () => activeFloor(store.get()) };
 }
 const items = a => a.floor().items;
 
@@ -36,6 +36,8 @@ describe('구조물 도구(기둥·개구부)', () => {
     a.t.onPointerDown([3000.5, 2000.25], {});
     expect(items(a)).toHaveLength(1);
     expect(a.done).toEqual([]);                       // onDone이 불리지 않는다 = 도구가 켜져 있다
+    // m-7: "그린 뒤 도구 유지" 설정은 놓은 뒤(onPlaced)에만 걸린다 — onDone([Esc])과 다른 훅이다.
+    expect(a.placed).toEqual(['column-square']);
     expect(items(a)[0].pos).toEqual([3001, 2000]);
     expect(items(a)[0].kind).toBe('column');
     expect(items(a)[0].size).toEqual([400, 400, 2300]);

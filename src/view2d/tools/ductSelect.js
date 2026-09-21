@@ -1,13 +1,11 @@
 // 선택 도구의 덕트 분기(아키텍처 §11.3). selectTool.js가 300줄을 넘지 않게 여기로 나눴다.
 // 꼭짓점 드래그 = 그 점만, 구간 드래그 = 폴리라인 전체 평행 이동(연결된 설비는 따라오지 않는다).
 import { activeFloor } from '../../state/schema.js';
-import { hitDuct, snapToEquipment, DUCT_SNAP_TOL } from '../../geom/ducts.js';
-import { lerp, dist } from '../../geom/vec.js';
+import { snapToEquipment, DUCT_SNAP_TOL } from '../../geom/ducts.js';
+import { lerp } from '../../geom/vec.js';
 import { ductById, moveDuctPoint, translateDuct, connectDuct, disconnectDuct, deleteDuctSelection } from '../../state/ductOps.js';
 import { ductMenuItems } from '../../ui/ductMenu.js';
 import { drawDuctSelection, ductVisible } from '../ducts2d.js';
-
-export const DUCT_HANDLE_HIT_PX = 8;   // 고른 덕트의 꼭짓점 핸들 히트 반경(벽 꼭짓점 px(8)과 같은 관례)
 
 // Delete 키의 덕트 규칙(판정은 state/ductOps.js의 deleteDuctSelection에 있다 — 아키텍처 §11.3·§9).
 // main.js의 deleteSelection과 ui/ductPanel.js의 삭제 버튼도 그 판정 함수를 부른다: 이 함수는
@@ -25,36 +23,17 @@ export function deleteSelectedDuct({ store, ui, toast = () => {} }) {
   return true;
 }
 
-export function createDuctSelect({ store, ui, view, toast = () => {} }) {
-  const px = n => n / view.camera.scale;
+export function createDuctSelect({ store, ui, toast = () => {} }) {
   const floor = () => activeFloor(store.get());
   const flags = () => store.get().view?.v2 ?? {};
   let drag = null;   // { kind:'vertex'|'duct', id, index, startP, base: points[], applied:[dx,dy], moved }
 
-  const visible = () => (floor().ducts ?? []).filter(d => ductVisible(d, flags()));
-  const pick = p => hitDuct(visible(), p, px(8));
   const current = () => { const s = ui.get().selection; return s?.type === 'duct' ? s : null; };
 
-  // 이미 고른 덕트의 꼭짓점만 보는 좁은 피커. 연결된 꼭짓점은 늘 설비 중심(connectionPoint)에 있어
-  // 일반 히트 순서(아이템 → 덕트)로는 영원히 아이템이 이긴다 — 그러면 그려 둔 핸들도, 자동 연결
-  // 해제도, 메뉴의 `설비 연결 해제`·`점 삭제`도 캔버스에서 도달할 수 없다. 그래서 선택된 아이템의
-  // 크기·회전 핸들과 같은 규칙으로 아이템보다 먼저 본다(selectTool.js).
-  function pickHandle(p) {
-    const s = current();
-    if (!s) return null;
-    const d = ductById(floor(), s.id);
-    if (!d || !ductVisible(d, flags())) return null;
-    const tol = px(DUCT_HANDLE_HIT_PX);
-    let best = null;
-    for (let i = 0; i < d.points.length; i++) {
-      const q = dist(p, d.points[i]);
-      if (q <= tol && (!best || q < best.q)) best = { ductId: d.id, vertex: i, q };
-    }
-    return best ? { ductId: best.ductId, vertex: best.vertex } : null;
-  }
-
   // 히트 하나를 선택으로 바꾸고, 움직일 수 있으면 드래그를 시작한다.
-  // onDown·onDownHandle(자체 피커)과 selectTool(pick.pickAt의 결과)이 함께 쓴다(§14.6).
+  // 히트 판정은 이 파일에 없다(§14.6): 2D의 히트 순서와 허용오차는 pick.pickAt 한 곳에만 있고
+  // 좌클릭(selectTool.onPointerDown)·우클릭(onContextMenu)이 그 결과를 begin·menuFor로 넘긴다.
+  // 예전에는 여기에도 pick·pickHandle이 있어 구간 허용오차(px(8))와 꼭짓점 핸들 루프가 두 벌이었다.
   function begin(hit, p) {
     const d = ductById(floor(), hit.ductId);
     ui.set({ selection: { type: 'duct', id: hit.ductId, segment: hit.segment ?? null, vertex: hit.vertex ?? null } });
@@ -66,16 +45,6 @@ export function createDuctSelect({ store, ui, view, toast = () => {} }) {
     };
     store.beginTransaction();
     return true;
-  }
-
-  function onDown(p) {
-    const hit = pick(p);
-    return hit ? begin(hit, p) : false;
-  }
-  // 아이템 히트보다 먼저 부른다(selectTool.js). 고른 덕트가 없으면 아무 일도 하지 않는다.
-  function onDownHandle(p) {
-    const hit = pickHandle(p);
-    return hit ? begin(hit, p) : false;
   }
 
   function apply(p) {
@@ -128,9 +97,6 @@ export function createDuctSelect({ store, ui, view, toast = () => {} }) {
     const a = hit.segment != null ? d?.points[hit.segment] : null, b = hit.segment != null ? d?.points[hit.segment + 1] : null;
     return ductMenuItems({ store, ui, sel: next, at: a && b ? lerp(a, b, hit.t ?? 0.5) : null });
   }
-  // 우클릭도 같은 예외를 쓴다: 고른 덕트의 꼭짓점 위면 설비 발자국 안이어도 그 꼭짓점을 겨눈다.
-  function menuItems(p) { return menuFor(pickHandle(p) ?? pick(p)); }
-
   function draw(ctx, v) {
     const s = current();
     if (!s) return;
@@ -139,7 +105,7 @@ export function createDuctSelect({ store, ui, view, toast = () => {} }) {
   }
 
   return {
-    pick, pickHandle, onDown, onDownHandle, begin, apply, finish, cancel, menuItems, menuFor, draw,
+    begin, apply, finish, cancel, menuFor, draw,
     deleteSelected: () => deleteSelectedDuct({ store, ui, toast }),
     getDrag: () => (drag ? { kind: drag.kind, id: drag.id, index: drag.index } : null),
   };

@@ -114,7 +114,8 @@ export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = 
     const on = selected.has(item.id);
     const outline = bad ? ITEM_COLORS.locked : on ? (item.locked ? ITEM_COLORS.locked : ITEM_COLORS.sel) : null;
     // shown이 오면 설비 라벨은 뷰의 라벨 패스가 그린다(겹치면 생략하는 LOD를 거치게 — §14.5).
-    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, equipLabels: flags.equipLabels !== false && !shown, alpha: dim ? dim(item) : 1, embedded: drawnByWall(item, floor.walls) });
+    // shown이 오면 제품 코드 라벨도 뷰의 라벨 패스가 그린다(겹치면 생략 — §14.5, m-3).
+    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode && !shown, labels, equipLabels: flags.equipLabels !== false && !shown, alpha: dim ? dim(item) : 1, embedded: drawnByWall(item, floor.walls) });
   }
 }
 

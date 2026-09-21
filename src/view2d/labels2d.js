@@ -8,7 +8,8 @@
 import { centroid } from '../geom/rooms.js';
 import { wallLength } from '../geom/walls.js';
 import { damperPos } from '../geom/ducts.js';
-import { sub, norm, perp } from '../geom/vec.js';
+import { itemAABB } from '../geom/items.js';
+import { sub, norm, perp, dist } from '../geom/vec.js';
 import { fmtLen, fmtArea } from '../util/units.js';
 import { sizeLabel, ductVisible, DUCT_COLORS, LABEL_BG } from './ducts2d.js';
 import { itemVisible, itemTextLabels, drawnByWall, ITEM_COLORS } from './items2d.js';
@@ -17,7 +18,9 @@ import { isEquip } from '../vent/equipment.js';
 // 라벨 모듈에서 다시 내보낸다 — 라벨 패스와 ducts2d 폴백이 같은 값을 쓰게 한다.
 export { LABEL_BG };
 
-export const LABEL_PRIORITY = ['roomName', 'roomArea', 'wallDim', 'ductSize', 'damper', 'equip'];
+// 우선순위(§14.5). measure는 사람이 직접 그은 치수라 방 이름 다음으로 높고, productCode는 가장
+// 길고 가장 많이 겹치므로 맨 뒤다("제품 코드" 보기를 켜면 감사 #22가 재현됐다 — m-3).
+export const LABEL_PRIORITY = ['roomName', 'roomArea', 'measure', 'wallDim', 'ductSize', 'damper', 'equip', 'productCode'];
 export const LOD_SCALE = 0.02;      // px/mm. 이보다 작으면 공간 이름만 남긴다
 export const ROOM_NAME_DY = 16;     // 방 중심에서 위로(화면 px)
 export const ROOM_AREA_DY = 4;      // 방 중심에서 아래로(화면 px)
@@ -39,6 +42,10 @@ export function labelBox({ sp = [0, 0], text = '', size = 12 } = {}) {
   return [sp[0] - w / 2, sp[1] - h / 2, sp[0] + w / 2, sp[1] + h / 2];
 }
 const hits = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+// 겹침 판정은 놓인 상자 전체와 비교했다 — 후보 600개면 프레임당 18만 번 AABB 비교다(m-2).
+// 화면 y를 밴드로 잘라 같은 밴드의 상자만 본다: 상자 하나는 자기 y 구간이 걸치는 모든 밴드에
+// 들어가므로, y로 겹치는 두 상자는 반드시 한 밴드를 공유한다(판정 결과는 전수 비교와 같다).
+export const BAND_PX = 16;
 
 export function placeLabels(candidates, { priority = LABEL_PRIORITY, scale = null } = {}) {
   const rank = k => { const i = priority.indexOf(k); return i < 0 ? priority.length : i; };
@@ -46,11 +53,14 @@ export function placeLabels(candidates, { priority = LABEL_PRIORITY, scale = nul
     && !(scale != null && scale < LOD_SCALE && c.kind !== 'roomName'));
   // 우선순위 → 입력 순서(같은 순위에서는 도면 배열 순서가 곧 안정된 순서다).
   const order = pool.map((c, i) => [c, i]).sort((a, b) => rank(a[0].kind) - rank(b[0].kind) || a[1] - b[1]);
-  const placed = [], boxes = [];
+  const placed = [], bands = new Map();
   for (const [c] of order) {
     const box = labelBox(c);
-    if (boxes.some(o => hits(o, box))) continue;
-    boxes.push(box);
+    const b0 = Math.floor(box[1] / BAND_PX), b1 = Math.floor(box[3] / BAND_PX);
+    let clash = false;
+    for (let b = b0; b <= b1 && !clash; b++) clash = (bands.get(b) ?? []).some(o => hits(o, box));
+    if (clash) continue;
+    for (let b = b0; b <= b1; b++) { const a = bands.get(b); a ? a.push(box) : bands.set(b, [box]); }
     placed.push(c);
   }
   // 반환 순서는 "자리를 잡은 순서" = 우선순위 오름차순이다. 그리기는 반드시 이 역순이어야 한다(§14.5):
@@ -69,6 +79,10 @@ export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = f
     const c = centroid(r.points);
     if (flags.roomName && r.name) out.push(cand(`room:${r.id}:name`, 'roomName', r.name, [c[0], c[1] - mm(ROOM_NAME_DY)], { size: 13, color: v.COLORS.dim }));
     if (flags.roomArea) out.push(cand(`room:${r.id}:area`, 'roomArea', fmtArea(r.area, { pyeong }), [c[0], c[1] + mm(ROOM_AREA_DY)]));
+  }
+  // 측정선 라벨(§14.5의 LOD를 지나게 옮겼다 — m-3). 선 자체는 view2d가 그린다.
+  if (flags.measures) for (const m of floor.measures ?? []) {
+    out.push(cand(`measure:${m.id}`, 'measure', fmtLen(dist(m.a, m.b), units, { unit: showUnit }), [(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2], { size: 12, color: v.COLORS.dim, bg: LABEL_BG }));
   }
   if (flags.dims) for (const w of floor.walls ?? []) {
     const len = wallLength(w);
@@ -90,10 +104,13 @@ export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = f
       out.push(cand(`damper:${d.id}:${i}`, 'damper', `${dm.type} ${Math.round(dm.w)}×${Math.round(dm.h)}`, [p[0] + n[0] * off, p[1] + n[1] * off], { size: 10, color: DUCT_COLORS.damper, bg: LABEL_BG }));
     });
   }
-  if (flags.equipLabels !== false) for (const it of floor.items ?? []) {
+  for (const it of floor.items ?? []) {
+    if (!itemVisible(it, flags)) continue;
+    // 제품 코드 라벨도 이 패스를 지난다(m-3): 예전에는 items2d가 곧바로 그려 겹침 판정 밖이었다.
+    if (flags.productCode) out.push(cand(`item:${it.id}:code`, 'productCode', `${it.name ?? ''} ${it.code ?? ''}`.trim(), [it.pos[0], itemAABB(it).max[1] + mm(12)], { size: 11, color: ITEM_COLORS.label, bg: LABEL_BG }));
     // 글자 부품이 있을 수 있는 것만 본다: 설비가 아닌 가구·문·창까지 symbolParts를 다시 만들 필요가 없고,
     // 벽이 대신 그리는 창·개구부(embedded)는 심벌이 없으니 라벨도 없다(drawItem과 같은 판정이다).
-    if (!itemVisible(it, flags) || !isEquip(it) || drawnByWall(it, floor.walls)) continue;
+    if (flags.equipLabels === false || !isEquip(it) || drawnByWall(it, floor.walls)) continue;
     itemTextLabels(v, it).forEach((t, i) => out.push(cand(`equip:${it.id}:${i}`, 'equip', t.text, t.at, { size: t.size, color: ITEM_COLORS.label })));
   }
   return out;

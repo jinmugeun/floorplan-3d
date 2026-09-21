@@ -26,7 +26,9 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   document.body.appendChild(root);
   const part = n => root.querySelector(`[data-part="${n}"]`);
   const close = () => { root.remove(); onClose(); };
-  let lastUrl = null;   // 방금 렌더한 이미지(내려받기 버튼이 쓴다 — §14.10)
+  // 방금 렌더한 이미지와 **그때의 파일명**(내려받기 버튼이 쓴다 — §14.10). 자동 저장 경로는 `-WxH`가
+  // 붙은 이름을 쓰는데 버튼만 안 붙은 이름을 써서, 같은 그림이 두 이름으로 내려왔다(m-10).
+  let last = null;   // { url, filename }
 
   async function render() {
     const [w, h] = st.size.split('×').map(Number);
@@ -40,14 +42,15 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
       part('msg').textContent = '갤러리에 저장했습니다.';
       onSaved(shot);
     } catch (e) { part('msg').textContent = `갤러리에 저장하지 못했습니다: ${e.message}`; }
-    downloadDataUrl(filenameFor(store.get()).replace(/\.json$/, `-${w}x${h}.png`), url);
-    lastUrl = url;
+    const filename = filenameFor(store.get()).replace(/\.json$/, `-${w}x${h}.png`);
+    downloadDataUrl(filename, url);
+    last = { url, filename };
     root.querySelector('[name="download"]').hidden = false;
   }
   root.addEventListener('click', ev => {
     if (ev.target.name === 'close') { close(); return; }
     if (ev.target.name === 'gallery') { openGalleryDialog({}); return; }
-    if (ev.target.name === 'download' && lastUrl) { downloadDataUrl(filenameFor(store.get()).replace(/\.json$/, '.png'), lastUrl); return; }
+    if (ev.target.name === 'download' && last) { downloadDataUrl(last.filename, last.url); return; }
     if (ev.target.name === 'render') render();
   });
   root.addEventListener('change', ev => { if (ev.target.name in st) st[ev.target.name] = ev.target.value; });

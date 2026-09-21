@@ -10,12 +10,18 @@ export const COLLISION_ITEM = '다른 제품과 겹칩니다';
 export const COLLISION_BANNER_QUIET = n => `충돌 ${n}건 — 겹친 제품을 옮겨 주세요`;
 
 // 값 범위(§14.10) — 입력이 조용히 잘리던 것을 알린다.
-export const CLAMP_MAX = (max, unit = 'mm') => `최대 ${max} ${unit}까지`;
-export const CLAMP_MIN = (min, unit = 'mm') => `최소 ${min} ${unit}까지`;
+// 단위를 빈 글자로 주면 값에 단위를 붙이지 않는다: ft·in 모드에서는 부르는 쪽이 fmtLen으로 이미
+// 12' 6" 꼴로 만들어 넘기므로 "mm"를 덧붙이면 거짓말이 된다(m-6).
+export const CLAMP_MAX = (max, unit = 'mm') => `최대 ${[max, unit].filter(x => x !== '' && x != null).join(' ')}까지`;
+export const CLAMP_MIN = (min, unit = 'mm') => `최소 ${[min, unit].filter(x => x !== '' && x != null).join(' ')}까지`;
 
 // 비활성 피드백(§14.10) — 층이 하나면 삭제 버튼은 disabled + title이다.
 export const LAST_FLOOR = '마지막 층은 삭제할 수 없습니다';
 export const LAST_FLOOR_TITLE = '층이 하나뿐입니다';
+
+// 끌어 놓기(§14.11) — 벽 부착 제품을 벽에서 먼 자리에 떨어뜨리면 배치 규칙이 거부한다.
+// 예전에는 토스트도 배너도 없이 아무 일도 일어나지 않아 "새 기능이 고장 났다"로 읽혔다.
+export const DROP_NEEDS_WALL = '벽에 붙는 제품입니다 — 벽에 닿는 자리에 놓아 주세요';
 
 // 2D에서 벽을 클릭하면 안·밖 두 면에 함께 발린다(면 구분은 3D에서만 된다 — 감사 #16).
 export const MATERIAL_BOTH_SIDES = '내·외벽 모두 적용';

@@ -76,6 +76,13 @@ test('렌더 전에는 내려받기가 숨어 있고 렌더 뒤에 내려받기�
   modal.querySelector('[name="render"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await new Promise(r => setTimeout(r, 0));
   expect(modal.querySelector('[name="download"]').hidden).toBe(false);
+  // m-10: 자동 저장 경로와 수동 버튼이 같은 파일명을 쓴다(예전에는 버튼만 `-WxH`가 빠졌다).
+  const names = [];
+  const realClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () { names.push(this.download); };
+  try { modal.querySelector('[name="download"]').dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+  finally { HTMLAnchorElement.prototype.click = realClick; }
+  expect(names).toEqual([expect.stringMatching(/-1920x1080\.png$/)]);
   modal.querySelector('[name="gallery"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   expect(document.querySelector('.modal.gallery')).toBeTruthy();
   document.querySelector('.modal.gallery')?.remove();
