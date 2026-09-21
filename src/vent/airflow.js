@@ -50,8 +50,8 @@ function onBoundary(pos, room, walls) {
 
 // 점 하나가 어느 방에 드는지 — 실별 풍량의 판정을 그대로 쓴다(폴리곤 내부 우선, 안에 들지 않으면
 // 경계 허용치로 2차 판정). "이 설비가 선 방"을 말하는 자리는 모두 이 함수를 쓴다 — 지금 쓰는 곳은
-// roomAirflow(아래), 후드 라벨의 방 이름(ui/equipRows.js:27), 레이어 트리의 방별 묶음과 덕트 묶음
-// (ui/layersPanel.js:13, 24). 두 곳이 다르게 판정하면 경계에 놓인 후드가 라벨·레이어 트리에는 방 이름이
+// roomAirflow(아래), 후드 라벨의 방 이름(ui/equipRows.js:25), 레이어 트리의 방별 묶음과 덕트 묶음
+// (ui/layersPanel.js:13, 25). 두 곳이 다르게 판정하면 경계에 놓인 후드가 라벨·레이어 트리에는 방 이름이
 // 없으면서 풍량 표에는 그 방에 세어지는 어긋남이 생긴다. 없으면 null이다.
 export function roomAt(pos, rooms, walls = []) {
   const list = rooms ?? [];
