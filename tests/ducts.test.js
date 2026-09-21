@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { segmentQuad, ductPolygons, hitDuct, movePoint, insertPoint, deletePoint, ductLength, segmentLength, connectionPoint, snapToEquipment, riser, damperPos, DUCT_SNAP_TOL } from '../src/geom/ducts.js';
+import { segmentQuad, ductPolygons, hitDuct, movePoint, insertPoint, deletePoint, ductLength, segmentLength, connectionPoint, snapToEquipment, riser, segmentForMeshData, damperPos, DUCT_SNAP_TOL } from '../src/geom/ducts.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
 
 const mk = patch => normalizeDuct({ points: [[0, 0], [3000, 0], [3000, 4000]], segments: [{ w: 600, h: 400, z: 2650 }], ...patch });
@@ -125,16 +125,42 @@ describe('덕트 기하', () => {
     expect(snapToEquipment(items, [9000, 9000])).toBeNull();
   });
 
-  test('라이저는 설비 윗면과 구간 아랫면을 잇고 너무 짧으면 없다', () => {
+  test('라이저는 가까운 두 면을 잇고 너무 짧으면 없다(§12.5)', () => {
     const duct = normalizeDuct({ points: [[1000, 500], [4000, 500]], segments: [{ w: 750, h: 400, z: 2650 }] });
+    // 바닥 팬(중심 350)은 덕트(중심 2650)보다 아래다: 설비 윗면 700 ↔ 구간 아랫면 2450.
     const fan = { id: 'f1', kind: 'equipment', pos: [1000, 500], size: [700, 700, 700], z: 0 };
     expect(riser(fan, duct, { point: 0, itemId: 'f1' })).toEqual({ pos: [1000, 500], z0: 700, z1: 2450, w: 400, h: 400 });
+    // 후드(중심 2600)도 덕트 중심보다 아래다: 윗면 2900 ↔ 아랫면 2450(두 면이 지나친 경우라 겹친다).
     const hood = { id: 'h1', kind: 'equipment', pos: [1000, 500], size: [1600, 1200, 600], z: 2300 };
-    // 후드 윗면 2900이 구간 아랫면 2450보다 위다: 작은 쪽에서 큰 쪽으로 잇는다.
     expect(riser(hood, duct, { point: 0, itemId: 'h1' })).toEqual({ pos: [1000, 500], z0: 2450, z1: 2900, w: 400, h: 400 });
     // 윗면 2445가 구간 아랫면 2450에 거의 닿았다(5 mm): 라이저를 만들지 않는다.
     const flush = { id: 'x', kind: 'equipment', pos: [1000, 500], size: [600, 600, 100], z: 2345 };
     expect(riser(flush, duct, { point: 0, itemId: 'x' })).toBeNull();
+  });
+
+  test('덕트보다 위에 있는 설비는 설비 밑면 ↔ 덕트 윗면을 잇는다(천장 디퓨저 과장 수정)', () => {
+    const duct = normalizeDuct({ points: [[1000.5, 500.25], [4000.5, 500.25]], segments: [{ w: 1200, h: 650, z: 2900 }] });
+    // 층고 3500 천장에 붙은 디퓨저: 밑면 3400, 중심 3450 > 구간 중심 2900 → 위에 있다.
+    // 구간 윗면 3225 ↔ 설비 밑면 3400 = 175 mm(예전 규칙은 설비 윗면 3500 ↔ 구간 아랫면 2575 = 925 mm였다).
+    const diff = { id: 'd1', kind: 'equipment', pos: [1000.5, 500.25], size: [650, 650, 100], z: 3400 };
+    expect(riser(diff, duct, { point: 0, itemId: 'd1' })).toEqual({ pos: [1000.5, 500.25], z0: 3225, z1: 3400, w: 650, h: 650 });
+    // 구간 윗면에 거의 닿은 설비(3230)는 라이저가 없다.
+    const near = { id: 'd2', kind: 'equipment', pos: [1000.5, 500.25], size: [650, 650, 100], z: 3230 };
+    expect(riser(near, duct, { point: 0, itemId: 'd2' })).toBeNull();
+  });
+
+  test('라이저·댐퍼 메시를 맞히면 인접 구간을 고른다', () => {
+    const d = normalizeDuct({
+      points: [[0, 0], [1000.5, 0], [1000.5, 2000.25]],
+      segments: [{ w: 500, h: 300, z: 2400 }, { w: 500, h: 300, z: 2400 }],
+      dampers: [{ segment: 1, t: 0.5, type: 'VD' }],
+    });
+    expect(segmentForMeshData(d, { segment: 1 })).toBe(1);        // 구간 메시는 자기 번호
+    expect(segmentForMeshData(d, { point: 0 })).toBe(0);          // 첫 점의 라이저 → 0구간
+    expect(segmentForMeshData(d, { point: 2 })).toBe(1);          // 마지막 점의 라이저 → 마지막 구간
+    expect(segmentForMeshData(d, { damper: 0 })).toBe(1);         // 댐퍼 → 그 댐퍼의 구간
+    expect(segmentForMeshData(d, {})).toBeNull();
+    expect(segmentForMeshData(null, { point: 0 })).toBeNull();
   });
 
   test('댐퍼 위치는 구간 위의 t 지점이다', () => {

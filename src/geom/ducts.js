@@ -143,18 +143,39 @@ export function snapToEquipment(items, p, tol = DUCT_SNAP_TOL) {
   return best ? { itemId: best.itemId, pos: [...best.pos] } : null;
 }
 
-// 설비 윗면과 덕트 구간 아랫면을 잇는 수직 덕트(명세 DT-07). 어느 쪽이 위인지는 정해져 있지 않으므로
-// 작은 쪽에서 큰 쪽으로 잇고, 10 mm 미만이면 만들지 않는다. 단면은 그 구간 단면의 짧은 변 정사각형이다.
+// 설비와 덕트 구간을 잇는 수직 덕트(명세 DT-07). 어느 쪽이 위인지는 설비 중심 높이와 구간 중심
+// 높이(seg.z)로 정한다: 설비가 위면 **설비 밑면 ↔ 덕트 윗면**, 아래면 **설비 윗면 ↔ 덕트 밑면**(§12.5).
+// 늘 "설비 윗면 ↔ 구간 아랫면"으로 잡던 예전 규칙은 천장 디퓨저처럼 설비가 덕트보다 위에 있을 때
+// 두 면을 지나쳐 잡아 라이저가 900 mm 가까이 부풀었다. 10 mm 미만이면 만들지 않는다.
+// 단면은 그 구간 단면의 짧은 변 정사각형이다.
 export function riser(item, duct, conn) {
   const i = conn?.point ?? 0;
   const seg = duct?.segments?.[Math.min(i, (duct?.segments?.length ?? 1) - 1)];
   if (!item || !seg) return null;
-  const top = (Number(item.z) || 0) + (Number(item.size?.[2]) || 0);
-  const bottom = seg.z - seg.h / 2;
-  const z0 = Math.min(top, bottom), z1 = Math.max(top, bottom);
+  const bottom = Number(item.z) || 0;
+  const top = bottom + (Number(item.size?.[2]) || 0);
+  const above = (bottom + top) / 2 > seg.z;                    // 설비 중심이 구간 중심보다 위
+  const a = above ? seg.z + seg.h / 2 : top;                   // 덕트 윗면 / 설비 윗면
+  const b = above ? bottom : seg.z - seg.h / 2;                // 설비 밑면 / 덕트 밑면
+  const z0 = Math.min(a, b), z1 = Math.max(a, b);
   if (z1 - z0 < 10) return null;
   const side = Math.min(seg.w, seg.h);
   return { pos: connectionPoint(item), z0, z1, w: side, h: side };
+}
+
+// 3D에서 맞힌 덕트 메시의 userData로 "고를 구간"을 정한다. 구간 메시는 자기 번호를 들고 있지만
+// 라이저는 연결 점(point)만, 댐퍼는 댐퍼 번호(damper)만 들고 있다(§12.5 — 전에는 둘 다 segment: null이라
+// 우클릭 메뉴의 구간 항목이 모두 비활성이었다).
+export function segmentForMeshData(duct, { segment = null, point = null, damper = null } = {}) {
+  if (Number.isInteger(segment)) return segment;
+  const n = duct?.segments?.length ?? 0;
+  if (!n) return null;
+  if (Number.isInteger(point)) return Math.min(Math.max(0, point), n - 1);
+  if (Number.isInteger(damper)) {
+    const d = duct?.dampers?.[damper];
+    return Number.isInteger(d?.segment) ? Math.min(d.segment, n - 1) : null;
+  }
+  return null;
 }
 
 export function damperPos(duct, damper) {
