@@ -141,14 +141,15 @@ describe('벽 부착 아이템 재부착', () => {
     expect(it.wallId).toBe(top.id);
   });
 
-  test('벽을 지우면 wallId만 비우고 아이템은 남는다', () => {
+  test('벽을 지우면 붙어 있던 아이템도 함께 사라진다(§15.6)', () => {
     const s = setup();
     const top = activeFloor(s.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
     const id = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }));
-    deleteWall(s, top.id);
+    expect(deleteWall(s, top.id)).toEqual({ walls: 1, items: 1, rooms: 1 });
+    expect(activeFloor(s.get()).items.find(x => x.id === id)).toBeUndefined();
+    s.undo();                                              // 벽·아이템·방이 한 단계로 되돌아온다
     const it = activeFloor(s.get()).items.find(x => x.id === id);
-    expect(it).toBeTruthy();
-    expect(it.wallId).toBeNull();
+    expect(it.wallId).toBe(top.id);
   });
 });
 
@@ -162,11 +163,15 @@ describe('재부착은 reroom이 도는 모든 액션 뒤에 돈다', () => {
     expect(it.t).toBeCloseTo(0.5);
     expect(Math.abs(it.pos[0] - 1000)).toBeLessThanOrEqual(1);
   });
-  test('여러 벽을 한 번에 지우면 부착이 풀린다', () => {
+  test('여러 벽을 한 번에 지우면 붙어 있던 아이템도 함께 사라진다(§15.6)', () => {
     const s = setup();
     const top = activeFloor(s.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
     const id = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }));
-    deleteWalls(s, [top.id]);
+    expect(deleteWalls(s, [top.id])).toMatchObject({ walls: 1, items: 1 });
+    expect(activeFloor(s.get()).items.find(x => x.id === id)).toBeUndefined();
+    // 벽이 바뀌기만 하는 경로(setWalls)는 예전처럼 아이템을 남기고 부착만 푼다.
+    s.undo();
+    setWalls(s, activeFloor(s.get()).walls.filter(w => w.id !== top.id));
     expect(activeFloor(s.get()).items.find(x => x.id === id).wallId).toBeNull();
   });
   test('벽에 수직인 방향키는 아무것도 바꾸지 않아 되돌림 단계도 없다', () => {

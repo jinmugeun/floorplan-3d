@@ -169,3 +169,18 @@ test('타일 배치는 actions.placeTile을 면 대상과 함께 부르고, 없�
   const off = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, side: 'in', actions: {} });
   expect(pick(off, '타일 배치').disabled).toBe(true);
 });
+
+// §15.6: 벽 우클릭 메뉴의 [삭제]도 같은 결과를 알린다(같은 상태 함수를 지나므로 동작도 같다).
+test('벽 메뉴 삭제는 붙은 제품을 함께 지우고 알린다', async () => {
+  const { createItem } = await import('../src/state/schema.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  const { productById } = await import('../src/products/catalog.js');
+  const a = setup();
+  const wall = a.floor().walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const id = addItem(a.store, createItem(productById('door-swing-900'), { wallId: wall.id, t: 0.5, pos: [2000, 0] }));
+  const items = wallMenuItems({ store: a.store, ui: a.ui, wallId: wall.id, actions: a.actions });
+  items.find(x => x !== 'sep' && x.label === '삭제').onSelect();
+  expect(a.floor().items.find(x => x.id === id)).toBeUndefined();
+  const texts = [...document.querySelectorAll('.toast')].map(t => t.textContent);
+  expect(texts.at(-1)).toContain('붙어 있던 제품 1개를 삭제했습니다');
+});

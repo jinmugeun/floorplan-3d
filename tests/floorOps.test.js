@@ -357,3 +357,34 @@ test('층 관리 export는 floorMgmt에 모이고 floorOps가 같은 것을 다�
   expect(store.get().floors).toHaveLength(2);
   expect(ops.totalArea(activeFloor(store.get()), 'net')).toBeCloseTo(activeFloor(store.get()).rooms[0].area, 6);
 });
+
+// §15.6(감사 §28): 벽을 지우면 붙어 있던 문·창·벽 제품이 wallId 없이 허공에 남았다.
+test('deleteWalls는 그 벽에 붙은 아이템을 같은 단계에서 함께 지우고 개수를 돌려준다', () => {
+  const s = setup();
+  addWalls(s, [makeWall({ a: [0, 3000], b: [1732.0508, 4000], thickness: 200, height: 2300 })]); // 30° 벽
+  const f = activeFloor(s.get());
+  const top = f.walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const slant = f.walls.find(w => Math.abs(w.a[1] - w.b[1]) > 100 && Math.abs(w.a[0] - w.b[0]) > 100);
+  const door = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000.5, 0.25] }));
+  const cap = addItem(s, createItem(productById('ventcap-150'), { wallId: slant.id, t: 0.5 }));
+  const sofa = addItem(s, createItem(productById('sofa-3'), { pos: [2000, 1500] }));
+  const before = activeFloor(s.get()).rooms.length;
+  const r = deleteWalls(s, [top.id, slant.id]);
+  expect(r).toEqual({ walls: 2, items: 2, rooms: before - activeFloor(s.get()).rooms.length });
+  const items = activeFloor(s.get()).items.map(i => i.id);
+  expect(items).toEqual([sofa]);                   // 바닥 제품은 그대로 남는다
+  expect(items).not.toContain(door);
+  expect(items).not.toContain(cap);
+  s.undo();                                        // 벽·아이템·방이 한 단계로 되돌아온다
+  expect(activeFloor(s.get()).items.map(i => i.id).sort()).toEqual([door, cap, sofa].sort());
+  expect(activeFloor(s.get()).walls).toHaveLength(5);
+});
+
+test('없는 벽을 지우면 아무 단계도 만들지 않는다', () => {
+  const s = setup();
+  const steps = [];
+  const off = s.subscribe(() => steps.push(1));
+  expect(deleteWalls(s, ['없는id'])).toEqual({ walls: 0, items: 0, rooms: 0 });
+  expect(steps).toEqual([]);
+  off();
+});

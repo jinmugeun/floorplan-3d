@@ -30,12 +30,29 @@ export function addWalls(store, walls) {
     reroom(f); reattach(f);
   });
 }
-export function deleteWall(store, id) {
-  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => w.id !== id); reroom(f); reattach(f); });
-}
+// 그 벽에 붙은 아이템(문·창·개구부·벽 제품)의 id. 벽을 지우면 이들도 함께 사라진다(§15.6):
+// 예전에는 wallId만 비워 허공에 남았고, 방 하나가 조용히 사라지는 것과 겹쳐 무엇이 없어졌는지
+// 알 수 없었다(감사 §28). 확인 대화상자는 두지 않는다 — undo 한 번으로 전부 돌아온다.
+const wallItemIds = (f, kill) => (f.items ?? []).filter(i => i.attach === 'wall' && i.wallId && kill.has(i.wallId)).map(i => i.id);
+
+export function deleteWall(store, id, opts) { return deleteWalls(store, [id], opts); }
 export function deleteWalls(store, ids, opts) {
   const kill = new Set(ids);
-  return store.dispatch(d => { const f = activeFloor(d); f.walls = f.walls.filter(w => !kill.has(w.id)); reroom(f); reattach(f); }, opts);
+  const before = activeFloor(store.get());
+  const walls = before.walls.filter(w => kill.has(w.id)).length;
+  if (!walls) return { walls: 0, items: 0, rooms: 0 };      // 지울 벽이 없으면 빈 단계도 만들지 않는다
+  const items = wallItemIds(before, kill).length;
+  const rooms0 = before.rooms.length;
+  store.dispatch(d => {
+    const f = activeFloor(d);
+    const gone = new Set(wallItemIds(f, kill));
+    f.walls = f.walls.filter(w => !kill.has(w.id));
+    f.items = f.items.filter(i => !gone.has(i.id));
+    f.groups = (f.groups ?? []).map(g => ({ ...g, itemIds: g.itemIds.filter(x => !gone.has(x)) })).filter(g => g.itemIds.length > 1);
+    pruneDuctConnections(f);   // 사라진 벽 제품을 가리키는 덕트 연결도 함께 사라진다(deleteItems와 같다)
+    reroom(f); reattach(f);
+  }, opts);
+  return { walls, items, rooms: rooms0 - activeFloor(store.get()).rooms.length };
 }
 export function deleteRoom(store, id) {
   return store.dispatch(d => {

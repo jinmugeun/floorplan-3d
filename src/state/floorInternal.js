@@ -10,7 +10,9 @@ import { wallLength } from '../geom/walls.js';
 export const reroom = f => { f.walls = normalizeWalls(f.walls); f.rooms = detectRooms(f.walls, f.rooms); };
 
 // 벽이 움직이거나 사라졌을 때 그 벽에 붙은 아이템을 다시 앉힌다. reroom이 도는 곳마다 함께 돈다.
-// 벽을 지우면 wallId만 비우고 아이템은 남긴다(사용자가 만든 물건을 소리 없이 없애지 않는다).
+// 벽이 사라지면 wallId만 비우고 아이템은 남긴다 — setWalls·transformFloor·splitWall처럼 벽 묶음이
+// 바뀌는 경로에서는 사용자가 만든 물건을 소리 없이 없애지 않는다. **삭제 액션**(deleteWall/
+// deleteWalls)은 §15.6대로 그 아이템까지 함께 지우고 몇 개를 지웠는지 알린다.
 // 아이템을 새로 만드는 경로(사본·층 복사)도 끝에서 이것을 부른다: "pos는 (wallId, t)의 결과"가 불변식이다.
 export function reattach(f) {
   for (let i = 0; i < f.items.length; i++) {

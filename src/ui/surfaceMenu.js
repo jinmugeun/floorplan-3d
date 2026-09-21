@@ -6,6 +6,8 @@ import { deleteWall, duplicateRoom } from '../state/floorOps.js';
 import { applyRoomWalls, assignmentOf } from '../state/materialOps.js';
 // 방 삭제는 ui/ 안의 roomActions에서 가져온다: ui/는 view2d/·view3d/·app/을 import하지 않는다(아키텍처 §9).
 import { removeRoom } from './roomActions.js';
+import { toast } from './toast.js';
+import { WALL_DELETE_RESULT, ROOMS_GONE } from './messages.js';
 
 const copyItem = (ui, mat) => ({
   label: '마감재 복사', disabled: !mat,
@@ -29,7 +31,13 @@ export function wallMenuItems({ store, ui, wallId, roomId = null, side = 'in', i
     { label: '마감재 편집기로 이동', disabled: !actions.openEditor, onSelect: () => actions.openEditor?.(wallId, target.side) },
   ];
   if (in3d) items.push({ label: '도면 뷰 전환', disabled: !actions.toPlanView, onSelect: () => actions.toPlanView?.() });
-  items.push('sep', { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => deleteWall(store, wallId) });
+  // 결과 문구는 app/deleteActions.js와 같은 규칙이다(§15.6): 제품이 함께 사라지면 그것을,
+  // 제품 없이 방만 줄면 방만 알린다.
+  items.push('sep', { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => {
+    const r = deleteWall(store, wallId);
+    if (r.items > 0) toast(WALL_DELETE_RESULT(r.walls, r.items, r.rooms));
+    else if (r.rooms > 0) toast(ROOMS_GONE(r.rooms));
+  } });
   return items;
 }
 

@@ -45,3 +45,9 @@ export const FP_BANNER = '1인칭 — WASD 이동 · 드래그로 둘러보기 �
 export const FP_EXIT = '나가기';
 // 포인터 락이 거부된 환경(감사 §8 ①)에서 한 번 알린다: 고장이 아니라 조작 방식이 다르다.
 export const FP_NO_LOCK = '마우스 잠금을 쓸 수 없어 드래그로 둘러봅니다';
+
+// 벽 삭제(§15.6 · 감사 §28) — 제품이 함께 사라졌다는 사실과, 방이 줄었다는 사실을 함께 알린다.
+export const WALL_DELETE_RESULT = (walls, items, rooms = 0) =>
+  `벽 ${walls}개와 붙어 있던 제품 ${items}개를 삭제했습니다${rooms > 0 ? ` · 방 ${rooms}개가 사라졌습니다` : ''}`;
+// 붙은 제품이 없고 방만 줄어든 경우(벽 하나를 지워 방이 열린 경우)에 쓴다.
+export const ROOMS_GONE = rooms => `방 ${rooms}개가 사라졌습니다`;

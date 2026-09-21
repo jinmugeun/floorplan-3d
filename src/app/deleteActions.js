@@ -7,19 +7,27 @@ import { deleteSelectedDuct } from '../view2d/tools/ductSelect.js';
 import { hitWall } from '../geom/walls.js';
 import { pointInPolygon } from '../geom/rooms.js';
 import { removeRoom } from '../ui/roomActions.js';
+import { WALL_DELETE_RESULT, ROOMS_GONE } from '../ui/messages.js';
 
 // 방 삭제의 확인·재확인은 ui/roomActions.js의 removeRoom 한 곳이다(방 우클릭 메뉴도 그것을 쓴다 —
 // ui/는 app/을 import하지 않으므로 공용 함수가 ui/에 산다). 여기서는 그것을 부르기만 한다:
 // 다시 내보내면 같은 함수에 두 개의 import 경로가 생겨 "한 자리" 규칙이 흐려진다.
 
 export function createDeleteActions({ store, ui, view, toast = () => {}, setTool = () => {} }) {
+  // 벽 삭제 결과 한 곳(§15.6). 제품이 함께 사라졌으면 그것을, 제품은 없고 방만 줄었으면 방만
+  // 알린다. 둘 다 없으면(벽만 사라짐) 화면에서 바로 보이므로 조용히 둔다.
+  const report = ({ walls = 0, items = 0, rooms = 0 } = {}) => {
+    if (!walls) return;
+    if (items > 0) toast(WALL_DELETE_RESULT(walls, items, rooms));
+    else if (rooms > 0) toast(ROOMS_GONE(rooms));
+  };
   function deleteSelection() {
     const s = ui.get().selection;
     if (deleteSelectedDuct({ store, ui, toast })) return;           // 덕트 규칙은 계획 3의 한 함수가 정본이다
     if (s?.type === 'item') { deleteItems(store, [s.id]); ui.set({ selection: null }); return; }
     if (s?.type === 'multi' && s.kind === 'item') { deleteItems(store, s.ids); ui.set({ selection: null }); return; }
-    if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); return; }
-    if (s?.type === 'multi' && s.kind === 'wall') { deleteWalls(store, s.ids); ui.set({ selection: null }); return; }
+    if (s?.type === 'wall') { report(deleteWall(store, s.id)); ui.set({ selection: null }); return; }
+    if (s?.type === 'multi' && s.kind === 'wall') { report(deleteWalls(store, s.ids)); ui.set({ selection: null }); return; }
     if (s?.type === 'room') removeRoom(store, ui, s.id);            // 확인은 비동기다(호출자는 기다리지 않는다)
   }
   function createDeleteTool() {
@@ -28,7 +36,7 @@ export function createDeleteActions({ store, ui, view, toast = () => {}, setTool
       onPointerDown(p) {
         const f = activeFloor(store.get());
         const w = hitWall(f.walls, p, 6 / view.camera.scale);
-        if (w) { deleteWall(store, w.id); return; }
+        if (w) { report(deleteWall(store, w.id)); return; }
         const r = f.rooms.find(x => pointInPolygon(p, x.points));
         if (r) removeRoom(store, ui, r.id);
       },

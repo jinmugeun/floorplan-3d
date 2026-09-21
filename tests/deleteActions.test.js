@@ -93,3 +93,32 @@ describe('삭제 배선', () => {
     expect(a.store.canUndo()).toBe(canUndoBefore); // undo 단계도 늘지 않는다
   });
 });
+
+// §15.6: 무엇이 함께 사라졌는지 알려 준다(감사 §28: 방 하나와 제품 하나가 조용히 없어졌다).
+test('벽 삭제는 붙은 제품·사라진 방을 토스트로 알린다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const seen = [];
+  const a = createDeleteActions({ store, ui, view: { camera: { scale: 0.08 } }, toast: m => seen.push(m), setTool: () => {} });
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  addItem(store, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.5, pos: [2000, 0] }));
+  ui.set({ selection: { type: 'wall', id: top.id } });
+  a.deleteSelection();
+  expect(seen).toEqual(['벽 1개와 붙어 있던 제품 1개를 삭제했습니다 · 방 1개가 사라졌습니다']);
+  expect(ui.get().selection).toBeNull();
+});
+
+test('붙은 제품이 없으면 방이 줄었다는 것만 알리고, 그것도 없으면 조용하다', () => {
+  const a = setup();
+  const top = a.f().walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const seen = [];
+  const b = createDeleteActions({ store: a.store, ui: a.ui, view: { camera: { scale: 0.08 } }, toast: m => seen.push(m), setTool: () => {} });
+  a.ui.set({ selection: { type: 'wall', id: top.id } });
+  b.deleteSelection();
+  expect(seen).toEqual(['방 1개가 사라졌습니다']);
+  const left = a.f().walls[0];
+  a.ui.set({ selection: { type: 'wall', id: left.id } });
+  b.deleteSelection();
+  expect(seen).toHaveLength(1);                 // 남은 벽 하나를 지워도 줄어들 방이 없다
+});
