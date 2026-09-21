@@ -21,7 +21,7 @@ describe('아이템 컨텍스트 메뉴', () => {
   test('오늘의집과 같은 항목과 단축키 표기', () => {
     const { store, ui, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
     const menu = itemMenuItems({ store, ui, ids, itemActions: {} });
-    expect(labels(menu)).toEqual(['좌우 반전', '상하 반전', '제품 교체', '상대이동', '직선 배열 복사', '원형 배열 복사', '회전 복사', '복사', '붙여넣기', '그룹화', '그룹 해제', '같은 제품 선택', '숨김', '잠금', '삭제']);
+    expect(labels(menu)).toEqual(['좌우 반전', '상하 반전', '제품 교체', '상대이동', '직선 배열 복사', '원형 배열 복사', '회전 복사', '경로 배열 복사', '복사', '붙여넣기', '그룹화', '그룹 해제', '같은 제품 선택', '숨김', '잠금', '삭제']);
     expect(labels(menu)).not.toContain('연결 덕트 선택');
     const byLabel = l => menu.find(m => m !== 'sep' && m.label === l);
     expect(byLabel('좌우 반전').shortcut).toBe('Alt+H');
@@ -30,6 +30,7 @@ describe('아이템 컨텍스트 메뉴', () => {
     expect(byLabel('직선 배열 복사').shortcut).toBe('Alt+A');
     expect(byLabel('원형 배열 복사').shortcut).toBe('Alt+C');
     expect(byLabel('회전 복사').shortcut).toBe('Alt+X');
+    expect(byLabel('경로 배열 복사').shortcut).toBe('Alt+S');
     expect(byLabel('복사').shortcut).toBe('Ctrl+C');
     expect(byLabel('붙여넣기').shortcut).toBe('Ctrl+V');
     expect(byLabel('숨김').shortcut).toBe('Ctrl+H');
@@ -106,4 +107,20 @@ describe('아이템 컨텍스트 메뉴', () => {
     const roomMenu = t.onContextMenu([500, 2000], {});
     expect(labels(roomMenu)).toContain('방 복사');   // 아이템이 없는 자리는 2A 분기로 내려간다
   });
+});
+
+// §13.1: 경로는 2D 캔버스에 그린다 — 3D에서는 항목을 비활성으로 두고 이유를 title로 알린다.
+test('경로 배열 복사는 3D에서 비활성이고 title이 "2D에서 사용"이다', () => {
+  const { store, ui, ids } = setup([['sofa-3', { pos: [2000.5, 1500.25] }]]);
+  const called = [];
+  const items2d = itemMenuItems({ store, ui, ids, itemActions: { pathArray: () => called.push('pathArray') } });
+  const row2d = items2d.find(m => m !== 'sep' && m.label === '경로 배열 복사');
+  expect(row2d.disabled).toBeFalsy();
+  expect(row2d.title).toBeUndefined();
+  row2d.onSelect();
+  expect(called).toEqual(['pathArray']);
+  ui.set({ mode: 'iso' });
+  const row3d = itemMenuItems({ store, ui, ids, itemActions: {} }).find(m => m !== 'sep' && m.label === '경로 배열 복사');
+  expect(row3d.disabled).toBe(true);
+  expect(row3d.title).toBe('2D에서 사용');
 });

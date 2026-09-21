@@ -65,3 +65,25 @@ test('Enter는 적용, Esc는 취소다', () => {
   expect(q('.modal')).toBeNull();
   expect(got).toHaveLength(1);
 });
+
+// §13.1: 경로 배열 복사 대화상자. 간격 기본값은 호출자가 넘기는 아이템의 긴 변이다.
+test('경로 배열 대화상자는 간격·개수·회전 체크를 모으고 개수 0은 null이 된다', () => {
+  const got = [];
+  const d = openArrayDialog('path', { length: 450, onApply: v => got.push(v) });
+  const root = document.querySelector('.modal');
+  expect(root.textContent).toContain('경로 배열 복사');
+  expect(root.querySelector('[name="spacing"]').value).toBe('450');
+  expect(root.querySelector('[name="count"]').value).toBe('0');
+  expect(root.querySelector('[name="follow"]').checked).toBe(true);
+  root.querySelector('[name="apply"]').click();
+  expect(got).toEqual([{ spacing: 450, count: null, follow: true }]);
+  d.close();
+
+  openArrayDialog('path', { length: 600, onApply: v => got.push(v) });
+  const r2 = document.querySelector('.modal');
+  r2.querySelector('[name="spacing"]').value = '1200';
+  r2.querySelector('[name="count"]').value = '5';
+  r2.querySelector('[name="follow"]').checked = false;
+  r2.querySelector('[name="apply"]').click();
+  expect(got[1]).toEqual({ spacing: 1200, count: 5, follow: false });
+});

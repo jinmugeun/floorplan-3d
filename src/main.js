@@ -30,6 +30,7 @@ import { openRoomTemplateDialog } from './ui/templateDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
 import { createDeleteActions } from './app/deleteActions.js';
+import { createArrangeActions } from './app/arrangeActions.js';
 import { confirmDialog } from './ui/confirmDialog.js';
 import { promptDialog } from './ui/promptDialog.js';
 import { openStartScreen } from './ui/startScreen.js';
@@ -47,6 +48,7 @@ let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아�
 const menu = createContextMenu(document.body);
 const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender() }); // 태스크 5의 onCameraChange를 유지한다
 const { createDeleteTool, deleteSelection, deleteOrTool } = createDeleteActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
+const arrange = createArrangeActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
 const selectItems = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids } });
 // 컨텍스트 메뉴(itemMenu.js)·속성 패널·단축키·3D 피커가 부르는 아이템 동작 묶음. view3d보다 먼저 선언한다(view3d 생성에 넘긴다).
@@ -75,6 +77,7 @@ const itemActions = {
     const ids = selectedItemIds(); if (!ids.length) return;
     openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(`${made.length}개 복사했습니다`); } });
   },
+  pathArray: () => arrange.pathArray(selectedItemIds()),
 };
 // 벽·방 메뉴(surfaceMenu.js)와 속성 패널이 부르는 면 동작 묶음. 2D·3D가 같은 묶음을 쓴다.
 const surfaceActions = {
@@ -135,6 +138,7 @@ const tools = {
   measure: () => createMeasureTool({ store, opts: toolOpts.measure, view }),
   duct: () => createDuctTool({ store, ui, view, opts: toolOpts.duct, onDone: () => setTool('select') }),
   place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select') }),
+  pathArray: () => arrange.createPathTool(),
 };
 function setTool(name) { cancelReplace(); const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
 // 라이브러리에서 제품을 고르면 배치 도구를 켠다(오늘의집과 같은 동작: 한 번 배치하면 선택 도구로 돌아간다).

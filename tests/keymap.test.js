@@ -323,3 +323,18 @@ test('재지정한 키가 핸들러에 바로 듣는다', async () => {
   expect(a.calls.setTool).toEqual(['wall']);   // K가 벽 그리기, L은 이제 아무것도 아니다
   setTable(TABLE);
 });
+
+// §13.1: Alt+S = 경로 배열 복사. 선택이 없으면 삼키지 않는다(다른 Alt 조합과 같은 규칙).
+test('Alt+S는 경로 배열 복사로 가고 선택이 없으면 브라우저에 맡긴다', async () => {
+  const { KEYMAP } = await import('../src/ui/keymap.js');
+  const a = setupItems();
+  const ev = a.key('s', { altKey: true });
+  expect(a.calls).toEqual([['pathArray']]);
+  expect(ev.prevented).toBe(1);
+  const none = setupItems({ ids: [], canPaste: false });
+  const ev2 = none.key('s', { altKey: true });
+  expect(none.calls).toEqual([]);
+  expect(ev2.prevented).toBe(0);
+  expect(KEYMAP.find(e => e.label === '경로 배열 복사').keys).toEqual(['Alt+S']);
+  expect(KEYMAP.find(e => e.label === '경로 배열 복사').group).toBe('제품');
+});

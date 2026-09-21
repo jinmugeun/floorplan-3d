@@ -121,3 +121,10 @@ test('예약 목록에 없는 Alt 조합도 충돌로 막는다', async () => {
   expect(conflictAction(km, 'Alt+H', 'tool:wall')).toBeTruthy();
   expect(conflictAction(km, 'K', 'tool:wall')).toBeNull();
 });
+
+// §13.1: alt+s로 재지정하면 선택이 있는 동안 절대 눌리지 않으므로 충돌로 막는다.
+test('alt+s는 예약 키이고 이름이 "제품 경로 배열 복사"다', async () => {
+  const { RESERVED_KEYS, conflictAction, effectiveKeymap } = await import('../src/ui/keyBindings.js');
+  expect(RESERVED_KEYS.find(r => r.key === 'alt+s')?.label).toBe('제품 경로 배열 복사');
+  expect(conflictAction(effectiveKeymap({}), 'Alt+S', 'tool:wall')).toBe('제품 경로 배열 복사');
+});

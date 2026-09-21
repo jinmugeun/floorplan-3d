@@ -33,6 +33,7 @@ export const KEYMAP = [
   { group: '제품', label: '상하 반전', keys: ['Alt+V'], action: null },
   { group: '제품', label: '상대이동', keys: ['Alt+R'], action: null },
   { group: '제품', label: '직선 / 원형 / 회전 배열 복사', keys: ['Alt+A', 'Alt+C', 'Alt+X'], action: null },
+  { group: '제품', label: '경로 배열 복사', keys: ['Alt+S'], action: null },
   { group: '제품', label: '복사 / 붙여넣기', keys: ['Ctrl+C', 'Ctrl+V'], action: null },
   { group: '제품', label: '숨김 / 잠금', keys: ['Ctrl+H', 'Ctrl+L'], action: null },
   { group: '제품', label: '그룹 / 해제', keys: ['Ctrl+G', 'Ctrl+Shift+G'], action: null },
@@ -61,6 +62,7 @@ function itemCombo(ev, k, a) {
     if (k === 'a') { a.arrayCopy?.('linear'); return true; }
     if (k === 'c') { a.arrayCopy?.('circular'); return true; }
     if (k === 'x') { a.arrayCopy?.('rotate'); return true; }
+    if (k === 's') { a.pathArray?.(); return true; }
     return false;
   }
   if (ev.ctrlKey || ev.metaKey) {

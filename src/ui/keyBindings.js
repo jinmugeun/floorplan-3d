@@ -47,7 +47,7 @@ export function keyLabel(ev) {
 }
 
 // KEYMAP 표(action이 있는 행)에는 없지만 다른 곳에서 이미 그 키를 소비하는 키들.
-// - keymap.js의 itemCombo가 선택이 있을 때 먼저 가져가는 조합키(Ctrl+C/V/H/L/G, Ctrl+Shift+G, Alt+H/V/R/A/C/X)
+// - keymap.js의 itemCombo가 선택이 있을 때 먼저 가져가는 조합키(Ctrl+C/V/H/L/G, Ctrl+Shift+G, Alt+H/V/R/A/C/X/S)
 // - 도구 단계에서 먼저 소비하는 키(방향키로 제품 이동, Q로 제품 90° 회전 — selectTool.js)
 // 이 키들로 재지정하면 표에는 저장되지만 선택이 있는 동안은 절대 눌리지 않으므로 conflictAction에서 충돌로 본다.
 // (1인칭에서 걷는 동안의 W/A/S/D/Q/E는 여기 포함하지 않는다 — 1인칭 모드에서는 도구/아이템 키를 아예 주지 않는다.)
@@ -64,6 +64,7 @@ export const RESERVED_KEYS = [
   { key: 'alt+a', label: '제품 직선 배열 복사' },
   { key: 'alt+c', label: '제품 원형 배열 복사' },
   { key: 'alt+x', label: '제품 회전 배열 복사' },
+  { key: 'alt+s', label: '제품 경로 배열 복사' },
   { key: 'arrowleft', label: '제품 이동' },
   { key: 'arrowright', label: '제품 이동' },
   { key: 'arrowup', label: '제품 이동' },

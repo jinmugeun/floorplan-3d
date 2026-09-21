@@ -1,5 +1,5 @@
 // 상대이동·배열 복사 대화상자. 값만 모아 onApply로 넘기고 스토어는 건드리지 않는다.
-const TITLES = { relative: '상대이동', linear: '직선 배열 복사', circular: '원형 배열 복사', rotate: '회전 복사' };
+const TITLES = { relative: '상대이동', linear: '직선 배열 복사', circular: '원형 배열 복사', rotate: '회전 복사', path: '경로 배열 복사' };
 const num = (name, label, value, min, max, step = 1) =>
   `<label class="field"><span>${label}</span><input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="${step}"></label>`;
 const clamp = (el, def) => {
@@ -36,6 +36,18 @@ export function openRelativeMoveDialog(opts = {}) {
 }
 
 export function openArrayDialog(kind, opts = {}) {
+  // 경로 배열(§13.1): 경로는 캔버스에서 이미 그렸고 여기서는 간격·개수·회전만 묻는다.
+  // 간격 기본값은 호출자가 넘기는 length(선택 아이템의 긴 변)이고, 개수 0은 "간격으로 채우기"다.
+  if (kind === 'path') {
+    const step = Math.max(1, Math.round(Number(opts.length) || 600));
+    const body = `${num('spacing', '간격 (mm)', step, 1, 100000, 'any')}${num('count', '개수 (0 = 간격으로 채우기)', 0, 0, 200)}
+      <label class="check"><input type="checkbox" name="follow" checked> 경로 방향으로 회전</label>`;
+    return openDialog('path', body, root => ({
+      spacing: clamp(root.querySelector('[name="spacing"]'), step),
+      count: clamp(root.querySelector('[name="count"]'), 0) || null,
+      follow: root.querySelector('[name="follow"]').checked,
+    }), opts);
+  }
   if (kind === 'linear') {
     const body = `${num('dx', '가로 간격 (mm)', 600, -100000, 100000, 'any')}${num('dy', '세로 간격 (mm)', 0, -100000, 100000, 'any')}${num('count', '개수', 3, 1, 100)}`;
     return openDialog('linear', body, root => ({
