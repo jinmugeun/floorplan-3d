@@ -31,11 +31,15 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   let firstLayout = true;
   // 하단 바 접기 판정은 "보이는 컨트롤 서명"이 바뀔 때만 다시 한다(계획 6 R-1 · §15.2):
   // bottom.sync()가 scrollWidth를 읽어 강제 리플로를 내므로, 스토어가 바뀔 때마다 부르면
-  // 드래그 중 프레임을 삼킨다(감사 §29). 폭 변화는 relayout()이 무조건 다시 재므로 놓치지 않는다.
+  // 드래그 중 프레임을 삼킨다(감사 §29). 폭 변화는 relayout()이 무조건 다시 재므로 놓치지 않는다 —
+  // 단, 좌/우 패널을 접거나 펴는 레일·[속성 ▸] 버튼 경로는 `#layout` 자체 크기를 바꾸지 않아
+  // ResizeObserver도 뜨지 않고 서명 4필드도 그대로다(p7 Task 2 리뷰 I-1). 그 두 경로는 서명이
+  // 같아도 강제로 다시 재도록 `syncBottom(true)`로 부른다 — 드래그 경로는 여전히 이 힘줄을 타지
+  // 않으므로 §15.2의 목적(드래그 중 리플로 0)은 그대로다.
   // 선언은 relayout()보다 **위**여야 한다: relayout()은 먼저 돌고, let은 TDZ다.
   let bottomSig = null;
   const bottomSignature = () => ['#btnGizmoMode', '#btnCam', '#btnSun', '#btnRightPanel'].map(s => (q(s)?.hidden ? '0' : '1')).join('');
-  const syncBottom = () => { const s = bottomSignature(); if (s === bottomSig) return; bottomSig = s; bottom?.sync(); };
+  const syncBottom = (force = false) => { const s = bottomSignature(); if (!force && s === bottomSig) return; bottomSig = s; bottom?.sync(); };
   // 레일 버튼의 `.on`은 "어느 탭인가"이고 aria-pressed는 "지금 열려 있는가"다(m-9): 활성 탭을 다시
   // 눌러 접거나 좁은 창이 자동으로 접으면 화면에는 패널이 없는데 보조기술은 눌림으로 읽었다.
   // 함수 선언이라 첫 relayout()보다 위에서 불려도 TDZ에 걸리지 않는다.
@@ -68,7 +72,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // pop은 아래에서 만들지만 이 콜백은 클릭 때 비로소 돌아 TDZ에 걸리지 않는다.
   bottom = createBottomBar(root, { onOpen: () => pop.close() });
   const resizeWatch = createResizeWatch(layout, relayout);
-  q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; onMinimapResize(); });
+  q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; syncBottom(true); onMinimapResize(); });
   const splitters = [
     createSplitter(q('#panelSplitter'), {
       get: () => widths.panel,
@@ -111,8 +115,11 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     const current = b.classList.contains('on');
     const collapsed = q('#panel').classList.contains('collapsed');
     autoOff.panel = false;
-    if (current && !collapsed) { togglePanel(layout, 'panel', true); syncRail(); return; }
+    // 왼쪽 패널을 접거나 펴면 바(#bottombar)의 clientWidth가 바뀐다 — #layout 크기는 그대로라
+    // ResizeObserver도, 서명 4필드도 반응하지 않으므로 여기서만 강제로 다시 잰다(I-1).
+    if (current && !collapsed) { togglePanel(layout, 'panel', true); syncRail(); syncBottom(true); return; }
     showPanel(b.dataset.panel);
+    syncBottom(true);
   }));
   root.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => store.dispatch(d => { d.units = b.dataset.units; }, { record: false })));
   q('#btnLock').addEventListener('click', () => store.dispatch(d => { d.view.lockPlan = !d.view.lockPlan; }, { record: false }));

@@ -467,8 +467,9 @@ test('패널 폭은 CSS 변수로 들어가고 스플리터 두 개가 그리드
     const root = document.createElement('div'); document.body.appendChild(root);
     createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
     const layout = root.querySelector('#layout');
-    expect(layout.style.getPropertyValue('--panel-w')).toBe('400px');
-    expect(layout.style.getPropertyValue('--right-w')).toBe('300px');
+    // §15.4: 캔버스 560 px 기준에서 1280 px 창은 646 px 몫이다 → 700에서 27 px씩 덜어 낸다.
+    expect(layout.style.getPropertyValue('--panel-w')).toBe('373px');
+    expect(layout.style.getPropertyValue('--right-w')).toBe('273px');
     const ids = [...layout.children].map(c => c.id);
     // #bottomMore는 #layout의 아홉 번째 자식이다: #bottombar가 overflow-x: auto라 팝오버를 그 안에
     // 둘 수 없고(잘린다 — 결정 8), position: fixed라 그리드 흐름을 차지하지 않는다.
@@ -798,5 +799,56 @@ test('하단 바 접기 판정은 보이는 컨트롤 서명이 바뀔 때만 �
   expect(reads).toBe(0);                       // 서명이 같으면 재지 않는다
   ui.set({ mode: 'iso' });                     // 3D 전용 버튼(카메라·햇빛)이 드러난다 → 서명이 바뀐다
   expect(reads).toBeGreaterThan(0);
+  shell.destroy();
+});
+
+// p7 Task 2 리뷰 I-1: 레일로 좌측 패널을 접거나 펴면 #bottombar의 clientWidth가 바뀌지만
+// #layout 크기·서명 4필드는 그대로라 예전 게이팅은 이 경로를 영원히 놓쳤다. syncBottom(true)로
+// 강제 재측정하되, 아이템 드래그처럼 서명이 그대로인 store 갱신은 여전히 한 번도 재지 않아야 한다.
+test('레일 패널을 접으면 서명이 그대로여도 하단 바를 다시 재고, 아이템 드래그는 여전히 재지 않는다', () => {
+  const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  let reads = 0;
+  const bar = root.querySelector('#bottombar');
+  Object.defineProperty(bar, 'scrollWidth', { configurable: true, get() { reads++; return 900; } });
+  Object.defineProperty(bar, 'clientWidth', { configurable: true, get: () => 1000 });
+
+  // 드래그 프레임을 흉내 낸다: record:false dispatch를 여러 번(ui/mode는 그대로) — 서명이
+  // 바뀌지 않으므로 한 번도 재측정하지 않아야 한다(§15.2, 이동마다 sync 금지).
+  reads = 0;
+  store.dispatch(d => { d.name = 'drag-1'; }, { record: false });
+  store.dispatch(d => { d.name = 'drag-2'; }, { record: false });
+  store.dispatch(d => { d.name = 'drag-3'; }, { record: false });
+  expect(reads).toBe(0);
+
+  // 레일 탭을 다시 눌러 왼쪽 패널을 접는다: ui/store 서명은 그대로지만 바 폭은 325px가량 바뀐다.
+  const drawTab = root.querySelector('#rail [data-panel="draw"]');
+  expect(drawTab.classList.contains('on')).toBe(true);   // 기본 탭이 이미 열려 있다
+  reads = 0;
+  drawTab.click();                                        // 열려 있는 탭을 다시 누른다 → 접힘
+  expect(root.querySelector('#panel').classList.contains('collapsed')).toBe(true);
+  expect(reads).toBeGreaterThan(0);                       // 서명 불변이어도 강제로 다시 쟀다
+
+  // 같은 탭을 다시 눌러 편다: 역시 강제 재측정.
+  reads = 0;
+  drawTab.click();
+  expect(root.querySelector('#panel').classList.contains('collapsed')).toBe(false);
+  expect(reads).toBeGreaterThan(0);
+
+  shell.destroy();
+});
+
+// §15.4: 아이콘으로 줄여도 이름은 남아야 한다(title·aria-label).
+test('화면 맞추기 버튼은 넓은 라벨과 아이콘을 함께 갖고 이름을 잃지 않는다', () => {
+  const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  const fit = root.querySelector('#btnFit');
+  expect(fit.title).toBe('화면 맞추기 [0]');
+  expect(fit.getAttribute('aria-label')).toBe('화면 맞추기');
+  expect(fit.querySelector('.wide').textContent).toBe('화면 맞추기');
+  expect(fit.querySelector('.narrow').textContent).toBe('⤢');
+  expect(fit.querySelector('.narrow').getAttribute('aria-hidden')).toBe('true');
   shell.destroy();
 });
