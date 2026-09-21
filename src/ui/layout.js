@@ -40,11 +40,21 @@ export function applyPanelWidths(layout, widths = PANEL_DEFAULT) {
   layout.style.setProperty('--right-w', `${clamp(widths.right ?? PANEL_DEFAULT.right)}px`);
 }
 
+// 키보드로 옮기는 한 걸음(px). 드래그는 1 px 단위지만 방향키는 눈에 보이게 움직여야 한다.
+export const SPLITTER_STEP = 16;
+
 // 세로 스플리터 하나. 드래그 중에는 set으로 즉시 반영하고(미리 보기), 놓을 때 한 번만 onEnd로 저장한다
 // (드래그마다 localStorage를 쓰면 프레임이 튄다). invert는 오른쪽 패널용이다: 왼쪽으로 끌면 넓어진다.
+// 마우스만으로 폭을 바꿀 수 있으면 키보드만 쓰는 사람에게는 없는 기능이다 → role="separator" +
+// tabindex="0"으로 포커스를 받고 ←·→로 SPLITTER_STEP만큼 옮긴다(드래그와 같은 min/max 안에서,
+// 한 번 누를 때마다 onEnd로 저장한다 — 키 입력은 드래그처럼 연속이 아니라 한 번이 곧 끝이다).
 export function createSplitter(el, { min = PANEL_MIN, max = PANEL_MAX, invert = false, get = () => min, set = () => {}, onEnd = () => {} } = {}) {
   // 요소가 없어도 던지지 않는다(applyPanelWidths·togglePanel과 같은 방어 수준).
   if (!el) return { isDragging: () => false, destroy() {} };
+  // 셸의 HTML에 이미 적혀 있어도 다시 쓴다(스플리터를 만드는 자리가 접근성 속성의 정본이다).
+  el.setAttribute('role', 'separator');
+  el.setAttribute('aria-orientation', 'vertical');
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
   let start = null;
   const onDown = ev => {
     if (ev.button !== 0) return;
@@ -63,14 +73,27 @@ export function createSplitter(el, { min = PANEL_MIN, max = PANEL_MAX, invert = 
     if (el.hasPointerCapture?.(ev.pointerId)) el.releasePointerCapture?.(ev.pointerId);
     onEnd(get());
   };
+  // →는 오른쪽으로 옮긴다: 왼쪽 패널은 넓어지고, invert(오른쪽 패널)는 반대로 좁아진다 —
+  // 드래그의 dx * (invert ? -1 : 1)과 같은 부호 규칙이다.
+  const onKey = ev => {
+    const dir = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+    if (!dir) return;
+    ev.preventDefault();                    // 방향키로 패널이 가로 스크롤되지 않게
+    const w = Math.min(max, Math.max(min, get() + dir * SPLITTER_STEP * (invert ? -1 : 1)));
+    if (w === get()) return;                // 이미 한계면 저장도 하지 않는다
+    set(w);
+    onEnd(get());                           // 드래그를 놓은 것과 같다(kvp에 남는다)
+  };
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('pointermove', onMove);
+  el.addEventListener('keydown', onKey);
   for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(t, onUp);
   return {
     isDragging: () => !!start,
     destroy() {
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('keydown', onKey);
       for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) el.removeEventListener(t, onUp);
     },
   };

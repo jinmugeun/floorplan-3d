@@ -11,6 +11,8 @@ function fakeLayout() {
 const down = (el, x) => el.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: x, bubbles: true, cancelable: true }));
 const move = (el, x) => el.dispatchEvent(new MouseEvent('pointermove', { clientX: x, bubbles: true }));
 const up = (el, x) => el.dispatchEvent(new MouseEvent('pointerup', { clientX: x, bubbles: true }));
+// dispatchEvent는 preventDefault가 걸리면 false를 돌려준다.
+const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
 
 beforeEach(() => { document.body.innerHTML = ''; localStorage.clear(); });
 
@@ -79,6 +81,46 @@ describe('스플리터', () => {
     sp.destroy();
     down(el, 500); move(el, 400);
     expect(w).toBe(340);                          // destroy 뒤에는 반응하지 않는다
+  });
+
+  test('키보드 ←·→로도 폭을 옮기고(16 px) 그때마다 저장한다', () => {
+    const layout = fakeLayout();
+    const el = layout.querySelector('#panelSplitter');
+    let w = 320; const ends = [];
+    createSplitter(el, { get: () => w, set: v => { w = v; savePanelWidth('panel', v); }, onEnd: v => ends.push(v) });
+    // 포커스를 받을 수 있고 스크린 리더에 세로 구분선으로 보인다.
+    expect(el.getAttribute('role')).toBe('separator');
+    expect(el.getAttribute('tabindex')).toBe('0');
+    expect(el.getAttribute('aria-orientation')).toBe('vertical');
+    expect(key(el, 'ArrowRight')).toBe(false);    // preventDefault가 걸린다(패널 가로 스크롤 방지)
+    expect(w).toBe(336);
+    key(el, 'ArrowLeft'); key(el, 'ArrowLeft');
+    expect(w).toBe(304);
+    expect(ends).toEqual([336, 320, 304]);        // 한 번 누를 때마다 드래그를 놓은 것과 같다
+    expect(localStorage.getItem('kvp.panelW')).toBe('304');
+    // 한계에서는 멈추고, 더 눌러도 저장이 늘지 않는다.
+    for (let i = 0; i < 5; i++) key(el, 'ArrowLeft');
+    expect(w).toBe(PANEL_MIN);
+    expect(ends.at(-1)).toBe(PANEL_MIN);
+    const n = ends.length;
+    key(el, 'ArrowLeft');
+    expect(ends).toHaveLength(n);
+    expect(key(el, 'ArrowUp')).toBe(true);        // 쓰지 않는 키는 그대로 흘려보낸다
+    expect(w).toBe(PANEL_MIN);
+  });
+
+  test('invert 스플리터는 ←가 넓힌다(우측 패널)', () => {
+    const layout = fakeLayout();
+    const el = layout.querySelector('#rightSplitter');
+    let w = 300;
+    const sp = createSplitter(el, { invert: true, get: () => w, set: v => { w = v; } });
+    key(el, 'ArrowLeft');
+    expect(w).toBe(316);
+    key(el, 'ArrowRight');
+    expect(w).toBe(300);
+    sp.destroy();
+    key(el, 'ArrowLeft');
+    expect(w).toBe(300);                          // destroy 뒤에는 키도 받지 않는다
   });
 
   test('왼쪽 버튼이 아니면 시작하지 않는다', () => {

@@ -28,10 +28,33 @@ test('안내 문구는 옵션 바가 아니라 배너에 찍히고, 누르면 �
   const banner = root.querySelector('#banner');
   expect(banner.hidden).toBe(false);
   expect(banner.textContent).toContain('안내');
-  banner.querySelector('[data-action="hintCancel"]').click();
+  const cancel = banner.querySelector('[data-action="hintCancel"]');
+  // 키보드로 닿아야 하므로 <span>이 아니라 <button>이다(Tab·Enter로 눌린다).
+  expect(cancel.tagName).toBe('BUTTON');
+  expect(cancel.type).toBe('button');
+  expect(cancel.classList.contains('hint')).toBe(true);
+  cancel.click();
   expect(cancelled).toBe(1);
   shell.setOptionBar({ name: 'select', opts: {} });
   expect(banner.hidden).toBe(true);
+});
+
+// 한글을 조합하는 중의 Enter는 "글자 확정"이다: 그때 반영하면 완성되지 않은 값이 들어간다(keymap.js와 같은 방어).
+test('옵션 바의 [Enter]는 한글 조합 중에는 반영하지 않는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const tool = { name: 'duct', opts: { system: 'F-4' } };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionBar input[name="system"]');
+  expect(el.type).toBe('text');
+  const enter = init => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }));
+  el.value = '가열';
+  expect(enter({ isComposing: true })).toBe(true);    // preventDefault도 걸지 않고 그냥 흘려보낸다
+  expect(tool.opts.system).toBe('F-4');
+  expect(enter({ keyCode: 229 })).toBe(true);         // isComposing을 주지 않는 브라우저의 조합 중 키코드
+  expect(tool.opts.system).toBe('F-4');
+  expect(enter({})).toBe(false);                      // 조합이 끝난 Enter는 반영하고 기본 동작을 막는다
+  expect(tool.opts.system).toBe('가열');
 });
 
 test('option bar hides when both opts and hint are empty', () => {

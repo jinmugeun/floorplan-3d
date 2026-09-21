@@ -207,7 +207,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
       return;
     }
     if (s.soloRoom) { show(`단일 공간 모드 ${exitSolo}`); wireSolo(); return; }
-    if (currentTool?.hint) { show(`<span class="hint" data-action="hintCancel">${esc(currentTool.hint)}</span>`); return; }
+    // 누를 수 있는 것은 버튼이다: <span>은 Tab으로 닿지도 Enter로 눌리지도 않아 키보드만 쓰는
+    // 사람에게는 "메시지를 누르면 취소"가 없는 기능이었다. 모양은 CSS가 글자처럼 되돌린다.
+    if (currentTool?.hint) { show(`<button type="button" class="hint" data-action="hintCancel">${esc(currentTool.hint)}</button>`); return; }
     els.banner.hidden = true; els.banner.innerHTML = '';
   }
   function setOptionBar(tool) { currentTool = tool; renderOptions(); renderBanner(); }
@@ -218,6 +220,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // 두 번 돈다 — 멱등하므로(같은 값을 같은 키에 두 번 쓴다) 결과는 같다. select는 INPUT이 아니라
   // 애초에 걸리지 않고, 체크박스는 Enter로 값이 바뀌지 않으므로 여기서 뺀다.
   els.optionBar.addEventListener('keydown', ev => {
+    // 한글 입력 조합 중의 Enter는 "글자 확정"이지 "반영"이 아니다(keymap.js:107과 같은 방어).
+    // 조합 중에 반영하면 아직 완성되지 않은 값이 들어가고, 이어지는 확정 Enter가 또 한 번 돈다.
+    if (ev.isComposing || ev.keyCode === 229) return;
     if (ev.key !== 'Enter' || ev.target?.tagName !== 'INPUT' || !ev.target.name) return;
     if (ev.target.type === 'checkbox') return;
     ev.preventDefault();
