@@ -1,4 +1,5 @@
 import { esc } from '../util/html.js';
+import { trapTab } from './dialogBase.js';
 // 우클릭 메뉴. 항목은 호출한 쪽(도구)이 만든다: { label, shortcut?, danger?, disabled?, title?, onSelect } 또는 'sep'.
 export function createContextMenu(root) {
   let el = null, items = [], focus = -1, opener = null;
@@ -13,25 +14,41 @@ export function createContextMenu(root) {
     back?.focus?.();     // 메뉴를 열기 전 포커스로 되돌린다(§15.3)
     document.removeEventListener('pointerdown', onDocDown, true);
     document.removeEventListener('keydown', onKey, true);
-    window.removeEventListener('scroll', close, true);
+    window.removeEventListener('scroll', onScroll, true);
   }
   // 메뉴를 닫는 바깥 클릭은 캔버스까지 내려가지 않는다(팝오버와 같은 규칙).
   const onDocDown = ev => { if (el && !el.contains(ev.target)) { ev.stopPropagation(); ev.preventDefault(); close(); } };
+  // 페이지가 스크롤되면 메뉴가 엉뚱한 자리에 남으므로 닫는다 — 메뉴 안에서 난 스크롤은 페이지 스크롤이 아니다.
+  const onScroll = ev => { if (el && !el.contains(ev.target)) close(); };
+  // 기준은 실제 포커스다: [Tab]으로 옮긴 뒤에도 ↑/↓·Enter가 엉뚱한 항목을 가리키지 않게.
+  const activeIndex = () => {
+    const i = buttons().indexOf(document.activeElement);
+    return i >= 0 ? i : focus;
+  };
   function move(step) {
     const bs = buttons();
     if (!bs.length) return;
+    focus = activeIndex();
     for (let i = 0; i < bs.length; i++) {
       focus = (focus + step + bs.length) % bs.length;
       if (!bs[focus].disabled) break;
     }
     bs[focus].focus();
   }
+  // 메뉴가 먹는 키는 전역 키맵(window bubble)까지 가지 않는다: 그러지 않으면 ↑/↓로 항목을 고르는
+  // 동안 선택한 제품이 한 번에 10 mm씩 움직이고 undo 단계가 쌓인다(§15.3).
   function onKey(ev) {
     if (!el) return;
-    if (ev.key === 'Escape') { ev.stopPropagation(); close(); return; }
-    if (ev.key === 'ArrowDown') { ev.preventDefault(); move(1); return; }
-    if (ev.key === 'ArrowUp') { ev.preventDefault(); move(-1); return; }
-    if (ev.key === 'Enter') { ev.preventDefault(); const b = buttons()[focus]; if (b && !b.disabled) b.click(); }
+    if (ev.key === 'Escape') { ev.stopPropagation(); ev.preventDefault(); close(); return; }
+    // [Tab]/[Shift+Tab]은 메뉴 안에서만 돈다(마지막 항목에서 앱으로 새어 나가지 않는다).
+    if (ev.key === 'Tab') { ev.stopPropagation(); trapTab(ev, buttons().filter(b => !b.disabled)); return; }
+    if (ev.key === 'ArrowDown') { ev.stopPropagation(); ev.preventDefault(); move(1); return; }
+    if (ev.key === 'ArrowUp') { ev.stopPropagation(); ev.preventDefault(); move(-1); return; }
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.stopPropagation(); ev.preventDefault();
+      const b = buttons()[activeIndex()];
+      if (b && !b.disabled) b.click();
+    }
   }
   function open(x, y, list) {
     const back = opener ?? document.activeElement;   // 메뉴를 다시 열어도 원래 자리를 잃지 않는다
@@ -58,7 +75,7 @@ export function createContextMenu(root) {
     });
     document.addEventListener('pointerdown', onDocDown, true);
     document.addEventListener('keydown', onKey, true);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     move(1);   // 첫 활성 항목으로 포커스(§15.3) — 비활성 항목은 move가 건너뛴다
   }
   return { open, close, isOpen, focusFirst: () => move(1) };

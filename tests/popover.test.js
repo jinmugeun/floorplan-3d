@@ -128,3 +128,48 @@ test('열린 채 다시 그려도 포커스를 옮기지 않는다', () => {
   expect(pop.isOpen()).toBe(true);
   pop.destroy();
 });
+
+// 브라우저에서는 넘치는 .popover(max-height: 70vh; overflow: auto) 안에서 Tab이 감싸 돌 때
+// 브라우저가 팝오버를 스크롤한다: 캡처 스크롤 리스너가 그것을 "페이지 스크롤"로 보고 닫으면
+// 키보드로는 마지막 항목에 닿을 수 없다.
+test('팝오버 안에서 난 스크롤은 닫지 않고, 페이지 스크롤은 닫는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const pop = createPopover(root);
+  pop.open(anchorAt(), '<label><input type="checkbox" data-v2="grid"> 격자</label>');
+  pop.el.dispatchEvent(new Event('scroll', { bubbles: true }));
+  expect(pop.isOpen()).toBe(true);
+  pop.el.querySelector('input').dispatchEvent(new Event('scroll', { bubbles: true }));
+  expect(pop.isOpen()).toBe(true);                 // 안쪽 요소에서 난 스크롤도 내부 스크롤이다
+  document.dispatchEvent(new Event('scroll', { bubbles: true }));
+  expect(pop.isOpen()).toBe(false);                // 페이지가 스크롤되면 앵커에서 떨어지므로 닫는다
+  pop.destroy();
+});
+
+test('[Tab]은 포커스가 팝오버 밖에 있어도 안으로 데려온다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const outside = document.createElement('button'); document.body.appendChild(outside);
+  const pop = createPopover(root);
+  const anchor = anchorAt();
+  pop.open(anchor, '<button type="button">첫</button><button type="button">둘</button>');
+  outside.focus();
+  const ev = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  document.dispatchEvent(ev);
+  expect(ev.defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(pop.focusables()[0]);
+  expect(pop.isOpen()).toBe(true);
+  pop.destroy();
+  outside.remove();
+});
+
+// I3: 다른 팝오버 버튼을 누르면(셸은 닫지 않고 새 앵커로 다시 연다) Esc는 **새** 앵커로 돌아간다.
+test('앵커가 바뀌면 [Esc]는 새 앵커로 포커스를 돌린다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const pop = createPopover(root);
+  const first = anchorAt(100, 400), second = anchorAt(300, 400);
+  pop.open(first, '<button type="button">a</button>');
+  pop.open(second, '<button type="button">b</button>');   // 닫지 않고 앵커만 바꿔 연다
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(pop.isOpen()).toBe(false);
+  expect(document.activeElement).toBe(second);
+  pop.destroy();
+});

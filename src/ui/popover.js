@@ -3,7 +3,10 @@
 // 되돌린다 — 예전에는 Tab이 뒤쪽 상단 바로 새어 나가면서 팝오버가 열린 채 남았다.
 import { trapTab, focusables } from './dialogBase.js';
 
+let seq = 0;   // 제목 id는 인스턴스별로 준다(한 문서에 팝오버가 둘이면 고정 id가 겹친다)
+
 export function createPopover(root) {
+  const titleId = `popoverTitle${++seq}`;
   const el = document.createElement('div');
   el.className = 'popover'; el.hidden = true;
   el.setAttribute('role', 'dialog');
@@ -22,10 +25,13 @@ export function createPopover(root) {
   const onKey = ev => {
     if (el.hidden) return;
     if (ev.key === 'Escape') { ev.stopPropagation(); close(); return; }
-    // 팝오버 안에 포커스가 있으면 Tab은 안에서만 돈다.
-    if (ev.key === 'Tab' && el.contains(document.activeElement)) { ev.stopPropagation(); trapTab(ev, focusables(el)); }
+    // 팝오버가 열려 있으면 Tab은 안에서만 돈다. 포커스가 바깥에 있으면 안으로 데려온다
+    // (trapTab은 목록에 없는 포커스를 앞으로는 첫, 뒤로는 마지막 항목으로 보낸다).
+    if (ev.key === 'Tab') { ev.stopPropagation(); trapTab(ev, focusables(el)); }
   };
-  const onScroll = () => close();
+  // 페이지가 스크롤되면 앵커에서 떨어지므로 닫는다. 단 팝오버 안에서 난 스크롤(넘치는 목록을
+  // Tab으로 감싸 돌 때 브라우저가 일으킨다)은 페이지 스크롤이 아니다 — 캡처 단계라 여기까지 온다.
+  const onScroll = ev => { if (!el.contains(ev.target)) close(); };
   document.addEventListener('pointerdown', onDocDown, true);
   document.addEventListener('keydown', onKey, true);
   window.addEventListener('scroll', onScroll, true);
@@ -43,7 +49,7 @@ export function createPopover(root) {
     el.onclick = handlers.onClick ?? null;
     // 이름은 팝오버 제목(h4)이 있으면 그것, 없으면 호출 버튼의 글자다.
     const head = el.querySelector('h4');
-    if (head) { if (!head.id) head.id = 'popoverTitle'; el.setAttribute('aria-labelledby', head.id); el.removeAttribute('aria-label'); }
+    if (head) { if (!head.id) head.id = titleId; el.setAttribute('aria-labelledby', head.id); el.removeAttribute('aria-label'); }
     else { el.removeAttribute('aria-labelledby'); el.setAttribute('aria-label', (anchor?.textContent ?? '').trim() || '옵션'); }
     const r = anchor.getBoundingClientRect();
     const w = el.offsetWidth || 260, h = el.offsetHeight || 220;

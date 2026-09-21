@@ -111,3 +111,65 @@ test('항목을 골라 닫아도 포커스가 되돌아온다', () => {
   expect(hit).toHaveBeenCalledTimes(1);
   expect(document.activeElement).toBe(opener);
 });
+
+// §15.3: [Tab]/[Shift+Tab]은 메뉴 안에서 순환한다 — 마지막 항목에서 Tab을 누르면 앱으로
+// 새어 나가는 대신 첫 항목으로 돌아온다(감사 §1).
+test('[Tab]과 [Shift+Tab]은 메뉴 안에서만 돈다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const outside = document.createElement('button'); document.body.appendChild(outside);
+  const menu = createContextMenu(root);
+  const pick = vi.fn();
+  menu.open(10, 10, [{ label: 'A', onSelect: () => {} }, { label: 'B', disabled: true, onSelect: () => {} }, 'sep', { label: 'C', onSelect: pick }]);
+  const [a, , c] = root.querySelectorAll('.ctx-item');
+  expect(document.activeElement).toBe(a);
+  const tab = (shiftKey = false) => {
+    const ev = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+    document.dispatchEvent(ev);
+    return ev;
+  };
+  const first = tab();
+  expect(first.defaultPrevented).toBe(true);        // 브라우저 기본 이동을 대신한다
+  expect(document.activeElement).toBe(c);           // 비활성 항목 B는 건너뛴다
+  tab();
+  expect(document.activeElement).toBe(a);           // 마지막에서 첫 항목으로 감싼다
+  tab(true);
+  expect(document.activeElement).toBe(c);           // Shift+Tab은 거꾸로 감싼다
+  expect(menu.isOpen()).toBe(true);
+  // Tab으로 옮긴 자리에서 Enter가 그 항목을 고른다(내부 index가 어긋나지 않는다)
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  expect(pick).toHaveBeenCalledTimes(1);
+  expect(menu.isOpen()).toBe(false);
+  outside.remove();
+});
+
+// §15.3: 메뉴가 먹는 키는 전역 키맵(window bubble)까지 가지 않는다 — 가면 ↑/↓ 한 번마다
+// 선택한 제품이 10 mm 움직이고 undo 단계가 쌓인다.
+test('메뉴가 열린 동안 방향키·Tab·Enter·Esc는 window 키 리스너에 닿지 않는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const menu = createContextMenu(root);
+  const global = vi.fn();
+  window.addEventListener('keydown', global);
+  try {
+    menu.open(10, 10, [{ label: 'A', onSelect: () => {} }, { label: 'B', onSelect: () => {} }]);
+    for (const key of ['ArrowDown', 'ArrowUp', 'Tab', 'Escape']) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    }
+    expect(global).not.toHaveBeenCalled();
+    expect(menu.isOpen()).toBe(false);              // Escape가 닫았다
+    // 닫힌 뒤에는 같은 키가 전역으로 정상 전달된다
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    expect(global).toHaveBeenCalledTimes(1);
+  } finally {
+    window.removeEventListener('keydown', global);
+  }
+});
+
+test('메뉴 안에서 난 스크롤은 메뉴를 닫지 않고, 페이지 스크롤은 닫는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const menu = createContextMenu(root);
+  menu.open(10, 10, [{ label: 'A', onSelect: () => {} }]);
+  root.querySelector('.ctx-menu').dispatchEvent(new Event('scroll', { bubbles: true }));
+  expect(menu.isOpen()).toBe(true);
+  document.dispatchEvent(new Event('scroll', { bubbles: true }));
+  expect(menu.isOpen()).toBe(false);
+});
