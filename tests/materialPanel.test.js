@@ -17,9 +17,13 @@ function setup() {
   return { store, ui, el, panel, picked, floor: () => activeFloor(store.get()) };
 }
 const click = (el, sel) => el.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+// 키보드 활성화(Enter/Space)는 이미 포커스된 버튼에서 click을 낸다 — .focus() 뒤에 클릭해 흉내 낸다.
+const focusClick = (el, sel) => { const b = el.querySelector(sel); b.focus(); b.dispatchEvent(new MouseEvent('click', { bubbles: true })); return b; };
 const mat = id => ({ id, offset: [0, 0], angle: 0 });
 
-beforeEach(() => localStorage.clear());
+// document는 이 파일의 테스트들 사이에서 공유된다(jsdom 인스턴스 하나) — 앞 테스트가 남긴 포커스가
+// 다음 테스트로 새지 않게 매번 지운다(포커스 복원을 검증하는 테스트를 더하며 필요해졌다).
+beforeEach(() => { localStorage.clear(); document.activeElement?.blur?.(); });
 
 describe('마감재 패널', () => {
   test('탭 3개와 카테고리 11개를 보여주고 카테고리로 들어가면 스와치 타일이 나온다', () => {
@@ -190,4 +194,31 @@ test('처음 열면 전체 스와치 그리드가 보이고 타일 배치는 타
   expect(el.querySelector('[data-cat="타일"]').classList.contains('on')).toBe(true);
   expect(el.querySelector('[data-cat-all]').classList.contains('on')).toBe(false);
   expect(el.querySelector('[name="scaleW"]')).not.toBeNull();   // 타일 크기 칸도 함께 보인다
+});
+
+// 리뷰 §Task8 I-1: renderChips()가 칩 행을 통째로 새로 만들어 방금 누른 칩 노드가 사라지고
+// document.activeElement가 <body>로 떨어진다. 포커스가 있던(키보드) 활성화만 되돌린다.
+test('키보드로 칩을 누르면 다시 그린 뒤에도 같은 칩에 포커스가 남는다', () => {
+  const { el } = setup();
+  const before = el.querySelector('[data-cat="벽돌"]');
+  focusClick(el, '[data-cat="벽돌"]');
+  const after = el.querySelector('[data-cat="벽돌"]');
+  expect(after).not.toBe(before);                    // 옛 노드는 실제로 버려졌다
+  expect(document.activeElement).toBe(after);
+  expect(after.getAttribute('aria-pressed')).toBe('true');
+});
+
+test('포커스된 칩을 다시 눌러 끄면 "전체" 칩으로 포커스가 돌아간다', () => {
+  const { el } = setup();
+  focusClick(el, '[data-cat="벽돌"]');
+  document.activeElement.dispatchEvent(new MouseEvent('click', { bubbles: true })); // 같은(이미 포커스된) 칩 재클릭 = 토글 off
+  const allBtn = el.querySelector('[data-cat-all]');
+  expect(document.activeElement).toBe(allBtn);
+  expect(allBtn.getAttribute('aria-pressed')).toBe('true');
+});
+
+test('마우스로 누른 칩은(포커스 없이) 다시 그려도 포커스를 훔치지 않는다', () => {
+  const { el } = setup();
+  click(el, '[data-cat="벽돌"]'); // 기존 click 헬퍼는 focus를 주지 않는다 — 실제 마우스 클릭과 같다
+  expect(document.activeElement).toBe(document.body);
 });

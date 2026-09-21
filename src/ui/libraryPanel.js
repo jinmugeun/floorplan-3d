@@ -2,7 +2,7 @@ import { CATEGORIES, PRODUCTS, productsIn, searchProducts, sortProducts, fmtSize
 import { symbolSvg } from '../products/symbols.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
-import { chipsHtml } from './libraryChips.js';
+import { chipsHtml, wasChipFocused, refocusChip } from './libraryChips.js';
 
 const key = id => `fav:${id}`;
 // 즐겨찾기는 프로젝트 파일이 아니라 브라우저에 남긴다(계정이 없으므로). 저장이 막힌 브라우저에서도 죽지 않는다.
@@ -83,10 +83,16 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     const tab = ev.target.closest('[data-tab]');
     if (tab) { st.tab = tab.dataset.tab; st.category = null; st.sub = null; render(); return; }
     if (ev.target.closest('[data-up]')) { if (st.sub) st.sub = null; else st.category = null; render(); return; }
-    if (ev.target.closest('[data-cat-all]')) { st.category = null; st.sub = null; render(); return; }
+    const catAll = ev.target.closest('[data-cat-all]');
+    if (catAll) { const had = wasChipFocused(catAll); st.category = null; st.sub = null; render(); refocusChip(part('chips'), null, had); return; }
     const cat = ev.target.closest('[data-cat]');
     // 같은 칩을 다시 누르면 필터가 풀린다(§15.8) — 칩이 토글이라는 것을 누르면 바로 알 수 있다.
-    if (cat) { st.category = st.category === cat.dataset.cat ? null : cat.dataset.cat; st.sub = null; render(); return; }
+    if (cat) {
+      const had = wasChipFocused(cat);
+      st.category = st.category === cat.dataset.cat ? null : cat.dataset.cat; st.sub = null; render();
+      refocusChip(part('chips'), st.category, had);
+      return;
+    }
     const sub = ev.target.closest('[data-sub]');
     if (sub) { st.sub = sub.dataset.sub || null; render(); return; }
     const tile = ev.target.closest('.tile');

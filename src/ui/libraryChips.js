@@ -13,3 +13,17 @@ export function chipsHtml(names, { active = null, all = ALL_LABEL } = {}) {
   const rest = (names ?? []).map(n => chip(`data-cat="${esc(n)}"`, n, n === active)).join('');
   return `<div class="chips">${chip('data-cat-all="1"', all, !active)}${rest}</div>`;
 }
+
+// render()가 칩 행 innerHTML을 통째로 새로 만들기 때문에, 방금 누른 칩 노드는 다시 그린 뒤
+// DOM에서 떨어져 나가고 document.activeElement가 <body>로 떨어진다(리뷰 §Task8 I-1).
+// 클릭이 **그 칩 자신에 포커스가 있는 상태에서** 일어났을 때만(키보드 Enter/Space, 또는 포커스를
+// 준 뒤의 클릭) 다시 그린 chipsEl에서 같은 카테고리(또는 꺼졌으면 "전체") 칩을 찾아 되돌린다 —
+// propsPanel.js:43 · layersPanel.js:74 · bottomBar.js:41과 같은 "다시 그린 뒤 같은 곳으로" 규칙.
+// 포커스가 없던 마우스 클릭은 손대지 않는다(activeElement가 그대로 body 등으로 남는다).
+export function wasChipFocused(chipBtn) {
+  return !!chipBtn && document.activeElement === chipBtn;
+}
+export function refocusChip(chipsEl, cat, hadFocus) {
+  if (!hadFocus || !chipsEl) return;
+  chipsEl.querySelector(cat ? `[data-cat="${cat}"]` : '[data-cat-all]')?.focus();
+}

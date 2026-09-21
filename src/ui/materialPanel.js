@@ -2,7 +2,7 @@ import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialB
 import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, MAT_RANGE } from '../state/schema.js';
 import { esc } from '../util/html.js';
-import { chipsHtml } from './libraryChips.js';
+import { chipsHtml, wasChipFocused, refocusChip } from './libraryChips.js';
 
 const key = id => `favmat:${id}`;
 // 즐겨찾기는 프로젝트 파일이 아니라 브라우저에 남긴다(계정이 없으므로). 저장이 막힌 브라우저에서도 죽지 않는다.
@@ -104,9 +104,15 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     const tab = ev.target.closest('[data-tab]');
     if (tab) { st.tab = tab.dataset.tab; st.category = null; render(); return; }
     if (ev.target.closest('[data-up]')) { st.category = null; render(); return; }
-    if (ev.target.closest('[data-cat-all]')) { st.category = null; render(); return; }
+    const catAll = ev.target.closest('[data-cat-all]');
+    if (catAll) { const had = wasChipFocused(catAll); st.category = null; render(); refocusChip(part('chips'), null, had); return; }
     const cat = ev.target.closest('[data-cat]');
-    if (cat) { st.category = st.category === cat.dataset.cat ? null : cat.dataset.cat; render(); return; }   // 같은 칩 = 토글(§15.8)
+    if (cat) {   // 같은 칩 = 토글(§15.8)
+      const had = wasChipFocused(cat);
+      st.category = st.category === cat.dataset.cat ? null : cat.dataset.cat; render();
+      refocusChip(part('chips'), st.category, had);
+      return;
+    }
     const tile = ev.target.closest('.tile');
     if (!tile) return;
     const m = materialById(tile.dataset.id);

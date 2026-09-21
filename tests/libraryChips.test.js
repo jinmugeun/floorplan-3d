@@ -1,6 +1,7 @@
+// @vitest-environment jsdom
 // §15.8: 카테고리는 전폭 1열 목록이 아니라 가로로 접히는 칩이고, 첫 칩은 "전체"다(누르면 필터가 풀린다).
 import { test, expect } from 'vitest';
-import { chipsHtml, ALL_LABEL } from '../src/ui/libraryChips.js';
+import { chipsHtml, ALL_LABEL, wasChipFocused, refocusChip } from '../src/ui/libraryChips.js';
 
 test('첫 칩은 전체이고 고른 칩에 on이 붙는다', () => {
   expect(ALL_LABEL).toBe('전체');
@@ -30,4 +31,32 @@ test('칩은 aria-pressed로 누른 상태를 알린다', () => {
   const on = chipsHtml(['소파'], { active: '소파' });
   expect(on).toContain('data-cat-all="1" class="" aria-pressed="false"');
   expect(on).toContain('data-cat="소파" class="on" aria-pressed="true"');
+});
+
+// 리뷰 §Task8 I-1: 칩 행을 다시 그리면(render()가 innerHTML을 통째로 새로 만든다) 방금 누른 칩
+// 노드가 DOM에서 떨어져 나간다. wasChipFocused/refocusChip은 포커스가 그 칩 자신에 있었을 때만
+// (키보드 활성화) 다시 그린 행에서 같은 카테고리(또는 꺼졌으면 "전체")를 찾아 되돌린다.
+test('wasChipFocused·refocusChip: 포커스가 있던 칩만 다시 그린 뒤 되돌아간다', () => {
+  const wrap = document.createElement('div');
+  document.body.appendChild(wrap);
+  wrap.innerHTML = chipsHtml(['소파'], { active: null });
+  const allBtn = wrap.querySelector('[data-cat-all]');
+  allBtn.focus();
+  expect(wasChipFocused(allBtn)).toBe(true);
+  wrap.innerHTML = chipsHtml(['소파'], { active: '소파' }); // render()가 다시 그리는 것을 흉내 낸다
+  expect(document.activeElement).toBe(document.body);      // 옛 노드가 떨어져 나가 포커스가 빠진다
+  refocusChip(wrap, '소파', true);
+  const chip = wrap.querySelector('[data-cat="소파"]');
+  expect(document.activeElement).toBe(chip);
+  expect(chip.getAttribute('aria-pressed')).toBe('true');
+  wrap.remove();
+});
+
+test('refocusChip: 포커스가 없던(마우스) 활성화는 손대지 않는다', () => {
+  const wrap = document.createElement('div');
+  document.body.appendChild(wrap);
+  wrap.innerHTML = chipsHtml(['소파'], { active: '소파' });
+  refocusChip(wrap, null, false);
+  expect(document.activeElement).toBe(document.body);
+  wrap.remove();
 });
