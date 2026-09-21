@@ -6,9 +6,9 @@ import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOption
 import { fmtLen, parseLen } from '../util/units.js';
 
 
-const LABELS = { reference: '기준선', thickness: '두께', snap: '스냅 모드', ortho: '직교 모드', direction: '방향' };
+const LABELS = { reference: '기준선', thickness: '두께', snap: '스냅 모드', ortho: '직교 모드', direction: '방향', kind: '종류', w: '단면 너비', h: '단면 높이', z: '중심 높이', system: '계통' };
 // 길이 옵션은 라벨에 현재 단위를 붙이고, ft·in 모드에서는 속성 패널과 같은 텍스트 입력이 된다.
-const LEN_OPTS = new Set(['thickness']);
+const LEN_OPTS = new Set(['thickness', 'w', 'h', 'z']);
 const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
 // 기즈모 모드 토글은 3D 궤도 뷰에서 기즈모가 실제로 붙는 아이템 하나를 골랐을 때만 쓸 일이 있다.
@@ -44,6 +44,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
         <h3>보조선 그리기</h3>
         <button data-tool="guide">보조선 <kbd>E</kbd></button>
         <button data-tool="measure">측정 <kbd>M</kbd></button>
+        <h3>환기 덕트</h3>
+        <button data-tool="duct">덕트 그리기 <kbd>T</kbd></button>
         <h3>일반</h3>
         <button data-tool="select">선택 <kbd>Esc</kbd></button>
       </section>
@@ -164,6 +166,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
         return `<label>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
       }
       if (k === 'reference') return `<label>${label} <select name="${k}">${REF.map(([val, l]) => `<option value="${val}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
+      if (k === 'kind') return `<label>${label} <select name="${k}"><option value="supply" ${v === 'supply' ? 'selected' : ''}>급기</option><option value="exhaust" ${v === 'exhaust' ? 'selected' : ''}>배기</option></select></label>`;
       if (k === 'direction') return `<label>${label} <select name="${k}"><option value="v" ${v === 'v' ? 'selected' : ''}>세로</option><option value="h" ${v === 'h' ? 'selected' : ''}>가로</option></select></label>`;
       return `<label>${label} <input type="text" name="${k}" value="${v}"></label>`;
     }).join('') : '';

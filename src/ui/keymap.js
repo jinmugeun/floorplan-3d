@@ -13,6 +13,7 @@ export const KEYMAP = [
   { group: '도구', label: '삭제 도구 / 선택 삭제', keys: ['D'], action: 'deleteOrTool' },
   { group: '도구', label: '보조선', keys: ['E'], action: 'tool:guide' },
   { group: '도구', label: '측정', keys: ['M'], action: 'tool:measure' },
+  { group: '도구', label: '덕트 그리기', keys: ['T'], action: 'tool:duct' },
   { group: '도구', label: '도면 이미지 업로드', keys: ['B'], action: 'background' },
   { group: '뷰', label: '2D 도면', keys: ['1'], action: 'mode:2d' },
   { group: '뷰', label: '평면 뷰어', keys: ['2'], action: 'mode:plan' },

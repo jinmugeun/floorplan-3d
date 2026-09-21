@@ -11,6 +11,7 @@ import { createWallTool, WALL_TOOL_DEFAULTS } from './view2d/tools/wallTool.js';
 import { createSelectTool } from './view2d/tools/selectTool.js';
 import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.js';
 import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
+import { createDuctTool, DUCT_TOOL_DEFAULTS } from './view2d/tools/ductTool.js';
 import { createPlaceTool } from './view2d/tools/placeTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
@@ -134,7 +135,7 @@ function createDeleteTool() {
   };
 }
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
-const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS } };
+const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS }, duct: { ...DUCT_TOOL_DEFAULTS } };
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
   select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
@@ -143,6 +144,7 @@ const tools = {
   delete: createDeleteTool,
   guide: () => createGuideTool({ store, view, opts: toolOpts.guide }),
   measure: () => createMeasureTool({ store, opts: toolOpts.measure, view }),
+  duct: () => createDuctTool({ store, ui, view, opts: toolOpts.duct, onDone: () => setTool('select') }),
   place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select') }),
 };
 function setTool(name) { cancelReplace(); const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
