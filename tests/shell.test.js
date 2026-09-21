@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { test, expect } from 'vitest';
+import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
@@ -524,4 +524,57 @@ test('도면 그리기 패널에 구조물 버튼 3개가 있다', () => {
   expect(draw.querySelector('[data-tool="column-square"] kbd').textContent).toBe('R');
   expect(draw.querySelector('[data-tool="column-round"] kbd').textContent).toBe('C');
   expect(draw.querySelector('[data-tool="opening"] kbd').textContent).toBe('O');
+});
+
+// §14.1: 좁은 창에서 캔버스가 106 px 띠가 되던 문제. 폭은 창이 바뀔 때마다 다시 정하고,
+// 최소 폭으로 줄여도 모자라면 패널을 자동으로 접는다(사용자가 접은 것과 구분한다).
+test('창을 좁히면 패널이 자동으로 접히고 넓히면 자동 접힘만 풀린다', () => {
+  localStorage.clear();
+  const vw = window.innerWidth;
+  vi.useFakeTimers();
+  try {
+    const root = document.createElement('div'); document.body.appendChild(root);
+    window.innerWidth = 1600;
+    createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+    const layout = root.querySelector('#layout');
+    expect(layout.classList.contains('right-off')).toBe(false);
+    expect(root.querySelector('#btnRightPanel').hidden).toBe(true);
+    window.innerWidth = 800;
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(200);
+    expect(layout.classList.contains('right-off')).toBe(true);
+    expect(layout.classList.contains('panel-off')).toBe(true);
+    expect(root.querySelector('#btnRightPanel').hidden).toBe(false);
+    window.innerWidth = 1600;
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(200);
+    expect(layout.classList.contains('right-off')).toBe(false);
+    expect(layout.style.getPropertyValue('--panel-w')).toBe('320px');   // 저장해 둔 폭이 그대로 돌아온다
+    expect(root.querySelector('#btnRightPanel').hidden).toBe(true);
+  } finally { vi.useRealTimers(); localStorage.clear(); window.innerWidth = vw; }
+});
+
+test('사용자가 접은 패널은 창을 넓혀도 그대로 접혀 있고 "속성 ▸"이 우측 패널을 되돌린다', () => {
+  localStorage.clear();
+  const vw = window.innerWidth;
+  vi.useFakeTimers();
+  try {
+    const root = document.createElement('div'); document.body.appendChild(root);
+    window.innerWidth = 1600;
+    createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+    const layout = root.querySelector('#layout');
+    root.querySelector('#rail [data-panel="draw"]').click();            // 직접 접었다
+    expect(layout.classList.contains('panel-off')).toBe(true);
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(200);
+    expect(layout.classList.contains('panel-off')).toBe(true);          // 자동 접힘이 아니므로 펴지 않는다
+    window.innerWidth = 800;
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(200);
+    const btn = root.querySelector('#btnRightPanel');
+    expect(btn.hidden).toBe(false);
+    btn.click();
+    expect(layout.classList.contains('right-off')).toBe(false);
+    expect(btn.hidden).toBe(true);
+  } finally { vi.useRealTimers(); localStorage.clear(); window.innerWidth = vw; }
 });

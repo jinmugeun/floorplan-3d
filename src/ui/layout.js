@@ -25,12 +25,47 @@ export function savePanelWidth(side, px) {
   try { localStorage.setItem(key, String(clamp(px))); } catch { /* 저장 불가 */ }
 }
 
-// 좁은 창에서는 저장된 폭이라도 최소 폭으로 줄인다(고정 열 합 64 + 320 + 5 + 5 + 300 = 694 px이라
-// 1100 px 창에서는 캔버스가 400 px 남는다). CSS 미디어 쿼리로는 할 수 없다: applyPanelWidths가
+// 그리드 고정 열: 레일 64 px + 세로 스플리터 5 px 둘. 캔버스 열은 최소 480 px를 지킨다(§14.1).
+export const CANVAS_MIN = 480;
+export const RAIL_W = 64;
+export const SPLITTER_W = 5;
+
+// 좁은 창에서는 저장된 폭이라도 줄인다. CSS 미디어 쿼리로는 할 수 없다: applyPanelWidths가
 // #layout에 인라인 스타일로 --panel-w를 쓰고, 인라인 선언은 !important 없는 어떤 저작자 규칙보다
 // 우선하므로 셸이 뜨는 순간 미디어 쿼리가 영구히 무효가 된다. 그래서 폭은 여기서 정한다.
+// 규칙: 두 패널에서 같은 양씩 덜어 내고 PANEL_MIN에서 멈춘다. 한쪽이 먼저 하한에 닿으면
+// 남은 몫은 다른 쪽이 낸다(그래서 320/300 같은 비대칭 기본값에서도 결과가 결정적이다).
 export function fitPanelWidths(widths, vw = (globalThis.innerWidth ?? 1280)) {
-  return vw <= 1100 ? { panel: PANEL_MIN, right: PANEL_MIN } : widths;
+  const panel0 = clamp(widths?.panel ?? PANEL_DEFAULT.panel), right0 = clamp(widths?.right ?? PANEL_DEFAULT.right);
+  const over = panel0 + right0 - (vw - RAIL_W - SPLITTER_W * 2 - CANVAS_MIN);
+  if (!(over > 0)) return { panel: panel0, right: right0 };
+  const panel1 = Math.max(PANEL_MIN, panel0 - Math.ceil(over / 2));
+  const right = Math.max(PANEL_MIN, right0 - (over - (panel0 - panel1)));
+  // 오른쪽이 하한에 먼저 닿아 덜 낸 몫이 있으면 왼쪽이 더 낸다(그래도 하한 아래로는 가지 않는다).
+  const panel = Math.max(PANEL_MIN, panel1 - Math.max(0, over - (panel0 - panel1) - (right0 - right)));
+  return { panel, right };
+}
+
+// 줄여도 캔버스가 480 px에 못 미치면 우측 패널을 접고, 그래도 모자라면 좌측 패널까지 접는다.
+// 접힌 열은 스플리터까지 0이 된다(#layout.right-off / .panel-off의 그리드 정의).
+export function autoCollapse(widths, vw = (globalThis.innerWidth ?? 1280)) {
+  const w = fitPanelWidths(widths, vw);
+  const right = RAIL_W + w.panel + SPLITTER_W + w.right + SPLITTER_W + CANVAS_MIN > vw;
+  const panel = right && RAIL_W + w.panel + SPLITTER_W + CANVAS_MIN > vw;
+  return { panel, right };
+}
+
+// 창·레이아웃 크기 변화를 한 번으로 묶는다: 드래그로 창을 줄이면 resize가 수십 번 오고,
+// 그때마다 폭을 다시 계산하면 캔버스가 매 프레임 두 번 다시 그려진다.
+// ResizeObserver가 없는 환경(jsdom)에서도 window.resize만으로 동작한다.
+export const LAYOUT_DEBOUNCE_MS = 120;
+export function createResizeWatch(el, fn, { delay = LAYOUT_DEBOUNCE_MS } = {}) {
+  let timer = 0;
+  const kick = () => { clearTimeout(timer); timer = setTimeout(() => { timer = 0; fn(); }, delay); };
+  window.addEventListener('resize', kick);
+  const ro = el && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(kick) : null;
+  ro?.observe(el);
+  return { destroy() { clearTimeout(timer); window.removeEventListener('resize', kick); ro?.disconnect(); } };
 }
 
 // 폭은 CSS 변수 하나로 다룬다: 그리드 열 정의(#layout)와 접기 클래스가 같은 변수를 읽는다.

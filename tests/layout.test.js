@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, test, expect, beforeEach } from 'vitest';
-import { PANEL_MIN, PANEL_MAX, PANEL_DEFAULT, loadPanelWidths, savePanelWidth, fitPanelWidths, applyPanelWidths, createSplitter, togglePanel } from '../src/ui/layout.js';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { PANEL_MIN, PANEL_MAX, PANEL_DEFAULT, CANVAS_MIN, RAIL_W, SPLITTER_W, LAYOUT_DEBOUNCE_MS, loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, createResizeWatch, applyPanelWidths, createSplitter, togglePanel } from '../src/ui/layout.js';
 
 function fakeLayout() {
   const root = document.createElement('div');
@@ -23,7 +23,8 @@ describe('패널 폭', () => {
     expect(loadPanelWidths()).toEqual({ panel: 320, right: 300 });
     // 좁은 창에서는 저장된 폭이라도 최소 폭으로 줄인다(인라인 폭이 미디어 쿼리를 이기므로 CSS가 아니라 여기서 정한다).
     expect(fitPanelWidths({ panel: 400, right: 400 }, 1000)).toEqual({ panel: 260, right: 260 });
-    expect(fitPanelWidths({ panel: 400, right: 400 }, 1280)).toEqual({ panel: 400, right: 400 });
+    expect(fitPanelWidths({ panel: 400, right: 400 }, 1600)).toEqual({ panel: 400, right: 400 });
+    expect(fitPanelWidths({ panel: 400, right: 400 }, 1280)).toEqual({ panel: 363, right: 363 }); // 캔버스 480을 지키려고 둘에서 같은 양씩 덜어 낸다
   });
 
   test('저장된 값을 읽고 범위 밖·쓰레기 값은 기본값으로 떨어진다', () => {
@@ -186,5 +187,52 @@ describe('패널 접기', () => {
     expect(togglePanel(layout, 'right', true)).toBe(true);
     expect(layout.querySelector('#right').classList.contains('collapsed')).toBe(true);
     expect(layout.classList.contains('right-off')).toBe(true);
+  });
+});
+
+describe('좁은 창 레이아웃(§14.1)', () => {
+  const canvasOf = (w, vw, { rightOff = false } = {}) =>
+    vw - RAIL_W - w.panel - SPLITTER_W - (rightOff ? 0 : w.right + SPLITTER_W);
+
+  test('상수와 세 창 폭에서 캔버스가 480 px 이상이다', () => {
+    expect([CANVAS_MIN, RAIL_W, SPLITTER_W, LAYOUT_DEBOUNCE_MS]).toEqual([480, 64, 5, 120]);
+    for (const vw of [1600, 1100]) {
+      const w = fitPanelWidths(PANEL_DEFAULT, vw);
+      expect(autoCollapse(PANEL_DEFAULT, vw)).toEqual({ panel: false, right: false });
+      expect(canvasOf(w, vw)).toBeGreaterThanOrEqual(CANVAS_MIN);
+    }
+    // 800 px에서는 두 패널을 최소로 줄여도 모자라 자동으로 접는다(접히면 그 열과 스플리터가 0이다).
+    expect(autoCollapse(PANEL_DEFAULT, 800)).toEqual({ panel: true, right: true });
+    expect(800 - RAIL_W).toBeGreaterThanOrEqual(CANVAS_MIN);
+  });
+
+  test('줄일 때 한쪽이 최소에 닿으면 남은 몫은 다른 쪽이 낸다', () => {
+    // 480 + 260이 712 px 몫을 28 px 넘긴다: 오른쪽은 이미 하한이라 왼쪽이 28 px를 다 낸다.
+    expect(fitPanelWidths({ panel: 480, right: 260 }, 1266)).toEqual({ panel: 452, right: 260 });
+    expect(fitPanelWidths({ panel: 300, right: 300 }, 1000)).toEqual({ panel: 260, right: 260 });
+    expect(fitPanelWidths(undefined, 1600)).toEqual({ panel: 320, right: 300 });   // 값이 없으면 기본 폭
+  });
+
+  test('우측만 접으면 되는 창 폭에서는 좌측 패널을 접지 않는다', () => {
+    expect(autoCollapse(PANEL_DEFAULT, 1000)).toEqual({ panel: false, right: true });
+    expect(autoCollapse(PANEL_DEFAULT, 900)).toEqual({ panel: false, right: true });
+  });
+
+  test('createResizeWatch는 120 ms 디바운스로 한 번만 부르고 destroy 뒤에는 조용하다', () => {
+    vi.useFakeTimers();
+    try {
+      const layout = fakeLayout();
+      let calls = 0;
+      const watch = createResizeWatch(layout, () => { calls += 1; });
+      window.dispatchEvent(new Event('resize'));
+      window.dispatchEvent(new Event('resize'));
+      expect(calls).toBe(0);                 // 아직 디바운스 중이다
+      vi.advanceTimersByTime(LAYOUT_DEBOUNCE_MS);
+      expect(calls).toBe(1);
+      watch.destroy();
+      window.dispatchEvent(new Event('resize'));
+      vi.advanceTimersByTime(LAYOUT_DEBOUNCE_MS * 2);
+      expect(calls).toBe(1);
+    } finally { vi.useRealTimers(); }
   });
 });

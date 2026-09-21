@@ -4,7 +4,8 @@ import { toast } from './toast.js';
 import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 import { optionBarHtml, applyOptionInput } from './optionBar.js';
-import { loadPanelWidths, savePanelWidth, fitPanelWidths, applyPanelWidths, createSplitter, togglePanel } from './layout.js';
+import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
+import { shellHtml } from './shellHtml.js';
 import { helpHtml } from './helpPopover.js';
 
 
@@ -15,96 +16,48 @@ export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {})
 }
 
 export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {} }) {
-  root.innerHTML = `
-  <div id="layout">
-    <header id="topbar">
-      <div class="group"><button id="btnUndo" aria-label="실행 취소">↶</button><button id="btnRedo" aria-label="다시 실행">↷</button></div>
-      <div class="group"><input id="projectName" aria-label="프로젝트 이름" value="${esc(store.get().name)}"><span id="savedAt" class="muted">저장 이력 없음</span></div>
-      <div class="group"><button id="btnRender">렌더샷</button><button id="btnGallery">갤러리</button><button id="btnEstimate">실시간 견적서</button><button id="btnSpec">시방서</button><button id="btnNew">새로만들기</button><button id="btnMore" aria-label="더보기">더보기 ▾</button></div>
-      <div class="group"><button id="btnHelp" data-popover="help" aria-label="도움말">?</button><button id="btnSettings" aria-label="설정">설정</button><button id="btnCapture" data-action="capture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
-    </header>
-    <nav id="rail" aria-label="작업 영역">
-      <button data-panel="draw" class="on"><span>도면 그리기</span></button>
-      <button data-panel="products"><span>제품</span></button>
-      <button data-panel="materials"><span>마감재</span></button>
-      <button data-panel="background"><span>배경 도면</span></button>
-      <button data-panel="airflow"><span>풍량</span></button>
-      <button data-panel="layers"><span>레이어</span></button>
-    </nav>
-    <aside id="panel">
-      <section data-panel="draw">
-        <h3>방 만들기</h3>
-        <button data-tool="wall">벽 그리기 <kbd>L</kbd></button>
-        <button data-tool="room">방 그리기 <kbd>F</kbd></button>
-        <button data-tool="delete">삭제 <kbd>D</kbd></button>
-        <h3>구조물</h3>
-        <button data-tool="column-square">사각 기둥 <kbd>R</kbd></button>
-        <button data-tool="column-round">원형 기둥 <kbd>C</kbd></button>
-        <button data-tool="opening">개구부 <kbd>O</kbd></button>
-        <h3>도면 반전 / 회전</h3>
-        <div class="row"><button data-action="flipH">좌우 반전</button><button data-action="flipV">상하 반전</button><button data-action="rotL">↺ 90°</button><button data-action="rotR">↻ 90°</button></div>
-        <h3>보조선 그리기</h3>
-        <button data-tool="guide">보조선 <kbd>E</kbd></button>
-        <button data-tool="measure">측정 <kbd>M</kbd></button>
-        <h3>환기 덕트</h3>
-        <button data-tool="duct">덕트 그리기 <kbd>T</kbd></button>
-        <h3>일반</h3>
-        <button data-tool="select">선택 <kbd>Esc</kbd></button>
-      </section>
-      <section data-panel="products" hidden><h3>제품</h3><div id="library"></div></section>
-      <section data-panel="materials" hidden><h3>마감재</h3><div id="materials"></div></section>
-      <section data-panel="background" hidden>
-        <h3>배경 도면</h3>
-        <button data-action="background">도면 이미지 업로드 <kbd>B</kbd></button>
-        <p class="hint">사진이나 스캔을 올리고 모서리를 찍어 펴고, 두 점으로 축척을 잡습니다.</p>
-      </section>
-      <section data-panel="airflow" hidden><h3>풍량 집계</h3><div id="airflow"></div></section>
-      <section data-panel="layers" hidden><h3>리소스 관리</h3><div id="layers"></div></section>
-    </aside>
-    <div id="panelSplitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="작업 패널 폭 조절"></div>
-    <main id="canvasWrap">
-      <div id="optionBar" hidden></div>
-      <div id="banner" hidden></div>
-      <div id="canvasStack">
-        <canvas id="c2d"></canvas>
-        <div id="c3d" hidden></div>
-        <div id="imageStrip" hidden>
-          <span class="muted">이미지 세팅</span>
-          <label>투명도 <input type="range" name="stripOpacity" min="0" max="1" step="0.05"></label>
-          <label><input type="checkbox" name="stripVisible"> 표시</label>
-          <button type="button" id="btnBgLock" aria-label="배경 도면 잠금">잠금</button>
-        </div>
-      </div>
-    </main>
-    <div id="rightSplitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="속성 패널 폭 조절"></div>
-    <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
-    <footer id="bottombar">
-      <div class="seg"><button data-mode="2d" class="on">2D</button><button data-mode="plan">평면 <kbd>2</kbd></button><button data-mode="iso">3D <kbd>3</kbd></button><button data-mode="fp">1인칭 <kbd>4</kbd></button></div>
-      <div class="seg"><button id="btnView" data-popover="view">보기</button><button id="btnCam" data-popover="cam" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" hidden>햇빛</button></div>
-      <div class="seg"><button id="btnLock">도면 잠금</button><button data-action="capture">스크린 캡쳐</button></div>
-      <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit">화면 맞추기</button></div>
-      <div class="seg"><label class="muted">2D 투영 <select id="viewPreset" aria-label="2D 투영 뷰"><option value="">—</option><option value="front">정면</option><option value="back">배면</option><option value="left">좌측</option><option value="right">우측</option><option value="top">평면</option><option value="bottom">저면</option></select></label></div>
-      <div class="seg"><button id="btnGizmoMode" aria-label="3D 기즈모 모드" hidden>이동</button></div>
-      <div class="seg" id="unitSeg"><button data-units="mm" class="on">mm</button><button data-units="ftin">ft·in</button></div>
-    </footer>
-  </div>`;
+  root.innerHTML = shellHtml({ name: store.get().name });
   const q = s => root.querySelector(s);
   const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials'), airflow: q('#airflow') };
   const layout = q('#layout');
-  // 좁은 창(≤ 1100 px)에서는 저장된 폭을 최소 폭으로 자른다(fitPanelWidths). CSS 미디어 쿼리는
-  // 여기서 쓰는 인라인 폭을 이기지 못하므로 폭 결정은 전부 layout.js에 있다.
-  const widths = fitPanelWidths(loadPanelWidths());
-  applyPanelWidths(layout, widths);
+  // widths는 "사용자가 바란 폭"이고(스플리터·kvp.panelW), 실제로 적용하는 폭은 창에 맞춰 줄인 값이다.
+  // 그래서 창을 좁혔다 넓히면 저장해 둔 폭이 그대로 돌아온다(§14.1).
+  const widths = loadPanelWidths();
+  // 사용자가 접은 것과 자동 접힘을 구분한다: 창이 넓어질 때 다시 펴지는 것은 자동 접힘뿐이다.
+  const autoOff = { panel: false, right: false };
+  let bottom = null;                      // Task 3이 createBottomBar()로 채운다 — 그때까지는 null이다
+  let firstLayout = true;
+  function relayout() {
+    const vw = globalThis.innerWidth ?? 1280;
+    applyPanelWidths(layout, fitPanelWidths(widths, vw));
+    const want = autoCollapse(widths, vw);
+    for (const side of ['panel', 'right']) {
+      const el = q(side === 'right' ? '#right' : '#panel');
+      const off = el.classList.contains('collapsed');
+      if (want[side] && !off) { togglePanel(layout, side, true); autoOff[side] = true; }
+      else if (!want[side] && off && autoOff[side]) { togglePanel(layout, side, false); autoOff[side] = false; }
+    }
+    // 우측 패널이 접혀 있을 때만 하단 바 오른쪽 끝에 "속성 ▸"이 보인다(다시 펴는 유일한 길이다).
+    q('#btnRightPanel').hidden = !q('#right').classList.contains('collapsed');
+    bottom?.sync();
+    // 첫 배치에서는 미니맵에 알리지 않는다: 아직 아무것도 바뀌지 않았고, 미니맵 리사이즈
+    // 콜백은 "크기가 변했다"는 신호다(shell.test.js의 ResizeObserver 테스트가 횟수를 센다).
+    if (!firstLayout) onMinimapResize();
+    firstLayout = false;
+  }
+  relayout();
+  const resizeWatch = createResizeWatch(layout, relayout);
+  q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; onMinimapResize(); });
   const splitters = [
     createSplitter(q('#panelSplitter'), {
       get: () => widths.panel,
-      set: w => { widths.panel = w; applyPanelWidths(layout, widths); onMinimapResize(); },
+      set: w => { widths.panel = w; relayout(); },
       onEnd: w => savePanelWidth('panel', w),
     }),
     createSplitter(q('#rightSplitter'), {
       invert: true,   // 오른쪽 패널은 왼쪽으로 끌 때 넓어진다
       get: () => widths.right,
-      set: w => { widths.right = w; applyPanelWidths(layout, widths); onMinimapResize(); },
+      set: w => { widths.right = w; relayout(); },
       onEnd: w => savePanelWidth('right', w),
     }),
   ];
@@ -125,6 +78,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { saveMiniHeight(); onMinimapResize(); }).observe(mini);
 
   function showPanel(name) {
+    autoOff.panel = false;
     togglePanel(layout, 'panel', false);   // 코드에서 패널을 열 때는 접힘을 함께 푼다(교체 모드 등)
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== name);
@@ -133,6 +87,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => {
     const current = b.classList.contains('on');
     const collapsed = q('#panel').classList.contains('collapsed');
+    autoOff.panel = false;
     if (current && !collapsed) { togglePanel(layout, 'panel', true); return; }
     showPanel(b.dataset.panel);
   }));
@@ -273,5 +228,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { splitters.forEach(s => s.destroy()); } };
+  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { resizeWatch.destroy(); splitters.forEach(s => s.destroy()); } };
 }

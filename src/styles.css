@@ -12,10 +12,9 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #panelSplitter { grid-area: psplit; } #rightSplitter { grid-area: rsplit; }
 #panel.collapsed, #right.collapsed { display: none; }
 #layout.panel-off #panelSplitter, #layout.right-off #rightSplitter { display: none; }
-#topbar { grid-area: top; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
-#topbar .group { display: flex; gap: 8px; align-items: center; }
+#topbar { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; white-space: nowrap; }
+#topbar .group { display: flex; gap: 8px; align-items: center; flex: none; }
 #topbar button:not(.primary) { padding: 5px 9px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
-@media (max-width: 1200px) { #topbar { overflow-x: auto; } }
 #projectName { font: inherit; font-weight: 600; border: 1px solid transparent; padding: 4px 6px; border-radius: 4px; } #projectName:focus { border-color: var(--accent); outline: none; }
 #rail { grid-area: rail; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); }
 #rail button { height: 64px; border: 0; background: none; font-size: 11px; color: var(--muted); cursor: pointer; } #rail button.on { color: var(--accent); background: #e6eefb; }
