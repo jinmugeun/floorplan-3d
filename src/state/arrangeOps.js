@@ -3,7 +3,7 @@
 import { uid, activeFloor } from './schema.js';
 import { itemsOf, movableItems, updateItems, duplicateItems } from './floorOps.js';
 import { reattach, seatCopies } from './floorInternal.js';
-import { linearOffsets, circularPlacements, alignPatches } from '../geom/arrange.js';
+import { linearOffsets, circularPlacements, alignPatches, pathPlacements } from '../geom/arrange.js';
 
 // 그룹화(Ctrl+G): 2개 이상일 때만 만든다. 겹치는 기존 그룹은 지우고 새 그룹으로 대체한다(그룹 중첩 없음).
 export function groupItems(store, ids) {
@@ -37,6 +37,7 @@ export function relativeMove(store, ids, { dx = 0, dy = 0, copy = false } = {}) 
 }
 // 배열 복사(직선·원형·회전). 원본은 그대로 두고 사본만 만든다(한 dispatch = undo 한 단계).
 // 사본은 seatCopies를 지난다: 벽 부착 제품은 사본 자리의 벽에 다시 앉거나 wallId를 비운다(I-2).
+// kind: 'linear' | 'circular' | 'rotate' | 'path'('path'는 §13.1 — 캔버스에 그린 폴리라인을 따라 놓는다).
 export function arrayCopy(store, ids, kind, params = {}) {
   const f = activeFloor(store.get());
   const src = itemsOf(store.get(), ids);
@@ -45,6 +46,13 @@ export function arrayCopy(store, ids, kind, params = {}) {
   if (kind === 'linear') {
     for (const [dx, dy] of linearOffsets(params)) {
       for (const it of src) drafts.push({ ...structuredClone(it), pos: [it.pos[0] + dx, it.pos[1] + dy] });
+    }
+  } else if (kind === 'path') {
+    // 여러 개를 고르면 아이템마다 같은 경로를 따른다(원형·회전 배열과 같은 규칙).
+    for (const it of src) {
+      for (const pl of pathPlacements(it, params.points, params)) {
+        drafts.push({ ...structuredClone(it), pos: [pl.pos[0], pl.pos[1]], rot: pl.rot });
+      }
     }
   } else {
     const xs = src.map(i => i.pos[0]), ys = src.map(i => i.pos[1]);

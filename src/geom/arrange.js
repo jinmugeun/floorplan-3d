@@ -1,5 +1,5 @@
-import { itemAABB, RAD, normDeg } from './items.js';
-import { sub } from './vec.js';
+import { itemAABB, RAD, DEG, normDeg } from './items.js';
+import { sub, dist } from './vec.js';
 
 // 직선 배열: i번째 사본의 오프셋은 간격의 (i+1)배.
 export function linearOffsets({ dx = 0, dy = 0, count = 1 } = {}) {
@@ -39,4 +39,39 @@ export function alignPatches(items, axis, mode) {
     pos[a] += target - cur;
     return { id: it.id, patch: { pos } };
   });
+}
+
+// 경로 배열(§13.1): 폴리라인 points(≥ 2)를 따라 시작점부터 spacing mm 간격으로 놓는다.
+// count가 1 이상이면 spacing을 "전체 길이 / count"로 덮어쓰고 정확히 count개를 낸다.
+// follow면 그 구간의 방향각으로 돈다(rot = atan2를 도로, 90° 스냅 없음), 아니면 원본 회전 유지.
+// 원본 자리(s = 0)는 건너뛰지 않는다 — 사용자가 경로를 원본에서 시작하지 않아도 되게 한 결정이다.
+// 꺾이는 점(s가 구간 경계와 딱 같은 자리)은 앞 구간에 속하므로 앞 구간의 각도를 쓴다.
+export function pathPlacements(item, points, { spacing = 600, count = null, follow = true } = {}) {
+  const pts = (points ?? []).filter(p => Array.isArray(p) && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
+  if (pts.length < 2) return [];
+  // 길이 0 구간(같은 점을 두 번 찍은 경우)은 버린다. at = 경로 시작부터 이 구간 시작까지의 거리.
+  const segs = [];
+  let total = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const d = dist(pts[i], pts[i + 1]);
+    if (!(d > 0)) continue;
+    segs.push({ a: pts[i], b: pts[i + 1], len: d, at: total });
+    total += d;
+  }
+  if (!segs.length) return [];
+  const n = Number(count) >= 1 ? Math.round(Number(count)) : null;
+  const step = n ? total / n : Math.abs(Number(spacing) || 0);
+  if (!(step > 0)) return [];
+  const limit = n ?? Math.floor(total / step) + 1;
+  const out = [];
+  for (let i = 0; i < limit; i++) {
+    const s = Math.min(i * step, total);
+    const seg = segs.find(g => s <= g.at + g.len) ?? segs[segs.length - 1];
+    const t = (s - seg.at) / seg.len;
+    out.push({
+      pos: [seg.a[0] + (seg.b[0] - seg.a[0]) * t, seg.a[1] + (seg.b[1] - seg.a[1]) * t],
+      rot: follow ? normDeg(DEG(Math.atan2(seg.b[1] - seg.a[1], seg.b[0] - seg.a[0]))) : normDeg(item?.rot),
+    });
+  }
+  return out;
 }

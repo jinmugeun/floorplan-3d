@@ -434,6 +434,28 @@ describe('그룹·배열·상대이동', () => {
     expect(activeFloor(s.get()).items.slice(1).map(i => [i.pos[0], i.rot])).toEqual([[1000, 45], [1000, 90]]);
   });
 
+  // §13.1: 경로 배열 복사. 기존 kind와 같은 경로(seatCopies → dispatch 1단계)를 지난다.
+  test('경로 배열 복사는 폴리라인을 따라 사본을 만들고 한 단계로 되돌린다', () => {
+    const s = setup();
+    const a = addItem(s, createItem(productById('chair-dining'), { pos: [500.5, 500.25], rot: 10 }));
+    const made = arrayCopy(s, [a], 'path', { points: [[1000, 1000], [1000, 2000]], spacing: 500, follow: true });
+    expect(made).toHaveLength(3);                                   // 0 · 500 · 1000
+    const copies = activeFloor(s.get()).items.slice(1);
+    expect(copies.map(i => [i.pos[0], i.pos[1], i.rot])).toEqual([[1000, 1000, 90], [1000, 1500, 90], [1000, 2000, 90]]);
+    expect(activeFloor(s.get()).items[0].pos).toEqual([500.5, 500.25]); // 원본은 그 자리에 남는다
+    s.undo();
+    expect(activeFloor(s.get()).items).toHaveLength(1);              // 한 단계로 사라진다
+    // follow가 false면 원본 회전을 유지한다.
+    const flat = arrayCopy(s, [a], 'path', { points: [[0, 0], [1000, 0]], count: 2, follow: false });
+    expect(flat).toHaveLength(2);
+    expect(activeFloor(s.get()).items.slice(1).every(i => i.rot === 10)).toBe(true);
+    s.undo();
+    // 점이 모자라면 아무것도 만들지 않고 undo 단계도 쌓지 않는다.
+    const before = s.get();
+    expect(arrayCopy(s, [a], 'path', { points: [[0, 0]], spacing: 500 })).toEqual([]);
+    expect(s.get()).toBe(before);
+  });
+
   test('정렬은 선택한 아이템을 한 단계로 맞춘다', () => {
     const s = setup();
     const a = addItem(s, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
