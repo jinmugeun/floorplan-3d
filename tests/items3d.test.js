@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+import * as THREE from 'three';
 import { buildItems, itemMesh, itemVisible3, paintItem, COLLIDE_COLOR } from '../src/view3d/items3d.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
@@ -97,6 +98,32 @@ describe('3D 아이템', () => {
     expect(lines(g)).toBe(5);                                    // 기본값은 켜짐
     const off = buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: { itemEdges: false } });
     expect(lines(off)).toBe(0);
+  });
+
+  // 2D는 (translate → rotate → scale)로 반전을 아이템 로컬 축에 먹인다(items2d.drawItem).
+  // 3D도 같아야 한다 — 형상이 비대칭이 된 뒤로는 후드 슬릿·냉장고 손잡이가 2D와 반대쪽에 오면 바로 보인다.
+  test('flipH/flipV가 3D에도 반영되고 아이템 로컬 축을 기준으로 반전된다', () => {
+    const at = patch => {
+      const g = itemMesh(mk('fridge-2door', { pos: [0, 0], ...patch }));
+      g.updateMatrixWorld(true);
+      return g.getObjectByName('fridgeHandle').getWorldPosition(new THREE.Vector3());
+    };
+    const base = at({});
+    expect(base.x).toBeGreaterThan(0.1);                      // 손잡이는 +x 쪽에 치우쳐 있다(비대칭)
+    expect(base.z).toBeGreaterThan(0.1);                      // 문짝 앞면(+깊이)
+    const h = at({ flipH: true });
+    expect(h.x).toBeCloseTo(-base.x); expect(h.z).toBeCloseTo(base.z);
+    const v = at({ flipV: true });
+    expect(v.x).toBeCloseTo(base.x); expect(v.z).toBeCloseTo(-base.z);
+    // 회전과 섞이면 로컬 축 기준임이 드러난다: rot 90°에서 로컬 +x는 월드(three) +z로 간다.
+    const r = at({ rot: 90 }), rf = at({ rot: 90, flipH: true });
+    expect(rf.z).toBeCloseTo(-r.z);                           // 로컬 x가 뒤집힌다
+    expect(rf.x).toBeCloseTo(r.x);                            // 월드 x를 뒤집는 것이 아니다
+    // 스케일 자체도 확인한다(박스 경로도 같은 규칙을 쓴다).
+    const s = itemMesh(mk('cabinet-lower', { pos: [0, 0], flipH: true, flipV: true })).scale;
+    expect([s.x, s.y, s.z]).toEqual([-1, 1, -1]);
+    const none = itemMesh(mk('cabinet-lower', { pos: [0, 0] })).scale;
+    expect([none.x, none.y, none.z]).toEqual([1, 1, 1]);
   });
 
   test('paintItem은 그룹과 메시 모두 칠한다', () => {

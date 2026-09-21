@@ -51,6 +51,11 @@ export function itemMesh(item, { edges = false } = {}) {
   const obj = shapeFor(item) ?? simpleMesh(item);
   obj.position.copy(toThree([item.pos[0], item.pos[1], item.z + item.size[2] / 2]));
   obj.rotation.y = -RAD(item.rot);
+  // 2D와 같은 반전: 캔버스가 (translate → rotate → scale)로 아이템 로컬 축을 세우듯
+  // three의 로컬 행렬도 T·R·S라 음수 스케일이 회전 전에, 즉 아이템 로컬 축을 기준으로 먹는다.
+  // 로컬 x = 너비(2D의 flipH), 로컬 z = 깊이(2D의 flipV)다. 형상이 비대칭이 된 뒤로는
+  // 이것이 없으면 후드 슬릿·냉장고 손잡이·침대 헤드보드가 2D와 3D에서 반대쪽에 온다.
+  obj.scale.set(item.flipH ? -1 : 1, 1, item.flipV ? -1 : 1);
   obj.name = 'item';
   if (edges) addEdges(obj);
   // 레이캐스트가 자식을 맞혀도 어느 아이템인지 알 수 있게 모든 자손에 id를 박는다(엣지 선까지).

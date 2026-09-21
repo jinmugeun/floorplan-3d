@@ -98,7 +98,7 @@ export function shapeFor(item) {
       g.add(box(accent, [leg, h - top, leg], [sx * (hw - leg / 2 - inset), -hh + (h - top) / 2, sz * (hd - leg / 2 - inset)], 'tableLeg'));
     }
   } else if (symbol === 'chair') {
-    const seat = min3(h * 0.08, 0.06), backT = min3(d * 0.1, 0.05), leg = min3(w * 0.09, 0.04), seatY = -hh + h * 0.5;
+    const seat = min3(h * 0.08, 0.06), backT = min3(d * 0.1, 0.05), leg = min3(w * 0.09, d, 0.04), seatY = -hh + h * 0.5;
     g.add(box(body, [w, seat, d], [0, seatY, 0], 'chairSeat'));
     g.add(box(body, [w, h * 0.45, backT], [0, seatY + h * 0.24, -hd + backT / 2], 'chairBack'));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -110,7 +110,7 @@ export function shapeFor(item) {
     g.add(box(body, [w, h * 0.6, back], [0, -hh + h * 0.7, -hd + back / 2], 'sofaBack'));
     for (const sx of [-1, 1]) g.add(box(accent, [arm, h * 0.72, d * 0.9], [sx * (hw - arm / 2), -hh + h * 0.36, d * 0.05], 'sofaArm'));
   } else if (symbol === 'fridge') {
-    const door = min3(d * 0.08, 0.06), grip = min3(w * 0.05, 0.04);
+    const door = min3(d * 0.08, 0.06), grip = min3(w * 0.05, d, 0.04);
     g.add(box(accent, [w, h, d - door], [0, 0, -door / 2], 'fridgeBody'));
     g.add(box(body, [w * 0.98, h * 0.97, door], [0, 0, hd - door / 2], 'fridgeDoor'));
     // 손잡이는 문짝 앞면과 같은 면에 붙인다(hd + grip/2로 내밀면 깊이 방향으로 약 39 mm 밖으로 나가
@@ -149,7 +149,9 @@ export function shapeFor(item) {
     g.add(box(body, [w, h * 0.8, d], [0, hh - h * 0.4, 0], 'diffuserFrame'));
     for (const sz of [-1, 1]) g.add(box(dark, [w * 0.86, h * 0.2, bar], [0, -hh + h * 0.1, sz * d * 0.18], 'diffuserBar'));
   } else if (symbol === 'fan') {
-    const r = min3(w, d) * 0.35, disc = min3(d * 0.06, 0.04);
+    // 원판은 axis 'z'라 반지름이 x(너비)와 y(높이)로 퍼진다 — h를 상한에 넣지 않으면 넓적한
+    // 벽부형 팬(500×500×300)에서 날개가 박스 위·아래로 삐져나와 벽·천장을 관통한다.
+    const r = min3(w, d, h) * 0.35, disc = min3(d * 0.06, 0.04);
     g.add(box(body, [w, h, d - disc], [0, 0, -disc / 2], 'fanChamber'));
     g.add(cyl(dark, r, disc, [0, 0, hd - disc / 2], 'fanDisc', { axis: 'z' }));
   } else {   // ventcap

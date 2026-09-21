@@ -52,11 +52,17 @@ export function openOnboarding({ store = null, onDone = () => {} } = {}) {
     onDone();
   }
   const next = () => { if (i < ONBOARDING_STEPS.length - 1) { i += 1; render(); } else finish(); };
-  // 캡처 단계에서 듣고 멈춘다: Enter·Esc가 전역 단축키까지 내려가지 않게.
+  // 캡처 단계에서 듣고 **모든** 키를 삼킨다: 안내가 떠 있는 동안 전역 단축키가 살아 있으면
+  // 읽는 중에 누른 키가 도면을 바꾼다(실제로 [L]이 벽 그리기로 도구를 바꿨고 Delete·Ctrl+Z도 샜다).
+  // 예외는 Tab 하나뿐 — 대화상자 안에서 [건너뛰기]·[다음] 사이를 포커스로 오갈 수 있어야 한다.
+  // preventDefault는 우리가 쓰는 키에만 건다(브라우저 새로고침·스페이스 버튼 활성화를 막지 않게).
   function onKey(ev) {
-    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(); return; }
-    if (ev.key === 'Enter' || ev.key === 'ArrowRight') { ev.preventDefault(); ev.stopPropagation(); next(); return; }
-    if (ev.key === 'ArrowLeft' && i > 0) { ev.preventDefault(); ev.stopPropagation(); i -= 1; render(); }
+    if (ev.key === 'Tab') return;
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();
+    if (ev.key === 'Escape') { ev.preventDefault(); finish(); return; }
+    if (ev.key === 'Enter' || ev.key === 'ArrowRight') { ev.preventDefault(); next(); return; }
+    if (ev.key === 'ArrowLeft' && i > 0) { ev.preventDefault(); i -= 1; render(); }
   }
   document.addEventListener('keydown', onKey, true);
   root.addEventListener('click', ev => {

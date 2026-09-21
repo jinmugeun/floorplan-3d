@@ -159,6 +159,11 @@ test('sceneSignature changes for geometry and display settings but not for sun o
   const withOpacity = sceneSignature(store.get());
   store.dispatch(d => { activeFloor(d).walls[0].thickness = 150; }, { record: false });
   expect(sceneSignature(store.get())).not.toBe(withOpacity);
+  // 아이템 윤곽선은 씬을 지을 때 읽는 값이다 — 서명에서 빠지면 팝오버 체크박스를 눌러도
+  // 씬을 다시 짓지 않아 기능이 조용히 죽는다.
+  const withThickness = sceneSignature(store.get());
+  store.dispatch(d => { d.view.v3.itemEdges = false; }, { record: false });
+  expect(sceneSignature(store.get())).not.toBe(withThickness);
 });
 
 test('a wall with a door becomes three boxes that keep the wall id, and items get their own group', async () => {

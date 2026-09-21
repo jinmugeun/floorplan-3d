@@ -62,6 +62,30 @@ describe('온보딩', () => {
     expect(leaked).toEqual([]);            // 전역 단축키로 새지 않는다
   });
 
+  // 실제로 새던 구멍: 안내를 읽는 중 [L]을 누르면 전역 단축키가 도구를 '벽 그리기'로 바꿨다.
+  // 캡처 단계에서 Esc·Enter·화살표만 멈췄기 때문이다 — 이제 Tab을 뺀 모든 키를 여기서 삼킨다.
+  test('열려 있는 동안 모든 키가 전역 단축키로 새지 않고, Tab만 통과한다', () => {
+    const leaked = [];
+    const spy = ev => leaked.push(ev.key);
+    window.addEventListener('keydown', spy);
+    try {
+      openOnboarding({});
+      key('l'); key('f'); key('Delete'); key('3'); key('z', { ctrlKey: true });
+      expect(leaked).toEqual([]);
+      expect(card()).not.toBeNull();                                                  // 아무 키도 대화상자를 닫지 않는다
+      expect(card().querySelector('[data-part="dots"]').textContent).toBe('● ○ ○');   // 단계도 그대로다
+      expect(key('Tab')).toBe(true);                                                  // preventDefault를 걸지 않는다
+      expect(leaked).toEqual(['Tab']);                                                // 포커스 이동은 통과시킨다
+      key('Escape');
+      expect(card()).toBeNull();
+      expect(leaked).toEqual(['Tab']);
+      key('l');
+      expect(leaked).toEqual(['Tab', 'l']);                                           // 닫힌 뒤에는 다시 전역으로 간다
+    } finally {
+      window.removeEventListener('keydown', spy);
+    }
+  });
+
   test('빈 프로젝트에서는 첫 단계에 샘플 안내가 붙고, 도면이 있으면 붙지 않는다', () => {
     openOnboarding({ store: createStore(createEmptyProject()) });
     expect(card().querySelector('[data-part="extra"]').hidden).toBe(false);

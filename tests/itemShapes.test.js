@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
 import { shapeFor, itemMaterial, itemMaterialSpec, darkerHex, SHAPE_SYMBOLS, ITEM_MATERIALS, ITEM_BASE_COLOR } from '../src/view3d/itemShapes.js';
 import { createItem } from '../src/state/schema.js';
-import { productById, CATEGORIES } from '../src/products/catalog.js';
+import { productById, CATEGORIES, PRODUCTS } from '../src/products/catalog.js';
 
 const mk = (id, patch = {}) => createItem(productById(id), { pos: [1000.5, 2000.25], ...patch });
 const names = g => g.children.map(c => c.name);
@@ -40,23 +40,43 @@ describe('조합 형상', () => {
   });
 
   // 규약: 형상은 아이템 바운딩 박스 밖으로 나가지 않는다(2D 심벌·충돌 판정·간격 치수가 item.size를
-  // 쓰므로 3D만 어긋나면 안 된다). 대표 제품 13개 = SHAPE_SYMBOLS 13종을 전부 검사한다.
-  test('형상은 아이템 크기 안에 들어간다(13종 전부 + 소수 크기)', () => {
-    const ids = ['bed-queen', 'dining-4', 'chair-dining', 'sofa-3', 'fridge-2door', 'sink-double', 'range-gas-6', 'range-gas-high', 'light-ceiling', 'hood-box', 'diffuser-650', 'fan-exhaust-700', 'ventcap-100'];
-    const cases = [...ids.map(id => mk(id)), mk('dining-4', { size: [1200.5, 800.25, 750.75] })];   // 마지막은 소수 크기
-    expect(cases).toHaveLength(SHAPE_SYMBOLS.length + 1);
-    for (const it of cases) {
-      const g = shapeFor(it);
-      expect(g).not.toBeNull();
-      const b = bbox(g);
-      const [w, d, h] = it.size;
-      const half = { x: w / 2000, y: h / 2000, z: d / 2000 };     // three 로컬: x = 너비, y = 높이, z = 깊이(m)
-      for (const k of ['x', 'y', 'z']) {
-        expect(b.min[k]).toBeGreaterThanOrEqual(-half[k] - 1e-6);
-        expect(b.max[k]).toBeLessThanOrEqual(half[k] + 1e-6);
+  // 쓰므로 3D만 어긋나면 안 된다). 심벌당 대표 1개만 보면 놓친다 — 정육면체인 fan-exhaust-700이
+  // 대표였을 때 fanDisc 반지름이 높이를 넘는 결함(넓적한 fan-wall-500)이 그대로 통과했다.
+  // 그래서 조합 형상을 가진 **제품 전부** × 크기 5종을 돈다: 카탈로그 기본 · 소수 · 넓적한 것
+  // (500×500×300, fan 결함이 나온 실제 제품 크기) · 깊이가 얇은 것 · 너비가 얇은 것.
+  // 얇은 두 크기는 의자 다리·냉장고 손잡이가 깊이를 상한에 넣지 않던 같은 종류의 결함을 잡는다.
+  test('형상은 아이템 크기 안에 들어간다(조합 형상 제품 전부 × 크기 5종)', () => {
+    const shaped = PRODUCTS.filter(p => SHAPE_SYMBOLS.includes(p.symbol));
+    expect(new Set(shaped.map(p => p.symbol)).size).toBe(SHAPE_SYMBOLS.length);   // 13종을 다 덮는다
+    expect(shaped.length).toBeGreaterThan(SHAPE_SYMBOLS.length);
+    let checked = 0;
+    for (const prod of shaped) {
+      for (const size of [prod.size, [1800.5, 1100.25, 600.75], [500, 500, 300], [5000, 30, 4000], [40, 1200, 1500]]) {
+        const it = mk(prod.id, { size: [...size] });
+        const where = `${prod.id} (${prod.symbol}) ${it.size.join('×')}`;
+        const g = shapeFor(it);
+        expect(g, where).not.toBeNull();
+        const b = bbox(g);
+        const [w, d, h] = it.size;
+        const half = { x: w / 2000, y: h / 2000, z: d / 2000 };   // three 로컬: x = 너비, y = 높이, z = 깊이(m)
+        for (const k of ['x', 'y', 'z']) {
+          expect(b.min[k], `${where} min.${k}`).toBeGreaterThanOrEqual(-half[k] - 1e-6);
+          expect(b.max[k], `${where} max.${k}`).toBeLessThanOrEqual(half[k] + 1e-6);
+        }
+        expect(g.children.every(c => c.geometry.type === 'BoxGeometry' || c.geometry.type === 'CylinderGeometry'), where).toBe(true);
+        checked += 1;
       }
-      expect(g.children.every(c => c.geometry.type === 'BoxGeometry' || c.geometry.type === 'CylinderGeometry')).toBe(true);
     }
+    expect(checked).toBe(shaped.length * 5);
+  });
+
+  // fan-wall-500(500×500×300)은 회귀 지점 자체다: 날개 원판이 axis 'z'라 반지름이 높이로도 퍼진다.
+  test('넓적한 벽부형 팬의 날개 반지름은 높이도 상한으로 쓴다', () => {
+    const it = mk('fan-wall-500');
+    expect(it.size).toEqual([500, 500, 300]);
+    const disc = shapeFor(it).children.find(c => c.name === 'fanDisc');
+    expect(disc.geometry.parameters.radiusTop).toBeCloseTo(0.3 * 0.35, 9);   // min(w, d, h) × 0.35
+    expect(bbox(shapeFor(it)).max.y).toBeLessThanOrEqual(0.15 + 1e-6);
   });
 
   test('조명·팬·환기캡은 원기둥을 쓴다', () => {
