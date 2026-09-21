@@ -12,7 +12,9 @@ function makeCanvas() {
   c.width = 800; c.height = 600;
   Object.defineProperty(c, 'clientWidth', { value: 800 });
   Object.defineProperty(c, 'clientHeight', { value: 600 });
-  c.getContext = () => new Proxy({}, { get: () => () => {} });
+  // measureText만 진짜 캔버스처럼 TextMetrics를 돌려준다: 배경 상자가 있는 라벨(치수·덕트 — §14.5)이
+  // 폭을 재기 때문이다. 나머지는 아무것도 하지 않는 함수다.
+  c.getContext = () => new Proxy({}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 10 }) : () => {}) });
   return c;
 }
 
@@ -69,7 +71,7 @@ test('room fills become translucent while a background image is showing', async 
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
   const alphas = [];
   const c = makeCanvas();
-  c.getContext = () => new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { if (k === 'globalAlpha') alphas.push(v); t[k] = v; return true; } });
+  c.getContext = () => new Proxy({}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 10 }) : k in t ? t[k] : () => {}), set: (t, k, v) => { if (k === 'globalAlpha') alphas.push(v); t[k] = v; return true; } });
   const v = createView2D(c, store, createUiState());
   const frame = () => new Promise(r => requestAnimationFrame(() => r()));
   await frame(); await frame();
@@ -289,7 +291,7 @@ test('collisionLive를 끄고 아이템을 끄는 동안에는 충돌 색이 숨
   const strokes = [];
   const c = makeCanvas();
   c.getContext = () => new Proxy({}, {
-    get: (t, k) => (k in t ? t[k] : () => {}),
+    get: (t, k) => (k === 'measureText' ? () => ({ width: 10 }) : k in t ? t[k] : () => {}),
     set: (t, k, v) => { if (k === 'strokeStyle') strokes.push(v); t[k] = v; return true; },
   });
   const v = createView2D(c, store, createUiState());

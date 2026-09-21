@@ -54,14 +54,20 @@ function drawPart(ctx, p, color) {
   ctx.stroke();
 }
 
-// 글자 부품은 아이템 로컬 좌표계 안에서 그리면 반전·회전에 따라 뒤집히고 읽을 수 없다.
-// 부품 위치만 월드로 옮긴 뒤 화면 좌표계에서 똑바로 그린다(v.label과 같은 방식).
-function drawTextPart(ctx, v, item, part) {
+// 심벌의 글자 부품(설비 라벨)을 월드 좌표 + 화면 px 크기로. 글자를 아이템 로컬 좌표계에서 그리면
+// 반전·회전에 따라 뒤집혀 읽을 수 없으므로, 위치만 월드로 옮기고 화면 좌표계에서 똑바로 그린다.
+// drawItem과 labels2d.collectLabels가 같은 자리를 계산하도록 한 함수로 둔다(§14.5).
+export function itemTextLabels(v, item) {
+  const parts = symbolParts(symbolOf(item), item.size[0], item.size[1], { text: equipLabel(item) });
   const c = Math.cos(RAD(item.rot)), s = Math.sin(RAD(item.rot));
-  const lx = (item.flipH ? -1 : 1) * part.x, ly = (item.flipV ? -1 : 1) * part.y;
-  const at = [item.pos[0] + lx * c - ly * s, item.pos[1] + lx * s + ly * c];
-  const px = Math.max(9, Math.min(28, part.size * v.camera.scale));
-  v.label(part.text, at, { size: px, color: ITEM_COLORS.label });
+  return parts.filter(p => p.t === 'text').map(part => {
+    const lx = (item.flipH ? -1 : 1) * part.x, ly = (item.flipV ? -1 : 1) * part.y;
+    return {
+      text: part.text,
+      at: [item.pos[0] + lx * c - ly * s, item.pos[1] + lx * s + ly * c],
+      size: Math.max(9, Math.min(28, part.size * v.camera.scale)),
+    };
+  });
 }
 
 function strokePoly(ctx, v, pts, color, lw = 2, dash = null) {
@@ -92,7 +98,7 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
     ctx.restore();
     ctx.globalAlpha = 1;
   }
-  if (showLabel) for (const part of parts) if (part.t === 'text') drawTextPart(ctx, v, item, part);
+  if (showLabel) for (const t of itemTextLabels(v, item)) v.label(t.text, t.at, { size: t.size, color: ITEM_COLORS.label });
   if (outline) strokePoly(ctx, v, itemCorners(item), outline, 2);
   if (labels && showCode) {
     const box = itemAABB(item);
@@ -100,14 +106,15 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
   }
 }
 
-export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = null, labels = true, dim = null } = {}) {
+export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = null, labels = true, dim = null, shown = null } = {}) {
   const selected = new Set(sel?.type === 'item' ? [sel.id] : sel?.type === 'multi' && sel.kind === 'item' ? sel.ids : []);
   for (const item of drawOrder(floor.items)) {
     if (!itemVisible(item, flags)) continue;
     const bad = collisions?.has(item.id);
     const on = selected.has(item.id);
     const outline = bad ? ITEM_COLORS.locked : on ? (item.locked ? ITEM_COLORS.locked : ITEM_COLORS.sel) : null;
-    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, equipLabels: flags.equipLabels !== false, alpha: dim ? dim(item) : 1, embedded: drawnByWall(item, floor.walls) });
+    // shown이 오면 설비 라벨은 뷰의 라벨 패스가 그린다(겹치면 생략하는 LOD를 거치게 — §14.5).
+    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, equipLabels: flags.equipLabels !== false && !shown, alpha: dim ? dim(item) : 1, embedded: drawnByWall(item, floor.walls) });
   }
 }
 

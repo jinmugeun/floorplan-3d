@@ -1,12 +1,13 @@
 import { activeFloor } from '../state/schema.js';
-import { endpoints, wallLength } from '../geom/walls.js';
-import { roomInnerPolygon, centroid, pointInPolygon } from '../geom/rooms.js';
+import { endpoints } from '../geom/walls.js';
+import { roomInnerPolygon, pointInPolygon } from '../geom/rooms.js';
 import { fmtLen, fmtArea } from '../util/units.js';
 import { dist } from '../geom/vec.js';
 import { drawItems, ITEM_DRAG_KINDS } from './items2d.js';
 import { drawDucts } from './ducts2d.js';
 import { memoCollisions } from '../geom/collide.js';
 import { drawWalls } from './walls2d.js';
+import { collectLabels, placeLabels, drawLabels } from './labels2d.js';
 
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
@@ -120,28 +121,34 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       ctx.globalAlpha = (tracing ? 0.35 : 1) * (soloRoom && r.id !== solo ? 0.25 : 1);
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
       ctx.globalAlpha = 1;
-      if (labels) {
-        const c = centroid(r.points);
-        if (v2.roomArea) label(fmtArea(r.area, { pyeong }), c);
-        if (v2.roomName && r.name) label(r.name, [c[0], c[1] + 250], { size: 13, color: COLORS.dim }); // 면적 라벨 아래
-      }
     }
     drawWalls(ctx, api, f, { sel, soloWalls, flags: v2 });
     ctx.globalAlpha = 1;
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
-    // 벽마다 치수 라벨을 그리되, 화면에서 40px보다 짧은 벽은 건너뛴다(LOD: 라벨이 겹쳐 뭉치는 것을 막는다).
-    if (v2.dims && labels) for (const wl of f.walls) {
-      const len = wallLength(wl);
-      if (len * camera.scale < 40) continue;
-      label(fmtLen(len, units, { unit: showUnit }), [(wl.a[0] + wl.b[0]) / 2, (wl.a[1] + wl.b[1]) / 2], { size: 11 });
-    }
+    // 라벨은 맨 마지막에 한 패스로 그린다(§14.5): 우선순위가 높은 것부터 화면 AABB로 자리를 잡고
+    // 겹치는 것은 생략한다. 여기서 먼저 걸러 두어야 덕트·아이템이 자기 라벨을 그릴지 알 수 있다.
+    const placedLabels = labels ? placeLabels(collectLabels(api, f, { flags: v2, units, showUnit, pyeong }), { scale: camera.scale }) : [];
+    // shown은 "라벨 패스가 맡았다"는 표시다(내용이 아니라 있고 없음만 본다 — ducts2d·items2d가
+    // `!shown`으로 검사한다). key는 후보를 테스트에서 지목하고 겹침 진단을 읽기 위한 이름이다.
+    const shown = labels ? new Set(placedLabels.map(c => c.key)) : null;
     // 단일 공간 모드에서는 그 방 밖의 아이템도 방·벽처럼 흐리게 그린다
     // 충돌 계산은 아이템 배열 참조가 바뀔 때만 한다(memoCollisions — §13.5). 미니맵·캡처처럼 readonly로
     // 그리는 캔버스와 "충돌 감지"를 끈 경우에는 아예 계산하지 않고, "실시간 충돌 감지"를 끈 상태로 아이템을 끌고 있는 동안에는 색을 내지 않는다(놓으면 다시 보인다).
-    drawDucts(ctx, api, f, { sel, flags: v2, labels });
+    drawDucts(ctx, api, f, { sel, flags: v2, labels, shown });
     const liveOff = v2.collisionLive === false && ITEM_DRAG_KINDS.has(tool?.getDrag?.()?.kind);
     const collisions = readonly || v2.collision === false || liveOff ? null : memoCollisions(f.items);
-    drawItems(ctx, api, f, { sel, flags: v2, collisions, labels: labels && !readonly, dim: soloRoom ? it => (pointInPolygon(it.pos, soloRoom.points) ? 1 : 0.25) : null });
+    drawItems(ctx, api, f, { sel, flags: v2, collisions, labels: labels && !readonly, shown, dim: soloRoom ? it => (pointInPolygon(it.pos, soloRoom.points) ? 1 : 0.25) : null });
+    // 단일 공간 모드·배경 추적의 흐리기는 라벨에도 이어진다(방 루프에서 라벨을 뺐으므로
+    // 여기서 같은 계수를 다시 준다 — 다른 방 이름이 또렷하게 남으면 모드의 뜻이 사라진다).
+    if (labels) {
+      const a0 = ctx.globalAlpha;
+      for (const c of placedLabels) {
+        const r = soloRoom && c.key.startsWith('room:') ? f.rooms.find(x => c.key === `room:${x.id}:name` || c.key === `room:${x.id}:area`) : null;
+        ctx.globalAlpha = (tracing ? 0.35 : 1) * (soloRoom && r && r.id !== solo ? 0.25 : 1);
+        drawLabels(ctx, api, [c]);
+      }
+      ctx.globalAlpha = a0;
+    }
     if (!readonly && v2.guides) for (const g of f.guides) { ctx.strokeStyle = COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath(); if (g.type === 'v') { const x = Math.round(toScreen([g.pos, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = Math.round(toScreen([0, g.pos])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
     if (v2.measures) for (const m of f.measures) {
       const s0 = toScreen(m.a), s1 = toScreen(m.b);

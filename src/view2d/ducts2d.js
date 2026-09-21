@@ -39,9 +39,10 @@ function drawDamper(ctx, v, duct, damper, showLabel) {
 
 // labels는 뷰의 옵션이다(미니맵은 labels:false로 그린다 — 글자가 층 전체를 덮지 않게).
 // 보기 플래그 ductLabels는 그 위에서 덕트 라벨만 따로 끈다: 둘 중 하나라도 꺼지면 글자를 그리지 않는다.
-export function drawDucts(ctx, v, floor, { sel = null, flags = {}, labels = true } = {}) {
+export function drawDucts(ctx, v, floor, { sel = null, flags = {}, labels = true, shown = null } = {}) {
   const selId = sel?.type === 'duct' ? sel.id : null;
-  const showLabels = labels && flags.ductLabels !== false;
+  // shown이 오면 단면·댐퍼 라벨은 뷰의 라벨 패스가 그린다(§14.5). 댐퍼 마커 선은 라벨과 무관하게 남는다.
+  const showLabels = labels && flags.ductLabels !== false && !shown;
   for (const duct of floor.ducts ?? []) {
     if (!ductVisible(duct, flags)) continue;
     const color = colorOf(duct);

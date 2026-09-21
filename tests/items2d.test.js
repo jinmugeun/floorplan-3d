@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { drawItem, drawItems, drawItemSelection, itemVisible, itemHandles, symbolOf, ROT_OFFSET_PX, drawOrder, ATTACH_ORDER, ITEM_DRAG_KINDS, drawnByWall, WALL_GAP_KINDS } from '../src/view2d/items2d.js';
+import { drawItem, drawItems, drawItemSelection, itemVisible, itemHandles, symbolOf, ROT_OFFSET_PX, drawOrder, ATTACH_ORDER, ITEM_DRAG_KINDS, drawnByWall, WALL_GAP_KINDS, itemTextLabels } from '../src/view2d/items2d.js';
 import { symbolParts, symbolSvg } from '../src/products/symbols.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
@@ -216,5 +216,31 @@ describe('벽이 그리는 자리는 심벌이 비켜 준다(창·개구부)', (
       expect(svg, id).toContain('<rect');
       expect(svg, id).not.toContain('NaN');
     }
+  });
+});
+
+// §14.5: 설비 라벨의 자리를 drawItem과 라벨 패스가 같은 함수에서 얻는다.
+describe('설비 라벨 자리(itemTextLabels)', () => {
+  test('회전·반전을 따라 월드 좌표로 오고 화면 크기는 9~28 px로 잘린다', () => {
+    const hood = mk('hood-box', { pos: [2000.5, 1500.25] });
+    const one = itemTextLabels(view, hood);
+    expect(one).toHaveLength(1);
+    expect(one[0].at[0]).toBeCloseTo(2000.5, 6);
+    expect(one[0].at[1]).toBeCloseTo(1500.25, 6);
+    expect(one[0].size).toBeLessThanOrEqual(28);
+    expect(one[0].size).toBeGreaterThanOrEqual(9);
+    expect(itemTextLabels({ camera: { scale: 0.0001 } }, hood)[0].size).toBe(9);
+    expect(itemTextLabels(view, mk('sofa-3', {}))).toEqual([]);   // 글자 부품이 없는 제품
+  });
+
+  test('shown을 넘기면 drawItems가 설비 라벨을 그리지 않는다', () => {
+    const hood = mk('hood-box', { pos: [0, 0] });
+    const labels = [];
+    const v = { ...view, label: (...a) => labels.push(a) };
+    drawItems(fakeCtx(), v, { items: [hood], walls: [], rooms: [] }, { flags: {}, labels: true });
+    expect(labels).toHaveLength(1);
+    labels.length = 0;
+    drawItems(fakeCtx(), v, { items: [hood], walls: [], rooms: [] }, { flags: {}, labels: true, shown: new Set() });
+    expect(labels).toHaveLength(0);
   });
 });
