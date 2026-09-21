@@ -12,12 +12,13 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
   const allHidden = items.every(i => i.hidden);
   const allLocked = items.every(i => i.locked);
   // 설비에 이어진 덕트 꼭짓점은 설비 아래에 숨는다: 메뉴에서 바로 그 꼭짓점을 고를 수 있게 한다(§12.5).
-  const link = items.length === 1 ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
+  // "연결된 덕트가 있으면"만 보인다 — 설비가 아니거나 연결이 없으면 항목 자체를 뺀다(비활성 표시가 아니다).
+  const link = items.length === 1 && items[0].kind === 'equipment' ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
   return [
     { label: '좌우 반전', shortcut: 'Alt+H', onSelect: call('mirror', 'h') },
     { label: '상하 반전', shortcut: 'Alt+V', onSelect: call('mirror', 'v') },
     { label: '제품 교체', onSelect: call('replace') },
-    { label: '연결 덕트 선택', disabled: !link, onSelect: () => { if (link) ui.set({ selection: { type: 'duct', id: link.ductId, segment: null, vertex: link.point } }); } },
+    ...(link ? [{ label: '연결 덕트 선택', onSelect: () => ui.set({ selection: { type: 'duct', id: link.ductId, segment: null, vertex: link.point } }) }] : []),
     'sep',
     { label: '상대이동', shortcut: 'Alt+R', onSelect: call('relativeMove') },
     { label: '직선 배열 복사', shortcut: 'Alt+A', onSelect: call('arrayCopy', 'linear') },

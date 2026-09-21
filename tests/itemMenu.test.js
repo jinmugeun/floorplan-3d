@@ -21,7 +21,8 @@ describe('아이템 컨텍스트 메뉴', () => {
   test('오늘의집과 같은 항목과 단축키 표기', () => {
     const { store, ui, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
     const menu = itemMenuItems({ store, ui, ids, itemActions: {} });
-    expect(labels(menu)).toEqual(['좌우 반전', '상하 반전', '제품 교체', '연결 덕트 선택', '상대이동', '직선 배열 복사', '원형 배열 복사', '회전 복사', '복사', '붙여넣기', '그룹화', '그룹 해제', '같은 제품 선택', '숨김', '잠금', '삭제']);
+    expect(labels(menu)).toEqual(['좌우 반전', '상하 반전', '제품 교체', '상대이동', '직선 배열 복사', '원형 배열 복사', '회전 복사', '복사', '붙여넣기', '그룹화', '그룹 해제', '같은 제품 선택', '숨김', '잠금', '삭제']);
+    expect(labels(menu)).not.toContain('연결 덕트 선택');
     const byLabel = l => menu.find(m => m !== 'sep' && m.label === l);
     expect(byLabel('좌우 반전').shortcut).toBe('Alt+H');
     expect(byLabel('상하 반전').shortcut).toBe('Alt+V');
@@ -37,16 +38,23 @@ describe('아이템 컨텍스트 메뉴', () => {
     expect(menu.filter(m => m === 'sep').length).toBeGreaterThan(2);
   });
 
-  test('"연결 덕트 선택"은 연결이 있을 때만 켜지고 그 꼭짓점을 고른다', () => {
-    const { store, ui } = setup([['sofa-3', { pos: [2000, 1500] }]]);
-    const hood = addItem(store, createItem(productById('hood-box'), { pos: [3000, 1500] }));
+  test('"연결 덕트 선택"은 연결된 설비에만 나타나고 그 꼭짓점을 고른다', () => {
+    const { store, ui } = setup([['sofa-3', { pos: [2000.5, 1500.25] }]]);
+    const hoodNoLink = addItem(store, createItem(productById('hood-box'), { pos: [2600.5, 1500.25] }));
+    const hood = addItem(store, createItem(productById('hood-box'), { pos: [3000.5, 1500.25] }));
     const plain = activeFloor(store.get()).items.find(i => i.kind !== 'equipment').id;
-    const off = itemMenuItems({ store, ui, ids: [plain], itemActions: {} });
-    expect(off.find(m => m.label === '연결 덕트 선택').disabled).toBe(true);
+    // 일반 제품: 항목 자체가 없다(비활성이 아니라 생략).
+    const offPlain = itemMenuItems({ store, ui, ids: [plain], itemActions: {} });
+    expect(offPlain.find(m => m !== 'sep' && m.label === '연결 덕트 선택')).toBeUndefined();
+    // 설비지만 이어진 덕트가 없다: 역시 생략.
+    const offHood = itemMenuItems({ store, ui, ids: [hoodNoLink], itemActions: {} });
+    expect(offHood.find(m => m !== 'sep' && m.label === '연결 덕트 선택')).toBeUndefined();
+    // 설비 + 덕트 연결: 항목이 나타나고 바로 켜져 있다.
     const ductId = addDuct(store, { points: [[3000, 1500], [6000, 1500]], segments: [{ w: 500, h: 300, z: 2400 }], connections: [{ point: 0, itemId: hood }] });
     const on = itemMenuItems({ store, ui, ids: [hood], itemActions: {} });
-    const pickDuct = on.find(m => m.label === '연결 덕트 선택');
-    expect(pickDuct.disabled).toBe(false);
+    const pickDuct = on.find(m => m !== 'sep' && m.label === '연결 덕트 선택');
+    expect(pickDuct).toBeDefined();
+    expect(pickDuct.disabled).toBeFalsy();
     pickDuct.onSelect();
     expect(ui.get().selection).toEqual({ type: 'duct', id: ductId, segment: null, vertex: 0 });
   });
