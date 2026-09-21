@@ -83,6 +83,26 @@ describe('제품 카탈로그', () => {
     expect(productById('없음')).toBeNull();
     expect(fmtSize([1200, 600, 750])).toBe('1200×600×750');
   });
+
+  // §13.9: 새 방 템플릿 6종이 쓰는 제품 8종. catalog.js가 186줄이라 catalogExtra.js로 나눠 병합한다.
+  test('계획 5가 더한 제품 8종이 병합되어 있다', async () => {
+    const { EXTRA_PRODUCTS, EXTRA_PRICES } = await import('../src/products/catalogExtra.js');
+    expect(EXTRA_PRODUCTS).toHaveLength(8);
+    expect(Object.keys(EXTRA_PRICES)).toHaveLength(8);
+    const ids = ['serve-counter', 'warmer-cabinet', 'bar-counter', 'coffee-machine', 'locker-12', 'meeting-table-2400', 'desk-student', 'lectern'];
+    for (const id of ids) {
+      const p = productById(id);
+      expect(p, id).toBeTruthy();
+      expect(p.price, id).toBeGreaterThan(0);
+      expect(CATEGORIES.find(c => c.name === p.category).subs, id).toContain(p.sub);
+      expect(SYMBOL_NAMES, id).toContain(p.symbol);
+      expect(p.kind, id).toBe('product');
+      expect(p.opening, id).toBeUndefined();
+    }
+    expect(productById('desk-student').size).toEqual([600, 450, 750]);
+    expect(productById('meeting-table-2400').size).toEqual([2400, 1200, 750]);
+    expect(PRODUCTS.filter(p => ids.includes(p.id))).toHaveLength(8);   // PRODUCTS에 실제로 들어 있다
+  });
 });
 
 test('카테고리마다 타일 색이 있다', () => {

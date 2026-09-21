@@ -14,6 +14,15 @@ import { reattach, seatCopies, pruneDuctConnections } from '../state/floorIntern
 const T = (id, name, roomType, use, minArea, maxArea, budget, items) => ({ id, name, roomType, use, minArea, maxArea, budget, items });
 const I = (productId, at, rot = 0, offset = [0, 0]) => ({ productId, at, rot, offset });
 // rot 규약(바닥 제품): 0 = 북쪽 벽에 등, 90 = 동쪽 벽에 등, 180 = 남쪽, 270 = 서쪽.
+// 같은 제품을 격자로 깔 때(교실 책상 20개). cols × rowsN 개를 at 자리 중심으로 pitch mm 간격으로 둔다.
+// 같은 규칙을 스무 번 적지 않으려는 것이고, 만들어지는 항목은 I(...)와 똑같은 모양이다.
+const grid = (productId, at, cols, rowsN, pitchX, pitchY, rot = 0) => {
+  const out = [];
+  for (let r = 0; r < rowsN; r++) {
+    for (let c = 0; c < cols; c++) out.push(I(productId, at, rot, [(c - (cols - 1) / 2) * pitchX, (r - (rowsN - 1) / 2) * pitchY]));
+  }
+  return out;
+};
 
 export const ROOM_TEMPLATES = [
   T('cook-basic', '가열조리 기본', 'cook', '상업', 8, 30, 6000000, [
@@ -74,6 +83,37 @@ export const ROOM_TEMPLATES = [
   T('studio-basic', '원룸 기본', 'none', '주거', 12, 40, 3000000, [
     I('bed-queen', [0.25, 0.42]), I('wardrobe-1200', [0.85, 0.15]), I('desk-1400', [0.78, 0.8], 180),
     I('chair-office', [0.78, 0.8], 0, [0, -700]), I('light-ceiling', [0.5, 0.5]),
+  ]),
+  // 계획 5가 더한 6종(§13.9). 묶음은 offset(mm)으로 붙여 두고 at은 0.15~0.8 안에 둔다
+  // (제품 치수는 고정이라 비율만 쓰면 작은 방에서 반드시 파고든다 — 2C와 같은 규칙).
+  T('serve-line', '배식 라인', 'dining', '상업', 12, 60, 5000000, [
+    I('serve-counter', [0.3, 0.3]), I('serve-counter', [0.3, 0.3], 0, [1850, 0]),
+    I('warmer-cabinet', [0.3, 0.75], 180), I('warmer-cabinet', [0.3, 0.75], 180, [1000, 0]),
+  ]),
+  T('cafe-bar', '카페 바', 'dining', '상업', 12, 50, 8000000, [
+    I('bar-counter', [0.5, 0.4]),
+    I('coffee-machine', [0.5, 0.4], 0, [-1400, 800]),
+    I('fridge-2door', [0.5, 0.4], 180, [1300, 800]),
+    I('stool-round', [0.5, 0.4], 0, [-800, -650]), I('stool-round', [0.5, 0.4], 0, [0, -650]), I('stool-round', [0.5, 0.4], 0, [800, -650]),
+  ]),
+  T('laundry', '세탁실', 'etc', '주거', 6, 25, 2500000, [
+    I('washer-drum', [0.3, 0.3]), I('dryer', [0.3, 0.3], 0, [700, 0]),
+    I('shelf-steel-4', [0.3, 0.8], 180), I('storage-box', [0.8, 0.8], 180),
+  ]),
+  T('locker', '탈의·사물함', 'etc', '상업', 6, 30, 2000000, [
+    I('locker-12', [0.3, 0.15]), I('locker-12', [0.3, 0.15], 0, [1000, 0]),
+    I('bench-1200', [0.4, 0.6]), I('bench-1200', [0.4, 0.6], 0, [0, 500]),
+  ]),
+  T('meeting-8p', '회의실 8인', 'office', '상업', 15, 60, 5000000, [
+    I('meeting-table-2400', [0.5, 0.5]),
+    I('chair-office', [0.5, 0.5], 0, [-800, -1000]), I('chair-office', [0.5, 0.5], 0, [0, -1000]), I('chair-office', [0.5, 0.5], 0, [800, -1000]),
+    I('chair-office', [0.5, 0.5], 180, [-800, 1000]), I('chair-office', [0.5, 0.5], 180, [0, 1000]), I('chair-office', [0.5, 0.5], 180, [800, 1000]),
+    I('chair-office', [0.5, 0.5], 270, [-1800, 0]), I('chair-office', [0.5, 0.5], 90, [1800, 0]),
+    I('light-fluorescent', [0.5, 0.5]),
+  ]),
+  T('class-20p', '교실 20인', 'office', '상업', 40, 120, 8000000, [
+    ...grid('desk-student', [0.5, 0.55], 4, 5, 900, 900),
+    I('lectern', [0.5, 0.55], 180, [0, -2700]),
   ]),
 ];
 

@@ -2,6 +2,7 @@
 // size = [너비 w(좌우), 깊이 d(앞뒤), 높이 h] mm. zDefault = "바닥으로부터의 높이"(item.z) 기본값.
 // opening이 있는 제품(문·창·개구부)은 벽에 그 크기의 구멍을 뚫는다(opening.sill = zDefault).
 // 실판매 상품 DB는 범위 밖이라 price는 참고용 정적 값이고 없는 제품도 있다(명세 §17).
+import { EXTRA_PRODUCTS, EXTRA_PRICES } from './catalogExtra.js';
 
 export const CATEGORIES = [
   { name: '문/창문', subs: ['문', '창문'] },
@@ -43,7 +44,7 @@ export const ATTACH_LABELS = { floor: '바닥에 서있는 제품', floorLay: '�
 
 // 제품 단가(원). 실판매 가격 DB는 범위 밖이라 견적서용 정적 값이다(명세 §17).
 // 구조물(기둥·개구부)은 사는 물건이 아니라 도면 요소라 0원이다.
-export const PRICES = {
+const BASE_PRICES = {
   'door-swing-900': 180000, 'door-swing-1000': 190000, 'door-double-1800': 360000, 'door-slide-1500': 420000,
   'window-slide-1200': 260000, 'window-slide-1800': 380000, 'window-fix-600': 140000,
   'fridge-2door': 1290000, 'fridge-kimchi': 980000, 'range-gas-6': 1850000, 'range-induction': 890000,
@@ -67,12 +68,14 @@ export const PRICES = {
   'fan-exhaust-700': 2600000, 'fan-supply-filter': 3100000, 'fan-wall-500': 380000,
   'ventcap-100': 35000, 'ventcap-150': 45000,
 };
+// 계획 5가 더한 제품 단가를 병합한다(§13.9). 이름은 그대로 PRICES다 — 읽는 쪽(견적서·테스트)이 바뀌지 않는다.
+export const PRICES = { ...BASE_PRICES, ...EXTRA_PRICES };
 
 const P = (id, name, code, category, sub, size, attach, symbol, extra = {}) =>
   ({ id, name, code, category, sub, size, attach, symbol, zDefault: 0, color: '#cfd4da', kind: 'product', tags: '', price: PRICES[id] ?? 0, ...extra });
 const hole = (kind, w, h, sill, color) => ({ kind, color, zDefault: sill, opening: { w, h, sill } });
 
-export const PRODUCTS = [
+const BASE_PRODUCTS = [
   // 문/창문
   P('door-swing-900', '여닫이문 900', 'DR-0900', '문/창문', '문', [900, 40, 2100], 'wall', 'door', { ...hole('door', 900, 2100, 0, '#b98a54'), tags: '문 방문 여닫이' }),
   P('door-swing-1000', '여닫이문 1000', 'DR-1000', '문/창문', '문', [1000, 40, 2100], 'wall', 'door', { ...hole('door', 1000, 2100, 0, '#b98a54'), tags: '문 현관문 여닫이' }),
@@ -166,6 +169,8 @@ export const PRODUCTS = [
   P('ventcap-100', 'STS 환기캡 Ø100', 'VP-100', '환기 설비', '환기캡', [100, 100, 100], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 100 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
   P('ventcap-150', 'STS 환기캡 Ø150', 'VP-150', '환기 설비', '환기캡', [150, 150, 150], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 150 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
 ];
+// 새 제품은 catalogExtra.js에 있다(catalog.js를 300줄 아래로 유지한다 — 아키텍처 §9).
+export const PRODUCTS = [...BASE_PRODUCTS, ...EXTRA_PRODUCTS];
 
 const byId = new Map(PRODUCTS.map(p => [p.id, p]));
 export const productById = id => byId.get(id) ?? null;

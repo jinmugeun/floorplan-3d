@@ -60,6 +60,22 @@ describe('방 템플릿 데이터', () => {
     expect(band.every(t => t.minArea <= 12 && t.maxArea >= 10)).toBe(true);
     expect(filterTemplates(all, {})).toHaveLength(all.length);
   });
+
+  test('계획 5가 더한 6종이 있고 제품·타입이 규칙 안에 있다(§13.9)', () => {
+    expect(ROOM_TEMPLATES.length).toBeGreaterThanOrEqual(22);
+    const added = ['serve-line', 'cafe-bar', 'laundry', 'locker', 'meeting-8p', 'class-20p'];
+    for (const id of added) {
+      const t = templateById(id);
+      expect(t, id).toBeTruthy();
+      expect(['none', 'cook', 'prep', 'cold', 'wash', 'dining', 'storage', 'office', 'etc'], id).toContain(t.roomType);
+      expect(t.items.length, id).toBeGreaterThanOrEqual(3);
+      for (const it of t.items) expect(productById(it.productId), `${id}/${it.productId}`).toBeTruthy();
+    }
+    expect(templateById('class-20p').items.filter(i => i.productId === 'desk-student')).toHaveLength(20);
+    expect(templateById('class-20p').items.some(i => i.productId === 'lectern')).toBe(true);
+    expect(templateById('meeting-8p').items.filter(i => i.productId === 'chair-office')).toHaveLength(8);
+    expect(filterTemplates(ROOM_TEMPLATES, { roomType: 'office' }).map(t => t.id)).toContain('meeting-8p');
+  });
 });
 
 describe('템플릿 배치', () => {
@@ -97,7 +113,7 @@ describe('템플릿 배치', () => {
 
   // C2: at 비율만 쓰면 제품 치수가 고정이라 작은 방에서 반드시 파고든다.
   // 묶음은 offset(mm)으로 붙여 두고, 그래도 겹치면 배치 루틴이 밀어내거나 생략한다.
-  test('16개 템플릿 모두 선언 면적대(최소·중간·최대)에서 바닥 제품이 겹치지 않는다', () => {
+  test('모든 템플릿이 선언 면적대(최소·중간·최대)에서 바닥 제품이 겹치지 않는다', () => {
     for (const t of ROOM_TEMPLATES) {
       for (const area of [t.minArea, (t.minArea + t.maxArea) / 2, t.maxArea]) {
         const r = rectRoom(area);
@@ -105,6 +121,25 @@ describe('템플릿 배치', () => {
         const label = `${t.id} @ ${area}m²`;
         expect([...collidingIds(made)], label).toEqual([]);
         expect(made.length, label).toBe(t.items.length);   // 이 면적대에서는 생략되는 제품이 없다
+      }
+    }
+  });
+
+  // §13.9: 새 6종은 면적 3단 × 종횡비 6종에서 충돌 0이어야 한다(2C 매트릭스를 종횡비까지 넓혔다).
+  // 아주 가늘고 긴 방에서는 일부가 생략될 수 있다 — 그래도 겹치지 않고, 최소 3개는 놓인다.
+  const NEW_TEMPLATES = ['serve-line', 'cafe-bar', 'laundry', 'locker', 'meeting-8p', 'class-20p'];
+  test('새 템플릿 6종은 면적 3단 × 종횡비 6종에서 바닥 제품이 겹치지 않는다', () => {
+    for (const id of NEW_TEMPLATES) {
+      const t = templateById(id);
+      expect(t, id).toBeTruthy();
+      for (const area of [t.minArea, (t.minArea + t.maxArea) / 2, t.maxArea]) {
+        for (const ratio of [0.25, 0.5, 1, 1.5, 2.5, 4]) {
+          const r = rectRoom(area, ratio);
+          const made = placeTemplate(r.floor, r.room, t);
+          const label = `${id} @ ${area}m² ratio ${ratio}`;
+          expect([...collidingIds(made)], label).toEqual([]);
+          expect(made.length, label).toBeGreaterThanOrEqual(3);
+        }
       }
     }
   });
