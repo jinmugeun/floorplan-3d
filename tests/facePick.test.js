@@ -295,10 +295,11 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     expect(ui.get().selection).toEqual({ type: 'duct', id: 'd1', segment: 1, vertex: null });
   });
 
-  // 실물 덕트(2구간, 소수 좌표, z 2100)를 store에 넣고 그 id로 덕트 박스를 만든다.
+  // 실물 덕트(2구간, 소수 좌표, z 2100). 댐퍼 하나는 3D 댐퍼 클릭 테스트가 쓴다.
   const ductFixture = store => addDuct(store, {
     points: [[1234.5, 678.25], [4234.5, 678.25], [4234.5, 3678.75]],
     segments: [{ w: 500, h: 300, z: 2100 }, { w: 500, h: 300, z: 2100 }],
+    dampers: [{ segment: 1, t: 0.5, type: 'VD' }],
   });
   const mkDuctGroup = (id, segment, y = 3) => {
     const box = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 0.5), new THREE.MeshBasicMaterial());
@@ -350,6 +351,29 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     b.items.add(mkItem(3));
     b.g.add(mkDuctGroup(ductIdB, 0, 4));
     expect(b.picker.hitAt(ev)).toEqual({ kind: 'duct', id: ductIdB, segment: 0 });
+  });
+
+  test('라이저·댐퍼 메시를 맞히면 인접 구간이 선택된다', () => {
+    const a = setup({ mesh: 'floor' });
+    const ductId = ductFixture(a.store);                 // 점 3개 · 구간 2개
+    const riser = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1, 0.3), new THREE.MeshBasicMaterial());
+    riser.position.set(0, 3, 0);
+    riser.name = 'riser';
+    riser.userData.ductId = ductId;
+    riser.userData.point = 2;                            // 마지막 점 → 마지막 구간(1)
+    const ducts = new THREE.Group(); ducts.name = 'ducts'; ducts.add(riser); a.g.add(ducts);
+    expect(a.picker.hitAt({ clientX: 100, clientY: 100 })).toEqual({ kind: 'duct', id: ductId, segment: 1 });
+    a.click();
+    expect(a.ui.get().selection).toEqual({ type: 'duct', id: ductId, segment: 1, vertex: null });
+
+    // 댐퍼 메시도 같은 경로를 지난다(이 분기가 "3D에서 댐퍼를 우클릭하면 구간 항목이 살아난다"의 근거다).
+    const damper = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.3, 0.5), new THREE.MeshBasicMaterial());
+    damper.position.set(0, 3.5, 0);            // 라이저보다 카메라에 가깝다
+    damper.name = 'damper';
+    damper.userData.ductId = ductId;
+    damper.userData.damper = 0;
+    ducts.add(damper);
+    expect(a.picker.hitAt({ clientX: 100, clientY: 100 })).toEqual({ kind: 'duct', id: ductId, segment: 1 });
   });
 
   // 조합 형상은 그룹이라 비재귀 레이캐스트로는 아무것도 맞지 않는다(클릭이 먹지 않는 회귀).

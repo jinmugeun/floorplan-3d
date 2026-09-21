@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { applyMaterial } from '../state/materialOps.js';
 import { wallMenuItems, roomMenuItems } from '../ui/surfaceMenu.js';
 import { ductMenuItems } from '../ui/ductMenu.js';
+import { activeFloor } from '../state/schema.js';
+import { ductById } from '../state/ductOps.js';
+import { segmentForMeshData } from '../geom/ducts.js';
 
 // 레이캐스트로 고를 수 있는 면 메시 이름(build.js가 붙인다).
 export const FACE_NAMES = new Set(['wall', 'wallFace', 'wallRegion', 'floor', 'ceiling', 'wallTop']);
@@ -32,7 +35,11 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     const faceHit = ray.intersectObjects(roots.filter(c => FACE_NAMES.has(c.name) && c.visible), false)[0] ?? null;
     // 아이템 → 덕트 → 면 순서(2D 선택 도구와 같다, 아키텍처 §11.3).
     if (itemHit && (!faceHit || itemHit.distance <= faceHit.distance) && (!ductHit || itemHit.distance <= ductHit.distance)) return { kind: 'item', id: itemHit.object.userData.itemId };
-    if (ductHit && (!faceHit || ductHit.distance <= faceHit.distance)) return { kind: 'duct', id: ductHit.object.userData.ductId, segment: ductHit.object.userData.segment ?? null };
+    if (ductHit && (!faceHit || ductHit.distance <= faceHit.distance)) {
+      // 구간 메시는 segment를 들고 있지만 라이저는 연결 점, 댐퍼는 댐퍼 번호만 들고 있다(§12.5).
+      const u = ductHit.object.userData;
+      return { kind: 'duct', id: u.ductId, segment: segmentForMeshData(ductById(activeFloor(store.get()), u.ductId), u) };
+    }
     if (!faceHit) return null;
     const o = faceHit.object;
     if (o.userData.wallId) {
