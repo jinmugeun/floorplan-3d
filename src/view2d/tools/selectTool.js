@@ -6,6 +6,7 @@ import { pointInPolygon } from '../../geom/rooms.js';
 import { eq, sub, add, dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
 import { createItemDragger } from './itemDrag.js';
+import { createDuctSelect } from './ductSelect.js';
 import { drawItemSelection, ITEM_COLORS } from '../items2d.js';
 import { itemMenuItems } from '../../ui/itemMenu.js';
 import { wallMenuItems, roomMenuItems } from '../../ui/surfaceMenu.js';
@@ -17,6 +18,7 @@ const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], Arrow
 
 export function createSelectTool({ store, ui, view, onLocked = () => {}, itemActions = {}, surfaceActions = {}, toast = () => {} }) {
   const items = createItemDragger({ store, ui, view, toast });
+  const ducts = createDuctSelect({ store, ui, view, toast });
   const selIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
   const setItemSelection = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids: [...ids] } });
   let drag = null; // { kind, id|point, startP, base, moved } — 벽·방·배경 드래그(아이템 드래그는 items가 따로 들고 있다)
@@ -87,6 +89,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         if (ids.length) items.start('items', ids, p);
         return;
       }
+      if (ducts.onDown(p)) return;   // 아이템 다음, 벽·방보다 먼저(아키텍처 §11.3)
       if (multi) {
         const hit = hitWall(f.walls, p, px(6));
         if (hit && multi.includes(hit.id)) {
@@ -128,6 +131,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     },
     onPointerMove(p, ev) {
       if (items.getDrag()) { items.apply(p, ev); return; }
+      if (ducts.getDrag()) { ducts.apply(p, ev); return; }
       if (!drag) return;
       if (drag.kind === 'bg') {
         const d = sub(p, drag.startP);
@@ -151,6 +155,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     },
     onPointerUp(p) {
       if (items.getDrag()) { items.finish(); return; }
+      if (ducts.getDrag()) { ducts.finish(); return; }
       if (drag?.kind === 'box') {
         const box = boxOf(drag.startP, drag.cur ?? p);
         const hit = items.pickInBox(box);
@@ -167,12 +172,15 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         const u = ui.get();
         if (u.fpPick || u.soloRoom || u.matPick) return false; // 취소할 것이 앱 쪽에 있으면 keymap이 처리한다
         if (items.getDrag()) { items.cancel(); return true; } // 아이템 드래그 중 Esc는 이동을 되돌린다
+        if (ducts.getDrag()) { ducts.cancel(); return true; }
         const had = !!drag || !!u.selection || !!u.splitWall;
         if (drag) { store.cancelTransaction(); drag = null; } // 드래그 중 Esc는 이동을 되돌린다
         ui.set({ selection: null, splitWall: false });
         return had; // 취소할 것이 없으면 소비하지 않는다(앱이 선택 도구로 돌아간다)
       }
       if (items.getDrag() && ev.ctrlKey && ev.key.toLowerCase() === 'z') { items.cancel(); return true; } // 아이템 드래그 중 undo는 드래그 취소로
+      // 덕트 드래그도 같다: 살려 두면 이미 닫힌 트랜잭션 위에 record 없는 dispatch가 쌓여 되돌릴 수 없는 이동이 생긴다
+      if (ducts.getDrag() && ev.ctrlKey && ev.key.toLowerCase() === 'z') { ducts.cancel(); return true; }
       if (ev.ctrlKey && ev.key.toLowerCase() === 'z' && drag) { store.cancelTransaction(); drag = null; return true; } // 드래그 중 undo는 드래그 취소로
       const ids = selIds();
       if (ARROWS[ev.key] && ids.length) {
@@ -187,6 +195,8 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
       const f = floor();
       const it = items.pick(p);
       if (it) { const cur = selIds(); const ids = expandGroups(f, cur.includes(it.id) ? cur : [it.id]); setItemSelection(ids); return itemMenuItems({ store, ui, ids, itemActions }); }
+      const ductItems = ducts.menuItems(p);
+      if (ductItems) return ductItems;
       const w = hitWall(f.walls, p, px(6));
       // 우클릭은 먼저 대상을 선택한다(다중 선택에 이미 든 벽이면 다중 선택을 유지한다).
       const sel = ui.get().selection;
@@ -204,6 +214,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     },
     draw(ctx, v) {
       items.drawOverlay(ctx, v); // 노란 가이드 + 벽까지 거리(v2.gapDims)
+      ducts.draw(ctx, v);
       if (drag?.kind === 'box') {
         const [x0, y0, x1, y1] = boxOf(drag.startP, drag.cur ?? drag.startP);
         const s0 = v.toScreen([x0, y0]), s1 = v.toScreen([x1, y1]);
@@ -233,7 +244,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         for (const q of [w.a, w.b]) { const n = others.find(x => eq(x.a, q) || eq(x.b, q)); if (!n) { const s = v.toScreen(q); ctx.fillStyle = v.COLORS.guide; ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); } }
       }
     },
-    cancel() { if (items.getDrag()) items.cancel(); if (drag) { store.cancelTransaction(); drag = null; } },
-    getDrag: () => items.getDrag() ?? (drag ? { kind: drag.kind, box: drag.kind === 'box' ? boxOf(drag.startP, drag.cur ?? drag.startP) : null } : null),
+    cancel() { if (items.getDrag()) items.cancel(); ducts.cancel(); if (drag) { store.cancelTransaction(); drag = null; } },
+    getDrag: () => items.getDrag() ?? ducts.getDrag() ?? (drag ? { kind: drag.kind, box: drag.kind === 'box' ? boxOf(drag.startP, drag.cur ?? drag.startP) : null } : null),
   };
 }
