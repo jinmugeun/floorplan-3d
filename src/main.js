@@ -35,8 +35,8 @@ import { createArrangeActions } from './app/arrangeActions.js';
 import { createDndActions } from './app/dndActions.js';
 import { createMenuActions } from './app/menuActions.js';
 import { openOnboarding, isOnboarded } from './ui/onboarding.js';
-import { createTopbar, projectIsEmpty, saveStatus, showSaved } from './app/topbar.js';
-import { createDirtyTracker } from './app/dirty.js';
+import { createTopbar, projectIsEmpty } from './app/topbar.js';
+import { createDirtyTracker, createSaveIndicator } from './app/dirty.js';
 import { createProjectActions } from './app/projectActions.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
@@ -209,26 +209,25 @@ document.getElementById('btnSettings').addEventListener('click', openSettings);
 // 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
 // 온보딩은 시작 화면을 닫은 뒤에 뜬다(오버레이 두 장이 겹치지 않게 — §12.4).
 const restored = loadAutosave();
-// 저장 표시 세 상태(§15.7): "HH:MM 파일로 저장" / "HH:MM 자동 저장됨" / "저장 안 된 변경".
-// 함수 선언이라 아래 createDirtyTracker에 넘겨도 TDZ에 걸리지 않는다(실제 호출은 첫 변경 뒤다).
-let lastSave = null;   // { at: Date, manual: boolean }
-function showSavedNow() { showSaved(saveStatus({ at: lastSave?.at ?? null, manual: !!lastSave?.manual, dirty: dirty.isDirty() })); }
-const dirty = createDirtyTracker(store, { onChange: showSavedNow });
-const markSaved = (manual = false) => { lastSave = { at: new Date(), manual }; dirty.markSaved(); };
-const auto = startAutosave(store, { onSaved: t => { lastSave = { at: t, manual: false }; dirty.markSaved(); } });
-const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: () => markSaved(false), saveNow: () => auto.saveNow() });
+// 저장 표시 세 상태(§15.7): "HH:MM 파일로 저장" / "HH:MM 자동 저장됨" / "저장 안 된 변경" · 이력이
+// 없으면 "저장 이력 없음". 무엇을 적을지는 createSaveIndicator가 정한다(kind: manual/auto/none).
+// onChange가 saveInd를 보지만 TDZ에 걸리지 않는다: 첫 호출은 스토어가 처음 바뀔 때다(이 구간에 쓰기 없음).
+const dirty = createDirtyTracker(store, { onChange: () => saveInd.show() });
+const saveInd = createSaveIndicator(dirty);
+const auto = startAutosave(store, { onSaved: t => saveInd.markSaved('auto', t) });   // 표시 시각 = 저장 시각
+const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow() });
 const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store }); };
 if (projectIsEmpty(store.get())) project.showStart({ onClose: maybeOnboard });
 else maybeOnboard();
 document.getElementById('btnSave').addEventListener('click', () => {
   downloadText(filenameFor(store.get()), serializeProject(store.get()));
-  auto.saveNow();          // 자동 저장본도 최신으로 만든다(그 onSaved가 lastSave를 먼저 적는다)
-  markSaved(true);         // 그다음 "파일로 저장"으로 덮는다(표시 문구가 수동 저장이 된다)
+  auto.saveNow();               // 자동 저장본도 최신으로 만든다(그 onSaved가 시각을 먼저 적는다)
+  saveInd.markSaved('manual');  // 그다음 "파일로 저장"으로 덮는다(표시 문구가 수동 저장이 된다)
   shell.toast(SAVED_MANUAL);
 });
 createTopbar({ store, ui, shell, menu, view3d, actions: project.actions });
 
-const files = createFileActions({ store, ui, view, view3d, toast: shell.toast, isDirty: () => dirty.isDirty(), onLoaded: () => markSaved(false) });
+const files = createFileActions({ store, ui, view, view3d, toast: shell.toast, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow() });
 document.getElementById('btnLoad').addEventListener('click', () => files.openFileDialog());
 document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventListener('click', () => files.captureNow()));
 files.wireDrop(document.getElementById('canvasWrap'));

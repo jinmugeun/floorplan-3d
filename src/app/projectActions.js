@@ -19,8 +19,9 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       store,
       restored: restore,
       onClose,
-      // 복원은 되돌릴 단계가 아니고, 복원한 상태는 자동 저장본과 같으므로 "저장된 상태"다(§15.7).
-      onRestore: () => { if (restore) { store.replace(restore, { record: false }); view.fit(); markSaved(); toast('이어서 작업합니다'); } },
+      // 복원은 되돌릴 단계가 아니고, 복원한 상태는 자동 저장본과 같으므로 "자동 저장됨"이 사실이다
+      // (§15.7). 다만 표시 시각은 자동 저장 시각이 아니라 복원 시각이다 — 저장본에 시각이 없다.
+      onRestore: () => { if (restore) { store.replace(restore, { record: false }); view.fit(); markSaved('auto'); toast('이어서 작업합니다'); } },
       onEmpty: () => {},
       onUpload: () => openBackgroundDialog({ store }),
       onSample: () => { loadSample(store); view.fit(); },
@@ -49,7 +50,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       store.replace(createEmptyProject());
       ui.set({ selection: null, soloRoom: null, matPick: null });
       view.fit();
-      markSaved();                       // 빈 프로젝트는 "저장 안 된 변경"이 아니다
+      markSaved('none');                 // 빈 프로젝트는 "저장 안 된 변경"도, 저장된 것도 아니다
       showStart({ restore: null });      // 방금 비웠으므로 "이어서 작업" 카드는 뜻이 없다
     },
     saveAsTemplate,

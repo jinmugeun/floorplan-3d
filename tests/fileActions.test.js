@@ -54,7 +54,7 @@ test('작업 중이면 불러오기 전에 확인을 받고, 취소하면 도면
   let answer = false;
   const acts = createFileActions({
     store, ui: createUiState(), view: { fit: vi.fn() }, view3d: { capture: () => 'data:,' },
-    toast: m => toasts.push(m), isDirty: () => true, onLoaded: () => loaded.push(1),
+    toast: m => toasts.push(m), isDirty: () => true, markSaved: kind => loaded.push(kind),
     confirm: opts => { asked.push(opts); return Promise.resolve(answer); },
   });
   const src = createStore(createEmptyProject());
@@ -68,7 +68,7 @@ test('작업 중이면 불러오기 전에 확인을 받고, 취소하면 도면
   await acts.loadFile({ name: 'a.json', type: 'application/json', text: async () => serializeProject(src.get()) });
   expect(activeFloor(store.get()).walls).toHaveLength(0);
   expect(toasts).toEqual(['불러왔습니다']);
-  expect(loaded).toEqual([1]);                                // 불러온 직후는 "저장된 상태"다
+  expect(loaded).toEqual(['none']);                           // 불러온 직후는 clean이지만 저장 이력은 없다
 });
 
 test('빈 프로젝트나 저장 직후에는 묻지 않는다', async () => {
@@ -82,4 +82,32 @@ test('빈 프로젝트나 저장 직후에는 묻지 않는다', async () => {
   expect(asked).toEqual([]);
   await mk(() => true).loadFile(file());                      // 이제 빈 프로젝트다
   expect(asked).toEqual([]);
+});
+
+// 리뷰 M2: 확인 문구는 "자동 저장본은 남습니다"라고 약속하는데 loadFile은 saveNow를 부르지 않았다
+// — 자동 저장 간격이 5분이므로 마지막 자동 저장 뒤의 작업이 복구 불가로 사라졌다(confirmLeave는 부른다).
+test('불러오기를 확인하면 교체 전에 자동 저장하고, 취소하면 저장도 교체도 없다', async () => {
+  const src = createStore(createEmptyProject());
+  const file = () => ({ name: 'a.json', type: 'application/json', text: async () => serializeProject(src.get()) });
+  const mk = answer => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+    const log = [];
+    store.subscribe(() => log.push('replace'));
+    const acts = createFileActions({
+      store, ui: createUiState(), view: { fit: vi.fn() }, view3d: { capture: () => 'data:,' },
+      toast: () => {}, isDirty: () => true, saveNow: () => log.push('save'),
+      confirm: () => Promise.resolve(answer),
+    });
+    return { store, log, acts };
+  };
+  const yes = mk(true);
+  await yes.acts.loadFile(file());
+  expect(yes.log).toEqual(['save', 'replace']);               // 저장이 교체보다 먼저다
+  expect(activeFloor(yes.store.get()).walls).toHaveLength(0);
+
+  const no = mk(false);
+  await no.acts.loadFile(file());
+  expect(no.log).toEqual([]);                                 // 취소는 아무것도 저장하지 않는다
+  expect(activeFloor(no.store.get()).walls).toHaveLength(4);
 });

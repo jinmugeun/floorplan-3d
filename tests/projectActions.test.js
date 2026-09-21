@@ -8,13 +8,14 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createProjectActions } from '../src/app/projectActions.js';
+import { createDirtyTracker, createSaveIndicator } from '../src/app/dirty.js';
 
 function setup({ dirty = true, restored = null } = {}) {
   const store = createStore(createEmptyProject());
   const ui = createUiState();
   const toasts = [], saves = [], marks = [];
   const view = { fit: vi.fn() };
-  const p = createProjectActions({ store, ui, view, toast: m => toasts.push(m), restored, isDirty: () => dirty, markSaved: () => marks.push(1), saveNow: () => saves.push(1) });
+  const p = createProjectActions({ store, ui, view, toast: m => toasts.push(m), restored, isDirty: () => dirty, markSaved: (kind = 'auto') => marks.push(kind), saveNow: () => saves.push(1) });
   return { store, ui, view, toasts, saves, marks, ...p };
 }
 const ok = () => document.querySelector('.modal.confirm [name="ok"]')?.click();
@@ -36,7 +37,7 @@ test('새로 만들기는 작업 중일 때만 묻고, 비운 뒤 시작 화면�
   ok();
   await run;
   expect(activeFloor(a.store.get()).walls).toHaveLength(0);
-  expect(a.marks).toEqual([1]);                              // 빈 프로젝트는 "저장 안 된 변경"이 아니다
+  expect(a.marks).toEqual(['none']);                         // 빈 프로젝트는 저장된 것도 아니다(리뷰 M1)
   expect(document.getElementById('startScreen')).not.toBeNull();
   expect(a.view.fit).toHaveBeenCalled();
 });
@@ -64,7 +65,7 @@ test('시작 화면의 "이어서 작업"은 복원 뒤 저장된 상태로 표�
   a.showStart();
   document.querySelector('[data-start="restore"]').click();
   expect(activeFloor(a.store.get()).walls).toHaveLength(4);
-  expect(a.marks).toEqual([1]);
+  expect(a.marks).toEqual(['auto']);                          // 복원한 상태는 자동 저장본과 같다
   expect(a.toasts).toEqual(['이어서 작업합니다']);
   expect(a.store.canUndo()).toBe(false);                     // 복원은 되돌릴 단계가 아니다
 });
@@ -73,4 +74,21 @@ test('JSON 내보내기는 토스트를 띄운다', () => {
   const a = setup();
   a.actions.exportJson();
   expect(a.toasts).toEqual(['JSON을 내보냈습니다']);
+});
+
+// 리뷰 M1: 새로 만든 직후 상단 바가 "HH:MM 자동 저장됨"이라고 적혀 있었다(저장은 일어나지 않았다).
+// 배선(추적기 + 표시)까지 함께 걸어 라벨 자체를 본다 — main.js의 세 줄이 회귀하지 않게.
+test('새로 만들기 뒤 표시는 "저장 이력 없음"이다("자동 저장됨"이 아니다)', async () => {
+  document.body.innerHTML = '<span id="savedAt">x</span>';
+  const store = createStore(createEmptyProject());
+  const d = createDirtyTracker(store);
+  const ind = createSaveIndicator(d);
+  const p = createProjectActions({ store, ui: createUiState(), view: { fit: vi.fn() }, isDirty: () => d.isDirty(), markSaved: ind.markSaved });
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  ind.markSaved('auto');                                     // 5분 자동 저장이 한 번 지나간 뒤라고 하자
+  expect(document.getElementById('savedAt').textContent).toContain('자동 저장됨');
+  await p.actions.newProject();                              // clean이므로 묻지 않는다
+  expect(ind.label()).toBe('저장 이력 없음');
+  expect(document.getElementById('savedAt').textContent).not.toContain('자동 저장됨');
+  expect(d.isDirty()).toBe(false);
 });
