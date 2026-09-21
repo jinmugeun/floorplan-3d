@@ -13,21 +13,22 @@ export const movableDucts = (state, ids) => ductsOf(state, ids).filter(d => !d.l
 
 const liveItemIds = f => new Set((f.items ?? []).map(i => i.id));
 
-// 덕트 하나를 함수로 바꿔 제자리에 다시 넣는다. fn이 null을 돌려주면 아무 일도 하지 않는다
-// (잠긴 덕트·없는 구간 — 되돌릴 단계도 만들지 않는다: dispatch 자체가 히스토리를 쌓으므로
-//  먼저 지금 상태로 한 번 가늠해 보고 바뀔 것이 없으면 dispatch를 부르지 않는다. fn은 순수 함수다).
+// 덕트 하나를 함수로 바꿔 제자리에 다시 넣는다. fn이 null을 돌려주거나 정규화한 결과가
+// 지금 덕트와 똑같으면 아무 일도 하지 않는다(잠긴 덕트·없는 구간·범위 밖 index·같은 좌표로
+// 이동·중복 연결 등 — 되돌릴 단계도 만들지 않는다: dispatch 자체가 히스토리를 쌓으므로 먼저
+// 지금 상태로 한 번 가늠해 보고 바뀔 것이 없으면 dispatch를 부르지 않는다. fn은 순수 함수라
+// 여기서 한 번만 부르고 그 결과를 dispatch 안에 그대로 넣는다).
 function put(store, id, fn, opts = {}) {
   const now = activeFloor(store.get());
   const cur = ductById(now, id);
-  if (!cur || !fn(cur, now)) return store.get();
+  if (!cur) return store.get();
+  const draft = fn(cur, now);
+  const norm = draft ? normalizeDuct(draft, { itemIds: liveItemIds(now) }) : null;
+  if (!norm || JSON.stringify(norm) === JSON.stringify(cur)) return store.get();
   return store.dispatch(s => {
     const f = activeFloor(s);
     const i = (f.ducts ?? []).findIndex(x => x.id === id);
-    if (i < 0) return;
-    const next = fn(f.ducts[i], f);
-    if (!next) return;
-    const norm = normalizeDuct(next, { itemIds: liveItemIds(f) });
-    if (norm) f.ducts[i] = norm;
+    if (i >= 0) f.ducts[i] = structuredClone(norm);
   }, opts);
 }
 
@@ -42,6 +43,7 @@ export function addDuct(store, duct, opts = {}) {
 export const updateDuct = (store, id, patch, opts) => put(store, id, d => ({ ...d, ...patch }), opts);
 export function deleteDucts(store, ids, opts = {}) {
   const kill = new Set(ids);
+  if (!(activeFloor(store.get()).ducts ?? []).some(d => kill.has(d.id))) return store.get();
   return store.dispatch(s => { const f = activeFloor(s); f.ducts = (f.ducts ?? []).filter(d => !kill.has(d.id)); }, opts);
 }
 // 숨김·잠금 토글(아이템의 setItemFlag와 같은 규칙): 여러 덕트를 한 단계로 바꾸고, 잠금 자체를
