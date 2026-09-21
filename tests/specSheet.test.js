@@ -7,6 +7,8 @@ import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { specHtml, SPEC_SECTIONS, PAPER } from '../src/io/specSheet.js';
 import { roomAirflow } from '../src/vent/airflow.js';
+import { estimateRows } from '../src/io/estimate.js';
+import { setItemFlag } from '../src/state/itemOps.js';
 
 function project() {
   const store = createStore(createEmptyProject('강당중 조리실'));
@@ -50,6 +52,25 @@ describe('시방서 HTML', () => {
     expect(html).toContain('화이트 타일 300');  // 바닥 마감재
     expect(html).toContain('브러시 스테인리스'); // 내벽 마감재
     expect(html).toContain('m²');
+  });
+
+  // 숨긴 것은 세지 않는다 — 견적서(io/estimate.js)·풍량 집계와 같은 규칙이다(§12.5).
+  // 한쪽만 숨김을 빼면 같은 도면에서 뽑은 두 산출물이 서로 다른 수량을 말하므로 견적 수량과 함께 단정한다.
+  test('숨긴 아이템은 제품 목록에서도 빠진다(견적서와 같은 수량, 소수 좌표)', () => {
+    const store = createStore(createEmptyProject('강당중 조리실'));
+    addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+    const p = productById('range-gas-6');
+    addItem(store, createItem(p, { pos: [1000.5, 800.25] }));
+    const second = addItem(store, createItem(p, { pos: [2500.75, 800.75] }));
+    // 제품 목록 줄: <td>이름</td><td>코드</td><td>치수</td><td>수량</td>
+    const qty = () => /업소용 6구 레인지<\/td>(?:<td>[^<]*<\/td>){2}<td>(\d+)<\/td>/
+      .exec(specHtml({ project: store.get() }))?.[1];
+    const estQty = () => estimateRows(activeFloor(store.get())).products.find(r => r.code === p.code)?.qty;
+    expect([qty(), estQty()]).toEqual(['2', 2]);
+    setItemFlag(store, [second], 'hidden', true);
+    expect([qty(), estQty()]).toEqual(['1', 1]);   // 두 문서가 같은 수량을 말한다
+    setItemFlag(store, [second], 'hidden', false);
+    expect([qty(), estQty()]).toEqual(['2', 2]);   // 다시 보이게 하면 둘 다 돌아온다
   });
 
   test('프로젝트 이름과 층 이름을 머리글에 쓰고 HTML을 이스케이프한다', () => {

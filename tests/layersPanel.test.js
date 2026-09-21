@@ -8,6 +8,8 @@ import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createLayersPanel, ductRoomId } from '../src/ui/layersPanel.js';
 import { addDuct } from '../src/state/ductOps.js';
+import { pointInPolygon } from '../src/geom/rooms.js';
+import { roomAt, roomAirflow } from '../src/vent/airflow.js';
 
 function setup() {
   const store = createStore(createEmptyProject()), ui = createUiState();
@@ -126,6 +128,27 @@ describe('레이어 패널', () => {
     expect(activeFloor(store.get()).ducts.find(d => d.id === 'd1').locked).toBe(true);
     el.querySelector('[data-duct-select="d1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(ui.get().selection).toEqual({ type: 'duct', id: 'd1', segment: null, vertex: null });
+  });
+
+  // 방 폴리곤은 벽 **중심선**이라 벽에 붙은 후드·벽팬의 중심은 경계 위에 놓인다. 판정을 roomAt으로
+  // 모으지 않으면(맨손 pointInPolygon) 같은 후드가 풍량 표에는 그 방에 세어지면서 레이어 트리에서는
+  // '미지정'으로 빠진다 — 두 표가 같은 방을 말하는지 여기서 못 박는다(소수 좌표).
+  test('경계(벽 중심선)에 놓인 설비도 풍량 표와 같은 방에 묶인다', () => {
+    const { store, el } = setup();
+    const f = activeFloor(store.get());
+    const room = f.rooms[0];
+    // 아래쪽 벽에 붙은 설비의 중심: 폴리곤(= 벽 중심선)에서 0.5 mm 밖 — 벽 두께 200의 절반 안쪽이다.
+    const onWall = [2000.5, room.points[0][1] - 0.5];
+    expect(pointInPolygon(onWall, room.points)).toBe(false);   // 맨손 판정은 방 밖으로 본다
+    expect(roomAt(onWall, f.rooms, f.walls)?.id).toBe(room.id);
+    const hood = addItem(store, createItem(productById('hood-box-filter'), { pos: onWall }));
+    const rooms = [...el.querySelectorAll('.layer-room')];
+    expect(rooms[0].textContent).toContain('가열조리실');
+    expect(rooms[0].querySelector(`.layer-item[data-id="${hood}"]`)).toBeTruthy();
+    // 풍량 표도 같은 방에 센다: '미배치' 줄이 생기지 않는다(두 표가 어긋나면 여기서 갈린다).
+    const air = roomAirflow(activeFloor(store.get()));
+    expect(air.find(r => r.roomId === room.id).EA).toBeGreaterThan(0);
+    expect(air.some(r => r.roomId === null)).toBe(false);
   });
 
   test('"모두 보기"가 제품과 덕트를 한 단계로 함께 켜고 끈다', () => {

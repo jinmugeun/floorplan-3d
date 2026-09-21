@@ -123,6 +123,46 @@ describe('스플리터', () => {
     expect(w).toBe(300);                          // destroy 뒤에는 키도 받지 않는다
   });
 
+  // 조합키는 브라우저·OS의 것이다: Alt+←는 뒤로 가기, Ctrl/Shift+←는 탐색·선택 단축키다.
+  // 스플리터에 포커스가 있다는 이유로 그것들을 먹으면(preventDefault + 폭 이동) 앱 밖의 약속이 깨진다.
+  test('조합키가 붙은 방향키는 스플리터가 먹지 않는다', () => {
+    const layout = fakeLayout();
+    const el = layout.querySelector('#panelSplitter');
+    let w = 320; const ends = [];
+    createSplitter(el, { get: () => w, set: v => { w = v; }, onEnd: v => ends.push(v) });
+    const mod = (k, opts) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
+    for (const opts of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
+      expect(mod('ArrowLeft', opts)).toBe(true);    // preventDefault를 걸지 않는다 → 브라우저가 받는다
+      expect(mod('ArrowRight', opts)).toBe(true);
+    }
+    expect([w, ends]).toEqual([320, []]);           // 폭도 저장도 건드리지 않는다
+    key(el, 'ArrowRight');                          // 맨 방향키는 그대로 듣는다
+    expect(w).toBe(336);
+  });
+
+  // ARIA의 window splitter는 값을 노출해야 한다(스크린 리더가 폭 변화를 읽는 유일한 단서다).
+  test('aria-value* 를 노출하고 폭이 바뀔 때마다 valuenow를 갱신한다(Home·End·클릭 포커스)', () => {
+    const layout = fakeLayout();
+    const el = layout.querySelector('#panelSplitter');
+    let w = 320.4;
+    createSplitter(el, { get: () => w, set: v => { w = v; } });
+    expect([el.getAttribute('aria-valuemin'), el.getAttribute('aria-valuemax')]).toEqual(['260', '480']);
+    expect(el.getAttribute('aria-valuenow')).toBe('320.4');   // 만들 때는 읽기만 한다(set을 부르지 않는다)
+    expect(w).toBe(320.4);
+    key(el, 'ArrowRight');
+    expect([w, el.getAttribute('aria-valuenow')]).toEqual([336.4, '336.4']);
+    key(el, 'End');
+    expect([w, el.getAttribute('aria-valuenow')]).toEqual([PANEL_MAX, String(PANEL_MAX)]);
+    key(el, 'Home');
+    expect([w, el.getAttribute('aria-valuenow')]).toEqual([PANEL_MIN, String(PANEL_MIN)]);
+    // 드래그도 같은 자리를 지난다.
+    down(el, 100); move(el, 140);
+    expect(el.getAttribute('aria-valuenow')).toBe('300');
+    up(el, 140);
+    // onDown이 preventDefault를 걸어 기본 포커스가 막히므로 직접 준다(클릭한 뒤 화살표가 바로 듣는다).
+    expect(document.activeElement).toBe(el);
+  });
+
   test('왼쪽 버튼이 아니면 시작하지 않는다', () => {
     const layout = fakeLayout();
     const el = layout.querySelector('#panelSplitter');

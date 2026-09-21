@@ -1,5 +1,8 @@
 // 시방서: 인쇄용 HTML 한 장을 문자열로 만든다(순수 함수 — DOM도 파일 시스템도 건드리지 않는다).
 // 편집기(도형·지시선)는 이번 범위 밖이라, 대신 도면 이미지 + 표(제품·공간·벽)를 정해진 서식으로 찍는다.
+// **숨긴 것은 세지 않는다** — 풍량 집계(vent/airflow.js)·견적서(io/estimate.js)와 같은 규칙이다(§12.5에서 통일했다).
+// 제품 목록과 풍량 표가 같은 규칙을 써야 한다: 한쪽만 숨김을 빼면 같은 도면에서 뽑은 두 산출물이
+// 서로 다른 수량을 말한다(견적서 수량은 줄었는데 시방서 제품 목록만 그대로 남는 식이다).
 import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
 import { wallLength } from '../geom/walls.js';
@@ -29,9 +32,9 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   const len = v => esc(fmtLen(v, units));
   const pyeong = !!project.settings?.pyeong;
 
-  // 같은 제품은 한 줄로 합치고 수량만 센다(개구부는 제품이 아니다).
+  // 같은 제품은 한 줄로 합치고 수량만 센다(개구부는 제품이 아니다. 숨긴 것도 빼면 아래 풍량 표와 수량이 맞는다).
   const productRows = [...(f.items ?? []).reduce((m, it) => {
-    if (it.kind === 'opening') return m;
+    if (it.kind === 'opening' || it.hidden) return m;
     const p = productById(it.productId);
     const key = it.productId || it.id;
     const row = m.get(key) ?? { name: it.name || p?.name || '제품', code: it.code || p?.code || '', size: fmtSize(it.size ?? p?.size ?? [0, 0, 0]), qty: 0 };

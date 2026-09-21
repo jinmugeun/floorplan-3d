@@ -55,17 +55,26 @@ export function createSplitter(el, { min = PANEL_MIN, max = PANEL_MAX, invert = 
   el.setAttribute('role', 'separator');
   el.setAttribute('aria-orientation', 'vertical');
   if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  // ARIA의 window splitter는 값을 노출해야 한다: 스크린 리더 사용자가 화살표를 눌렀을 때
+  // 폭이 얼마가 되었는지 읽히지 않으면 키보드 조작이 있으나 마나다. min/max는 고정이고
+  // valuenow는 폭이 바뀔 때마다 갱신한다(setValue).
+  el.setAttribute('aria-valuemin', String(min));
+  el.setAttribute('aria-valuemax', String(max));
+  const showValue = w => el.setAttribute('aria-valuenow', String(w));
+  const setValue = w => { showValue(w); set(w); };
+  showValue(Math.min(max, Math.max(min, get())));   // 만들 때는 읽기만 한다(set을 부르면 없던 폭 변경이 생긴다)
   let start = null;
   const onDown = ev => {
     if (ev.button !== 0) return;
     start = { x: ev.clientX, w: get() };
     el.setPointerCapture?.(ev.pointerId);   // 커서가 캔버스 위로 넘어가도 이동을 계속 받는다
-    ev.preventDefault();
+    ev.preventDefault();                    // 텍스트 선택·기본 드래그를 막는다
+    el.focus?.();                            // preventDefault가 기본 포커스까지 막으므로 직접 준다(클릭 뒤 화살표가 바로 듣는다)
   };
   const onMove = ev => {
     if (!start) return;
     const dx = (ev.clientX - start.x) * (invert ? -1 : 1);
-    set(Math.min(max, Math.max(min, Math.round(start.w + dx))));
+    setValue(Math.min(max, Math.max(min, Math.round(start.w + dx))));
   };
   const onUp = ev => {
     if (!start) return;
@@ -75,13 +84,18 @@ export function createSplitter(el, { min = PANEL_MIN, max = PANEL_MAX, invert = 
   };
   // →는 오른쪽으로 옮긴다: 왼쪽 패널은 넓어지고, invert(오른쪽 패널)는 반대로 좁아진다 —
   // 드래그의 dx * (invert ? -1 : 1)과 같은 부호 규칙이다.
+  // 조합키는 우리 것이 아니다: Alt+←는 브라우저 뒤로 가기, Ctrl/Shift+←는 텍스트·탐색 단축키다.
+  // 스플리터에 포커스가 있다는 이유로 그것들을 먹으면 앱 밖의 약속을 깨뜨린다.
   const onKey = ev => {
+    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    // Home/End는 ARIA 슬라이더의 관례대로 최소·최대로 보낸다(기본 폭 복귀는 레일 버튼이 맡는다).
     const dir = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
-    if (!dir) return;
+    const to = ev.key === 'Home' ? min : ev.key === 'End' ? max : null;
+    if (!dir && to === null) return;
     ev.preventDefault();                    // 방향키로 패널이 가로 스크롤되지 않게
-    const w = Math.min(max, Math.max(min, get() + dir * SPLITTER_STEP * (invert ? -1 : 1)));
+    const w = to !== null ? to : Math.min(max, Math.max(min, get() + dir * SPLITTER_STEP * (invert ? -1 : 1)));
     if (w === get()) return;                // 이미 한계면 저장도 하지 않는다
-    set(w);
+    setValue(w);
     onEnd(get());                           // 드래그를 놓은 것과 같다(kvp에 남는다)
   };
   el.addEventListener('pointerdown', onDown);

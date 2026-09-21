@@ -1,5 +1,5 @@
 import { activeFloor } from '../state/schema.js';
-import { pointInPolygon } from '../geom/rooms.js';
+import { roomAt } from '../vent/airflow.js';
 import { productById, fmtSize } from '../products/catalog.js';
 import { setItemFlag, updateItem, setDuctFlag } from '../state/floorOps.js';
 import { ductLength } from '../geom/ducts.js';
@@ -7,17 +7,24 @@ import { fmtArea, fmtLen } from '../util/units.js';
 import { esc } from '../util/html.js';
 
 // 덕트는 첫 점이 든 방에 묶는다. 폴리라인은 여러 방을 지날 수 있어 기준이 하나 필요하다.
-export const ductRoomId = (floor, duct) => (floor.rooms ?? []).find(r => pointInPolygon(duct.points[0], r.points))?.id ?? null;
+// 방 판정은 맨손 pointInPolygon이 아니라 roomAt(vent/airflow.js)을 쓴다: 방 폴리곤은 벽 **중심선**이라
+// 벽에 붙은 후드·벽팬의 중심이 경계 위에 놓인다 → 두 곳이 다르게 판정하면 같은 후드가 풍량 표에는
+// 그 방에 세어지면서 레이어 트리에서는 '미지정'으로 빠지는 어긋남이 생긴다.
+export const ductRoomId = (floor, duct) => roomAt(duct.points[0], floor.rooms, floor.walls)?.id ?? null;
 
 export function createLayersPanel(container, { store, ui }) {
   let renaming = null;
 
-  // 아이템 위치가 어느 방 안인지로 묶는다. 어느 방에도 없으면 "미지정". 덕트는 첫 점으로 묶는다.
+  // 아이템 위치가 어느 방 안인지로 묶는다(판정은 roomAt 한 자리 — 위 ductRoomId 주석과 같은 이유).
+  // 어느 방에도 없으면 "미지정". 덕트는 첫 점으로 묶는다.
   function buckets() {
     const f = activeFloor(store.get());
     const rooms = f.rooms.map(r => ({ room: r, items: [], ducts: [] }));
     const none = { room: null, items: [], ducts: [] };
-    for (const it of f.items) (rooms.find(x => pointInPolygon(it.pos, x.room.points)) ?? none).items.push(it);
+    for (const it of f.items) {
+      const id = roomAt(it.pos, f.rooms, f.walls)?.id ?? null;
+      (rooms.find(x => x.room.id === id) ?? none).items.push(it);
+    }
     for (const d of f.ducts ?? []) { const id = ductRoomId(f, d); (rooms.find(x => x.room.id === id) ?? none).ducts.push(d); }
     return none.items.length || none.ducts.length ? [...rooms, none] : rooms;
   }
