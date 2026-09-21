@@ -7,15 +7,15 @@ import { fmtLen, parseLen } from '../util/units.js';
 // 옵션 바에 찍는 짧은 라벨. 한 줄에 다 들어가야 한다(도구가 옵션 여섯 개를 낼 수 있다).
 export const OPTION_LABELS = {
   reference: '기준선', thickness: 'W', snap: '스냅', ortho: '직교', direction: '방향',
-  kind: '종류', w: 'W', h: 'H', z: 'Z', system: '계통',
+  kind: '종류', w: 'W', d: 'D', h: 'H', z: 'Z', sill: '바닥에서', system: '계통',
 };
 // 같은 옵션의 긴 이름(마우스를 올리면 보인다). 짧은 라벨만으로는 무엇인지 모를 수 있다.
 export const OPTION_TITLES = {
   reference: '기준선', thickness: '벽 두께', snap: '스냅 모드', ortho: '직교 모드', direction: '방향',
-  kind: '급기/배기', w: '단면 너비', h: '단면 높이', z: '중심 높이', system: '계통',
+  kind: '급기/배기', w: '단면 너비', d: '기둥 깊이', h: '단면 높이', z: '중심 높이', sill: '바닥에서 개구부 밑선까지', system: '계통',
 };
 // 길이 옵션은 라벨에 현재 단위를 붙이고, ft·in 모드에서는 속성 패널과 같은 텍스트 입력이 된다.
-export const LEN_OPTS = new Set(['thickness', 'w', 'h', 'z']);
+export const LEN_OPTS = new Set(['thickness', 'w', 'd', 'h', 'z', 'sill']);
 export const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
 
 const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];

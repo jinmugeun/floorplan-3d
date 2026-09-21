@@ -37,6 +37,10 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
         <button data-tool="wall">벽 그리기 <kbd>L</kbd></button>
         <button data-tool="room">방 그리기 <kbd>F</kbd></button>
         <button data-tool="delete">삭제 <kbd>D</kbd></button>
+        <h3>구조물</h3>
+        <button data-tool="column-square">사각 기둥 <kbd>R</kbd></button>
+        <button data-tool="column-round">원형 기둥 <kbd>C</kbd></button>
+        <button data-tool="opening">개구부 <kbd>O</kbd></button>
         <h3>도면 반전 / 회전</h3>
         <div class="row"><button data-action="flipH">좌우 반전</button><button data-action="flipV">상하 반전</button><button data-action="rotL">↺ 90°</button><button data-action="rotR">↻ 90°</button></div>
         <h3>보조선 그리기</h3>

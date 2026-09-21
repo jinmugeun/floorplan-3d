@@ -20,6 +20,22 @@ describe('옵션 바 HTML', () => {
     expect(unitLabel('ftin')).toBe('ft·in');
   });
 
+  test('구조물 옵션(D · 바닥에서)도 짧은 라벨과 길이 단위를 갖는다(§13.2)', () => {
+    expect(OPTION_LABELS.d).toBe('D');
+    expect(OPTION_LABELS.sill).toBe('바닥에서');
+    expect(OPTION_TITLES.d).toBe('기둥 깊이');
+    expect(OPTION_TITLES.sill).toBe('바닥에서 개구부 밑선까지');
+    expect(LEN_OPTS.has('d')).toBe(true);
+    expect(LEN_OPTS.has('sill')).toBe(true);
+    const col = optionBarHtml({ name: 'column-square', opts: { w: 400, d: 400, h: 2300 } }, { units: 'mm' });
+    expect(col).toContain('D (mm)');
+    expect(col).toContain('name="d"');
+    const op = optionBarHtml({ name: 'opening', opts: { w: 900, h: 2100, sill: 0 } }, { units: 'ftin' });
+    expect(op).toContain('바닥에서 (ft·in)');
+    expect(op).toContain('name="sill"');
+    expect(op).toContain('data-len="1"');
+  });
+
   test('ft·in 모드의 길이 옵션은 텍스트 입력이다', () => {
     const html = optionBarHtml({ name: 'duct', opts: { w: 750, h: 400, z: 2900 } }, { units: 'ftin' });
     expect(html).toContain('W (ft·in)');

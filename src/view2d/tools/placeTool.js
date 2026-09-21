@@ -3,6 +3,19 @@ import { addItem } from '../../state/floorOps.js';
 import { snapItemPos, nearestWallPlacement, WALL_ATTACH_DIST } from '../../geom/items.js';
 import { drawItem } from '../items2d.js';
 
+// 배치 고스트(반투명 제품 + 스냅 가이드 점선) 그리기. placeTool과 structTool이 나눠 쓴다(§13.2).
+export function drawGhost(ctx, v, ghost) {
+  if (!ghost?.item) return;
+  drawItem(ctx, v, ghost.item, { alpha: 0.6, outline: v.COLORS.wallSel, labels: false });
+  for (const g of ghost.guides ?? []) {
+    const [w, h] = [ctx.canvas.clientWidth || ctx.canvas.width, ctx.canvas.clientHeight || ctx.canvas.height];
+    ctx.save(); ctx.strokeStyle = v.COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath();
+    if (g.type === 'v') { const x = Math.round(v.toScreen([g.x, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+    else { const y = Math.round(v.toScreen([0, g.y])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); }
+    ctx.stroke(); ctx.restore();
+  }
+}
+
 // 라이브러리 타일을 누르면 켜지는 도구. 한 번 배치하면 선택 도구로 돌아간다(오늘의집과 같은 동작).
 export function createPlaceTool({ store, ui, view, product, onDone = () => {} }) {
   const floor = () => activeFloor(store.get());
@@ -42,16 +55,7 @@ export function createPlaceTool({ store, ui, view, product, onDone = () => {} })
     onKey(ev) { if (ev.key === 'Escape') { onDone(); return true; } return false; },
     onHintClick() { onDone(); },
     onContextMenu() { onDone(); return null; },
-    draw(ctx, v) {
-      drawItem(ctx, v, ghost.item, { alpha: 0.6, outline: v.COLORS.wallSel, labels: false });
-      for (const g of ghost.guides) {
-        const [w, h] = [ctx.canvas.clientWidth, ctx.canvas.clientHeight];
-        ctx.save(); ctx.strokeStyle = v.COLORS.guide; ctx.setLineDash([8, 6]); ctx.beginPath();
-        if (g.type === 'v') { const x = Math.round(v.toScreen([g.x, 0])[0]) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, h); }
-        else { const y = Math.round(v.toScreen([0, g.y])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); }
-        ctx.stroke(); ctx.restore();
-      }
-    },
+    draw(ctx, v) { drawGhost(ctx, v, ghost); },
     cancel() {},
   };
 }

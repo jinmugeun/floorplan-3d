@@ -338,3 +338,20 @@ test('Alt+S는 경로 배열 복사로 가고 선택이 없으면 브라우저�
   expect(KEYMAP.find(e => e.label === '경로 배열 복사').keys).toEqual(['Alt+S']);
   expect(KEYMAP.find(e => e.label === '경로 배열 복사').group).toBe('제품');
 });
+
+// §13.2: R·C·O는 "도구" 그룹의 재지정 가능한 행이다(설정 > 단축키에 나온다).
+test('R·C·O가 구조물 도구를 켠다', async () => {
+  const { KEYMAP, TABLE } = await import('../src/ui/keymap.js');
+  expect(TABLE.get('r')).toBe('tool:column-square');
+  expect(TABLE.get('c')).toBe('tool:column-round');
+  expect(TABLE.get('o')).toBe('tool:opening');
+  const rows = KEYMAP.filter(e => e.group === '도구' && e.action?.startsWith('tool:column'));
+  expect(rows.map(e => e.label)).toEqual(['사각 기둥', '원형 기둥']);
+  expect(KEYMAP.find(e => e.action === 'tool:opening').keys).toEqual(['O']);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const calls = [];
+  const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn() };
+  const h = createKeyHandler({ store, ui, view, setTool: n => calls.push(n), setMode: vi.fn(), openBackground: vi.fn(), deleteSelection: vi.fn() });
+  for (const k of ['r', 'c', 'o']) h({ key: k, target: document.body, preventDefault() {} });
+  expect(calls).toEqual(['column-square', 'column-round', 'opening']);
+});

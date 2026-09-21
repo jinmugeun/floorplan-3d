@@ -509,3 +509,19 @@ test('옵션 바 길이 입력은 [Enter]로도 반영된다', () => {
   ft.dispatchEvent(new Event('change', { bubbles: true }));   // Enter + blur가 겹쳐도 한 번과 같다
   expect(tool.opts.thickness).toBe(305);
 });
+
+// §13.2: 레일 "방 만들기" 아래 "구조물" 소절에 버튼 3개.
+test('도면 그리기 패널에 구조물 버튼 3개가 있다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const draw = root.querySelector('#panel section[data-panel="draw"]');
+  expect([...draw.querySelectorAll('h3')].map(h => h.textContent)).toContain('구조물');
+  const tools = [...draw.querySelectorAll('[data-tool]')].map(b => b.dataset.tool);
+  expect(tools).toContain('column-square');
+  expect(tools).toContain('column-round');
+  expect(tools).toContain('opening');
+  expect(draw.querySelector('[data-tool="column-square"]').textContent).toContain('사각 기둥');
+  expect(draw.querySelector('[data-tool="column-square"] kbd').textContent).toBe('R');
+  expect(draw.querySelector('[data-tool="column-round"] kbd').textContent).toBe('C');
+  expect(draw.querySelector('[data-tool="opening"] kbd').textContent).toBe('O');
+});

@@ -11,6 +11,7 @@ import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.j
 import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
 import { createDuctTool, DUCT_TOOL_DEFAULTS } from './view2d/tools/ductTool.js';
 import { createPlaceTool } from './view2d/tools/placeTool.js';
+import { createStructTool, structDefaults } from './view2d/tools/structTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
@@ -128,12 +129,18 @@ store.subscribe(s => {
 
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS }, duct: { ...DUCT_TOOL_DEFAULTS } };
+// 구조물 도구 옵션도 세션 동안 유지된다. 기둥 높이 기본값이 층고라 처음 켤 때 활성 층에서 읽는다.
+const structOpts = {};
+const structTool = kind => () => createStructTool({ store, ui, view, kind, opts: (structOpts[kind] ??= structDefaults(kind, activeFloor(store.get()).height)), onDone: () => setTool('select') });
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
   select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
   room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
   wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
   delete: createDeleteTool,
+  'column-square': structTool('column-square'),
+  'column-round': structTool('column-round'),
+  opening: structTool('opening'),
   guide: () => createGuideTool({ store, view, opts: toolOpts.guide }),
   measure: () => createMeasureTool({ store, opts: toolOpts.measure, view }),
   duct: () => createDuctTool({ store, ui, view, opts: toolOpts.duct, onDone: () => setTool('select') }),
