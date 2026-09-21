@@ -261,3 +261,19 @@ test('핸들 드래그는 2px 데드존을 지나야 크기가 바뀐다', () =>
   expect(item(store, ids[0]).size[0]).not.toBe(before);
   t.onPointerUp([corner[0] + 200.5, corner[1] + 0.5], {});
 });
+
+// §13.7: 후드(천장)와 조리기구(바닥)가 겹쳐 있으면 위에서 보이는 후드가 먼저 잡혀야 한다.
+// 배열 순서만 보던 예전 규칙에서는 나중에 놓은 조리기구가 후드를 가져갔다.
+test('겹친 천장 제품이 바닥 제품보다 먼저 잡힌다(놓은 순서와 무관)', () => {
+  const { store, ui, ids, t } = setup([
+    ['hood-box', { pos: [2000.5, 1500.25] }],
+    ['range-gas-high', { pos: [2000.5, 1500.25] }],
+  ]);
+  store.dispatch(d => { activeFloor(d).items[0].z = 1700; });      // 후드는 천장에 매달려 있다
+  t.onPointerDown([2000.5, 1500.25], {}); t.onPointerUp([2000.5, 1500.25], {});
+  expect(ui.get().selection).toEqual({ type: 'item', id: ids[0] }); // 후드
+  // 천장 제품을 보기에서 끄면 그 아래 조리기구가 잡힌다.
+  store.dispatch(d => { d.view.v2.ceilingItems = false; }, { record: false });
+  t.onPointerDown([2000.5, 1500.25], {}); t.onPointerUp([2000.5, 1500.25], {});
+  expect(ui.get().selection).toEqual({ type: 'item', id: ids[1] }); // 조리기구
+});

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { drawItem, drawItems, drawItemSelection, itemVisible, itemHandles, symbolOf, ROT_OFFSET_PX } from '../src/view2d/items2d.js';
+import { drawItem, drawItems, drawItemSelection, itemVisible, itemHandles, symbolOf, ROT_OFFSET_PX, drawOrder, ATTACH_ORDER, ITEM_DRAG_KINDS } from '../src/view2d/items2d.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { RAD } from '../src/geom/items.js';
@@ -120,4 +120,33 @@ test('drawItems dims items outside the solo room through the dim callback', () =
   const alphas = calls.filter(c => c[0] === 'set' && c[1] === 'globalAlpha').map(c => c[2]);
   expect(alphas).toContain(0.25);
   expect(alphas).toContain(1);
+});
+
+describe('겹친 아이템의 그리기 순서(drawOrder)', () => {
+  const at = (attach, id) => ({ id, attach, kind: 'product', productId: 'sofa-3', pos: [0, 0], z: 0, rot: 0, size: [600, 600, 600], flipH: false, flipV: false, hidden: false, locked: false });
+
+  test('바닥 → 벽 → 천장 순위로 정렬하고 같은 순위는 배열 순서를 지킨다', () => {
+    const src = [at('ceiling', 'c1'), at('floor', 'f1'), at('wall', 'w1'), at('floorLay', 'l1'), at('ceiling', 'c2'), at('floor', 'f2')];
+    expect(drawOrder(src).map(i => i.id)).toEqual(['f1', 'l1', 'f2', 'w1', 'c1', 'c2']);
+    expect(src.map(i => i.id)).toEqual(['c1', 'f1', 'w1', 'l1', 'c2', 'f2']);  // 원본은 그대로다
+    expect(ATTACH_ORDER).toEqual({ floor: 0, floorLay: 0, wall: 1, ceiling: 2 });
+  });
+
+  test('모르는 attach는 바닥으로 보고, 빈 배열·null도 안전하다', () => {
+    expect(drawOrder([])).toEqual([]);
+    expect(drawOrder(null)).toEqual([]);
+    const odd = [at('ceiling', 'c'), { ...at('floor', 'x'), attach: '없음' }];
+    expect(drawOrder(odd).map(i => i.id)).toEqual(['x', 'c']);
+  });
+
+  test('drawItems는 순서를 drawOrder에 맡기고 아이템마다 한 번씩 그린다', () => {
+    const range = { ...at('floor', 'range'), productId: 'range-gas-high', pos: [1000.5, 1000.25], size: [1200, 750, 850] };
+    const hood = { ...at('ceiling', 'hood'), productId: 'hood-box', pos: [1000.5, 1000.25], size: [1600, 1200, 600] };
+    const ctx = fakeCtx();
+    drawItems(ctx, view, { items: [hood, range], walls: [], rooms: [] }, { flags: {}, labels: false });
+    expect(ctx.calls.filter(c => c[0] === 'translate')).toHaveLength(2);
+    expect(drawOrder([hood, range]).map(i => i.id)).toEqual(['range', 'hood']);  // 천장이 마지막 = 위에 그려진다
+    expect(ITEM_DRAG_KINDS.has('items')).toBe(true);
+    expect(ITEM_DRAG_KINDS.has('box')).toBe(false);
+  });
 });

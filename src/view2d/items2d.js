@@ -11,6 +11,18 @@ export const ROT_OFFSET_PX = 26; // 바운딩 박스 아래 회전 핸들까지(
 
 export const symbolOf = item => productById(item.productId)?.symbol ?? 'box';
 
+// 위에서 본 도면에서 무엇이 위에 오는가(§13.7): 바닥 → 벽 → 천장. 천장 부착(후드·디퓨저)이
+// 조리기구 위에 그려지고, 역순으로 순회하는 픽(itemDrag.pick)에서 먼저 잡힌다.
+export const ATTACH_ORDER = { floor: 0, floorLay: 0, wall: 1, ceiling: 2 };
+// 안정 정렬: 같은 순위는 배열 순서(= z 순서)를 지킨다(Array.prototype.sort는 ES2019부터 안정이다).
+// 원본 배열은 바꾸지 않는다 — 호출자가 스토어 스냅샷을 그대로 넘긴다.
+export function drawOrder(items) {
+  return [...(items ?? [])].sort((a, b) => (ATTACH_ORDER[a?.attach] ?? 0) - (ATTACH_ORDER[b?.attach] ?? 0));
+}
+// itemDrag.getDrag().kind 중 "아이템을 끌고 있는" 것들. view2d가 실시간 충돌 계산을 건너뛸지
+// 판단하는 데 쓴다(§13.5) — 영역 선택('box')이나 덕트 드래그는 여기 들지 않는다.
+export const ITEM_DRAG_KINDS = new Set(['items', 'scale', 'rotate']);
+
 // 2D(v2)와 3D(v3)가 같은 규칙을 쓴다.
 export function itemVisible(item, flags = {}) {
   if (item.hidden) return false;
@@ -75,7 +87,7 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
 
 export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = null, labels = true, dim = null } = {}) {
   const selected = new Set(sel?.type === 'item' ? [sel.id] : sel?.type === 'multi' && sel.kind === 'item' ? sel.ids : []);
-  for (const item of floor.items) {
+  for (const item of drawOrder(floor.items)) {
     if (!itemVisible(item, flags)) continue;
     const bad = collisions?.has(item.id);
     const on = selected.has(item.id);

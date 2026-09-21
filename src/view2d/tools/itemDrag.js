@@ -2,7 +2,7 @@ import { activeFloor } from '../../state/schema.js';
 import { updateItems, movableItems, resizeItem } from '../../state/floorOps.js';
 import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
-import { itemVisible, itemHandles, HANDLE_HIT_PX } from '../items2d.js';
+import { itemVisible, itemHandles, drawOrder, HANDLE_HIT_PX } from '../items2d.js';
 import { collidingIds } from '../../geom/collide.js';
 
 // 아이템 드래그 한 묶음. selectTool은 "무엇을 잡았나"만 판단하고 나머지를 여기로 넘긴다.
@@ -13,11 +13,14 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
   const flags = () => store.get().view?.v2 ?? {};
   let drag = null;
 
-  // 위에 그린 아이템이 먼저 잡힌다. 잠긴 아이템은 클릭으로 잡히지 않는다(레이어 패널에서만 고른다).
+  // 위에 그린 아이템이 먼저 잡힌다: 그리는 순서(drawOrder)를 역순으로 돈다 — 천장 부착(후드·디퓨저)이
+  // 조리기구 위에 그려지므로 클릭도 후드가 먼저 가져간다(§13.7).
+  // 잠긴 아이템은 클릭으로 잡히지 않는다(레이어 패널에서만 고른다).
   function pick(p) {
-    const f = floor(), fl = flags();
-    for (let i = f.items.length - 1; i >= 0; i--) {
-      const it = f.items[i];
+    const fl = flags();
+    const order = drawOrder(floor().items);
+    for (let i = order.length - 1; i >= 0; i--) {
+      const it = order[i];
       if (it.locked || !itemVisible(it, fl)) continue;
       if (pointInItem(p, it, px(2))) return it;
     }
