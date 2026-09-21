@@ -8,6 +8,8 @@ import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPan
 import { shellHtml } from './shellHtml.js';
 import { createBottomBar } from './bottomBar.js';
 import { helpHtml } from './helpPopover.js';
+import { memoCollisions } from '../geom/collide.js';
+import { COLLISION_BANNER } from './messages.js';
 
 
 // 기즈모 모드 토글은 3D 궤도 뷰에서 기즈모가 실제로 붙는 아이템 하나를 골랐을 때만 쓸 일이 있다.
@@ -163,6 +165,14 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     els.optionBar.hidden = !html;
     els.optionBar.innerHTML = html;
   }
+  // 충돌은 드래그 밖에서도 알린다(§14.8). 계산은 memoCollisions의 캐시를 그대로 쓰므로(아이템 배열
+  // 참조가 바뀔 때만 계산한다) 배너를 자주 그려도 비용이 늘지 않는다. 보기 옵션 "충돌 감지"를 끄면
+  // 빨간 테두리가 없으므로 문구도 없다(무엇을 옮기라는 말인지 알 수 없게 되기 때문이다).
+  const collisionCount = () => {
+    const s = store.get();
+    if (s.view?.v2?.collision === false) return 0;
+    return memoCollisions(activeFloor(s)?.items ?? []).size;
+  };
   // 배너는 한 번에 하나만 보인다: ui 상태(1인칭 찍기 · 마감재 적용 · 단일 공간 모드)가 도구 안내보다 앞선다.
   function renderBanner(s = ui.get()) {
     const exitSolo = '<button type="button" id="btnExitSolo">도면 전체 보기</button>';
@@ -179,6 +189,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
       return;
     }
     if (s.soloRoom) { show(`단일 공간 모드 ${exitSolo}`); wireSolo(); return; }
+    const clashes = collisionCount();
+    if (clashes) { show(esc(COLLISION_BANNER(clashes))); return; }
     // 누를 수 있는 것은 버튼이다: <span>은 Tab으로 닿지도 Enter로 눌리지도 않아 키보드만 쓰는
     // 사람에게는 "메시지를 누르면 취소"가 없는 기능이었다. 모양은 CSS가 글자처럼 되돌린다.
     if (currentTool?.hint) { show(`<button type="button" class="hint" data-action="hintCancel">${esc(currentTool.hint)}</button>`); return; }
@@ -241,6 +253,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
       q('#btnBgLock').classList.toggle('on', !!bg.locked);
       q('#btnBgLock').textContent = bg.locked ? '잠금 해제' : '잠금'; // 버튼은 누르면 일어나는 일을 말한다
     }
+    renderBanner();   // 충돌 건수는 스토어가 바뀔 때만 달라진다(§14.8)
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { bottom?.destroy(); resizeWatch.destroy(); splitters.forEach(s => s.destroy()); } };

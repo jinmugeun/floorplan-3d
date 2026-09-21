@@ -8,6 +8,7 @@ import { deleteFloor } from '../src/state/floorMgmt.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { createPropsPanel, applyNumber, lenField, withUnit, readLen } from '../src/ui/propsPanel.js';
+import { getKeepRatio, setKeepRatio } from '../src/ui/propsApply.js';
 import { applyMaterial, assignmentOf } from '../src/state/materialOps.js';
 
 test('wall panel edits thickness; room panel edits name', () => {
@@ -595,4 +596,37 @@ test('층 삭제는 확인 뒤에 대상을 id로 다시 찾는다(앞 층이 �
   document.querySelector('.modal.confirm [name="ok"]').click();
   await new Promise(r => setTimeout(r, 0));
   expect(store.get().floors.map(f => f.name)).toEqual(['3층']);   // 인덱스를 그대로 썼다면 '3층'이 지워진다
+});
+
+// §14.8: 고른 제품이 겹쳐 있으면 속성 패널 상단에 한 줄로 알린다.
+test('충돌 중인 제품을 고르면 속성 패널이 한 줄로 알린다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const a = addItem(store, createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] }));
+  addItem(store, createItem(productById('sofa-3'), { pos: [1200.5, 1000.25] }));
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'item', id: a } });
+  expect(el.textContent).toContain('다른 제품과 겹칩니다');
+  store.dispatch(d => { d.floors[0].items[1].pos = [6000, 6000]; });
+  expect(el.textContent).not.toContain('다른 제품과 겹칩니다');
+});
+
+// §14.8의 분리: applyNumber는 propsApply.js로 옮겼고 propsPanel이 다시 내보낸다(호출자 불변).
+test('비율 유지 체크박스와 applyNumber가 같은 칸을 본다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const id = addItem(store, createItem(productById('sofa-3'), { pos: [1000, 1000] }));
+  const el = document.createElement('div'); document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  ui.set({ selection: { type: 'item', id } });
+  const cb = el.querySelector('[name="keepRatio"]');
+  expect(cb.checked).toBe(false);
+  cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(getKeepRatio()).toBe(true);
+  applyNumber(store, { type: 'item', id }, 'w', 1050);      // 2100 → 1050, 비율 유지로 깊이·높이도 절반
+  const it = activeFloor(store.get()).items.find(i => i.id === id);
+  expect(it.size[0]).toBe(1050);
+  expect(it.size[1]).toBe(450);
+  setKeepRatio(false);
 });

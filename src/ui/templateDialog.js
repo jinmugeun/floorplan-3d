@@ -4,14 +4,15 @@ import { ROOM_TYPES } from './propsPanel.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
+import { TEMPLATE_RESULT } from './messages.js';
 
 const USES = ['주거', '상업'];
 const TYPE_LABEL = Object.fromEntries(ROOM_TYPES);
 // 부분 배치·위치 조정·0개 배치를 사용자가 알 수 있게 하는 문구(§14.9). 자리가 없어 빠진 제품도,
 // 벽에서 안쪽으로 당겨 온 제품도 조용히 지나가지 않는다.
-// 문구 자체는 §14.8이 ui/messages.js의 TEMPLATE_RESULT로 모을 몫이다(그 파일이 아직 없어 여기 둔다).
+// 문구 자체는 §14.8의 ui/messages.js에 모여 있다(TEMPLATE_RESULT — 배너·토스트가 갈라지지 않게).
 export const placementMessage = (placed, skipped, moved = 0) => (placed
-  ? `${placed}개 배치 · ${moved}개 위치 조정 · ${skipped}개 건너뜀`
+  ? TEMPLATE_RESULT(placed, moved, skipped)
   : '배치할 공간이 없습니다');
 const numField = (name, label, value) => `<label class="field"><span>${label}</span><input type="number" name="${name}" value="${value}" min="0" max="100000000" step="any"></label>`;
 

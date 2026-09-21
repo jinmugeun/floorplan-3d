@@ -1,5 +1,5 @@
 import { activeFloor } from '../state/schema.js';
-import { updateWall, updateRoom, setRoomWallThickness, setActiveFloor, updateFloor, deleteFloor, totalArea, setWallLength, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
+import { updateRoom, setActiveFloor, deleteFloor, totalArea, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
 import { wallLength } from '../geom/walls.js';
 import { fmtArea } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
@@ -13,68 +13,18 @@ import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
 import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
+import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
+import { memoCollisions } from '../geom/collide.js';
+import { COLLISION_ITEM } from './messages.js';
 export { lenField, readLen, withUnit } from './fieldUtils.js';
+export { applyNumber };
 
 // 상세 설정 <details>의 열림 상태는 패널을 다시 그려도 유지된다.
 let detailsOpen = true;
-// 아이템 크기 패널의 "비율 유지" 체크박스 상태. applyNumber(모듈 최상위 함수)도 읽어야 해서 모듈 스코프에 둔다.
-let keepRatio = false;
 // 비율 유지는 제품 하나에만 뜻이 있다: 선택이 바뀌면 끈다.
 let keepRatioFor = null;
 
 export { ROOM_TYPES };
-
-// 숫자·길이 입력 한 칸을 상태에 반영한다. 2B의 아이템 패널도 이 함수를 쓴다.
-export function applyNumber(store, sel, name, v) {
-  if (!sel) {
-    if (name === 'floorHeight') store.dispatch(d => { activeFloor(d).height = v; });
-    if (name === 'slab') updateFloor(store, store.get().activeFloor ?? 0, { slab: v });
-    return;
-  }
-  if (sel.type === 'item') {
-    const it = activeFloor(store.get()).items.find(x => x.id === sel.id); if (!it) return;
-    if (it.locked) { toast('잠긴 제품은 편집할 수 없습니다'); return; }             // 잠금 = 이동·회전·크기 불가(레이어 패널에서 골라도 같다)
-    if ((name === 'posX' || name === 'posY') && it.attach === 'wall' && it.wallId) return; // 벽 부착 제품의 pos는 (wallId, t)의 결과다
-    if (name === 'w' || name === 'd' || name === 'h') {
-      const i = { w: 0, d: 1, h: 2 }[name];
-      const size = [...it.size];
-      if (keepRatio) { const k = v / size[i]; size[0] = Math.min(5000, Math.max(10, size[0] * k)); size[1] = Math.min(5000, Math.max(10, size[1] * k)); size[2] = Math.min(5000, Math.max(10, size[2] * k)); }
-      size[i] = v;
-      resizeItem(store, sel.id, size.map(x => Math.round(x)));
-      return;
-    }
-    if (name === 'posX') updateItem(store, sel.id, { pos: [v, it.pos[1]] });
-    else if (name === 'posY') updateItem(store, sel.id, { pos: [it.pos[0], v] });
-    else if (name === 'rot' && it.attach === 'wall' && it.wallId) return; // 벽 부착 제품은 벽 방향에 고정(명세 8.5)
-    else updateItem(store, sel.id, { [name]: v });   // z, rot
-    return;
-  }
-  if (sel.type === 'wall') {
-    if (name === 'wallLength') setWallLength(store, sel.id, v);
-    else if (name === 'height') updateWallProps(store, sel.id, { height: v }); // 기하 불변 → reroom 없음
-    else updateWall(store, sel.id, { [name]: v });                            // 두께는 방 면적을 바꾼다
-    return;
-  }
-  // 여러 dispatch를 한 undo 단계로 묶는다: 안쪽 updateWall은 { record: false }를 넘겨야 한다
-  // (기본 record로 두면 첫 updateWall이 트랜잭션을 조기에 닫아 벽마다 되돌릴 단계가 생긴다).
-  if (sel.type === 'multi' && sel.kind === 'wall') { // 아이템 다중 선택은 여기로 오지 않는다(Task 12 패널이 따로 처리)
-    store.beginTransaction();
-    for (const id of sel.ids) updateWall(store, id, { [name]: v }, { record: false });
-    store.endTransaction();
-    return;
-  }
-  if (sel.type === 'room') {
-    if (name === 'wallThickness') { setRoomWallThickness(store, sel.id, v); return; }
-    // 방 높이 변경이 "공간 높이 맞추기"로 벽 높이까지 바꿀 수 있으므로, 두 dispatch를
-    // 트랜잭션으로 묶는다. 안쪽 dispatch는 { record: false }로 넘겨야 endTransaction이
-    // 되돌림 한 단계로 묶어 준다(첫 dispatch가 기본 record로 트랜잭션을 미리 닫으면 두 단계가 된다).
-    store.beginTransaction();
-    updateRoom(store, sel.id, { [name]: v }, { record: false });
-    const room = activeFloor(store.get()).rooms.find(x => x.id === sel.id);
-    if (name === 'height' && room?.matchWallHeight) setRoomWallHeight(store, sel.id, v, { record: false }); // "공간 높이 맞추기"
-    store.endTransaction();
-  }
-}
 
 // deleteSelection: 앱의 삭제 동작(확인 대화상자 포함). 삭제 버튼은 이를 그대로 호출한다.
 // itemActions: main.js의 아이템 동작 묶음(정렬·그룹화·그룹 해제는 여기서 부른다).
@@ -116,10 +66,13 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
     if (sel.type === 'item') {
       const it = f.items.find(x => x.id === sel.id); if (!it) { container.innerHTML = ''; return; }
-      if (keepRatioFor !== it.id) { keepRatio = false; keepRatioFor = it.id; }
+      if (keepRatioFor !== it.id) { setKeepRatio(false); keepRatioFor = it.id; }
       const p = productById(it.productId);
       const onWall = !!(it.attach === 'wall' && it.wallId); // 벽 부착 제품의 위치는 벽 위 t로 정해지므로 읽기 전용
+      // 겹침은 빨간 테두리만으로는 눈치채기 어렵다(§14.8): 고른 제품이 충돌 중이면 한 줄로 말한다.
+      const clash = store.get().view?.v2?.collision !== false && memoCollisions(f.items).has(it.id);
       container.innerHTML = `<h2>제품 상세 정보</h2>
+        ${clash ? `<p class="error">${COLLISION_ITEM}</p>` : ''}
         <p class="muted">${esc(it.name || p?.name || '제품')} · ${esc(it.code || p?.code || '')}</p>
         ${field('크기 (W×D×H)', `<output>${fmtSize(it.size)}</output>`)}
         ${p?.price ? field('가격', `<output>${p.price.toLocaleString('ko-KR')}원</output>`) : ''}
@@ -128,7 +81,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${lenField(withUnit('너비', units, showUnit), 'w', it.size[0], 10, 5000, false, units)}
         ${lenField(withUnit('깊이', units, showUnit), 'd', it.size[1], 10, 5000, false, units)}
         ${lenField(withUnit('높이', units, showUnit), 'h', it.size[2], 10, 5000, false, units)}
-        <label class="check"><input type="checkbox" name="keepRatio" ${keepRatio ? 'checked' : ''}> 크기 비율 유지</label>
+        <label class="check"><input type="checkbox" name="keepRatio" ${getKeepRatio() ? 'checked' : ''}> 크기 비율 유지</label>
         <button type="button" name="resetSize">수치 초기화</button>
         ${lenField(withUnit('바닥으로부터의 높이', units, showUnit), 'z', it.z, -1000, 8000, false, units)}
         ${field('각도 (°)', num('rot', it.rot, 0, 360, 1))}
@@ -223,7 +176,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (name === 'floorSelect') { setActiveFloor(store, Number(el.value)); return; }
     if (name === 'areaMode') { store.dispatch(d => { d.areaMode = el.value; }, { record: false }); return; }
     if (name === 'wallOpacity' || name === 'floorOpacity') { store.dispatch(d => { d.view[name] = Number(el.value); }, { record: false }); return; }
-    if (name === 'keepRatio') { keepRatio = el.checked; return; }
+    if (name === 'keepRatio') { setKeepRatio(el.checked); return; }
     if (name === 'color' && sel?.type === 'item') { updateItem(store, sel.id, { color: el.value }); return; }
     if (el.dataset.len) {
       const v = readLen(el, store.get().units ?? 'mm');

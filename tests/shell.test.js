@@ -2,8 +2,11 @@
 import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject } from '../src/state/schema.js';
+import { createEmptyProject, createItem } from '../src/state/schema.js';
 import { createShell, gizmoBtnVisible } from '../src/ui/shell.js';
+import { addItem } from '../src/state/floorOps.js';
+import { productById } from '../src/products/catalog.js';
+import { COLLISION_BANNER } from '../src/ui/messages.js';
 
 test('shell renders regions and option bar reflects tool opts', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
@@ -579,4 +582,37 @@ test('사용자가 접은 패널은 창을 넓혀도 그대로 접혀 있고 "�
     expect(layout.classList.contains('right-off')).toBe(false);
     expect(btn.hidden).toBe(true);
   } finally { vi.useRealTimers(); localStorage.clear(); window.innerWidth = vw; }
+});
+
+// §14.8: 겹침은 빨간 테두리로만 알려 줘서(문구 0건) 처음 쓰는 사람이 무엇이 잘못됐는지 몰랐다.
+test('충돌이 있으면 배너가 건수를 알리고 ui 상태 배너가 그보다 앞선다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  const banner = root.querySelector('#banner');
+  expect(banner.hidden).toBe(true);
+  addItem(store, createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] }));
+  addItem(store, createItem(productById('sofa-3'), { pos: [1200.5, 1000.25] }));
+  expect(banner.hidden).toBe(false);
+  expect(banner.textContent).toContain(COLLISION_BANNER(2));
+  shell.setOptionBar({ name: 'room', opts: {}, hint: '첫 모서리를 클릭 (1/2)' });
+  expect(banner.textContent).toContain('충돌 2건');            // 도구 안내보다 앞이다
+  ui.set({ matPick: { assignment: { id: 'paint-white' } } });
+  expect(banner.textContent).toContain('재질을 적용할 면을 클릭');  // ui 상태 배너가 충돌보다 앞이다
+  ui.set({ matPick: null });
+  expect(banner.textContent).toContain('충돌 2건');
+  store.dispatch(d => { d.view.v2.collision = false; }, { record: false });
+  expect(banner.textContent).toContain('첫 모서리를 클릭 (1/2)');   // 표시를 끄면 도구 안내가 돌아온다
+});
+
+test('충돌이 사라지면 배너도 사라진다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  createShell(root, { store, ui: createUiState() });
+  const a = addItem(store, createItem(productById('sofa-3'), { pos: [1000, 1000] }));
+  addItem(store, createItem(productById('sofa-3'), { pos: [1100, 1000] }));
+  expect(root.querySelector('#banner').hidden).toBe(false);
+  store.dispatch(d => { const f = d.floors[0]; f.items = f.items.filter(i => i.id !== a); });
+  expect(root.querySelector('#banner').hidden).toBe(true);
 });
