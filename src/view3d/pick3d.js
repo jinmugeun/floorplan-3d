@@ -30,6 +30,43 @@ export function gizmoAxes(mode) {
   return mode === 'rotate' ? { showX: false, showY: true, showZ: false } : { showX: true, showY: false, showZ: true };
 }
 
+// 기즈모 축 배색(§13.6). 오늘의집과 같은 방향: 축은 신호색, 평면 핸들은 주황. 설정은 두지 않는다.
+export const GIZMO_COLORS = { X: '#e5484d', Y: '#30a46c', Z: '#0090ff', plane: '#f5a524' };
+const GIZMO_PLANES = new Set(['XY', 'YZ', 'XZ']);
+
+// 핸들 이름 → 색. 평면 셋이 먼저이고, 그 밖에 X/Y/Z로 시작하는 이름은 그 축 색이다
+// (XYZ·XYZE도 X로 시작하므로 X 색을 쓴다 — §13.6이 평면으로 센 것은 XY/YZ/XZ 셋뿐이다).
+// E·AXIS·START·END·DELTA는 축이 아니라 손대지 않는다.
+export function gizmoTintFor(name, colors = GIZMO_COLORS) {
+  const n = typeof name === 'string' ? name : '';
+  if (!n) return null;
+  if (GIZMO_PLANES.has(n)) return colors.plane ?? null;
+  const axis = n[0];
+  return axis === 'X' || axis === 'Y' || axis === 'Z' ? (colors[axis] ?? null) : null;
+}
+
+// gizmo.getHelper()를 훑어 축·평면 핸들의 색을 바꾼다. 색을 바꾼 개수를 돌려준다.
+// three 0.169의 TransformControlsGizmo는 재질 몇 개를 여러 핸들이 나눠 쓰므로(X 핸들 14개가 재질 4개)
+// 반드시 clone한 뒤 칠한다 — 공유 재질에 칠하면 엉뚱한 핸들까지 물든다.
+// 그리고 three는 updateMatrixWorld마다 material.color를 material._color로 되돌리므로
+// (TransformControls.js:1479) 그 캐시도 같이 세운다 — 순서에 상관없이 색이 남는다.
+// clone()은 _color를 복사하지 않으므로 복제본에는 우리가 넣은 값만 남는다.
+export function tintGizmo(gizmo, colors = GIZMO_COLORS) {
+  const helper = gizmo?.getHelper ? gizmo.getHelper() : gizmo;
+  if (!helper?.traverse) return 0;
+  let n = 0;
+  helper.traverse(o => {
+    if (!o.material || Array.isArray(o.material)) return;
+    const hex = gizmoTintFor(o.name, colors);
+    if (!hex) return;
+    o.material = o.material.clone();
+    o.material.color.set(hex);
+    o.material._color = o.material.color.clone();
+    n += 1;
+  });
+  return n;
+}
+
 // 기즈모 드래그가 끝난 pointerup 하나를 막는 빗장. 아이템 피커와 면 피커가 같은 빗장을 나눠 본다:
 // 한 이벤트에 두 번 물어도 같은 답을 주고(둘 다 물러난다), 다음 pointerup부터는 평소대로 선택이 된다.
 export function createDragLatch() {
@@ -75,6 +112,7 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   gizmo.setTranslationSnap(0.01);        // 10mm
   gizmo.setRotationSnap(THREE.MathUtils.degToRad(15));
   scene.add(gizmo.getHelper ? gizmo.getHelper() : gizmo);
+  tintGizmo(gizmo);                      // 첫 렌더 전에 칠한다(§13.6)
   gizmo.enabled = false;
   let current = null;
 

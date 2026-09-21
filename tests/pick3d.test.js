@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch } from '../src/view3d/pick3d.js';
+import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch, tintGizmo, gizmoTintFor, GIZMO_COLORS } from '../src/view3d/pick3d.js';
 import { createItem, createEmptyProject } from '../src/state/schema.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
@@ -297,4 +297,52 @@ test('matPick 모드에서는 attach가 기즈모를 떼어 두고, 모드가 �
   a.ui.set({ matPick: null });
   a.picker.attach({ type: 'item', id });
   expect(a.gizmo.object).toBeTruthy();
+});
+
+describe('기즈모 배색(§13.6)', () => {
+  const namesOf = helper => { const s = new Set(); helper.traverse(o => { if (o.name) s.add(o.name); }); return [...s].sort(); };
+
+  // three 0.169에 고정된 이름 규칙: 이 집합이 바뀌면 배색이 조용히 죽으므로 테스트로 못 박는다.
+  test('TransformControls 헬퍼의 핸들 이름 집합이 three 0.169 그대로다', () => {
+    const a = setupPicker();
+    expect(namesOf(a.gizmo.getHelper())).toEqual(['AXIS', 'DELTA', 'E', 'END', 'START', 'X', 'XY', 'XYZ', 'XYZE', 'XZ', 'Y', 'YZ', 'Z']);
+  });
+
+  test('gizmoTintFor: X/Y/Z로 시작하면 그 축 색, 평면 핸들은 주황, 나머지는 null', () => {
+    expect(GIZMO_COLORS).toEqual({ X: '#e5484d', Y: '#30a46c', Z: '#0090ff', plane: '#f5a524' });
+    expect(gizmoTintFor('X')).toBe('#e5484d');
+    expect(gizmoTintFor('Y')).toBe('#30a46c');
+    expect(gizmoTintFor('Z')).toBe('#0090ff');
+    expect(gizmoTintFor('XY')).toBe('#f5a524');
+    expect(gizmoTintFor('YZ')).toBe('#f5a524');
+    expect(gizmoTintFor('XZ')).toBe('#f5a524');
+    expect(gizmoTintFor('XYZ')).toBe('#e5484d');    // 평면 셋이 아니면 첫 글자를 따른다
+    expect(gizmoTintFor('XYZE')).toBe('#e5484d');
+    for (const n of ['E', 'AXIS', 'START', 'END', 'DELTA', '', null, undefined]) expect(gizmoTintFor(n), String(n)).toBeNull();
+  });
+
+  test('피커가 만든 기즈모는 축 색이 바뀌어 있고 재질을 복제해 쓴다', () => {
+    const a = setupPicker();                         // createItemPicker가 tintGizmo를 한 번 부른다
+    const helper = a.gizmo.getHelper();
+    const pick = name => { const out = []; helper.traverse(o => { if (o.name === name && o.material) out.push(o.material); }); return out; };
+    const xs = pick('X');
+    expect(xs.length).toBeGreaterThan(1);
+    expect(new Set(xs).size).toBe(xs.length);        // 공유 재질을 더럽히지 않는다(하나씩 clone)
+    expect(xs.every(m => m.color.getHexString() === 'e5484d')).toBe(true);
+    expect(pick('Y').every(m => m.color.getHexString() === '30a46c')).toBe(true);
+    expect(pick('Z').every(m => m.color.getHexString() === '0090ff')).toBe(true);
+    expect(pick('XY').every(m => m.color.getHexString() === 'f5a524')).toBe(true);
+
+    // three는 매 updateMatrixWorld에서 material._color로 색을 되돌린다 — 그 캐시도 세워 둔다.
+    const obj = new THREE.Object3D(); a.scene.add(obj); a.gizmo.attach(obj);
+    helper.updateMatrixWorld(true);
+    expect(pick('X').every(m => m.color.getHexString() === 'e5484d')).toBe(true);
+    expect(pick('XY').every(m => m.color.getHexString() === 'f5a524')).toBe(true);
+
+    // 색을 바꾼 개수를 돌려주고, 색 표를 바꿔 끼울 수 있다.
+    const n = tintGizmo(a.gizmo, { X: '#000000', Y: '#111111', Z: '#222222', plane: '#333333' });
+    expect(n).toBeGreaterThan(20);
+    expect(pick('X').every(m => m.color.getHexString() === '000000')).toBe(true);
+    expect(tintGizmo(null)).toBe(0);                 // 기즈모가 없으면 아무것도 하지 않는다
+  });
 });
