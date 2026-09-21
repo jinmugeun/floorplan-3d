@@ -117,4 +117,14 @@ describe('라이브러리 패널', () => {
     expect(() => toggleFav('sofa-3')).not.toThrow();
     localStorage.setItem = orig;
   });
+
+  test('타일 썸네일은 96 px 심벌과 카테고리 색 배경을 쓴다', () => {
+    const { el } = setup();
+    click(el, '[data-cat="소파"]');
+    const thumb = el.querySelector('.tile[data-id="sofa-3"] .tile-thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb.getAttribute('style')).toContain('#eef0f4');   // CATEGORY_COLORS['소파']
+    const svg = thumb.querySelector('svg');
+    expect(svg.getAttribute('width')).toBe('96');
+  });
 });

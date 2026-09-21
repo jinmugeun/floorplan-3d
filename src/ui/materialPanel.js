@@ -21,7 +21,7 @@ export function placedMaterials(floor) {
   return counts;
 }
 
-export const SWATCH_PX = 48;
+export const SWATCH_PX = 96;
 export function drawSwatch(canvas, material) {
   canvas.width = SWATCH_PX; canvas.height = SWATCH_PX;
   const ctx = canvas.getContext('2d');

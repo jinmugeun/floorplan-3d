@@ -102,7 +102,7 @@ export function sceneSignature(state) {
   const f = activeFloor(state) ?? { walls: [], rooms: [] }; // 활성 층이 없어도 구독자가 예외를 던지지 않게
   const v = state.view ?? {};
   const v3 = v.v3 ?? {};
-  return JSON.stringify([f.walls, f.rooms, f.items, f.ducts ?? [], state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity, v3.floorItems, v3.wallItems, v3.ceilingItems, v3.structures, v3.collision, v3.ducts, v3.ductLabels, v3.equipLabels]);
+  return JSON.stringify([f.walls, f.rooms, f.items, f.ducts ?? [], state.activeFloor ?? 0, v.display, v.hiddenLine, v.wallOpacity, v.floorOpacity, v3.floorItems, v3.wallItems, v3.ceilingItems, v3.structures, v3.collision, v3.itemEdges, v3.ducts, v3.ductLabels, v3.equipLabels]);
 }
 
 // 벽 면의 일부만 다른 재질로 덮는 영역(마감재 편집기). 벽면에서 2 mm 앞으로 띄워 z-파이팅을 피한다.

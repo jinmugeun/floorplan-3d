@@ -83,7 +83,9 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
     ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, getCamera());
     const g = getGroup()?.children.find(c => c.name === 'items');
-    const hit = g ? ray.intersectObjects(g.children, false)[0] : null;
+    // 조합 형상은 Group이라 재귀로 맞힌다. 엣지 선(LineSegments)은 건너뛴다 — Raycaster의 Line
+    // 허용치는 월드 1 m라 선이 먼 거리에서 엉뚱하게 이긴다.
+    const hit = g ? ray.intersectObjects(g.children, true).find(x => x.object.isMesh) : null;
     return hit?.object?.userData?.itemId ?? null;
   };
 

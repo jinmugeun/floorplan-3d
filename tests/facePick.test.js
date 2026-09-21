@@ -351,4 +351,18 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     b.g.add(mkDuctGroup(ductIdB, 0, 4));
     expect(b.picker.hitAt(ev)).toEqual({ kind: 'duct', id: ductIdB, segment: 0 });
   });
+
+  // 조합 형상은 그룹이라 비재귀 레이캐스트로는 아무것도 맞지 않는다(클릭이 먹지 않는 회귀).
+  test('그룹으로 된 조합 형상도 아이템으로 잡힌다', () => {
+    const a = setup({ mesh: 'floor' });
+    const group = new THREE.Group();
+    const part = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 2), new THREE.MeshBasicMaterial());
+    part.position.set(0, 0, 0);
+    group.add(part);
+    group.position.set(0, 3, 0);
+    group.name = 'item';
+    group.traverse(o => { o.userData.itemId = 'i9'; });
+    a.items.add(group);
+    expect(a.picker.hitAt({ clientX: 100, clientY: 100 })).toEqual({ kind: 'item', id: 'i9' });
+  });
 });

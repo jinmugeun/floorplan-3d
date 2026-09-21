@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { buildItems, itemMesh, itemVisible3 } from '../src/view3d/items3d.js';
+import { buildItems, itemMesh, itemVisible3, paintItem, COLLIDE_COLOR } from '../src/view3d/items3d.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { RAD } from '../src/geom/items.js';
@@ -54,17 +54,58 @@ describe('3D 아이템', () => {
     expect(itemVisible3(items[3], {})).toBe(false);
   });
 
-  test('아이템 색이 재질 색으로 간다', () => {
-    const m = itemMesh(mk('sofa-3', { pos: [0, 0], color: '#ff0000' }));
-    expect(m.material.color.getHexString()).toBe('ff0000');
+  test('아이템 색이 재질 색으로 간다(조합 형상은 자식 전부)', () => {
+    const g = itemMesh(mk('sofa-3', { pos: [0, 0], color: '#ff0000' }));
+    const colors = [];
+    g.traverse(o => { if (o.material?.color) colors.push(o.material.color.getHexString()); });
+    expect(colors.length).toBeGreaterThan(0);
+    expect(colors.some(c => c === 'ff0000')).toBe(true);          // 본체는 지정한 색
+    const box = itemMesh(mk('cabinet-lower', { pos: [0, 0], color: '#ff0000' }));
+    expect(box.material.color.getHexString()).toBe('ff0000');      // 박스 경로는 그대로
   });
 
   test('v3.collision이 켜져 있으면 겹친 아이템이 빨갛게 칠해진다', () => {
     const items = [mk('dining-4', { pos: [0, 0] }), mk('dining-4', { pos: [500, 0] }), mk('dining-4', { pos: [5000, 0] })];
     expect(collidingIds(items).size).toBe(2);
+    const red = obj => { let hit = false; obj.traverse(o => { if (o.material?.color?.getHexString() === 'e5484d') hit = true; }); return hit; };
     const on = buildItems(floor(items), { v3: {} });
-    expect(on.children.filter(c => c.material.color.getHexString() === 'e5484d')).toHaveLength(2);
+    expect(on.children.filter(red)).toHaveLength(2);
     const off = buildItems(floor(items), { v3: { collision: false } });
-    expect(off.children.some(c => c.material.color.getHexString() === 'e5484d')).toBe(false);
+    expect(off.children.some(red)).toBe(false);
+  });
+
+  test('조합 형상은 그룹이고 위치·회전·itemId는 모든 자손에 붙는다', () => {
+    const it = mk('dining-4', { pos: [1000.5, 2000.25], rot: 90 });
+    const g = itemMesh(it);
+    expect(g.type).toBe('Group');
+    expect(g.name).toBe('item');
+    expect(g.children).toHaveLength(5);
+    expect(g.position.x).toBeCloseTo(1.0005);
+    expect(g.position.z).toBeCloseTo(2.00025);
+    expect(g.position.y).toBeCloseTo((it.z + it.size[2] / 2) / 1000);
+    expect(g.rotation.y).toBeCloseTo(-RAD(90));
+    const ids = []; g.traverse(o => ids.push(o.userData.itemId));
+    expect(ids.every(x => x === it.id)).toBe(true);
+  });
+
+  test('itemEdges가 켜지면 메시마다 엣지 선이 붙고 꺼지면 없다', () => {
+    const lines = obj => { let n = 0; obj.traverse(o => { if (o.isLineSegments) n += 1; }); return n; };
+    expect(lines(itemMesh(mk('dining-4', { pos: [0, 0] }), { edges: true }))).toBe(5);
+    expect(lines(itemMesh(mk('dining-4', { pos: [0, 0] })))).toBe(0);
+    expect(lines(itemMesh(mk('cabinet-lower', { pos: [0, 0] }), { edges: true }))).toBe(1);
+    const g = buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: {} });
+    expect(lines(g)).toBe(5);                                    // 기본값은 켜짐
+    const off = buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: { itemEdges: false } });
+    expect(lines(off)).toBe(0);
+  });
+
+  test('paintItem은 그룹과 메시 모두 칠한다', () => {
+    const g = itemMesh(mk('sofa-3', { pos: [0, 0] }));
+    paintItem(g, COLLIDE_COLOR);
+    const all = []; g.traverse(o => { if (o.material?.color) all.push(o.material.color.getHexString()); });
+    expect(all.every(c => c === 'e5484d')).toBe(true);
+    const box = itemMesh(mk('cabinet-lower', { pos: [0, 0] }));
+    paintItem(box, COLLIDE_COLOR);
+    expect(box.material.color.getHexString()).toBe('e5484d');
   });
 });

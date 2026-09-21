@@ -19,6 +19,24 @@ export const CATEGORIES = [
   { name: '환기 설비', subs: ['후드', '조리기구', '디퓨저', '팬', '환기캡'] },
 ];
 
+// 카테고리 색(라이브러리 타일 썸네일 배경). 심벌 선화가 잘 보이게 옅은 색만 쓴다.
+// 3D 재질의 카테고리 색은 목적이 달라(면 색) itemShapes.js의 ITEM_MATERIALS가 따로 들고 있다.
+export const CATEGORY_COLORS = {
+  '문/창문': '#f6efe2',
+  '가전': '#eef1f4',
+  '침대/매트리스': '#f5efe6',
+  '드레스룸/행거': '#f3ece1',
+  '수납가구': '#f2f0ea',
+  '소파': '#eef0f4',
+  '책상/테이블': '#f3ece1',
+  '의자/스툴': '#f1ece4',
+  '화장대/거울': '#f0f2f4',
+  '주방싱크/욕실': '#eaf0f3',
+  '조명': '#fdf6dd',
+  '구조물': '#eceef0',
+  '환기 설비': '#e9eef2',
+};
+
 export const SYMBOL_NAMES = ['box', 'bed', 'sofa', 'table', 'chair', 'door', 'window', 'column', 'columnRound', 'circle', 'sink', 'range', 'fridge', 'lamp', 'hood', 'appliance', 'diffuser', 'fan', 'ventcap'];
 
 export const ATTACH_LABELS = { floor: '바닥에 서있는 제품', floorLay: '바닥에 깔리는 제품', wall: '벽에 붙는 제품', ceiling: '천장에 붙는 제품' };

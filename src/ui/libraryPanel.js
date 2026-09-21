@@ -1,4 +1,4 @@
-import { CATEGORIES, PRODUCTS, productsIn, searchProducts, sortProducts, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
+import { CATEGORIES, PRODUCTS, productsIn, searchProducts, sortProducts, fmtSize, ATTACH_LABELS, CATEGORY_COLORS } from '../products/catalog.js';
 import { symbolSvg } from '../products/symbols.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
@@ -38,8 +38,9 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {} }) 
     return sortProducts(productsIn(st.category, st.sub), st.sort);
   }
   function tileHtml(p, count) {
+    const tint = CATEGORY_COLORS[p.category] ?? '#f4f6f8';
     return `<button type="button" class="tile" data-id="${p.id}" title="${esc(`${p.name} · ${ATTACH_LABELS[p.attach]}`)}">
-      ${symbolSvg(p.symbol, p.size[0], p.size[1], { solid: p.color })}
+      <span class="tile-thumb" style="background:${esc(tint)}">${symbolSvg(p.symbol, p.size[0], p.size[1], { box: 96, solid: p.color })}</span>
       <span class="tile-name">${esc(p.name)}</span>
       <span class="tile-code muted">${esc(p.code)}${count ? ` · ${count}개` : ''}</span>
       <span class="tile-size muted">${fmtSize(p.size)}</span>

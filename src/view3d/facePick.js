@@ -25,7 +25,8 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     root.updateMatrixWorld();   // 레이캐스트는 최신 월드 행렬을 본다: 다시 지은 직후(렌더 전) 클릭도 맞아야 한다
     const roots = root.children;
     const itemGroup = roots.find(c => c.name === 'items');
-    const itemHit = itemGroup ? ray.intersectObjects(itemGroup.children, false)[0] : null;
+    // 조합 형상은 Group이다: 재귀로 맞히고 엣지 선(LineSegments)은 건너뛴다(Line 허용치가 월드 1 m다).
+    const itemHit = itemGroup ? ray.intersectObjects(itemGroup.children, true).find(x => x.object.isMesh) ?? null : null;
     const ductGroup = roots.find(c => c.name === 'ducts');
     const ductHit = ductGroup ? ray.intersectObjects(ductGroup.children, false)[0] : null;
     const faceHit = ray.intersectObjects(roots.filter(c => FACE_NAMES.has(c.name) && c.visible), false)[0] ?? null;

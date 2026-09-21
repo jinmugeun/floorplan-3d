@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { CATEGORIES, PRODUCTS, SYMBOL_NAMES, productById, productsIn, searchProducts, sortProducts, fmtSize } from '../src/products/catalog.js';
+import { CATEGORIES, PRODUCTS, SYMBOL_NAMES, productById, productsIn, searchProducts, sortProducts, fmtSize, CATEGORY_COLORS } from '../src/products/catalog.js';
 
 describe('제품 카탈로그', () => {
   test('카테고리 13개가 정확한 이름과 순서로 있다', () => {
@@ -83,4 +83,9 @@ describe('제품 카탈로그', () => {
     expect(productById('없음')).toBeNull();
     expect(fmtSize([1200, 600, 750])).toBe('1200×600×750');
   });
+});
+
+test('카테고리마다 타일 색이 있다', () => {
+  expect(Object.keys(CATEGORY_COLORS).sort()).toEqual(CATEGORIES.map(c => c.name).sort());
+  for (const v of Object.values(CATEGORY_COLORS)) expect(v).toMatch(/^#[0-9a-f]{6}$/);
 });
