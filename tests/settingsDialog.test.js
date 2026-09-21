@@ -157,3 +157,17 @@ test('실제 Alt+H keydown을 캡처하면 예약 키(좌우 반전) 충돌로 �
   expect(loadOverrides()).toEqual({});
   expect(document.querySelector('#toasts')?.textContent ?? '').toContain('Alt+H');
 });
+
+test('일반 탭의 "시작 안내 다시 보기"가 설정을 닫고 온보딩을 연다', () => {
+  document.body.innerHTML = '';
+  localStorage.setItem('kvp.onboarded', '1');
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const b = document.querySelector('.modal.settings [name="replayOnboarding"]');
+  expect(b.textContent).toBe('시작 안내 다시 보기');
+  b.click();
+  expect(document.querySelector('.modal.settings')).toBeNull();
+  expect(document.querySelector('.modal.onboarding')).not.toBeNull();
+  document.querySelector('.modal.onboarding [name="skip"]').click();
+  localStorage.clear();
+});

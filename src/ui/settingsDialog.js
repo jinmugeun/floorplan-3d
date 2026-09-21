@@ -3,6 +3,7 @@ import { toast } from './toast.js';
 import { downloadText } from '../io/file.js';
 import { setTable } from './keymap.js';
 import { loadOverrides, saveOverrides, effectiveKeymap, buildTable, exportJson, importJson, reset, keyLabel, conflictAction, labelOf } from './keyBindings.js';
+import { openOnboarding } from './onboarding.js';
 
 // 키 칸: action이 있는 행만 다시 지정할 수 있다(마우스 조작·1인칭 이동은 표시 전용).
 function keymapRows(keymap) {
@@ -29,6 +30,7 @@ export function openSettingsDialog({ store, onClose = () => {} }) {
       <label class="check"><input type="checkbox" name="pyeong" ${s.pyeong ? 'checked' : ''}> 평 면적 표기</label>
       <label class="check"><input type="checkbox" name="showUnit" ${s.showUnit ? 'checked' : ''}> 치수 단위 표시</label>
       <p class="hint">자동 저장: 5분 간격으로 브라우저에 저장됩니다.</p>
+      <button type="button" name="replayOnboarding">시작 안내 다시 보기</button>
     </section>
     <section id="tabKeys" hidden>
       <p class="hint">키 칸을 누르고 새 키를 누르세요. [ESC]로 취소합니다. 키를 누르면 그 동작의 모든 키가 새 키 하나로 바뀝니다.</p>
@@ -76,6 +78,7 @@ export function openSettingsDialog({ store, onClose = () => {} }) {
       return;
     }
     const name = ev.target.name;
+    if (name === 'replayOnboarding') { close(); openOnboarding({ store }); return; }
     if (name === 'keyExport') { downloadText('kvp-keymap.json', exportJson()); return; }
     if (name === 'keyReset') { reset(); setTable(buildTable(effectiveKeymap())); renderKeys(); toast('단축키를 초기화했습니다'); return; }
     if (name === 'keyImport') {

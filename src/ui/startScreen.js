@@ -13,7 +13,7 @@ const HIDDEN = new Set(['builtin-empty', 'builtin-gangdang']);
 const restoreCard = p => ({ key: 'restore', title: '이어서 작업', desc: `자동 저장된 "${p?.name ?? '프로젝트'}"을 불러옵니다.` });
 
 // 프로젝트가 비어 있을 때 띄우는 시작 오버레이.
-export function openStartScreen({ store, restored = null, onEmpty = () => {}, onUpload = () => {}, onSample = () => {}, onTemplate = () => {}, onRestore = () => {} }) {
+export function openStartScreen({ store, restored = null, onEmpty = () => {}, onUpload = () => {}, onSample = () => {}, onTemplate = () => {}, onRestore = () => {}, onClose = () => {} }) {
   const templates = allTemplateCards().filter(c => !HIDDEN.has(c.id));
   const cards = restored ? [restoreCard(restored), ...CARDS] : CARDS;
   const root = document.createElement('div');
@@ -28,7 +28,8 @@ export function openStartScreen({ store, restored = null, onEmpty = () => {}, on
       : '<p class="hint">저장한 템플릿이 없습니다. 더보기 메뉴의 "템플릿으로 저장"으로 만들 수 있습니다.</p>'}</div>
   </div>`;
   document.body.appendChild(root);
-  const close = () => { if (root.parentNode) root.remove(); };
+  // 어느 길로 닫혀도(카드·템플릿·Esc·close()) 한 번만 알린다 — 온보딩이 시작 화면 위에 겹쳐 뜨지 않게.
+  const close = () => { if (!root.parentNode) return; root.remove(); onClose(); };
   const handlers = { empty: onEmpty, upload: onUpload, sample: onSample, restore: onRestore };
   root.addEventListener('click', ev => {
     const tpl = ev.target.closest('[data-template]');

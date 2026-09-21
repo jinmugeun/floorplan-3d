@@ -75,3 +75,17 @@ test('자동 저장본이 있으면 "이어서 작업" 카드가 맨 앞에 뜨�
   expect(calls).toEqual(['restore']);
   expect(document.getElementById('startScreen')).toBeNull();
 });
+
+test('어느 길로 닫혀도 onClose가 한 번 불린다', () => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+  const closed = [];
+  const s = openStartScreen({ store: createStore(createEmptyProject()), onClose: () => closed.push(1) });
+  document.querySelector('[data-start="empty"]').click();
+  expect(closed).toEqual([1]);
+  s.close();                                   // 이미 닫혔으므로 다시 부르지 않는다
+  expect(closed).toEqual([1]);
+  openStartScreen({ store: createStore(createEmptyProject()), onClose: () => closed.push(2) })
+    .close();
+  expect(closed).toEqual([1, 2]);
+});

@@ -32,6 +32,7 @@ import { createContextMenu } from './ui/contextMenu.js';
 import { createDeleteActions } from './app/deleteActions.js';
 import { confirmDialog } from './ui/confirmDialog.js';
 import { openStartScreen } from './ui/startScreen.js';
+import { openOnboarding, isOnboarded } from './ui/onboarding.js';
 import { createTopbar, projectIsEmpty, confirmLeave } from './app/topbar.js';
 import { templateProject, saveTemplate } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
@@ -174,8 +175,11 @@ const openSettings = () => openSettingsDialog({ store });
 document.getElementById('btnSettings').addEventListener('click', openSettings);
 
 // 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
+// 온보딩은 시작 화면을 닫은 뒤에 뜬다(오버레이 두 장이 겹치지 않게 — §12.4).
 const restored = loadAutosave();
-if (projectIsEmpty(store.get())) showStart({ restored });
+const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store }); };
+if (projectIsEmpty(store.get())) showStart({ restored, onClose: maybeOnboard });
+else maybeOnboard();
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
 // 더보기 메뉴의 "템플릿으로 저장"(태스크 14의 topbar.js가 부른다). 이름은 프로젝트 이름을 기본값으로 묻는다.
@@ -187,10 +191,11 @@ function saveAsTemplate() {
   else shell.toast('템플릿을 저장하지 못했습니다(저장 공간 부족)');
 }
 // 새로 만들기·나가기·JSON 내보내기. 상단 바 버튼 배선은 topbar.js가 한다.
-function showStart({ restored = null } = {}) {
+function showStart({ restored = null, onClose = () => {} } = {}) {
   openStartScreen({
     store,
     restored,
+    onClose,
     onRestore: () => { if (restored) { store.replace(restored, { record: false }); view.fit(); shell.toast('이어서 작업합니다'); } }, // 복원은 되돌릴 단계가 아니다
     onEmpty: () => {},
     onUpload: () => openBackgroundDialog({ store }),

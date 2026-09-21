@@ -1,0 +1,87 @@
+// @vitest-environment jsdom
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { createStore } from '../src/state/store.js';
+import { createEmptyProject } from '../src/state/schema.js';
+import { addWalls } from '../src/state/floorOps.js';
+import { rectWalls } from '../src/geom/walls.js';
+import { openOnboarding, isOnboarded, markOnboarded, ONBOARDING_STEPS, ONBOARDING_KEY } from '../src/ui/onboarding.js';
+
+const card = () => document.querySelector('.modal.onboarding');
+const btn = name => card().querySelector(`[name="${name}"]`);
+const key = (k, opts = {}) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...opts }));
+
+beforeEach(() => { document.body.innerHTML = ''; localStorage.clear(); });
+// 대화상자를 열어 둔 채 끝나는 테스트가 있다: 정상 종료 경로로 닫아 document 캡처 keydown 리스너를 떼어 낸다
+// (body.innerHTML = ''는 DOM만 지우고 리스너는 남긴다 — 떼어 낸 노드를 계속 만지는 좀비 핸들러가 된다).
+afterEach(() => { document.querySelector('.modal.onboarding [name="skip"]')?.click(); });
+
+describe('온보딩', () => {
+  test('3단계 문구와 진행 표시', () => {
+    expect(ONBOARDING_STEPS).toHaveLength(3);
+    expect(ONBOARDING_STEPS[0].title).toContain('벽·방 그리기');
+    expect(ONBOARDING_STEPS[1].title).toContain('제품·마감재');
+    expect(ONBOARDING_STEPS[2].title).toContain('3D·환기');
+    openOnboarding({});
+    expect(card().textContent).toContain(ONBOARDING_STEPS[0].body);
+    expect(card().querySelector('[data-part="dots"]').textContent).toBe('● ○ ○');
+    expect(btn('next').textContent).toBe('다음');
+  });
+
+  test('[다음]으로 끝까지 가면 [시작하기]가 되고 onDone과 저장이 한 번씩 일어난다', () => {
+    const done = [];
+    openOnboarding({ onDone: () => done.push(1) });
+    btn('next').click();
+    expect(card().textContent).toContain(ONBOARDING_STEPS[1].body);
+    expect(card().querySelector('[data-part="dots"]').textContent).toBe('○ ● ○');
+    btn('next').click();
+    expect(btn('next').textContent).toBe('시작하기');
+    btn('next').click();
+    expect(card()).toBeNull();
+    expect(done).toEqual([1]);
+    expect(isOnboarded()).toBe(true);
+    expect(localStorage.getItem(ONBOARDING_KEY)).toBe('1');
+  });
+
+  test('[건너뛰기]와 [Esc]도 "봤다"로 기록하고, 키보드로 앞뒤로 움직인다', () => {
+    openOnboarding({});
+    btn('skip').click();
+    expect(card()).toBeNull();
+    expect(isOnboarded()).toBe(true);
+
+    localStorage.clear();
+    const leaked = [];
+    window.addEventListener('keydown', ev => leaked.push(ev.key));
+    openOnboarding({});
+    key('ArrowRight');
+    expect(card().textContent).toContain(ONBOARDING_STEPS[1].body);
+    key('ArrowLeft');
+    expect(card().textContent).toContain(ONBOARDING_STEPS[0].body);
+    key('Escape');
+    expect(card()).toBeNull();
+    expect(isOnboarded()).toBe(true);
+    expect(leaked).toEqual([]);            // 전역 단축키로 새지 않는다
+  });
+
+  test('빈 프로젝트에서는 첫 단계에 샘플 안내가 붙고, 도면이 있으면 붙지 않는다', () => {
+    openOnboarding({ store: createStore(createEmptyProject()) });
+    expect(card().querySelector('[data-part="extra"]').hidden).toBe(false);
+    expect(card().textContent).toContain('샘플');
+    btn('next').click();
+    expect(card().querySelector('[data-part="extra"]').hidden).toBe(true);
+    btn('skip').click();
+
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+    openOnboarding({ store });
+    expect(card().querySelector('[data-part="extra"]').hidden).toBe(true);
+  });
+
+  test('이미 봤으면 isOnboarded가 true이고, 두 번 열어도 하나만 뜬다', () => {
+    expect(isOnboarded()).toBe(false);
+    markOnboarded();
+    expect(isOnboarded()).toBe(true);
+    openOnboarding({});
+    openOnboarding({});
+    expect(document.querySelectorAll('.modal.onboarding')).toHaveLength(1);
+  });
+});
