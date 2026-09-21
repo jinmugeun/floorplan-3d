@@ -43,3 +43,43 @@ test('캔버스에 떨어뜨린 JSON은 프로젝트로 열고 제품 드래그�
   await new Promise(r => setTimeout(r, 0));
   expect(toasts).toEqual(['JSON 파일이 아닙니다']);
 });
+
+// §15.13(감사 §19): 불러오기가 현재 작업을 확인 없이 덮었다.
+test('작업 중이면 불러오기 전에 확인을 받고, 취소하면 도면이 그대로다', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const asked = [];
+  const toasts = [];
+  const loaded = [];
+  let answer = false;
+  const acts = createFileActions({
+    store, ui: createUiState(), view: { fit: vi.fn() }, view3d: { capture: () => 'data:,' },
+    toast: m => toasts.push(m), isDirty: () => true, onLoaded: () => loaded.push(1),
+    confirm: opts => { asked.push(opts); return Promise.resolve(answer); },
+  });
+  const src = createStore(createEmptyProject());
+  await acts.loadFile({ name: 'a.json', type: 'application/json', text: async () => serializeProject(src.get()) });
+  expect(asked).toHaveLength(1);
+  expect(asked[0].message).toBe('현재 도면이 대체됩니다. 자동 저장본은 남습니다');
+  expect(activeFloor(store.get()).walls).toHaveLength(4);     // 취소했으니 그대로다
+  expect(toasts).toEqual([]);
+  expect(loaded).toEqual([]);
+  answer = true;
+  await acts.loadFile({ name: 'a.json', type: 'application/json', text: async () => serializeProject(src.get()) });
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(toasts).toEqual(['불러왔습니다']);
+  expect(loaded).toEqual([1]);                                // 불러온 직후는 "저장된 상태"다
+});
+
+test('빈 프로젝트나 저장 직후에는 묻지 않는다', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const asked = [];
+  const mk = isDirty => createFileActions({ store, ui: createUiState(), view: { fit: vi.fn() }, view3d: { capture: () => 'data:,' }, toast: () => {}, isDirty, confirm: o => { asked.push(o); return Promise.resolve(true); } });
+  const src = createStore(createEmptyProject());
+  const file = () => ({ name: 'a.json', type: 'application/json', text: async () => serializeProject(src.get()) });
+  await mk(() => false).loadFile(file());                     // 저장 직후
+  expect(asked).toEqual([]);
+  await mk(() => true).loadFile(file());                      // 이제 빈 프로젝트다
+  expect(asked).toEqual([]);
+});

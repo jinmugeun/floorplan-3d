@@ -7,7 +7,7 @@ import { createShell } from '../src/ui/shell.js';
 import { createContextMenu } from '../src/ui/contextMenu.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { createTopbar, projectIsEmpty, confirmLeave, savedLabel, showSaved } from '../src/app/topbar.js';
+import { createTopbar, projectIsEmpty, confirmLeave, savedLabel, saveStatus, showSaved } from '../src/app/topbar.js';
 
 function setup(actions = {}) {
   const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
@@ -107,9 +107,32 @@ describe('나가기 가드', () => {
 test('저장 표시는 수동·자동을 가르고 시각을 0으로 채운다', () => {
   document.body.innerHTML = '<span id="savedAt">저장 이력 없음</span>';
   expect(savedLabel(new Date(2026, 8, 22, 1, 2))).toBe('01:02 자동 저장됨');
-  expect(savedLabel(new Date(2026, 8, 22, 1, 2), { manual: true })).toBe('파일로 저장했습니다');
+  expect(savedLabel(new Date(2026, 8, 22, 1, 2), { manual: true })).toBe('01:02 파일로 저장');
   showSaved(savedLabel(new Date(2026, 8, 22, 13, 5)));
   expect(document.getElementById('savedAt').textContent).toBe('13:05 자동 저장됨');
   document.body.innerHTML = '';
   expect(() => showSaved('없어도 던지지 않는다')).not.toThrow();
+});
+
+// §15.7(감사 §18): 시각이 사라졌고, 저장 뒤 편집해도 문구가 그대로라 "저장됨"으로 읽혔다.
+test('저장 표시는 세 상태다', () => {
+  const at = new Date(2026, 8, 22, 5, 3);
+  expect(saveStatus({})).toBe('저장 이력 없음');
+  expect(saveStatus({ at, manual: true })).toBe('05:03 파일로 저장');
+  expect(saveStatus({ at, manual: false })).toBe('05:03 자동 저장됨');
+  expect(saveStatus({ at, manual: true, dirty: true })).toBe('저장 안 된 변경');
+  expect(saveStatus({ dirty: true })).toBe('저장 안 된 변경');
+});
+
+test('빈 프로젝트나 저장 직후에는 나가기를 묻지 않는다', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  let asked = 0;
+  const confirm = () => { asked++; return Promise.resolve(true); };
+  expect(await confirmLeave(store.get(), { confirm, dirty: false })).toBe(true);
+  expect(asked).toBe(0);                                     // 저장 직후에는 잃을 것이 없다
+  expect(await confirmLeave(store.get(), { confirm, dirty: true })).toBe(true);
+  expect(asked).toBe(1);
+  expect(await confirmLeave(createEmptyProject(), { confirm, dirty: true })).toBe(true);
+  expect(asked).toBe(1);                                     // 빈 프로젝트도 묻지 않는다
 });

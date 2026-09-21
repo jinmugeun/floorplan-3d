@@ -34,17 +34,14 @@ import { createDeleteActions } from './app/deleteActions.js';
 import { createArrangeActions } from './app/arrangeActions.js';
 import { createDndActions } from './app/dndActions.js';
 import { createMenuActions } from './app/menuActions.js';
-import { confirmDialog } from './ui/confirmDialog.js';
-import { promptDialog } from './ui/promptDialog.js';
-import { openStartScreen } from './ui/startScreen.js';
 import { openOnboarding, isOnboarded } from './ui/onboarding.js';
-import { createTopbar, projectIsEmpty, confirmLeave, savedLabel, showSaved } from './app/topbar.js';
-import { templateProject, saveTemplate, listTemplates, BUILTIN_TEMPLATES } from './templates/projectTemplates.js';
-import { loadSample } from './samples/gangdang.js';
+import { createTopbar, projectIsEmpty, saveStatus, showSaved } from './app/topbar.js';
+import { createDirtyTracker } from './app/dirty.js';
+import { createProjectActions } from './app/projectActions.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
 import { stickyTools } from './ui/prefs.js';
-import { FP_NO_LOCK } from './ui/messages.js';
+import { FP_NO_LOCK, SAVED_MANUAL } from './ui/messages.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -212,53 +209,26 @@ document.getElementById('btnSettings').addEventListener('click', openSettings);
 // 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
 // 온보딩은 시작 화면을 닫은 뒤에 뜬다(오버레이 두 장이 겹치지 않게 — §12.4).
 const restored = loadAutosave();
+// 저장 표시 세 상태(§15.7): "HH:MM 파일로 저장" / "HH:MM 자동 저장됨" / "저장 안 된 변경".
+// 함수 선언이라 아래 createDirtyTracker에 넘겨도 TDZ에 걸리지 않는다(실제 호출은 첫 변경 뒤다).
+let lastSave = null;   // { at: Date, manual: boolean }
+function showSavedNow() { showSaved(saveStatus({ at: lastSave?.at ?? null, manual: !!lastSave?.manual, dirty: dirty.isDirty() })); }
+const dirty = createDirtyTracker(store, { onChange: showSavedNow });
+const markSaved = (manual = false) => { lastSave = { at: new Date(), manual }; dirty.markSaved(); };
+const auto = startAutosave(store, { onSaved: t => { lastSave = { at: t, manual: false }; dirty.markSaved(); } });
+const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: () => markSaved(false), saveNow: () => auto.saveNow() });
 const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store }); };
-if (projectIsEmpty(store.get())) showStart({ restored, onClose: maybeOnboard });
+if (projectIsEmpty(store.get())) project.showStart({ onClose: maybeOnboard });
 else maybeOnboard();
-const auto = startAutosave(store, { onSaved: t => showSaved(savedLabel(t)) });
-document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); showSaved(savedLabel(new Date(), { manual: true })); shell.toast(savedLabel(new Date(), { manual: true })); });
-// 더보기 메뉴의 "템플릿으로 저장". 이름은 프로젝트 이름을 기본값으로 묻고, 이미 있는 이름은 막는다
-// (saveTemplate은 같은 이름을 조용히 덮어쓴다 — 실수로 저장해 둔 템플릿을 지우지 않게 여기서 거른다).
-async function saveAsTemplate() {
-  const taken = new Set([...listTemplates(), ...BUILTIN_TEMPLATES].map(t => String(t.name).trim()));
-  const name = await promptDialog({
-    title: '템플릿으로 저장', label: '템플릿 이름', value: store.get().name, ok: '저장',
-    validate: t => (!t.trim() ? '이름을 입력해주세요' : taken.has(t.trim()) ? '같은 이름의 템플릿이 있습니다' : null),
-  });
-  if (name === null) return;
-  const saved = saveTemplate(name, store.get());
-  if (saved) shell.toast(`템플릿 "${saved.name}"을 저장했습니다`);
-  else shell.toast('템플릿을 저장하지 못했습니다(저장 공간 부족)');
-}
-// 새로 만들기·나가기·JSON 내보내기. 상단 바 버튼 배선은 topbar.js가 한다.
-function showStart({ restored = null, onClose = () => {} } = {}) {
-  openStartScreen({
-    store,
-    restored,
-    onClose,
-    onRestore: () => { if (restored) { store.replace(restored, { record: false }); view.fit(); shell.toast('이어서 작업합니다'); } }, // 복원은 되돌릴 단계가 아니다
-    onEmpty: () => {},
-    onUpload: () => openBackgroundDialog({ store }),
-    onSample: () => { loadSample(store); view.fit(); },
-    onTemplate: id => { const p = templateProject(id); if (p) { store.replace(p); view.fit(); } },
-  });
-}
-const actions = {
-  newProject: async () => {
-    if (!(await confirmDialog({ title: '새로 만들기', message: '현재 도면이 초기화됩니다. 새로 만들까요?', ok: '새로 만들기' }))) return;
-    store.replace(createEmptyProject());
-    ui.set({ selection: null, soloRoom: null, matPick: null });
-    view.fit();
-    showStart();
-  },
-  saveAsTemplate,
-  exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); shell.toast('JSON을 내보냈습니다'); },
-  // 시작 화면은 샘플·템플릿으로 프로젝트를 갈아 끼운다: 작업 중이면 먼저 묻는다(새로만들기와 같은 규칙).
-  exit: async () => { if (await confirmLeave(store.get(), { saveNow: () => auto.saveNow() })) showStart(); },
-};
-createTopbar({ store, ui, shell, menu, view3d, actions });
+document.getElementById('btnSave').addEventListener('click', () => {
+  downloadText(filenameFor(store.get()), serializeProject(store.get()));
+  auto.saveNow();          // 자동 저장본도 최신으로 만든다(그 onSaved가 lastSave를 먼저 적는다)
+  markSaved(true);         // 그다음 "파일로 저장"으로 덮는다(표시 문구가 수동 저장이 된다)
+  shell.toast(SAVED_MANUAL);
+});
+createTopbar({ store, ui, shell, menu, view3d, actions: project.actions });
 
-const files = createFileActions({ store, ui, view, view3d, toast: shell.toast });
+const files = createFileActions({ store, ui, view, view3d, toast: shell.toast, isDirty: () => dirty.isDirty(), onLoaded: () => markSaved(false) });
 document.getElementById('btnLoad').addEventListener('click', () => files.openFileDialog());
 document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventListener('click', () => files.captureNow()));
 files.wireDrop(document.getElementById('canvasWrap'));
@@ -267,4 +237,4 @@ setTable(buildTable(effectiveKeymap(loadOverrides()))); // 저장된 단축키 �
 const menuActions = createMenuActions({ store, ui, view, menu, canvas: canvas2d });
 window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions, contextMenu: () => menuActions.openSelectionMenu() }));
 setTool('select'); view.fit(); minimap.fit(500);
-if (import.meta.env.DEV) window.__app = { store, ui, view, view3d, actions }; // 브라우저 검증용, 개발 빌드에서만
+if (import.meta.env.DEV) window.__app = { store, ui, view, view3d, actions: project.actions, dirty }; // 브라우저 검증용, 개발 빌드에서만

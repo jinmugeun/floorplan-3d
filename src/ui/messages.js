@@ -51,3 +51,16 @@ export const WALL_DELETE_RESULT = (walls, items, rooms = 0) =>
   `벽 ${walls}개와 붙어 있던 제품 ${items}개를 삭제했습니다${rooms > 0 ? ` · 방 ${rooms}개가 사라졌습니다` : ''}`;
 // 붙은 제품이 없고 방만 줄어든 경우(벽 하나를 지워 방이 열린 경우)에 쓴다.
 export const ROOMS_GONE = rooms => `방 ${rooms}개가 사라졌습니다`;
+
+// 저장 표시 세 상태(§15.7 · 감사 §18). SAVED_MANUAL은 저장 직후의 토스트 문구로 남고,
+// 상단 바 표시는 시각을 갖는다("1:02"가 새벽인지 오후인지 알 수 없던 것도 0 채움으로 막는다).
+export const savedManual = (date = new Date()) => {
+  const d = date instanceof Date ? date : new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())} 파일로 저장`;
+};
+export const SAVED_DIRTY = '저장 안 된 변경';
+export const SAVED_NONE = '저장 이력 없음';
+
+// 불러오기 확인(§15.13) — 자동 저장본이 남는다는 사실까지 말해 준다(되돌릴 길이 있다).
+export const CONFIRM_LOAD = { title: '불러오기', message: '현재 도면이 대체됩니다. 자동 저장본은 남습니다', ok: '불러오기' };

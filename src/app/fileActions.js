@@ -3,11 +3,17 @@
 // 동작은 옮기기 전과 같다(문구·순서 포함).
 import { parseProject, readTextFile, capture2D, filenameFor } from '../io/file.js';
 import { openBackgroundDialog } from '../ui/backgroundDialog.js';
+import { confirmDialog } from '../ui/confirmDialog.js';
+import { CONFIRM_LOAD } from '../ui/messages.js';
+import { projectIsEmpty } from './topbar.js';
 
-export function createFileActions({ store, ui, view, view3d, toast = () => {} }) {
+export function createFileActions({ store, ui, view, view3d, toast = () => {}, confirm = confirmDialog, isDirty = () => false, onLoaded = () => {} }) {
   async function loadFile(file) {
     if (!file) return;                            // 파일 선택 취소
-    try { store.replace(parseProject(await readTextFile(file))); view.fit(); toast('불러왔습니다'); }
+    // §15.13(감사 §19): 작업 중이면 먼저 묻는다. 빈 프로젝트나 저장 직후에는 잃을 것이 없다.
+    if (!projectIsEmpty(store.get()) && isDirty() && !(await confirm(CONFIRM_LOAD))) return;
+    // 불러온 직후는 "파일과 같은 상태"다: onLoaded가 dirty를 초기화한다(§15.7).
+    try { store.replace(parseProject(await readTextFile(file))); view.fit(); onLoaded(); toast('불러왔습니다'); }
     catch (e) { toast(e.message); }
   }
   function openFileDialog() {
