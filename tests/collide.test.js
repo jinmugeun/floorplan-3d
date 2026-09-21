@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { obbOverlap, collidingIds, memoCollisions } from '../src/geom/collide.js';
+import { obbOverlap, collidingIds, memoCollisions, collidingFor } from '../src/geom/collide.js';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 
@@ -72,5 +72,39 @@ describe('충돌 계산 캐시(memoCollisions)', () => {
     expect([...memoCollisions(null)]).toEqual([]);
     expect([...memoCollisions(undefined)]).toEqual([]);
     expect([...memoCollisions({})]).toEqual([]);        // 배열이 아닌 객체도 던지지 않는다(M-2)
+  });
+});
+
+// §15.2: 드래그 중에는 전체 N² SAT를 돌지 않는다 — 끌고 있는 것만 나머지와 비교한다.
+describe('collidingFor(드래그 대상 기준)', () => {
+  test('끌고 있는 것과 겹치는 쌍만 모은다(소수 좌표)', () => {
+    const a = mk('dining-4', { pos: [0.5, 0.25] }), b = mk('dining-4', { pos: [500.5, 0.25] }), c = mk('dining-4', { pos: [5000, 0] });
+    const all = [a, b, c];
+    const hit = collidingFor(all, [a.id]);
+    expect([...hit].sort()).toEqual([a.id, b.id].sort());
+    expect(collidingFor(all, [c.id]).size).toBe(0);
+    expect(collidingFor(all, []).size).toBe(0);
+    expect(collidingFor(all, ['없는id']).size).toBe(0);
+  });
+
+  test('프리뷰 자리로 판정한다(스토어는 아직 옛 자리다)', () => {
+    const a = mk('dining-4', { pos: [0, 0] }), b = mk('dining-4', { pos: [5000, 0] });
+    const all = [a, b];
+    expect(collidingFor(all, [a.id]).size).toBe(0);
+    const preview = new Map([[a.id, { ...a, pos: [4800.5, 0.25] }]]);
+    expect([...collidingFor(all, [a.id], preview)].sort()).toEqual([a.id, b.id].sort());
+    // 프리뷰가 상대에게도 적용된다: 둘이 같이 움직이면 서로 겹치지 않는다.
+    const together = new Map([[a.id, { ...a, pos: [4800, 0] }], [b.id, { ...b, pos: [9800, 0] }]]);
+    expect(collidingFor(all, [a.id, b.id], together).size).toBe(0);
+  });
+
+  test('벽·천장 부착·숨김·높이 규칙은 collidingIds와 같다', () => {
+    const table = mk('dining-4', { pos: [0, 0] });
+    const wallItem = mk('hood-wall', { pos: [0, 0] });
+    const hidden = mk('dining-4', { pos: [0, 0], hidden: true });
+    const box = mk('storage-box', { pos: [0, 0], z: 750 });
+    expect(collidingFor([table, wallItem, hidden, box], [table.id]).size).toBe(0);
+    const under = mk('storage-box', { pos: [0, 0], z: 300 });
+    expect(collidingFor([table, under], [under.id]).size).toBe(2);
   });
 });

@@ -780,3 +780,23 @@ test('1인칭에서는 안내 배너와 [나가기] 버튼이 상주한다', () 
   expect(root.querySelector('#banner').hidden).toBe(true);
   shell.destroy();
 });
+
+// 계획 6 R-1 · §15.2: bottom.sync()는 scrollWidth를 읽어 강제 리플로를 일으킨다. 드래그 중
+// 매 프레임 스토어가 바뀌면(예전 경로) 그때마다 다시 재서 프레임을 삼켰다.
+test('하단 바 접기 판정은 보이는 컨트롤 서명이 바뀔 때만 다시 잰다', () => {
+  const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  let reads = 0;
+  const bar = root.querySelector('#bottombar');
+  Object.defineProperty(bar, 'scrollWidth', { configurable: true, get() { reads++; return 900; } });
+  Object.defineProperty(bar, 'clientWidth', { configurable: true, get: () => 1000 });
+  reads = 0;
+  store.dispatch(d => { d.name = 'a'; });
+  store.dispatch(d => { d.name = 'b'; });
+  store.dispatch(d => { d.name = 'c'; });
+  expect(reads).toBe(0);                       // 서명이 같으면 재지 않는다
+  ui.set({ mode: 'iso' });                     // 3D 전용 버튼(카메라·햇빛)이 드러난다 → 서명이 바뀐다
+  expect(reads).toBeGreaterThan(0);
+  shell.destroy();
+});

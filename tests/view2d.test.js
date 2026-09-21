@@ -422,3 +422,16 @@ test('tool.hint가 바뀐 프레임에 onHint를 한 번 부른다', async () =>
   expect(hints).toEqual(['단계 1', '단계 2']);
   v.destroy();
 });
+
+// §15.2: 프리뷰 드래그 중에도 화면은 새 자리를 보여야 한다(스토어는 pointerup까지 옛 자리다).
+test('프리뷰 층은 아이템 자리를 프리뷰로 바꾼다', async () => {
+  const { previewFloor, previewed } = await import('../src/view2d/items2d.js');
+  const floor = { items: [{ id: 'a', pos: [0, 0] }, { id: 'b', pos: [10, 10] }], walls: [] };
+  expect(previewFloor(floor, null)).toBe(floor);              // 프리뷰가 없으면 같은 객체다(불필요한 사본 없음)
+  const map = new Map([['a', { id: 'a', pos: [100.5, 200.25] }]]);
+  const pf = previewFloor(floor, map);
+  expect(pf.items[0].pos).toEqual([100.5, 200.25]);
+  expect(pf.items[1]).toBe(floor.items[1]);                   // 나머지는 그대로 물려준다
+  expect(pf.walls).toBe(floor.walls);
+  expect(previewed(floor.items[1], map)).toBe(floor.items[1]);
+});

@@ -15,15 +15,40 @@ export function obbOverlap(a, b, tol = 1) {
   return true;
 }
 
+// 충돌을 셀 대상과 높이 규칙은 두 함수가 나눠 쓴다(collidingIds · collidingFor).
+const FLOOR_ATTACH = new Set(['floor', 'floorLay']);
+const collidable = i => !!i && !i.hidden && FLOOR_ATTACH.has(i.attach);
+const zOverlap = (a, b, tol) => !(a.z >= b.z + b.size[2] - tol || b.z >= a.z + a.size[2] - tol);
+
 // 같은 층의 바닥 아이템끼리 겹치는 것들의 id. 벽·천장 부착과 숨긴 아이템은 보지 않는다.
 export function collidingIds(items, { tol = 1 } = {}) {
-  const list = (Array.isArray(items) ? items : []).filter(i => !i.hidden && (i.attach === 'floor' || i.attach === 'floorLay'));
+  const list = (Array.isArray(items) ? items : []).filter(collidable);
   const out = new Set();
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
-      const aTop = a.z + a.size[2], bTop = b.z + b.size[2];
-      if (a.z >= bTop - tol || b.z >= aTop - tol) continue; // 높이 구간이 안 겹치면 충돌 아님
+      if (!zOverlap(a, b, tol)) continue;      // 높이 구간이 안 겹치면 충돌 아님
+      if (obbOverlap(a, b, tol)) { out.add(a.id); out.add(b.id); }
+    }
+  }
+  return out;
+}
+
+// 드래그 중의 충돌(§15.2). 끌고 있는 것(ids)만 기준으로 나머지와 비교한다: 511개 도면에서
+// 전체 N²(130,000쌍)이 아니라 N×|ids|(511쌍)만 돈다. preview(Map<id, item>)가 있으면 그 자리로
+// 바꿔 본다 — 프리뷰 드래그는 스토어를 건드리지 않으므로 items의 자리는 아직 옛 자리다.
+// 돌려주는 Set은 새 객체다(memoCollisions의 캐시와 달리 호출자가 마음대로 써도 된다).
+export function collidingFor(items, ids, preview = null, { tol = 1 } = {}) {
+  const set = new Set(ids ?? []);
+  const out = new Set();
+  if (!set.size) return out;
+  const at = i => preview?.get?.(i.id) ?? i;
+  const list = (Array.isArray(items) ? items : []).map(at).filter(collidable);
+  for (const a of list) {
+    if (!set.has(a.id)) continue;
+    for (const b of list) {
+      if (a.id === b.id) continue;
+      if (!zOverlap(a, b, tol)) continue;
       if (obbOverlap(a, b, tol)) { out.add(a.id); out.add(b.id); }
     }
   }

@@ -29,6 +29,13 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // 마크업이 붙은 뒤(relayout() 다음) 한다 — 그 사이의 sync()는 ?.로 조용히 건너뛴다.
   let bottom = null;
   let firstLayout = true;
+  // 하단 바 접기 판정은 "보이는 컨트롤 서명"이 바뀔 때만 다시 한다(계획 6 R-1 · §15.2):
+  // bottom.sync()가 scrollWidth를 읽어 강제 리플로를 내므로, 스토어가 바뀔 때마다 부르면
+  // 드래그 중 프레임을 삼킨다(감사 §29). 폭 변화는 relayout()이 무조건 다시 재므로 놓치지 않는다.
+  // 선언은 relayout()보다 **위**여야 한다: relayout()은 먼저 돌고, let은 TDZ다.
+  let bottomSig = null;
+  const bottomSignature = () => ['#btnGizmoMode', '#btnCam', '#btnSun', '#btnRightPanel'].map(s => (q(s)?.hidden ? '0' : '1')).join('');
+  const syncBottom = () => { const s = bottomSignature(); if (s === bottomSig) return; bottomSig = s; bottom?.sync(); };
   // 레일 버튼의 `.on`은 "어느 탭인가"이고 aria-pressed는 "지금 열려 있는가"다(m-9): 활성 탭을 다시
   // 눌러 접거나 좁은 창이 자동으로 접으면 화면에는 패널이 없는데 보조기술은 눌림으로 읽었다.
   // 함수 선언이라 첫 relayout()보다 위에서 불려도 TDZ에 걸리지 않는다.
@@ -50,6 +57,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     q('#btnRightPanel').hidden = !q('#right').classList.contains('collapsed');
     syncRail();          // 자동 접힘도 레일 상태에 반영한다(m-9)
     bottom?.sync();
+    bottomSig = bottom ? bottomSignature() : null;   // 폭 때문에 이미 쟀다: 뒤이은 syncBottom은 건너뛴다
     // 첫 배치에서는 미니맵에 알리지 않는다: 아직 아무것도 바뀌지 않았고, 미니맵 리사이즈
     // 콜백은 "크기가 변했다"는 신호다(shell.test.js의 ResizeObserver 테스트가 횟수를 센다).
     if (!firstLayout) onMinimapResize();
@@ -203,7 +211,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     q('#btnGizmoMode').hidden = !gizmoBtnVisible({ mode: s.mode, ortho: orthoName, item });
   };
   // 2D 투영으로 들어가고 나오면 기즈모 버튼이 숨거나 보인다 → 하단 바 접기 판정도 다시 한다.
-  const setOrtho = name => { orthoName = name ?? null; syncGizmoVisible(); bottom?.sync(); };
+  const setOrtho = name => { orthoName = name ?? null; syncGizmoVisible(); syncBottom(); };
 
   const unsubs = [ui.subscribe(s => {
     root.querySelectorAll('[data-tool]').forEach(b => { const on = b.dataset.tool === s.tool; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
@@ -213,7 +221,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     q('#btnCam').hidden = !isIso; q('#btnSun').hidden = !isIso;
     syncGizmoVisible(s);
     if (!isIso && (popKind === 'cam' || popKind === 'sun')) pop.close();
-    bottom?.sync();                        // 3D 전용 버튼이 늘거나 줄면 접기 판정을 다시 한다
+    syncBottom();                          // 3D 전용 버튼이 늘거나 줄면 접기 판정을 다시 한다
     renderBanner(s);
     if (pop.isOpen() && popKind === 'view') refreshPopover();
     strip.hidden = !store.get().background || s.mode !== '2d'; // 모드가 바뀌면 이미지 세팅 스트립도 따라간다
@@ -238,8 +246,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     // 기즈모 버튼 표시(gizmoBtnVisible)는 item.locked·attach·wallId를 읽는다 — 전부 스토어 상태다.
     // 속성 패널·우클릭 메뉴로 고른 아이템을 잠그거나 아이템을 끌어 벽에 붙이면 ui는 그대로이므로
     // ui.subscribe가 돌지 않는다: 여기서도 다시 맞춰야 버튼과 하단 바 접기 판정이 낡지 않는다.
-    // bottom.sync()는 보이는 컨트롤 서명이 같으면 측정만 하고 끝나므로 비용이 늘지 않는다(bottomBar.js).
-    syncGizmoVisible(); bottom?.sync();
+    // syncBottom()은 보이는 컨트롤 서명이 같으면 아무것도 하지 않는다(측정조차 하지 않는다 — §15.2).
+    syncGizmoVisible(); syncBottom();
   };
   unsubs.push(store.subscribe(syncTop)); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, refreshBanner: () => renderBanner(),

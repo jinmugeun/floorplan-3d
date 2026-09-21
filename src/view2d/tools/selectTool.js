@@ -241,8 +241,10 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
       const sel = ui.get().selection; if (!sel) return;
       const f = floor();
       if (sel.type === 'item' || (sel.type === 'multi' && sel.kind === 'item')) {
+        const preview = items.getPreview();
         for (const id of selIds()) {
-          const it = f.items.find(x => x.id === id);
+          // 드래그 중에는 프리뷰 자리에 외곽선·핸들을 그린다(스토어는 pointerup까지 옛 자리다 — §15.2).
+          const it = preview?.get(id) ?? f.items.find(x => x.id === id);
           if (it) drawItemSelection(ctx, v, it, { locked: it.locked });
         }
         return;
@@ -261,6 +263,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
       }
     },
     cancel() { if (items.getDrag()) items.cancel(); ducts.cancel(); if (drag) { store.cancelTransaction(); drag = null; } },
+    getPreview: () => items.getPreview(),
     getDrag: () => items.getDrag() ?? ducts.getDrag() ?? (drag ? { kind: drag.kind, box: drag.kind === 'box' ? boxOf(drag.startP, drag.cur ?? drag.startP) : null } : null),
   };
 }

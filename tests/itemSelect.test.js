@@ -45,13 +45,16 @@ describe('아이템 선택과 이동', () => {
     expect(item(store, ids[0]).pos).toEqual([2000, 1500]);
   });
 
-  test('Ctrl 드래그는 스냅을 끈다', () => {
+  test('Ctrl 드래그는 스냅을 끈다(움직이는 것은 프리뷰다)', () => {
     const { store, t, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
     t.onPointerDown([2000, 1500], {});
     t.onPointerMove([2000, 560], { ctrlKey: true });
-    expect(item(store, ids[0]).pos).toEqual([2000, 560]);
+    expect(t.getPreview().get(ids[0]).pos).toEqual([2000, 560]);
+    expect(item(store, ids[0]).pos).toEqual([2000, 1500]);   // 스토어는 아직 옛 자리다
     expect(t.getDrag().guides).toEqual([]);
     t.onPointerUp([2000, 560], {});
+    expect(item(store, ids[0]).pos).toEqual([2000, 560]);    // 커밋은 pointerup에서 한 번
+    expect(t.getPreview()).toBeNull();
   });
 
   test('드래그 중 노란 가이드와 벽까지 거리가 준비된다', () => {
@@ -295,4 +298,60 @@ test('실시간 충돌 감지를 끄면 드래그 중 경고 토스트가 없다
   a.t.onPointerMove([1050, 1000], { ctrlKey: true });
   a.t.onPointerUp([1050, 1000], {});
   expect(seen).toEqual(['충돌이 발생중입니다']);
+});
+
+// §15.2(감사 §29): 이동마다 dispatch하면 511개 도면에서 480 ms/프레임이 된다.
+test('아이템 드래그는 이동 중 dispatch 0, pointerup에 1이다', () => {
+  const { store, t, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
+  let notes = 0;
+  const off = store.subscribe(() => { notes++; });
+  t.onPointerDown([2000, 1500], {});
+  expect(notes).toBe(0);                     // 선택만 바뀌었다(ui는 스토어가 아니다)
+  t.onPointerMove([2000, 1300], { ctrlKey: true });
+  t.onPointerMove([2000, 1200], { ctrlKey: true });
+  t.onPointerMove([2000, 1100], { ctrlKey: true });
+  expect(notes).toBe(0);                     // 이동 중에는 스토어를 건드리지 않는다
+  t.onPointerUp([2000, 1100], {});
+  expect(notes).toBe(1);                     // 커밋 한 번(= undo 한 단계)
+  expect(item(store, ids[0]).pos).toEqual([2000, 1100]);
+  store.undo();
+  expect(item(store, ids[0]).pos).toEqual([2000, 1500]);
+  off();
+});
+
+test('드래그 중 [Esc]는 프리뷰만 버리고 스토어를 되돌리지 않는다', () => {
+  const { store, t, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
+  t.onPointerDown([2000, 1500], {});
+  t.onPointerMove([2000, 900], { ctrlKey: true });
+  expect(t.getPreview().get(ids[0]).pos).toEqual([2000, 900]);
+  expect(t.onKey({ key: 'Escape' })).toBe(true);
+  expect(t.getPreview()).toBeNull();
+  expect(item(store, ids[0]).pos).toEqual([2000, 1500]);
+  expect(store.canUndo()).toBe(true);        // setup의 addWalls·addItem 두 단계뿐이다
+  store.undo();                              // 드래그가 undo 단계를 남기지 않았다: 직전 단계는 setup의 addItem이다
+  expect(activeFloor(store.get()).items).toHaveLength(0);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+});
+
+test('벽 부착 제품과 다중 선택도 같은 프리뷰 경로를 쓴다', () => {
+  const a = setup([['door-swing-900', {}]]);
+  const top = a.floor().walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  a.t.onPointerDown([2000, 1500], {}); a.t.onPointerUp([2000, 1500], {});
+  a.store.dispatch(d => { const it = activeFloor(d).items[0]; it.wallId = top.id; it.t = 0.5; it.pos = [2000, 0]; it.rot = 0; });
+  a.t.onPointerDown([2000, 0], {});
+  a.t.onPointerMove([2600, 300], {});
+  const prev = a.t.getPreview().get(a.ids[0]);
+  expect(prev.pos[1]).toBe(0);               // 프리뷰도 벽을 따라 미끄러진다
+  expect(prev.wallId).toBe(top.id);
+  a.t.onPointerUp([2600, 300], {});
+  expect(item(a.store, a.ids[0]).pos[0]).toBe(2600);
+
+  const b = setup([['chair-dining', { pos: [1000, 1000] }], ['chair-dining', { pos: [2000, 1000] }]]);
+  b.ui.set({ selection: { type: 'multi', kind: 'item', ids: [...b.ids] } });
+  b.t.onPointerDown([2000, 1000], {});
+  b.t.onPointerMove([2000, 1300], { ctrlKey: true });
+  expect([...b.t.getPreview().keys()].sort()).toEqual([...b.ids].sort());
+  b.t.onPointerUp([2000, 1300], {});
+  expect(item(b.store, b.ids[0]).pos).toEqual([1000, 1300]);
+  expect(item(b.store, b.ids[1]).pos).toEqual([2000, 1300]);
 });

@@ -3,7 +3,7 @@ import { updateItems, movableItems, resizeItem } from '../../state/floorOps.js';
 import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, drawOrder, HANDLE_HIT_PX } from '../items2d.js';
-import { memoCollisions } from '../../geom/collide.js';
+import { collidingFor } from '../../geom/collide.js';
 
 // 아이템 드래그 한 묶음. selectTool은 "무엇을 잡았나"만 판단하고 나머지를 여기로 넘긴다.
 // drag.kind: 'items'(이동) | 'scale'(크기 핸들, Task 9) | 'rotate'(회전 핸들, Task 9)
@@ -76,14 +76,17 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
     }
     drag.gaps = wallGaps(itemAABB(moved[0]), f.walls);
     drag.moved = true;
+    // §15.2: 이동마다 dispatch하지 않는다(감사 §29의 480 ms/프레임). 뷰 로컬 프리뷰에만 적어 두고
+    // pointerup(finish)에서 한 번 커밋한다 — undo 한 단계라는 규칙은 그대로다.
+    // 스토어가 드래그 중에 바뀌지 않으므로 속성 패널·배너도 드래그 중에는 갱신되지 않고,
+    // 놓는 순간 커밋된 자리를 보여준다(의도된 좁힘 — banner.js의 주석과 같은 이유다).
     // 여러 개를 함께 옮기면 벽 부착을 놓는다(묶음에서 기준 아이템만 벽을 따라갈 수 있다).
-    updateItems(store, moved.map(m => ({
-      id: m.id,
-      patch: {
-        pos: [Math.round(m.pos[0]), Math.round(m.pos[1])], rot: m.rot,
-        ...(drag.base.length === 1 ? { wallId: m.wallId, t: m.t, side: m.side } : { wallId: null }),
-      },
-    })), { record: false });
+    const single = drag.base.length === 1;
+    drag.preview = new Map(moved.map(m => {
+      const seated = { ...m, pos: [Math.round(m.pos[0]), Math.round(m.pos[1])] };
+      return [m.id, single ? seated : { ...seated, wallId: null }];
+    }));
+    drag.single = single;
     warn();
   }
 
@@ -92,7 +95,7 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
   function warn() {
     const fl = flags();
     if (drag.warned || fl.collision === false || fl.collisionLive === false) return;
-    const bad = memoCollisions(floor().items);
+    const bad = collidingFor(floor().items, drag.ids, drag.preview);
     if (drag.ids.some(id => bad.has(id))) { drag.warned = true; toast('충돌이 발생중입니다'); }
   }
 
@@ -120,6 +123,17 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
   function finish() {
     if (!drag) return false;
     const moved = drag.moved;
+    // 프리뷰 드래그(kind 'items')는 여기서 딱 한 번 dispatch한다. 트랜잭션 안의 dispatch이므로
+    // { record: false }이고, endTransaction이 그 하나를 undo 한 단계로 닫는다.
+    if (moved && drag.preview) {
+      updateItems(store, [...drag.preview.values()].map(m => ({
+        id: m.id,
+        patch: {
+          pos: [...m.pos], rot: m.rot,
+          ...(drag.single ? { wallId: m.wallId, t: m.t, side: m.side } : { wallId: null }),
+        },
+      })), { record: false });
+    }
     moved ? store.endTransaction() : store.cancelTransaction();
     drag = null;
     return moved;
@@ -136,7 +150,8 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
       else { const y = Math.round(v.toScreen([0, g.y])[1]) + 0.5; ctx.moveTo(0, y); ctx.lineTo(w, y); }
       ctx.stroke(); ctx.restore();
     }
-    const it = floor().items.find(x => x.id === d.base[0].id);
+    // 드래그 중에는 스토어가 옛 자리를 들고 있다: 간격 치수는 프리뷰 자리에 붙어야 한다(§15.2).
+    const it = d.preview?.get(d.base[0].id) ?? floor().items.find(x => x.id === d.base[0].id);
     if (it && d.gaps && flags().gapDims !== false) {
       const b = itemAABB(it), c = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2];
       const spots = {
@@ -152,6 +167,8 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
 
   return {
     pick, pickInBox, handleHit, start, apply, finish, cancel, drawOverlay,
+    // 뷰가 그리기에 쓰는 드래그 중 자리(§15.2). 드래그가 없으면 null이다.
+    getPreview: () => drag?.preview ?? null,
     // 테스트와 오버레이가 읽는 좁은 뷰(내부 base·startP는 내보내지 않는다)
     getDrag: () => (drag ? { kind: drag.kind, guides: drag.guides, gaps: drag.gaps } : null),
   };

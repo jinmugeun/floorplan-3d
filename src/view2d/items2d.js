@@ -106,6 +106,15 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
   }
 }
 
+// 드래그 중의 자리(§15.2). itemDrag가 만든 Map<id, item>을 그리기 경로에 얹는 유일한 방법이다:
+// 뷰가 층 하나를 프리뷰 자리로 바꿔(previewFloor) 벽 개구부·라벨·충돌·선택 표시가 모두 같은
+// 자리를 보게 한다 — 모듈마다 preview를 따로 받으면 어느 하나가 빠져 한 프레임 어긋난다.
+export const previewed = (item, preview = null) => preview?.get?.(item?.id) ?? item;
+export function previewFloor(floor, preview = null) {
+  if (!preview?.size) return floor;
+  return { ...floor, items: (floor.items ?? []).map(it => previewed(it, preview)) };
+}
+
 export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = null, labels = true, dim = null, shown = null } = {}) {
   const selected = new Set(sel?.type === 'item' ? [sel.id] : sel?.type === 'multi' && sel.kind === 'item' ? sel.ids : []);
   for (const item of drawOrder(floor.items)) {

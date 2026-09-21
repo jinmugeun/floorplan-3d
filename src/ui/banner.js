@@ -26,7 +26,10 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
     return memoCollisions(activeFloor(s)?.items ?? []).size;
   };
   // 충돌 문구는 "빨간 테두리 제품을 옮겨 주세요"다. 다만 "실시간 충돌 감지"(v2.collisionLive)를 끈 채로
-  // 제품을 끌고 있는 동안에는 2D가 빨간 테두리를 감추므로(view2d.js), 그 사이에만 그 절을 뺀 문구를 쓴다.
+  // 끌고 있는 동안에는 2D가 빨간 테두리를 감추므로(view2d.js), 그 사이에만 그 절을 뺀 문구를 쓴다.
+  // 계획 7 §15.2부터 **아이템** 이동 드래그는 스토어를 건드리지 않아(프리뷰) 드래그 중에 이 render()가
+  // 아예 돌지 않는다 — 이 분기가 실제로 쓰이는 것은 덕트·벽 드래그이고, 아이템 드래그의 배너 건수는
+  // pointerup 뒤 한 번에 갱신된다(드래그 중 충돌은 빨간 테두리가 알린다).
   // 배너를 감추지는 않는다 — §14.8이 드래그 밖에서도 충돌을 배너로 알리라고 하므로 collisionLive로
   // 배너를 게이팅하면 드래그 밖에서까지 문구가 사라져 규격을 깬다(Task 8 리뷰 Minor 1).
   const collisionText = n => (dragging && store.get().view?.v2?.collisionLive === false ? COLLISION_BANNER_QUIET : COLLISION_BANNER)(n);

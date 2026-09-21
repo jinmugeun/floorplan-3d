@@ -2,9 +2,9 @@ import { activeFloor } from '../state/schema.js';
 import { endpoints } from '../geom/walls.js';
 import { roomInnerPolygon, pointInPolygon } from '../geom/rooms.js';
 import { fmtLen, fmtArea } from '../util/units.js';   // api로 도구·라벨에 넘긴다
-import { drawItems, ITEM_DRAG_KINDS } from './items2d.js';
+import { drawItems, ITEM_DRAG_KINDS, previewFloor } from './items2d.js';
 import { drawDucts } from './ducts2d.js';
-import { memoCollisions } from '../geom/collide.js';
+import { memoCollisions, collidingFor } from '../geom/collide.js';
 import { drawWalls } from './walls2d.js';
 import { collectLabels, placeLabels, drawLabels } from './labels2d.js';
 
@@ -106,6 +106,10 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
+    // 드래그 중이면 이 프레임의 "층"은 프리뷰 자리다(§15.2). 벽 개구부·라벨·충돌·아이템이 모두
+    // 같은 층을 본다. 드래그가 없으면 previewFloor가 같은 객체를 돌려주므로 비용이 0이다.
+    const preview = tool?.getPreview?.() ?? null;
+    const pf = previewFloor(f, preview);
     ctx.fillStyle = state.settings?.background ?? '#f3f4f6'; ctx.fillRect(0, 0, w, h);
     const solo = ui.get().soloRoom ?? null;
     const soloRoom = solo ? f.rooms.find(r => r.id === solo) : null;
@@ -121,7 +125,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       poly(roomInnerPolygon(r, f.walls), sel?.type === 'room' && sel.id === r.id ? COLORS.roomSel : COLORS.room, null);
       ctx.globalAlpha = 1;
     }
-    drawWalls(ctx, api, f, { sel, soloWalls, flags: v2 });
+    drawWalls(ctx, api, pf, { sel, soloWalls, flags: v2 });
     ctx.globalAlpha = 1;
     if (sel?.type === 'wall' && !readonly) { const wl = f.walls.find(x => x.id === sel.id); if (wl) for (const p of [wl.a, wl.b]) { const s = toScreen(p); ctx.beginPath(); ctx.arc(s[0], s[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = COLORS.wallSel; ctx.lineWidth = 2; ctx.stroke(); } }
     // 라벨은 맨 마지막에 한 패스로 그린다(§14.5): 우선순위가 높은 것부터 화면 AABB로 자리를 잡고
@@ -129,17 +133,19 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     // 제품 코드 라벨은 대화형 캔버스에만 그린다(미니맵·캡처는 예전부터 drawItems의 labels && !readonly로
     // 빠져 있었다 — 라벨 패스로 옮기면서 같은 규칙을 플래그로 넘긴다).
     const lflags = readonly ? { ...v2, productCode: false } : v2;
-    const placedLabels = labels ? placeLabels(collectLabels(api, f, { flags: lflags, units, showUnit, pyeong }), { scale: camera.scale }) : [];
+    const placedLabels = labels ? placeLabels(collectLabels(api, pf, { flags: lflags, units, showUnit, pyeong }), { scale: camera.scale }) : [];
     // shown은 "라벨 패스가 맡았다"는 표시다(내용이 아니라 있고 없음만 본다 — ducts2d·items2d가
     // `!shown`으로 검사한다). key는 후보를 테스트에서 지목하고 겹침 진단을 읽기 위한 이름이다.
     const shown = labels ? new Set(placedLabels.map(c => c.key)) : null;
     // 단일 공간 모드에서는 그 방 밖의 아이템도 방·벽처럼 흐리게 그린다
     // 충돌 계산은 아이템 배열 참조가 바뀔 때만 한다(memoCollisions — §13.5). 미니맵·캡처처럼 readonly로
     // 그리는 캔버스와 "충돌 감지"를 끈 경우에는 아예 계산하지 않고, "실시간 충돌 감지"를 끈 상태로 아이템을 끌고 있는 동안에는 색을 내지 않는다(놓으면 다시 보인다).
-    drawDucts(ctx, api, f, { sel, flags: v2, labels, shown });
+    drawDucts(ctx, api, pf, { sel, flags: v2, labels, shown });
     const liveOff = v2.collisionLive === false && ITEM_DRAG_KINDS.has(tool?.getDrag?.()?.kind);
-    const collisions = readonly || v2.collision === false || liveOff ? null : memoCollisions(f.items);
-    drawItems(ctx, api, f, { sel, flags: v2, collisions, labels: labels && !readonly, shown, dim: soloRoom ? it => (pointInPolygon(it.pos, soloRoom.points) ? 1 : 0.25) : null });
+    // 드래그 중에는 끌고 있는 것만 비교한다(§15.2). 드래그 밖에서는 예전처럼 캐시된 전체 판정이다.
+    const collisions = readonly || v2.collision === false || liveOff ? null
+      : preview ? collidingFor(pf.items, [...preview.keys()]) : memoCollisions(f.items);
+    drawItems(ctx, api, pf, { sel, flags: v2, collisions, labels: labels && !readonly, shown, dim: soloRoom ? it => (pointInPolygon(it.pos, soloRoom.points) ? 1 : 0.25) : null });
     // 단일 공간 모드·배경 추적의 흐리기는 라벨에도 이어진다(방 루프에서 라벨을 뺐으므로
     // 여기서 같은 계수를 다시 준다 — 다른 방 이름이 또렷하게 남으면 모드의 뜻이 사라진다).
     // 그리는 순서는 placedLabels의 역순이다(§14.5): 나중에 그린 것이 위에 남으므로, 우선순위가
