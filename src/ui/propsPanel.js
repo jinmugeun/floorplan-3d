@@ -7,6 +7,7 @@ import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
+import { equipRowsHtml, roomDesignRowsHtml, applyVentField } from './equipRows.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 export { lenField, readLen, withUnit } from './fieldUtils.js';
@@ -130,6 +131,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${field('각도 (°)', num('rot', it.rot, 0, 360, 1))}
         ${lenField(withUnit('위치 X', units, showUnit), 'posX', it.pos[0], -1e6, 1e6, onWall, units)}
         ${lenField(withUnit('위치 Y', units, showUnit), 'posY', it.pos[1], -1e6, 1e6, onWall, units)}
+        ${equipRowsHtml(it, { units, showUnit, floor: f })}
         <button type="button" name="delete" class="danger">제품 삭제</button>`;
       return;
     }
@@ -187,6 +189,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${r.floorMat ? '' : colorField('바닥 색', 'floorColor', r.floorColor)}
         ${r.ceilingMat ? '' : colorField('천장 색', 'ceilingColor', r.ceilingColor)}
         <label class="check"><input type="checkbox" name="hideCeiling" ${r.hideCeiling ? 'checked' : ''}> 천장 감추기</label>
+        ${roomDesignRowsHtml(r)}
         <button type="button" name="delete" class="danger">방 삭제</button>`;
       return;
     }
@@ -208,6 +211,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
     if (applyMaterialField(store, sel, el)) return;      // 마감재 오프셋·각도
+    if (applyVentField(store, ui, sel, el)) return;       // 설비 속성 · 방 설계 풍량
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }
     if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }, { record: false }); return; }
     if (name === 'bgLocked') { store.dispatch(d => { d.background.locked = el.checked; }, { record: false }); return; }
