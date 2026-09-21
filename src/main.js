@@ -12,7 +12,7 @@ import { createSelectTool } from './view2d/tools/selectTool.js';
 import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.js';
 import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
 import { createDuctTool, DUCT_TOOL_DEFAULTS } from './view2d/tools/ductTool.js';
-import { deleteDuctSelection } from './view2d/tools/ductSelect.js';
+import { deleteSelectedDuct } from './view2d/tools/ductSelect.js';
 import { createPlaceTool } from './view2d/tools/placeTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
@@ -191,7 +191,7 @@ document.getElementById('btnSettings').addEventListener('click', openSettings);
 
 function deleteSelection() {
   const s = ui.get().selection;
-  if (deleteDuctSelection({ store, ui, toast: shell.toast })) return;
+  if (deleteSelectedDuct({ store, ui, toast: shell.toast })) return;
   if (s?.type === 'item') { deleteItems(store, [s.id]); ui.set({ selection: null }); return; }
   if (s?.type === 'multi' && s.kind === 'item') { deleteItems(store, s.ids); ui.set({ selection: null }); return; }
   if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); }

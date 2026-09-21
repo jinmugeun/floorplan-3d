@@ -79,6 +79,10 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
       const one = selIds().length === 1 ? f.items.find(x => x.id === selIds()[0]) : null;
       const h = one && items.handleHit(one, p);
       if (h) { items.start(h.kind, [one.id], p, h.kind === 'scale' ? { index: h.index } : {}); return; }
+      // 같은 규칙을 덕트에도 쓴다: 이미 고른 덕트의 꼭짓점 핸들은 아이템 히트보다 먼저 본다.
+      // 연결된 꼭짓점은 늘 설비 중심이라 이 예외가 없으면 영원히 잡히지 않는다(그린 핸들도 자동
+      // 연결 해제도 메뉴의 `설비 연결 해제`도 도달 불가). 고른 덕트가 없으면 아무 일도 하지 않는다.
+      if (ducts.onDownHandle(p)) return;
       // 아이템이 벽·방보다 먼저 잡힌다. 도면 잠금은 아이템 편집을 막지 않는다(locked() 가드보다 앞).
       const it = items.pick(p);
       if (it) {
@@ -193,6 +197,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     },
     onContextMenu(p) {
       const f = floor();
+      if (ducts.pickHandle(p)) return ducts.menuItems(p);   // 고른 덕트의 꼭짓점 핸들은 아이템 메뉴보다 먼저
       const it = items.pick(p);
       if (it) { const cur = selIds(); const ids = expandGroups(f, cur.includes(it.id) ? cur : [it.id]); setItemSelection(ids); return itemMenuItems({ store, ui, ids, itemActions }); }
       const ductItems = ducts.menuItems(p);

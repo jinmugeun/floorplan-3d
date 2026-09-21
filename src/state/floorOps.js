@@ -11,8 +11,12 @@ export * from './itemOps.js';
 export * from './arrangeOps.js';
 // addFloor, setActiveFloor, renameFloor, updateFloor, deleteFloor, totalArea는 300줄을 넘어 floorMgmt.js로 나눴다.
 export * from './floorMgmt.js';
-// 덕트 액션(addDuct·updateSegment·connectDuct …)은 ductOps.js에 있다. 이름이 겹치는 export가 없으므로
-// 여기서 다시 내보낸다(호출자는 계속 floorOps.js만 import한다).
+// 덕트 액션(addDuct·updateSegment·connectDuct·deleteDuctSelection …)은 ductOps.js에 있고, 위의
+// itemOps·arrangeOps·floorMgmt와 똑같이 여기서 다시 내보낸다(호출자는 floorOps.js만 import해도 된다.
+// ductOps.js를 바로 import하는 기존 호출자도 그대로 둔다 — 같은 함수다).
+// 이름이 겹치는 export는 없다: deleteDuctSelection(store, sel)이라는 이름은 이 상태 op만 쓰고,
+// 선택·토스트를 처리하는 view2d 쪽 래퍼는 deleteSelectedDuct다(ductSelect.js).
+// 좌표는 moveDuctPoint·translateDuct로만 고친다(updateDuct에 points를 넘기지 않는다).
 export * from './ductOps.js';
 
 export function setWalls(store, walls, opts = {}) {

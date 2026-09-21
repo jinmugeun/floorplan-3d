@@ -7,7 +7,7 @@ import { addDuct, ductById } from '../src/state/ductOps.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
-import { createDuctSelect, deleteDuctSelection } from '../src/view2d/tools/ductSelect.js';
+import { createDuctSelect, deleteSelectedDuct } from '../src/view2d/tools/ductSelect.js';
 import { ductMenuItems } from '../src/ui/ductMenu.js';
 
 const fakeView = { camera: { scale: 0.05 }, fit: () => {} };
@@ -73,13 +73,13 @@ describe('덕트 선택과 편집', () => {
   test('Delete는 꼭짓점을 골랐으면 점 하나, 아니면 덕트 전체를 지운다', () => {
     const { store, ui, id, floor } = setup();
     ui.set({ selection: { type: 'duct', id, segment: null, vertex: 1 } });
-    expect(deleteDuctSelection({ store, ui })).toBe(true);
+    expect(deleteSelectedDuct({ store, ui })).toBe(true);
     expect(ductById(floor(), id).points).toHaveLength(2);
     expect(ui.get().selection).toEqual({ type: 'duct', id, segment: null, vertex: null });
-    expect(deleteDuctSelection({ store, ui })).toBe(true);   // 점이 2개면 덕트를 지운다
+    expect(deleteSelectedDuct({ store, ui })).toBe(true);   // 점이 2개면 덕트를 지운다
     expect(floor().ducts).toHaveLength(0);
     expect(ui.get().selection).toBeNull();
-    expect(deleteDuctSelection({ store, ui })).toBe(false);  // 고른 덕트가 없으면 처리하지 않는다
+    expect(deleteSelectedDuct({ store, ui })).toBe(false);  // 고른 덕트가 없으면 처리하지 않는다
   });
 
   test('우클릭 메뉴 항목이 상황에 따라 켜지고 꺼진다', () => {
@@ -149,12 +149,47 @@ describe('덕트 선택과 편집', () => {
     expect(ductById(floor(), id).points[1]).toEqual([4000.25, 1500]);
   });
 
+  test('고른 덕트의 꼭짓점 핸들은 설비보다 먼저 잡힌다 — 자동 연결 해제에 닿는 유일한 경로', () => {
+    const { store, ui, st, id, hood, floor } = setup();
+    // 아무것도 고르지 않았으면 일반 히트 순서 그대로 후드가 이긴다(연결점 = 후드 중심).
+    st.onPointerDown([2000.5, 1500.25]); st.onPointerUp([2000.5, 1500.25]);
+    expect(ui.get().selection.type).toBe('item');
+    // 구간을 눌러 덕트를 먼저 고르면(1단계) 그 덕트의 꼭짓점 핸들이 아이템보다 먼저다(2단계).
+    st.onPointerDown([5000.5, 1500.25]); st.onPointerUp([5000.5, 1500.25]);
+    expect(ui.get().selection).toEqual({ type: 'duct', id, segment: 0, vertex: null });
+    st.onPointerDown([2000.5, 1500.25]);
+    expect(ui.get().selection).toEqual({ type: 'duct', id, segment: null, vertex: 0 });
+    expect(st.getDrag()).toMatchObject({ kind: 'vertex', id, index: 0 });   // 아이템 드래그가 아니다
+    st.onPointerMove([4000.75, 1500.25]);                                  // 2 m 밖 = 풋프린트·스냅 허용치 밖
+    st.onPointerUp([4000.75, 1500.25]);
+    expect(ductById(floor(), id).points[0]).toEqual([4000, 1500]);
+    expect(ductById(floor(), id).connections).toEqual([]);                  // 자동 연결 해제
+    store.undo();                                                          // 이동 + 해제가 한 단계
+    expect(ductById(floor(), id).points[0]).toEqual([2000, 1500]);
+    expect(ductById(floor(), id).connections).toEqual([{ point: 0, itemId: hood }]);
+  });
+
+  test('고른 덕트의 꼭짓점 우클릭은 아이템 메뉴가 아니라 덕트 메뉴를 준다', () => {
+    const { ui, st, id, floor } = setup();
+    ui.set({ selection: { type: 'duct', id, segment: 0, vertex: null } });
+    const menu = st.onContextMenu([2000.5, 1500.25]);
+    expect(ui.get().selection).toEqual({ type: 'duct', id, segment: null, vertex: 0 });
+    expect(pickItem(menu, '설비 연결 해제').disabled).toBe(false);
+    pickItem(menu, '설비 연결 해제').onSelect();
+    expect(ductById(floor(), id).connections).toEqual([]);
+    // 고른 덕트가 없으면 같은 자리 우클릭은 그대로 아이템 메뉴다.
+    ui.set({ selection: null });
+    expect(pickItem(st.onContextMenu([2000.5, 1500.25]), '설비 연결 해제')).toBeUndefined();
+    expect(ui.get().selection.type).toBe('item');
+  });
+
   test('선택 도구는 아이템 다음·벽 앞에서 덕트를 잡는다', () => {
     const { ui, st, id } = setup();
+    // 고른 덕트가 없을 때의 히트 순서다: 후드가 덕트보다 먼저다(고른 덕트의 꼭짓점 핸들만 예외).
+    st.onPointerDown([2000, 1500]); st.onPointerUp([2000, 1500]);
+    expect(ui.get().selection.type).toBe('item');
     st.onPointerDown([5000, 1500]); st.onPointerUp([5000, 1500]);
     expect(ui.get().selection).toEqual({ type: 'duct', id, segment: 0, vertex: null });
-    st.onPointerDown([2000, 1500]); st.onPointerUp([2000, 1500]);       // 후드가 덕트보다 먼저
-    expect(ui.get().selection.type).toBe('item');
     st.onPointerDown([5000, 0]); st.onPointerUp([5000, 0]);             // 덕트가 없는 벽 위
     expect(ui.get().selection.type).toBe('wall');
   });
