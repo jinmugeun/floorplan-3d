@@ -1,4 +1,5 @@
-// 레일 "풍량" 탭(명세 §11.3). 스토어를 구독해 설비·연결·설계값이 바뀌면 바로 다시 센다.
+// 레일 "풍량" 탭(기능 명세 §11.3 / 아키텍처 §11.7). 스토어를 구독해 설비·연결·설계값이 바뀌면 바로 다시 센다.
+// 패널 폭이 240 px뿐이라 실별 표는 4열(공간·EA·SA·급기율)이고 설계값은 실측값 아래 작은 글씨로 접어 넣는다.
 import { activeFloor } from '../state/schema.js';
 import { airflowSummary, AIRFLOW_TOL } from '../vent/airflow.js';
 import { esc } from '../util/html.js';
@@ -8,6 +9,8 @@ const pct = v => (v === null ? '-' : `${v.toFixed(1)}%`);
 const KIND_LABELS = { supply: '급기', exhaust: '배기', mixed: '급·배기' };
 // 설계와 5% 이상 벌어진 칸만 붉게 표시한다(설계가 0이면 견줄 대상이 없다).
 const warn = off => (off !== null && Math.abs(off) >= AIRFLOW_TOL ? ' class="warn"' : '');
+// 실측값 + 그 아래 설계값. '미배치' 줄(roomId null)은 견줄 설계값이 없어 '-'로 찍는다.
+const cell = (now, design, off, hasDesign) => `<td${warn(off)}>${cmh(now)}<br><small class="muted">설계 ${hasDesign ? cmh(design) : '-'}</small></td>`;
 
 export function createAirflowPanel(container, { store, ui }) {
   function render() {
@@ -15,15 +18,15 @@ export function createAirflowPanel(container, { store, ui }) {
     const rows = s.rooms.filter(r => r.EA || r.SA || r.design.EA || r.design.SA);
     container.innerHTML = `
       <h3>실별 풍량 (CMH)</h3>
-      <table class="est-table air-table"><thead><tr><th>공간</th><th>EA</th><th>SA</th><th>설계 EA</th><th>설계 SA</th><th>급기율</th></tr></thead>
-      <tbody>${rows.length ? rows.map(r => `<tr data-room="${esc(r.roomId)}"><td>${esc(r.name)}</td><td${warn(r.offEA)}>${cmh(r.EA)}</td><td${warn(r.offSA)}>${cmh(r.SA)}</td><td>${cmh(r.design.EA)}</td><td>${cmh(r.design.SA)}</td><td>${pct(r.ratio)}</td></tr>`).join('')
-        : '<tr><td colspan="6">배치된 설비가 없습니다.</td></tr>'}</tbody></table>
+      <div class="air-wrap"><table class="est-table air-table"><thead><tr><th>공간</th><th>EA</th><th>SA</th><th>급기율</th></tr></thead>
+      <tbody>${rows.length ? rows.map(r => `<tr${r.roomId === null ? '' : ` data-room="${esc(r.roomId)}"`}><td>${esc(r.name)}</td>${cell(r.EA, r.design.EA, r.offEA, r.roomId !== null)}${cell(r.SA, r.design.SA, r.offSA, r.roomId !== null)}<td>${pct(r.ratio)}</td></tr>`).join('')
+        : '<tr><td colspan="4">배치된 설비가 없습니다.</td></tr>'}</tbody></table></div>
       <h3>계통별 풍량 (CMH)</h3>
-      <table class="est-table air-table"><thead><tr><th>계통</th><th>구분</th><th>EA</th><th>SA</th><th>설비</th></tr></thead>
+      <div class="air-wrap"><table class="est-table air-table"><thead><tr><th>계통</th><th>구분</th><th>EA</th><th>SA</th><th>설비</th></tr></thead>
       <tbody>${s.systems.length ? s.systems.map(x => `<tr data-system="${esc(x.system)}"><td>${esc(x.system)}</td><td>${KIND_LABELS[x.kind]}</td><td>${cmh(x.EA)}</td><td>${cmh(x.SA)}</td><td>${x.itemIds.length}</td></tr>`).join('')
-        : '<tr><td colspan="5">덕트 계통이 없습니다.</td></tr>'}</tbody></table>
+        : '<tr><td colspan="5">덕트 계통이 없습니다.</td></tr>'}</tbody></table></div>
       <p class="hint">합계 배기 ${cmh(s.totalEA)} · 급기 ${cmh(s.totalSA)} · 급기율 ${pct(s.ratio)}</p>
-      <p class="hint">설계값과 5% 이상 차이 나는 칸은 붉게 표시됩니다. 공간 줄을 누르면 그 공간이 선택됩니다.</p>`;
+      <p class="hint">설계값과 5% 이상 차이 나는 칸은 붉게 표시됩니다. 공간 줄을 누르면 그 공간이 선택됩니다. 숨긴 설비와 어느 공간에도 들지 않는 설비('미배치')는 실별 합계에서 구분됩니다.</p>`;
   }
   const onClick = ev => {
     const tr = ev.target.closest('tr[data-room]');
@@ -32,5 +35,6 @@ export function createAirflowPanel(container, { store, ui }) {
   container.addEventListener('click', onClick);
   const unsub = store.subscribe(render);
   render();
+  // 계통 줄의 data-system은 Task 12(계통 선택·시방서 연동)가 쓸 자리다 — 지금은 클릭 대상이 아니다.
   return { destroy() { unsub(); container.removeEventListener('click', onClick); container.innerHTML = ''; } };
 }

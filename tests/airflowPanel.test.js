@@ -55,6 +55,30 @@ describe('풍량 패널', () => {
     expect(ui.get().selection).toEqual({ type: 'room', id: room });
   });
 
+
+  test('실별 표는 4열이고 설계값은 실측값 아래 작은 글씨로 들어간다', () => {
+    const { el } = setup();
+    const first = el.querySelectorAll('table')[0];
+    const th = [...first.querySelectorAll('thead th')];
+    expect(th).toHaveLength(4);                                   // 240 px 레일에 들어가야 한다
+    expect(th.map(t => t.textContent)).toEqual(['공간', 'EA', 'SA', '급기율']);
+    const row = el.querySelector('tr[data-room]');
+    expect(row.children).toHaveLength(4);
+    expect(row.children[1].querySelector('small').textContent).toBe('설계 5,000');
+    expect(row.children[2].querySelector('small').textContent).toBe('설계 4,000');
+    expect(el.querySelectorAll('.air-wrap')).toHaveLength(2);     // 두 표 모두 가로 스크롤 감싸개 안에
+  });
+
+  test('어느 공간에도 들지 않는 설비는 "미배치" 줄로 보이고 클릭 대상이 아니다', () => {
+    const { store, el } = setup();
+    addItem(store, createItem(productById('diffuser-650'), { pos: [50000, 50000], props: { type: 'diffuser', symbol: '가', flow: 'supply', a: 650, b: 650, cmh: 3200 } }));
+    const row = [...el.querySelectorAll('tbody tr')].find(r => r.textContent.includes('미배치'));
+    expect(row).toBeTruthy();
+    expect(row.dataset.room).toBeUndefined();                     // 선택할 방이 없다
+    expect(row.textContent).toContain('설계 -');
+    expect(el.textContent).toContain('합계 배기 4,990 · 급기 3,200');
+  });
+
   test('destroy가 구독을 끊고 비운다', () => {
     const { store, el, panel } = setup();
     panel.destroy();

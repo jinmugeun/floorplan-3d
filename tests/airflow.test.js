@@ -1,8 +1,9 @@
 import { describe, test, expect } from 'vitest';
-import { equipAirflow, roomAirflow, systemAirflow, airflowSummary, AIRFLOW_TOL } from '../src/vent/airflow.js';
+import { equipAirflow, roomAirflow, systemAirflow, airflowSummary, AIRFLOW_TOL, UNPLACED_ROOM } from '../src/vent/airflow.js';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
-import { addWalls, addItem, updateItem, updateRoom } from '../src/state/floorOps.js';
+import { addWalls, addItem, updateItem, updateRoom, deleteItems } from '../src/state/floorOps.js';
+import { setItemFlag } from '../src/state/itemOps.js';
 import { addDuct } from '../src/state/ductOps.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
@@ -54,7 +55,70 @@ describe('실별 풍량', () => {
     expect(w.EA).toBe(1000);
     expect(w.SA).toBe(0);
     expect(w.ratio).toBe(0);
-    expect(rows).toHaveLength(2);               // 방 밖 설비는 어느 줄에도 없다
+    expect(rows).toHaveLength(3);               // 방 둘 + 방 밖 설비를 담는 '미배치' 줄
+  });
+
+  test('어느 방에도 들지 않는 설비는 맨 끝 "미배치" 줄에 남는다', () => {
+    const { floor } = setup();
+    const rows = roomAirflow(floor());
+    const last = rows[rows.length - 1];
+    expect(last).toMatchObject({ roomId: null, name: UNPLACED_ROOM, SA: 3200, design: { EA: 0, SA: 0 }, offEA: null, offSA: null });
+    expect(rows.filter(r => r.roomId === null)).toHaveLength(1);
+  });
+
+  test('방 밖 설비가 없으면 "미배치" 줄은 만들지 않는다', () => {
+    const { store, floor, stray } = setup();
+    deleteItems(store, [stray]);
+    expect(roomAirflow(floor()).some(r => r.roomId === null)).toBe(false);
+  });
+
+  test('벽 중심선(방 경계) 위의 벽 부착 설비도 그 방에 센다', () => {
+    // 방 폴리곤은 벽 중심선이라 벽팬 중심이 경계 위에 놓인다 — pointInPolygon만 쓰면 북/동 벽에서 사라진다.
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [4000, 5000], 200));
+    const f = () => activeFloor(store.get());
+    const room = f().rooms[0].id;
+    const wallFan = props => createItem(productById('fan-wall-500'), { pos: props.pos, props: { type: 'fan', fanId: 'F-1', flow: 'exhaust', chamber: [500, 500, 500], cmh: 5000 } });
+    const north = addItem(store, wallFan({ pos: [2000, 0] }));
+    const south = addItem(store, wallFan({ pos: [2000, 5000] }));
+    const west = addItem(store, wallFan({ pos: [0, 2500] }));
+    const east = addItem(store, wallFan({ pos: [4000, 2500] }));
+    const rows = roomAirflow(f());
+    expect(rows).toHaveLength(1);                     // '미배치' 줄이 생기지 않는다
+    expect(rows[0].roomId).toBe(room);
+    expect(rows[0].EA).toBe(20000);                   // 5000 × 4
+    expect(airflowSummary(f()).totalEA).toBe(20000);
+    // 벽 두께 절반(100 mm) + 1 mm 안쪽은 받고, 2 m 밖은 '미배치'다.
+    deleteItems(store, [north, south, west, east]);
+    addItem(store, wallFan({ pos: [2000, -2000] }));
+    const out = roomAirflow(f());
+    expect(out.find(r => r.roomId === room).EA).toBe(0);
+    expect(out[out.length - 1]).toMatchObject({ roomId: null, name: UNPLACED_ROOM, EA: 5000 });
+    expect(airflowSummary(f()).totalEA).toBe(5000);   // 합계에서 사라지지 않는다
+  });
+
+  test('소수 좌표도 방 안·경계에서 같게 판정한다', () => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [4000.5, 5000.25], 200));
+    const f = () => activeFloor(store.get());
+    const room = f().rooms[0].id;
+    addItem(store, createItem(productById('diffuser-650'), { pos: [2000.5, 2000.25], props: { type: 'diffuser', symbol: '가', flow: 'supply', a: 650, b: 650, cmh: 3200 } }));
+    addItem(store, createItem(productById('fan-wall-500'), { pos: [2000.5, 5000.25], props: { type: 'fan', fanId: 'F-1', flow: 'exhaust', chamber: [500, 500, 500], cmh: 1250 } }));
+    const rows = roomAirflow(f());
+    expect(rows.some(r => r.roomId === null)).toBe(false);
+    expect(rows.find(r => r.roomId === room)).toMatchObject({ SA: 3200, EA: 1250 });
+  });
+
+  test('숨긴 설비는 실별·계통별·합계 어디에도 세지 않는다', () => {
+    const { store, floor, diff, hood } = setup();
+    setItemFlag(store, [diff, hood], 'hidden');
+    const s = airflowSummary(floor());
+    expect(s.totalSA).toBe(3200);               // 숨긴 급기 디퓨저 3200이 빠지고 방 밖 설비 3200만 남는다
+    expect(s.totalEA).toBe(1000);               // 숨긴 후드 4990이 빠진다
+    expect(s.rooms.find(r => r.name === '가열조리실')).toMatchObject({ EA: 0, SA: 0 });
+    const f4 = s.systems.find(r => r.system === 'F-4');
+    expect(f4.EA).toBe(0);
+    expect(f4.itemIds).not.toContain(hood);
   });
 
   test('EA가 0이면 비율은 null, 설계가 0이면 편차는 null이다', () => {
@@ -110,6 +174,30 @@ describe('계통별 풍량', () => {
     expect(rows.reduce((a, r) => a + r.EA, 0)).toBeLessThanOrEqual(s.totalEA);
     expect(rows.reduce((a, r) => a + r.SA, 0)).toBeLessThanOrEqual(s.totalSA);
   });
+
+  test('서로 다른 계통의 덕트 두 개에 같은 설비가 붙어도 한 번만 계상된다', () => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [6000, 5000], 200));
+    const f = () => activeFloor(store.get());
+    // 후드를 F-4 덕트와 F-3 덕트에 모두 연결한다 — 주인은 floor.ducts 순서상 먼저 나온 F-4다.
+    const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000, 2000], size: [1800, 1100, 600], props: { type: 'hood', no: 1, faceVelocity: 0.7, system: 'F-9' } }));
+    const d4 = addDuct(store, { system: 'F-4', kind: 'exhaust', points: [[2000, 2000], [3000, 2000]], connections: [{ point: 0, itemId: hood }] });
+    const d3 = addDuct(store, { system: 'F-3', kind: 'exhaust', points: [[2000, 2000], [2000, 1000]], connections: [{ point: 0, itemId: hood }] });
+    const rows = systemAirflow(f()), s = airflowSummary(f());
+    expect(rows.find(r => r.system === 'F-4')).toMatchObject({ EA: 4990, itemIds: [hood], ductIds: [d4] });
+    expect(rows.find(r => r.system === 'F-3')).toMatchObject({ EA: 0, itemIds: [], ductIds: [d3] });
+    expect(rows.some(r => r.system === 'F-9')).toBe(false);
+    expect(rows.reduce((a, r) => a + r.EA, 0)).toBe(s.totalEA);   // 계통 합계의 총합 = 전체 배기량
+    expect(rows.reduce((a, r) => a + r.SA, 0)).toBe(s.totalSA);
+  });
+
+  test('급기 덕트만 있는 계통은 kind가 supply다', () => {
+    const { store, floor } = setup();
+    addDuct(store, { system: 'SA-1', kind: 'supply', points: [[0, 0], [1000, 0]], segments: [{ w: 400, h: 300, z: 2700 }] });
+    const rows = systemAirflow(floor());
+    expect(rows.find(r => r.system === 'SA-1')).toMatchObject({ kind: 'supply', EA: 0, SA: 0 });
+    expect(rows.find(r => r.system === 'F-4').kind).toBe('exhaust');  // 배기 덕트 + 배기 설비
+  });
 });
 
 describe('요약', () => {
@@ -117,9 +205,12 @@ describe('요약', () => {
     const { floor } = setup();
     const s = airflowSummary(floor());
     expect(s.totalEA).toBe(5990);               // 4990 + 1000
-    expect(s.totalSA).toBe(3200);
-    expect(s.ratio).toBeCloseTo(53.4, 1);
-    expect(s.rooms).toHaveLength(2);
+    expect(s.totalSA).toBe(6400);               // 3200(조리실) + 3200(방 밖 = '미배치')
+    expect(s.ratio).toBeCloseTo(106.8, 1);      // 6400 / 5990
+    expect(s.rooms).toHaveLength(3);            // 방 둘 + '미배치'
     expect(s.systems.some(x => x.system === 'F-4')).toBe(true);
+    // 합계는 보이는 설비 전부의 합이다('미배치'가 있어 어느 설비도 합계에서 사라지지 않는다).
+    const all = floor().items.reduce((a, it) => ({ EA: a.EA + equipAirflow(it).EA, SA: a.SA + equipAirflow(it).SA }), { EA: 0, SA: 0 });
+    expect({ EA: s.totalEA, SA: s.totalSA }).toEqual(all);
   });
 });
