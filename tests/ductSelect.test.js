@@ -100,6 +100,9 @@ describe('덕트 선택과 편집', () => {
     expect(pickItem(onSeg, '급기로 전환')).toBeTruthy();
     pickItem(onSeg, '댐퍼 추가').onSelect();
     expect(ductById(floor(), id).dampers[0]).toMatchObject({ segment: 0, type: 'VD', w: 750, h: 400 });
+    // §15.5: 후드 중심의 연결된 꼭짓점은 설비에 양보한다 — 덕트를 먼저 고르면 그 꼭짓점 핸들이
+    // 다시 앞선다(계획 3의 "고른 덕트의 핸들" 규칙).
+    ui.set({ selection: { type: 'duct', id, segment: 0, vertex: null } });
     const onVtx = menu([2000, 1500]);
     expect(pickItem(onVtx, '점 삭제').disabled).toBe(false);
     expect(pickItem(onVtx, '설비 연결 해제').disabled).toBe(false);
@@ -112,7 +115,8 @@ describe('덕트 선택과 편집', () => {
   });
 
   test('연결된 꼭짓점을 설비에서 떼어 놓으면 연결이 끊긴다(한 단계로 되돌아간다)', () => {
-    const { store, ds, down, id, hood, floor } = setup();
+    const { store, ui, ds, down, id, hood, floor } = setup();
+    ui.set({ selection: { type: 'duct', id, segment: 0, vertex: null } });   // 덕트를 먼저 고른다(§15.5)
     down([2000, 1500]);                       // 후드에 연결된 0번 점
     ds.apply([3000.5, 3000.25]);                   // 풋프린트(1600×1200) 밖 + 접속점에서 300 mm 넘게
     ds.finish();
@@ -124,7 +128,8 @@ describe('덕트 선택과 편집', () => {
   });
 
   test('연결된 꼭짓점을 설비 안에서 조금만 옮기면 연결이 남는다', () => {
-    const { ds, down, id, hood, floor } = setup();
+    const { ui, ds, down, id, hood, floor } = setup();
+    ui.set({ selection: { type: 'duct', id, segment: 0, vertex: null } });   // 덕트를 먼저 고른다(§15.5)
     down([2000, 1500]);
     ds.apply([2200.5, 1600.25]);                   // 아직 후드 풋프린트 안
     ds.finish();
@@ -132,8 +137,9 @@ describe('덕트 선택과 편집', () => {
   });
 
   test('연결된 꼭짓점을 다른 설비에 떨어뜨리면 그 설비로 옮겨 붙는다', () => {
-    const { store, ds, down, id, hood, floor } = setup();
+    const { store, ui, ds, down, id, hood, floor } = setup();
     const other = addItem(store, createItem(productById('hood-box'), { pos: [7000.5, 5000.25], z: 1700 }));
+    ui.set({ selection: { type: 'duct', id, segment: 0, vertex: null } });   // 덕트를 먼저 고른다(§15.5)
     down([2000, 1500]);
     ds.apply([7000.5, 5000.25]);
     ds.finish();
@@ -195,12 +201,12 @@ describe('덕트 선택과 편집', () => {
     expect(ui.get().selection.type).toBe('item');
   });
 
-  test('선택 도구는 덕트를 아이템보다 먼저, 벽보다 먼저 잡는다(§14.6)', () => {
-    const { ui, st, id } = setup();
-    // 후드 중심 = 덕트 0번 꼭짓점: 이제 덕트가 이긴다(예전에는 후드가 이겼다).
+  test('선택 도구는 덕트 구간을 벽보다 먼저, 연결 꼭짓점은 설비에 양보한다(§14.6 · §15.5)', () => {
+    const { ui, st, id, hood } = setup();
+    // 후드 중심 = 후드에 연결된 덕트 0번 꼭짓점: 설비가 이긴다(§15.5 — 감사 §22).
     st.onPointerDown([2000, 1500]); st.onPointerUp([2000, 1500]);
-    expect(ui.get().selection).toEqual({ type: 'duct', id, segment: null, vertex: 0 });
-    // 꼭짓점 밖의 후드 몸통은 후드다.
+    expect(ui.get().selection).toEqual({ type: 'item', id: hood });
+    // 후드 몸통의 다른 자리도 당연히 후드다.
     st.onPointerDown([2600, 1900]); st.onPointerUp([2600, 1900]);
     expect(ui.get().selection.type).toBe('item');
     st.onPointerDown([5000, 1500]); st.onPointerUp([5000, 1500]);

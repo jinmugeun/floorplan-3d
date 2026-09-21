@@ -45,18 +45,29 @@ export const projectOnSegment = (a, b, p) => lerp(a, b, segmentT(a, b, p));
 // 꼭짓점이 구간보다 먼저다(아키텍처 §11.3). 두 단계로 나눠 도는 이유가 그것이다:
 // 한 번에 돌면 덕트 A의 구간이 덕트 B의 꼭짓점을 이긴다. 뒤에 그린 덕트가 먼저 잡힌다.
 // 구간 허용치는 띠 반폭과 tol 중 큰 쪽이다(가는 덕트도 클릭할 수 있게).
-export function hitDuct(ducts, p, tol = 0) {
+// skipVertex(duct, index)가 true인 꼭짓점은 건너뛴다(§15.5: 커서가 든 설비에 연결된 꼭짓점).
+// 그 꼭짓점을 끝점으로 갖는 구간도 **그 점 위에서만** 함께 건너뛴다: 구간의 끝점이 곧 그
+// 꼭짓점이라 거리 0으로 걸려, 그러지 않으면 감사 §22가 '구간 선택'으로 이름만 바꿔 되살아난다.
+// 구간 중앙·다른 구간은 그대로 아이템보다 앞선다(라운드 4 §20 유지).
+export function hitDuct(ducts, p, tol = 0, { skipVertex = null } = {}) {
   const list = (ducts ?? []).filter(d => d && !d.hidden);
   for (let k = list.length - 1; k >= 0; k--) {
     const d = list[k];
-    for (let i = 0; i < d.points.length; i++) if (dist(p, d.points[i]) <= tol) return { ductId: d.id, vertex: i };
+    for (let i = 0; i < d.points.length; i++) {
+      if (dist(p, d.points[i]) > tol) continue;
+      if (skipVertex?.(d, i)) continue;
+      return { ductId: d.id, vertex: i };
+    }
   }
   for (let k = list.length - 1; k >= 0; k--) {
     const d = list[k];
     for (let i = 0; i < d.points.length - 1; i++) {
       const a = d.points[i], b = d.points[i + 1];
       if (distToSegment(p, a, b) > Math.max(tol, (d.segments[i]?.w ?? 0) / 2)) continue;
-      return { ductId: d.id, segment: i, t: segmentT(a, b, p) };
+      const t = segmentT(a, b, p);
+      const near = t <= 0.5 ? i : i + 1;           // 커서에 가까운 끝점
+      if (skipVertex?.(d, near) && dist(p, d.points[near]) <= tol) continue;
+      return { ductId: d.id, segment: i, t };
     }
   }
   return null;

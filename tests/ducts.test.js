@@ -31,6 +31,9 @@ describe('덕트 기하', () => {
     expect(seg.t).toBeCloseTo(0.50016, 4);
     expect(hitDuct(ducts, [1500, 900], 20)).toBeNull();   // 띠 밖(폭 600 → 반폭 300)
     expect(hitDuct([mk({ id: 'd1', hidden: true })], [3000, 0], 150)).toBeNull();
+    expect(hitDuct(ducts, [3000, 0], 150, { skipVertex: (d, i) => i === 1 })).toBeNull();   // §15.5: 건너뛴 꼭짓점 + 그 끝점의 구간
+    expect(hitDuct(ducts, [1500, 0], 150, { skipVertex: (d, i) => i === 1 }))               // 구간 중앙은 그대로 잡힌다
+      .toMatchObject({ ductId: 'd1', segment: 0 });
   });
 
   test('점 이동·삽입·삭제가 구간·연결·댐퍼 인덱스를 함께 옮긴다', () => {

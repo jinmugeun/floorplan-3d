@@ -6,10 +6,10 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
 import { addWalls, addItem } from '../src/state/floorOps.js';
-import { addDuct } from '../src/state/ductOps.js';
+import { addDuct, disconnectDuct } from '../src/state/ductOps.js';
 import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { pickAt, PICK_TOL_PX } from '../src/view2d/tools/pick.js';
+import { pickAt, PICK_TOL_PX, topItemAt } from '../src/view2d/tools/pick.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 
 const fakeView = { camera: { scale: 0.05 }, fit: () => {} };
@@ -90,6 +90,34 @@ describe('2D 히트 순서(pickAt)', () => {
     ui.set({ selection: null });
     expect(menuLabel(t.onContextMenu([5000, 0], {}), '벽 나누기')).toBeTruthy();
     expect(ui.get().selection).toEqual({ type: 'wall', id: wallId });
+  });
+
+  // §15.5(감사 §22): 연결된 꼭짓점은 늘 그 설비 중심에 있다 — 설비를 옮기면 꼭짓점이 따라오므로
+  // 설비 발자국 안에서는 설비를 잡아야 한다(계획 3의 규칙 복원).
+  test('설비 중심의 연결된 꼭짓점은 그 설비에 양보한다', () => {
+    const { store, ui, hood, duct } = setup();
+    expect(pickAt(store, ui, [2000, 1500], at)).toMatchObject({ type: 'item' });
+    expect(pickAt(store, ui, [2000.5, 1500.25], at).item.id).toBe(hood);
+    // 연결이 끊기면 예전 규칙대로 꼭짓점이 먼저다(라운드 4 §20 유지).
+    disconnectDuct(store, duct, 0);
+    expect(pickAt(store, ui, [2000, 1500], at)).toMatchObject({ type: 'duct', ductId: duct, vertex: 0 });
+  });
+
+  test('발자국 밖의 연결 꼭짓점과 모든 구간은 여전히 아이템보다 앞선다', () => {
+    const { store, ui, duct } = setup();
+    // 후드 발자국(1600×1200) 밖으로 점이 나가 있어도 연결은 남아 있을 수 있다(불러온 파일).
+    store.dispatch(d => { activeFloor(d).ducts.find(x => x.id === duct).points[0] = [3500.5, 1500.25]; });
+    expect(pickAt(store, ui, [3500.5, 1500.25], at)).toMatchObject({ type: 'duct', ductId: duct, vertex: 0 });
+    // 구간은 이 규칙에서 아예 빠지지 않는다: 디퓨저 중심을 지나는 구간이 여전히 이긴다.
+    expect(pickAt(store, ui, [6000, 3100], at)).toMatchObject({ type: 'duct', ductId: duct, segment: 1 });
+  });
+
+  test('다른 설비에 연결된 꼭짓점은 건너뛰지 않는다', () => {
+    const { store, ui, duct, lamp } = setup();
+    store.dispatch(d => { activeFloor(d).ducts.find(x => x.id === duct).points[0] = [4000, 4000]; });
+    // 커서 아래 아이템은 천장 디퓨저인데 꼭짓점의 연결 대상은 후드다 → 꼭짓점이 이긴다.
+    expect(topItemAt(activeFloor(store.get()), {}, [4000, 4000], 40).id).toBe(lamp);
+    expect(pickAt(store, ui, [4000, 4000], at)).toMatchObject({ type: 'duct', ductId: duct, vertex: 0 });
   });
 
   test('다중 선택된 벽 묶음은 그 벽에 붙은 제품보다 먼저다(결정 37)', () => {
