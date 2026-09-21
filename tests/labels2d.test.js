@@ -2,7 +2,7 @@
 // 덕트 단면·댐퍼·치수 라벨이 서로 겹쳐 아무것도 읽히지 않았다. 라벨은 화면 px 단위로 놓고,
 // 우선순위가 높은 것부터 자리를 잡되 겹치면 생략한다(LOD).
 import { describe, test, expect } from 'vitest';
-import { LABEL_PRIORITY, LOD_SCALE, ROOM_NAME_DY, ROOM_AREA_DY, WALL_DIM_MIN_PX, labelBox, placeLabels, collectLabels, drawLabels } from '../src/view2d/labels2d.js';
+import { LABEL_PRIORITY, LOD_SCALE, ROOM_NAME_DY, ROOM_AREA_DY, WALL_DIM_MIN_PX, LABEL_BG, CHAR_EM, textWidth, labelBox, placeLabels, collectLabels, drawLabels } from '../src/view2d/labels2d.js';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
 import { addWalls, addItem } from '../src/state/floorOps.js';
@@ -21,10 +21,23 @@ describe('라벨 배치(placeLabels)', () => {
   test('상수와 화면 AABB', () => {
     expect(LABEL_PRIORITY).toEqual(['roomName', 'roomArea', 'wallDim', 'ductSize', 'damper', 'equip']);
     expect([LOD_SCALE, ROOM_NAME_DY, ROOM_AREA_DY, WALL_DIM_MIN_PX]).toEqual([0.02, 16, 4, 40]);
-    // v.label이 그리는 배경 상자와 같은 크기: 폭 = 글자수 × size × 0.62 + 8, 높이 = size + 6.
+    // 폭은 글자별로 잰다(높이 = size + 6): 한글·전각·원문자는 size당 1.0, ASCII·숫자는 0.62.
+    // 실측(Chromium, IBM Plex Sans KR)은 한글 0.892·① 1.0·ASCII 0.50~0.60이며, 한글을 넉넉히
+    // 잡는 쪽이 "겹치면 생략"에 안전하다. 글자수 × 0.62로 재면 '가나'가 6.1 px 좁아진다.
+    expect([CHAR_EM.wide, CHAR_EM.narrow]).toEqual([1, 0.62]);
     expect(labelBox({ sp: [100.5, 50.25], text: '가나', size: 12 })).toEqual([
-      100.5 - (2 * 12 * 0.62 + 8) / 2, 50.25 - 9, 100.5 + (2 * 12 * 0.62 + 8) / 2, 50.25 + 9,
+      100.5 - (2 * 12 + 8) / 2, 50.25 - 9, 100.5 + (2 * 12 + 8) / 2, 50.25 + 9,
     ]);
+    // 한글 이름 vs 숫자 치수: 같은 글자수라도 상자 폭이 다르다(소수 좌표도 그대로 흐른다).
+    expect(labelBox({ sp: [40.25, 12.5], text: '조리실', size: 13 })).toEqual([
+      40.25 - (3 * 13 + 8) / 2, 12.5 - 9.5, 40.25 + (3 * 13 + 8) / 2, 12.5 + 9.5,
+    ]);
+    expect(labelBox({ sp: [40.25, 12.5], text: '750', size: 13 })).toEqual([
+      40.25 - (3 * 13 * 0.62 + 8) / 2, 12.5 - 9.5, 40.25 + (3 * 13 * 0.62 + 8) / 2, 12.5 + 9.5,
+    ]);
+    expect(textWidth('①', 12)).toBeCloseTo(12, 9);            // 원문자는 전각이다(실측 12.0 px)
+    expect(textWidth('VD 750×400', 10)).toBeCloseTo(62, 9);   // 전각이 없으면 전부 0.62(실측 0.572)
+    expect(textWidth('', 12)).toBe(0);
   });
 
   test('우선순위가 높은 것이 자리를 얻고 겹치는 것은 생략한다', () => {
@@ -35,6 +48,8 @@ describe('라벨 배치(placeLabels)', () => {
     ];
     const placed = placeLabels(list, { scale: 0.05 });
     expect(placed.map(c => c.key)).toEqual(['room:r1:name', 'wall:w1']);   // 겹친 설비 번호가 빠진다
+    // 반환은 우선순위 오름차순이다(그리는 쪽이 역순으로 그려 높은 우선순위를 위에 남긴다 — §14.5).
+    expect(placed.map(c => c.kind)).toEqual(['roomName', 'wallDim']);
   });
 
   test('같은 우선순위는 입력 순서를 지키고 빈 글자는 후보가 아니다', () => {
@@ -83,7 +98,8 @@ describe('라벨 후보 수집(collectLabels)', () => {
     const { floor } = setup();
     const dims = collectLabels(fakeView(0.05), floor(), { flags: { dims: true } }).filter(c => c.kind === 'wallDim');
     expect(dims).toHaveLength(5);                       // 사각형 4 + 30° 벽 1
-    expect(dims.every(c => c.bg === '#fff')).toBe(true);
+    expect(dims.every(c => c.bg === LABEL_BG)).toBe(true);
+    expect(LABEL_BG).toBe('rgba(255,255,255,0.85)');    // §14.5 "반투명 상자" — 불투명 흰 상자는 벽선을 지운다
     expect(collectLabels(fakeView(0.001), floor(), { flags: { dims: true } }).filter(c => c.kind === 'wallDim')).toHaveLength(0);
   });
 
@@ -95,7 +111,7 @@ describe('라벨 후보 수집(collectLabels)', () => {
     expect(all.find(c => c.kind === 'ductSize').text).toBe('750×400');
     expect(all.find(c => c.kind === 'damper').key).toBe('damper:dk1:0');
     expect(all.find(c => c.kind === 'damper').text).toBe('VD 750×400');
-    expect(all.find(c => c.kind === 'equip').key).toBe(`equip:${hood}`);
+    expect(all.find(c => c.kind === 'equip').key).toBe(`equip:${hood}:0`);   // 글자 부품마다 유일한 키
     expect(collectLabels(v, floor(), { flags: { ductLabels: false } }).some(c => c.kind === 'ductSize')).toBe(false);
     expect(collectLabels(v, floor(), { flags: { ducts: false } }).some(c => c.kind === 'damper')).toBe(false);
     expect(collectLabels(v, floor(), { flags: { equipLabels: false } }).some(c => c.kind === 'equip')).toBe(false);
@@ -106,9 +122,9 @@ describe('라벨 후보 수집(collectLabels)', () => {
     const calls = [];
     const v = { ...fakeView(0.05), label: (...a) => calls.push(a) };
     const ctx = { globalAlpha: 0.25 };                 // 흐리기는 부르는 쪽(view2d)의 몫이다
-    drawLabels(ctx, v, [{ text: 'A', at: [1, 2], size: 11, color: '#000', bg: '#fff' }, { text: 'B', at: [3, 4], size: 12, color: '#111', bg: null }]);
-    expect(calls).toEqual([
-      ['A', [1, 2], { size: 11, color: '#000', bg: '#fff' }],
+    drawLabels(ctx, v, [{ text: 'A', at: [1, 2], size: 11, color: '#000', bg: LABEL_BG }, { text: 'B', at: [3, 4], size: 12, color: '#111', bg: null }]);
+    expect(calls).toEqual([   // 받은 순서 그대로(뒤집는 것은 부르는 쪽의 몫이다 — view2d)
+      ['A', [1, 2], { size: 11, color: '#000', bg: LABEL_BG }],
       ['B', [3, 4], { size: 12, color: '#111', bg: null }],
     ]);
     expect(ctx.globalAlpha).toBe(0.25);                // 단일 공간 모드의 계수를 덮어쓰지 않는다

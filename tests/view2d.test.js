@@ -6,6 +6,7 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createView2D, drawEmptyGuide, EMPTY_GUIDE_LINES } from '../src/view2d/view2d.js';
+import { LABEL_BG } from '../src/view2d/labels2d.js';
 
 function makeCanvas() {
   const c = document.createElement('canvas');
@@ -116,6 +117,32 @@ test('v2 flags decide what the 2D canvas draws', async () => {
   store.dispatch(d => { d.view.v2.roomName = false; d.view.v2.roomArea = false; d.view.v2.measures = false; d.view.v2.dims = false; }, { record: false });
   await frame(); await frame();
   expect(texts).toEqual([]);
+  v.destroy();
+});
+
+// §14.5: 우선순위가 낮은 라벨(벽 치수·덕트 단면)의 배경 상자가 방 이름 위에 오면 우선순위가
+// 무의미해진다. 라벨 패스는 placedLabels를 역순으로 그려 높은 우선순위를 맨 위에 남긴다.
+test('낮은 우선순위의 배경 상자가 방 이름보다 먼저 그려진다(위를 덮지 않는다)', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  store.dispatch(d => { activeFloor(d).rooms[0].name = '식기구세척실'; }, { record: false });
+  const ops = [];
+  const c = makeCanvas();
+  c.getContext = () => new Proxy({}, {
+    get: (t, k) => (k === 'measureText' ? () => ({ width: 10 })
+      : k === 'fillText' ? (str => ops.push(`text:${str}`))
+      : k === 'fillRect' ? (() => ops.push(`rect:${t.fillStyle}`))
+      : (k in t ? t[k] : () => {})),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+  const v = createView2D(c, store, createUiState());
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  await frame(); await frame();
+  const name = ops.indexOf('text:식기구세척실');
+  const lastBox = ops.lastIndexOf(`rect:${LABEL_BG}`);   // 벽 치수 라벨의 반투명 상자
+  expect(name).toBeGreaterThan(-1);
+  expect(lastBox).toBeGreaterThan(-1);
+  expect(lastBox).toBeLessThan(name);                    // 상자가 먼저 = 방 이름이 위에 남는다
   v.destroy();
 });
 

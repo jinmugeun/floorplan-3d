@@ -140,11 +140,14 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     drawItems(ctx, api, f, { sel, flags: v2, collisions, labels: labels && !readonly, shown, dim: soloRoom ? it => (pointInPolygon(it.pos, soloRoom.points) ? 1 : 0.25) : null });
     // 단일 공간 모드·배경 추적의 흐리기는 라벨에도 이어진다(방 루프에서 라벨을 뺐으므로
     // 여기서 같은 계수를 다시 준다 — 다른 방 이름이 또렷하게 남으면 모드의 뜻이 사라진다).
+    // 그리는 순서는 placedLabels의 역순이다(§14.5): 나중에 그린 것이 위에 남으므로, 우선순위가
+    // 낮은 라벨(덕트 단면·댐퍼)의 반투명 상자가 방 이름·면적을 덮지 못하게 낮은 것부터 그린다.
     if (labels) {
       const a0 = ctx.globalAlpha;
-      for (const c of placedLabels) {
-        const r = soloRoom && c.key.startsWith('room:') ? f.rooms.find(x => c.key === `room:${x.id}:name` || c.key === `room:${x.id}:area`) : null;
-        ctx.globalAlpha = (tracing ? 0.35 : 1) * (soloRoom && r && r.id !== solo ? 0.25 : 1);
+      const soloKeys = soloRoom ? new Set([`room:${solo}:name`, `room:${solo}:area`]) : null;
+      for (const c of [...placedLabels].reverse()) {
+        const other = soloKeys && c.key.startsWith('room:') && !soloKeys.has(c.key);
+        ctx.globalAlpha = (tracing ? 0.35 : 1) * (other ? 0.25 : 1);
         drawLabels(ctx, api, [c]);
       }
       ctx.globalAlpha = a0;

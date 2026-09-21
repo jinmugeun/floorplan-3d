@@ -5,6 +5,9 @@ import { FLOW_COLORS } from '../vent/equipment.js';
 import { sub, norm, perp } from '../geom/vec.js';
 
 export const DUCT_COLORS = { ...FLOW_COLORS, sel: '#8b5cf6', locked: '#e5484d', label: '#5b6775', damper: '#f59e0b' };
+// 치수·덕트 단면·댐퍼 라벨의 배경 상자(§14.5 "반투명 상자"). 불투명 흰 상자는 벽선과 덕트 띠를
+// 통째로 지웠다. labels2d가 여기서 가져다 쓰고 다시 내보낸다(의존 방향을 지키려고 정의만 여기 둔다).
+export const LABEL_BG = 'rgba(255,255,255,0.85)';
 export const DUCT_FILL_ALPHA = 0.35;
 export const DUCT_HANDLE_PX = 7;
 export const DUCT_DOT_PX = 2.5;        // 꼭짓점 점 반지름(§11.5) — 선택 핸들보다 작다
@@ -34,7 +37,7 @@ function drawDamper(ctx, v, duct, damper, showLabel) {
   ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]);
   ctx.strokeStyle = DUCT_COLORS.damper; ctx.lineWidth = 3; ctx.stroke();
   ctx.restore();
-  if (showLabel) v.label(`${damper.type} ${Math.round(damper.w)}×${Math.round(damper.h)}`, [p[0] + n[0] * (half + 300), p[1] + n[1] * (half + 300)], { size: 10, color: DUCT_COLORS.damper, bg: '#fff' });
+  if (showLabel) v.label(`${damper.type} ${Math.round(damper.w)}×${Math.round(damper.h)}`, [p[0] + n[0] * (half + 300), p[1] + n[1] * (half + 300)], { size: 10, color: DUCT_COLORS.damper, bg: LABEL_BG });
 }
 
 // labels는 뷰의 옵션이다(미니맵은 labels:false로 그린다 — 글자가 층 전체를 덮지 않게).
@@ -74,7 +77,7 @@ export function drawDucts(ctx, v, floor, { sel = null, flags = {}, labels = true
     if (showLabels) {
       for (let i = 0; i < duct.segments.length; i++) {
         const a = duct.points[i], b = duct.points[i + 1];
-        v.label(sizeLabel(duct.segments[i]), [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { size: 11, color: DUCT_COLORS.label, bg: '#fff' });
+        v.label(sizeLabel(duct.segments[i]), [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { size: 11, color: DUCT_COLORS.label, bg: LABEL_BG });
       }
     }
     for (const d of duct.dampers) drawDamper(ctx, v, duct, d, showLabels);
