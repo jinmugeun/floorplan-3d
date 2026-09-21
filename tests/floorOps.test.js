@@ -388,3 +388,61 @@ test('없는 벽을 지우면 아무 단계도 만들지 않는다', () => {
   expect(steps).toEqual([]);
   off();
 });
+
+// §15.6(감사 §28) — 벽 삭제와 같은 규칙이 방 삭제에도 적용된다: 그 방만 쓰는 벽에 붙어 있던
+// 문·창·벽 제품이 wallId 없이 허공에 남으면 안 된다.
+test('deleteRoom은 지우는 벽에 붙은 제품도 같은 단계에서 지우고 개수를 돌려준다', () => {
+  const s = setup();
+  addWalls(s, [makeWall({ a: [0, 3000], b: [1732.0508, 4000], thickness: 200, height: 2300 })]); // 방에 속하지 않는 30° 벽
+  const f0 = activeFloor(s.get());
+  const room = f0.rooms[0];
+  const top = f0.walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const slant = f0.walls.find(w => !room.wallIds.includes(w.id));
+  const door = addItem(s, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.37, pos: [1480.5, 0.25] }));
+  const cap = addItem(s, createItem(productById('ventcap-150'), { wallId: slant.id, t: 0.5 }));
+  const sofa = addItem(s, createItem(productById('sofa-3'), { pos: [2000, 1500] }));
+
+  const r = deleteRoom(s, room.id);
+  expect(r).toEqual({ walls: 4, items: 1, rooms: 1 });
+  const f = activeFloor(s.get());
+  expect(f.walls.map(w => w.id)).toEqual([slant.id]);   // 방의 벽 4개만 사라졌다
+  expect(f.items.map(i => i.id).sort()).toEqual([cap, sofa].sort());
+  expect(f.items.some(i => i.wallId === null && i.attach === 'wall')).toBe(false); // 허공에 남은 제품이 없다
+
+  s.undo();                                             // 벽·제품·방이 한 단계로 돌아온다
+  const u = activeFloor(s.get());
+  expect(u.walls).toHaveLength(5);
+  expect(u.rooms).toHaveLength(1);
+  expect(u.items.map(i => i.id).sort()).toEqual([door, cap, sofa].sort());
+  const back = u.items.find(i => i.id === door);
+  expect(back.wallId).toBe(top.id);
+  expect(back.t).toBeCloseTo(0.37, 6);
+});
+
+test('deleteRoom은 이웃 방과 공유하는 벽과 그 벽에 붙은 제품을 건드리지 않는다', () => {
+  const s = setup();
+  addWalls(s, rectWalls([4000, 0], [7000, 3000], 200));
+  const f0 = activeFloor(s.get());
+  expect(f0.rooms).toHaveLength(2);
+  const shared = f0.walls.find(w => f0.rooms.every(r => r.wallIds.includes(w.id)));
+  expect(shared).toBeTruthy();
+  const win = addItem(s, createItem(productById('window-slide-1200'), { wallId: shared.id, t: 0.42, pos: [4000, 1260.5] }));
+  const left = activeFloor(s.get()).rooms.find(r => r.wallIds.includes(shared.id) && r.points.some(p => p[0] < 1000));
+
+  const r = deleteRoom(s, left.id);
+  const f = activeFloor(s.get());
+  expect(f.walls.some(w => w.id === shared.id)).toBe(true);
+  expect(r.items).toBe(0);
+  const kept = f.items.find(i => i.id === win);
+  expect(kept.wallId).toBe(shared.id);                  // 공유 벽의 제품은 그대로 붙어 있다
+  expect(kept.t).toBeCloseTo(0.42, 6);
+});
+
+test('없는 방을 지우면 아무 단계도 만들지 않는다', () => {
+  const s = setup();
+  const steps = [];
+  const off = s.subscribe(() => steps.push(1));
+  expect(deleteRoom(s, '없는id')).toEqual({ walls: 0, items: 0, rooms: 0 });
+  expect(steps).toEqual([]);
+  off();
+});

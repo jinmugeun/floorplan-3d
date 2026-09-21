@@ -36,8 +36,20 @@ export function addWalls(store, walls) {
 const wallItemIds = (f, kill) => (f.items ?? []).filter(i => i.attach === 'wall' && i.wallId && kill.has(i.wallId)).map(i => i.id);
 
 export function deleteWall(store, id, opts) { return deleteWalls(store, [id], opts); }
-export function deleteWalls(store, ids, opts) {
-  const kill = new Set(ids);
+export function deleteWalls(store, ids, opts) { return removeWalls(store, new Set(ids), opts); }
+// 방 삭제도 벽을 지우는 일이다: 이웃 방과 공유하는 벽은 남기고(예전 규칙 그대로) 그 방만 쓰는 벽을
+// 지운다. 지워지는 벽에 붙어 있던 제품도 같은 단계에서 사라진다(§15.6 · 감사 §28) — 공유 벽은 남으니
+// 거기 붙은 제품도 그대로다. 개수를 deleteWalls와 같은 모양으로 돌려줘 호출자가 같은 문구로 알린다.
+export function deleteRoom(store, id, opts) {
+  const f = activeFloor(store.get());
+  const room = f.rooms.find(r => r.id === id);
+  if (!room) return { walls: 0, items: 0, rooms: 0 };
+  const shared = new Set(f.rooms.filter(r => r.id !== id).flatMap(r => r.wallIds));
+  return removeWalls(store, new Set(room.wallIds.filter(w => !shared.has(w))), opts);
+}
+// 벽과 그 벽에 붙어 있던 것들을 한 단계(undo 한 번)로 지운다. 지운 벽·제품 수와 줄어든 방 수를
+// 돌려준다(호출자가 토스트로 알린다). 벽 삭제와 방 삭제가 같은 트랜잭션을 쓰는 한 자리다.
+function removeWalls(store, kill, opts) {
   const before = activeFloor(store.get());
   const walls = before.walls.filter(w => kill.has(w.id)).length;
   if (!walls) return { walls: 0, items: 0, rooms: 0 };      // 지울 벽이 없으면 빈 단계도 만들지 않는다
@@ -53,16 +65,6 @@ export function deleteWalls(store, ids, opts) {
     reroom(f); reattach(f);
   }, opts);
   return { walls, items, rooms: rooms0 - activeFloor(store.get()).rooms.length };
-}
-export function deleteRoom(store, id) {
-  return store.dispatch(d => {
-    const f = activeFloor(d);
-    const room = f.rooms.find(r => r.id === id); if (!room) return;
-    const shared = new Set(f.rooms.filter(r => r.id !== id).flatMap(r => r.wallIds));
-    f.walls = f.walls.filter(w => !room.wallIds.includes(w.id) || shared.has(w.id));
-    reroom(f);
-    reattach(f);
-  });
 }
 // opts는 store.dispatch로 그대로 전달된다(트랜잭션 안에서 여러 벽을 한 번에 고칠 때 { record: false }가 필요하다).
 export function updateWall(store, id, patch, opts) {

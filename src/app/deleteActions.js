@@ -12,6 +12,7 @@ import { WALL_DELETE_RESULT, ROOMS_GONE } from '../ui/messages.js';
 // 방 삭제의 확인·재확인은 ui/roomActions.js의 removeRoom 한 곳이다(방 우클릭 메뉴도 그것을 쓴다 —
 // ui/는 app/을 import하지 않으므로 공용 함수가 ui/에 산다). 여기서는 그것을 부르기만 한다:
 // 다시 내보내면 같은 함수에 두 개의 import 경로가 생겨 "한 자리" 규칙이 흐려진다.
+// 방 삭제의 결과 토스트도 removeRoom이 낸다(확인 뒤 한 번) — 그래서 여기서는 report를 부르지 않는다.
 
 export function createDeleteActions({ store, ui, view, toast = () => {}, setTool = () => {} }) {
   // 벽 삭제 결과 한 곳(§15.6). 제품이 함께 사라졌으면 그것을, 제품은 없고 방만 줄었으면 방만
@@ -28,7 +29,7 @@ export function createDeleteActions({ store, ui, view, toast = () => {}, setTool
     if (s?.type === 'multi' && s.kind === 'item') { deleteItems(store, s.ids); ui.set({ selection: null }); return; }
     if (s?.type === 'wall') { report(deleteWall(store, s.id)); ui.set({ selection: null }); return; }
     if (s?.type === 'multi' && s.kind === 'wall') { report(deleteWalls(store, s.ids)); ui.set({ selection: null }); return; }
-    if (s?.type === 'room') removeRoom(store, ui, s.id);            // 확인은 비동기다(호출자는 기다리지 않는다)
+    if (s?.type === 'room') removeRoom(store, ui, s.id, toast);     // 확인은 비동기다(호출자는 기다리지 않는다)
   }
   function createDeleteTool() {
     return {
@@ -38,7 +39,7 @@ export function createDeleteActions({ store, ui, view, toast = () => {}, setTool
         const w = hitWall(f.walls, p, 6 / view.camera.scale);
         if (w) { report(deleteWall(store, w.id)); return; }
         const r = f.rooms.find(x => pointInPolygon(p, x.points));
-        if (r) removeRoom(store, ui, r.id);
+        if (r) removeRoom(store, ui, r.id, toast);
       },
       onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {},
     };

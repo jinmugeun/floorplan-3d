@@ -10,11 +10,19 @@
 import { activeFloor } from '../state/schema.js';
 import { deleteRoom } from '../state/floorOps.js';
 import { confirmDialog, CONFIRM_ROOM_DELETE } from './confirmDialog.js';
+import { toast as showToast } from './toast.js';
+import { WALL_DELETE_RESULT } from './messages.js';
 
-export async function removeRoom(store, ui, roomId) {
+// toast를 받는 이유: 방 우클릭 메뉴(surfaceMenu.js)는 모듈의 토스트를 그대로 쓰고,
+// app/deleteActions.js는 자기가 쥔 토스트를 넘긴다(테스트도 그것으로 문구를 확인한다).
+export async function removeRoom(store, ui, roomId, toast = showToast) {
   if (!(await confirmDialog(CONFIRM_ROOM_DELETE))) return false;
   if (!activeFloor(store.get()).rooms.some(r => r.id === roomId)) return false;
-  deleteRoom(store, roomId);
+  const r = deleteRoom(store, roomId);
+  // 방이 사라진 것은 방금 확인창에서 본 일이라 그것만으로는 알리지 않는다. 확인창이 말해 주지 않는
+  // 것은 "벽에 붙어 있던 제품도 함께 사라졌다"다(§15.6 · 감사 §28) — 벽 삭제와 같은 문구를 쓴다.
+  // 줄어든 방 수는 그 문구 뒤에 붙는다(방 하나를 지워 옆 방까지 열렸을 때 K > 1이 된다).
+  if (r.items > 0) toast(WALL_DELETE_RESULT(r.walls, r.items, r.rooms));
   const s = ui.get().selection;
   if (s?.type === 'room' && s.id === roomId) ui.set({ selection: null });
   return true;

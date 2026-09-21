@@ -122,3 +122,37 @@ test('붙은 제품이 없으면 방이 줄었다는 것만 알리고, 그것도
   b.deleteSelection();
   expect(seen).toHaveLength(1);                 // 남은 벽 하나를 지워도 줄어들 방이 없다
 });
+
+// §15.6(감사 §28) — 방 삭제 경로도 같은 문구로 알린다. 확인 뒤 한 번만 뜬다(이중 토스트 금지).
+test('방 삭제도 붙어 있던 제품을 알린다(확인 뒤 한 번)', async () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const seen = [];
+  const a = createDeleteActions({ store, ui, view: { camera: { scale: 0.08 } }, toast: m => seen.push(m), setTool: () => {} });
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  addItem(store, createItem(productById('door-swing-900'), { wallId: top.id, t: 0.37, pos: [1480.5, 0.25] }));
+  const roomId = activeFloor(store.get()).rooms[0].id;
+
+  ui.set({ selection: { type: 'room', id: roomId } });
+  a.deleteSelection();
+  expect(seen).toEqual([]);                        // 확인 전에는 아무것도 지우지 않고 알리지도 않는다
+  ok(); await flush();
+  expect(seen).toEqual(['벽 4개와 붙어 있던 제품 1개를 삭제했습니다 · 방 1개가 사라졌습니다']);
+  expect(activeFloor(store.get()).items).toHaveLength(0);
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+});
+
+// 삭제 도구로 방 바닥을 눌러도 같다(경로가 갈라지지 않는다).
+test('삭제 도구의 방 삭제도 같은 문구를 쓴다', async () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const seen = [];
+  const a = createDeleteActions({ store, ui, view: { camera: { scale: 0.08 } }, toast: m => seen.push(m), setTool: () => {} });
+  const top = activeFloor(store.get()).walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  addItem(store, createItem(productById('window-slide-1200'), { wallId: top.id, t: 0.42, pos: [1680.5, 0.25] }));
+  a.createDeleteTool().onPointerDown([2000.5, 1500.25]);
+  ok(); await flush();
+  expect(seen).toEqual(['벽 4개와 붙어 있던 제품 1개를 삭제했습니다 · 방 1개가 사라졌습니다']);
+});
