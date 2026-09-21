@@ -103,3 +103,46 @@ describe('마감재 패널', () => {
     expect(a.el.innerHTML).toBe('');
   });
 });
+
+// §13.3: 타일 카테고리에서만 "타일 크기 W × H" 두 칸이 보이고, 그 값이 matPick으로 실린다.
+describe('타일 배치와 타일 크기', () => {
+  test('타일 카테고리에서만 크기 두 칸이 보인다', () => {
+    const { el } = setup();
+    expect(el.querySelector('[name="scaleW"]')).toBeNull();
+    click(el, '[data-cat="벽돌"]');
+    expect(el.querySelector('[name="scaleW"]')).toBeNull();
+    click(el, '[data-up]');
+    click(el, '[data-cat="타일"]');
+    expect(el.querySelector('[name="scaleW"]').value).toBe('300');   // tile-white-300의 기본 크기
+    expect(el.querySelector('[name="scaleH"]').value).toBe('300');
+    expect(el.querySelectorAll('.tile')).toHaveLength(4);            // 타일 목록은 그대로다
+  });
+
+  test('타일을 고르면 지금의 크기가 matPick에 실리고, 칸을 고치면 곧바로 반영된다', () => {
+    const { el, ui } = setup();
+    click(el, '[data-cat="타일"]');
+    const w = el.querySelector('[name="scaleW"]');
+    w.value = '600';
+    w.dispatchEvent(new Event('input', { bubbles: true }));
+    click(el, '.tile[data-id="tile-gray-600"]');
+    expect(ui.get().matPick).toEqual({ assignment: { id: 'tile-gray-600', offset: [0, 0], angle: 0, scale: [600, 300] }, category: '타일' });
+    const h = el.querySelector('[name="scaleH"]');
+    h.value = '450';
+    h.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ui.get().matPick.assignment.scale).toEqual([600, 450]);   // 켜져 있는 적용 모드도 따라간다
+    // 범위 밖은 잘린다.
+    h.value = '9999';
+    h.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ui.get().matPick.assignment.scale).toEqual([600, 2000]);
+  });
+
+  test('placeTile()이 타일 카테고리를 열고 첫 타일로 적용 모드를 켠다', () => {
+    const { el, ui, panel } = setup();
+    click(el, '[data-cat="벽돌"]');
+    panel.placeTile();
+    expect(panel.state.category).toBe('타일');
+    expect(panel.state.mode).toBe('place');
+    expect(el.querySelector('[name="scaleW"]').value).toBe('300');
+    expect(ui.get().matPick).toEqual({ assignment: { id: 'tile-white-300', offset: [0, 0], angle: 0, scale: [300, 300] }, category: '타일' });
+  });
+});

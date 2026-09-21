@@ -1,6 +1,6 @@
 import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById } from '../materials/catalog.js';
 import { drawPattern } from '../materials/pattern.js';
-import { activeFloor } from '../state/schema.js';
+import { activeFloor, MAT_RANGE } from '../state/schema.js';
 import { esc } from '../util/html.js';
 
 const key = id => `favmat:${id}`;
@@ -29,13 +29,26 @@ export function drawSwatch(canvas, material) {
   drawPattern(ctx, material, SWATCH_PX);
 }
 
+// 타일 크기 덮어쓰기(§13.3). 범위는 normalizeAssignment가 자르는 값과 같은 곳에서 온다.
+export const TILE_CATEGORY = '타일';
+export const TILE_SCALE_RANGE = MAT_RANGE.scale;
+const clampScale = v => Math.min(TILE_SCALE_RANGE[1], Math.max(TILE_SCALE_RANGE[0], Math.round(Number(v) || TILE_SCALE_RANGE[0])));
+export const tileScaleHtml = ([w, h]) => `<div class="mat-scale">
+  <span class="muted">타일 크기</span>
+  <input type="number" name="scaleW" value="${w}" min="${TILE_SCALE_RANGE[0]}" max="${TILE_SCALE_RANGE[1]}" step="10" aria-label="타일 가로 크기(mm)">
+  <span class="muted">×</span>
+  <input type="number" name="scaleH" value="${h}" min="${TILE_SCALE_RANGE[0]}" max="${TILE_SCALE_RANGE[1]}" step="10" aria-label="타일 세로 크기(mm)">
+</div>`;
+const defaultTileScale = () => [...(materialsIn(TILE_CATEGORY)[0]?.scale ?? [300, 300])];
+
 const TABS = [['ohouse', '오늘의집 마감재'], ['fav', '즐겨찾기'], ['placed', '배치된 마감재']];
 
 export function createMaterialPanel(container, { store, ui, onPick = () => {} }) {
-  const st = { tab: 'ohouse', category: null, q: '', mode: 'place', target: null };
+  const st = { tab: 'ohouse', category: null, q: '', mode: 'place', target: null, scale: null };
   container.innerHTML = `
     <div class="tabs" data-part="tabs"></div>
     <p class="hint" data-part="note" hidden></p>
+    <div data-part="tile"></div>
     <div class="lib-tools"><input type="search" name="q" placeholder="전체 검색 (이름·코드)" aria-label="마감재 검색"></div>
     <div data-part="crumbs"></div>
     <div class="lib-list" data-part="list"></div>`;
@@ -62,6 +75,10 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     note.hidden = st.mode !== 'replace';
     note.textContent = '교체할 재질을 선택하세요. [Esc]를 누르면 취소됩니다.';
   }
+  // 타일 크기 두 칸은 카테고리가 '타일'일 때만 보인다(§13.3).
+  function renderTile() {
+    part('tile').innerHTML = st.category === TILE_CATEGORY ? tileScaleHtml(st.scale ?? defaultTileScale()) : '';
+  }
   function renderCrumbs() {
     const c = part('crumbs');
     c.innerHTML = st.tab !== 'ohouse' || st.q.trim() || !st.category ? '' : `<button type="button" data-up="1" class="crumb">‹ ${esc(st.category)}</button>`;
@@ -79,7 +96,7 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     // 스와치는 innerHTML 다음에 그린다(캔버스는 문자열로 그릴 수 없다).
     for (const c of el.querySelectorAll('canvas.swatch')) drawSwatch(c, materialById(c.closest('.tile').dataset.id));
   }
-  const render = () => { renderTabs(); renderCrumbs(); renderList(); };
+  const render = () => { renderTabs(); renderTile(); renderCrumbs(); renderList(); };
 
   const onClick = ev => {
     const fav = ev.target.closest('[data-fav]');
@@ -99,11 +116,22 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
       onPick(m, { mode: 'replace', target });
       return;
     }
-    // 배치 모드: 연속 적용을 켠다(Esc로 끝난다).
-    ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0 } } });
+    // 배치 모드: 연속 적용을 켠다(Esc로 끝난다). 타일 카테고리에서는 위 두 칸의 크기를 함께 싣는다(§13.3).
+    const tiling = st.category === TILE_CATEGORY;
+    const scale = tiling ? [...(st.scale ?? defaultTileScale())] : null;
+    ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0, ...(scale ? { scale } : {}) }, ...(tiling ? { category: TILE_CATEGORY } : {}) } });
     onPick(m, { mode: 'place', target: null });
   };
-  const onInput = ev => { if (ev.target.name === 'q') { st.q = ev.target.value; renderCrumbs(); renderList(); } }; // 입력란은 다시 그리지 않아 포커스가 유지된다
+  // 입력란은 다시 그리지 않아 포커스가 유지된다.
+  const onInput = ev => {
+    const name = ev.target.name;
+    if (name === 'q') { st.q = ev.target.value; renderCrumbs(); renderList(); return; }
+    if (name !== 'scaleW' && name !== 'scaleH') return;
+    st.scale = [clampScale(container.querySelector('[name="scaleW"]').value), clampScale(container.querySelector('[name="scaleH"]').value)];
+    // 이미 켜져 있는 적용 모드도 새 크기를 따라가게 한다(다음 클릭부터 바로 먹는다).
+    const pick = ui.get().matPick;
+    if (pick?.assignment) ui.set({ matPick: { ...pick, assignment: { ...pick.assignment, scale: [...st.scale] } } });
+  };
   container.addEventListener('click', onClick);
   container.addEventListener('input', onInput);
   const unsub = store.subscribe(() => { if (st.tab === 'placed') renderList(); });
@@ -111,6 +139,17 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
   return {
     destroy() { unsub(); container.removeEventListener('click', onClick); container.removeEventListener('input', onInput); container.innerHTML = ''; },
     setMode(mode, { target = null } = {}) { st.mode = mode; st.target = target; renderTabs(); },
+    // 벽 메뉴 "타일 배치"(§13.3): 타일 카테고리로 필터해 열고 첫 타일로 적용 모드를 켠다.
+    placeTile() {
+      const m = materialsIn(TILE_CATEGORY)[0] ?? null;
+      st.tab = 'ohouse'; st.q = ''; st.category = TILE_CATEGORY; st.mode = 'place'; st.target = null;
+      st.scale = [...(m?.scale ?? [300, 300])];
+      const q = container.querySelector('[name="q"]');
+      if (q) q.value = '';
+      render();
+      if (m) ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0, scale: [...st.scale] }, category: TILE_CATEGORY } });
+      return m;
+    },
     get state() { return { ...st }; },
   };
 }

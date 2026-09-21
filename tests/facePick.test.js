@@ -128,7 +128,7 @@ describe('3D 면 피커', () => {
     const a = setup({ mesh: 'wall' });
     const ev = a.rightClick();
     expect(ev.defaultPrevented).toBe(true);
-    expect(labels(a.menu[0].items)).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', '도면 뷰 전환', '삭제']);
+    expect(labels(a.menu[0].items)).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '타일 배치', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', '도면 뷰 전환', '삭제']);
     expect(a.ui.get().selection).toEqual({ type: 'wall', id: a.wallId });
     a.rightClick({ prevented: true });   // OrbitControls가 먼저 preventDefault 한 경우와 같다
     expect(a.menu).toHaveLength(2);      // defaultPrevented는 "아이템 메뉴가 이미 열렸다"의 신호가 아니다

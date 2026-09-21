@@ -28,7 +28,7 @@ describe('벽·방 공용 메뉴', () => {
   test('벽 메뉴 항목과 순서(3D는 도면 뷰 전환이 더 붙는다)', () => {
     const a = setup();
     const items = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, roomId: a.roomId });
-    expect(labels(items)).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', '삭제']);
+    expect(labels(items)).toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '타일 배치', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', '삭제']);
     expect(pick(items, '곡선벽 전환')).toMatchObject({ disabled: true, title: '미지원' }); // 곡선벽은 범위 밖임을 메뉴로 알린다(I-20)
     const in3d = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, roomId: a.roomId, in3d: true });
     expect(labels(in3d)).toContain('도면 뷰 전환');
@@ -155,4 +155,17 @@ describe('2D 마감재 적용 모드', () => {
     a.ui.set({ matPick: { assignment: mat('wood-oak') } });
     expect(a.t.onKey({ key: 'Escape' })).toBe(false);
   });
+});
+
+// §13.3: "타일 배치"는 마감재 패널을 타일 카테고리로 열고 적용 모드를 켠다(actions가 실제 동작).
+test('타일 배치는 actions.placeTile을 면 대상과 함께 부르고, 없으면 비활성이다', () => {
+  const called = [];
+  const a = setup({ placeTile: t => called.push(t) });
+  const on = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, side: 'in', actions: a.actions });
+  const row = pick(on, '타일 배치');
+  expect(row.disabled).toBeFalsy();
+  row.onSelect();
+  expect(called).toEqual([{ kind: 'wall', id: a.wallId, side: 'in' }]);
+  const off = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, side: 'in', actions: {} });
+  expect(pick(off, '타일 배치').disabled).toBe(true);
 });

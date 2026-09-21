@@ -7,6 +7,9 @@ import { openingsOnWall } from '../geom/openings.js';
 export const MAT_TARGET_LABELS = { in: '내벽 재질', out: '외벽 재질', floor: '바닥 재질', ceiling: '천장 재질' };
 const matKey = side => (side === 'out' ? 'matOut' : 'matIn');
 const sideKey = side => (side === 'out' ? 'out' : 'in');
+// 지정을 문서에 넣기 전에 배열을 복사한다: store.dispatch는 mutate 전에 스냅샷을 복제하므로,
+// 호출자가 준 offset·scale 배열을 그대로 넣으면 여러 면이 한 배열을 나눠 갖는다(§13.3).
+const cloneAssign = a => (a ? { ...a, offset: [...a.offset], ...(a.scale ? { scale: [...a.scale] } : {}) } : null);
 
 // assignment가 null이면 미지정으로 되돌린다. 카탈로그에 없는 id(예: 지워진 재질)는 아무것도
 // 바꾸지 않는다 — normalizeAssignment가 그 경우도 null을 돌려주므로, 여기서 미리 구분해
@@ -19,13 +22,13 @@ export function applyMaterial(store, target, assignment, opts = {}) {
     const f = activeFloor(d);
     if (target?.kind === 'wall') {
       const w = f.walls.find(x => x.id === target.id);
-      if (w) w[matKey(target.side)] = a ? { ...a, offset: [...a.offset] } : null;
+      if (w) w[matKey(target.side)] = cloneAssign(a);
       return;
     }
     const r = f.rooms.find(x => x.id === target?.id);
     if (!r) return;
-    if (target.kind === 'floor') r.floorMat = a ? { ...a, offset: [...a.offset] } : null;
-    if (target.kind === 'ceiling') r.ceilingMat = a ? { ...a, offset: [...a.offset] } : null;
+    if (target.kind === 'floor') r.floorMat = cloneAssign(a);
+    if (target.kind === 'ceiling') r.ceilingMat = cloneAssign(a);
   }, opts);
 }
 
@@ -37,7 +40,7 @@ export function applyRoomWalls(store, roomId, assignment, opts = {}) {
     const f = activeFloor(d);
     const r = f.rooms.find(x => x.id === roomId);
     if (!r) return;
-    for (const w of f.walls) if (r.wallIds.includes(w.id)) w.matIn = a ? { ...a, offset: [...a.offset] } : null;
+    for (const w of f.walls) if (r.wallIds.includes(w.id)) w.matIn = cloneAssign(a);
   }, opts);
 }
 

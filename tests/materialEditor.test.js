@@ -192,3 +192,19 @@ describe('마감재 편집기', () => {
     expect(document.querySelector('.modal.mat-editor')).toBeNull();    // 기본값 그대로도 검증을 통과한다
   });
 });
+
+// §13.3: 편집기도 영역(면 단위)마다 타일 크기를 정할 수 있다. 기본값은 그 행 재질의 scale이다.
+test('영역 행마다 타일 크기 두 칸이 있고 값이 저장된다', () => {
+  const a = setup();
+  click(a.root, '[name="addBand"]');
+  const row = a.q('[data-region="0"]');
+  const first = row.querySelector('[name="mat"]').value;
+  expect(row.querySelector('[name="scaleW"]')).not.toBeNull();
+  expect(Number(row.querySelector('[name="scaleW"]').value)).toBeGreaterThan(0);  // 기본값 = 그 재질의 scale
+  set(row.querySelector('[name="scaleW"]'), 250);
+  set(a.q('[data-region="0"] [name="scaleH"]'), 9999);
+  click(a.root, '[name="apply"]');
+  const saved = a.wall().regions.in[0];
+  expect(saved.mat.id).toBe(first);
+  expect(saved.mat.scale).toEqual([250, 2000]);          // 100~2000 mm로 잘린다
+});

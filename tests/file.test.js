@@ -33,3 +33,19 @@ test('loadAutosave returns null when localStorage is unavailable or holds garbag
   localStorage.setItem('bad', '{"version":42}');
   expect(loadAutosave('bad')).toBeNull();
 });
+
+// §13.3 + 전역 규칙: 저장 형식은 assignment.scale 하나만 늘어난다. scale이 없는 파일은
+// 필드가 생기지 않은 채로 열리고 저장되며(바이트가 늘지 않는다), 있는 파일은 값이 그대로 돌아온다.
+test('assignment.scale은 있을 때만 저장 파일에 실린다', async () => {
+  const { applyMaterial } = await import('../src/state/materialOps.js');   // 이 파일이 아직 import하지 않은 것만 가져온다
+  const s = createStore(createEmptyProject());
+  addWalls(s, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const id = activeFloor(s.get()).walls[0].id;
+  applyMaterial(s, { kind: 'wall', id, side: 'in' }, { id: 'tile-white-300', offset: [0, 0], angle: 0 });
+  const plain = serializeProject(s.get());
+  expect(plain).not.toContain('"scale"');
+  expect(activeFloor(parseProject(plain)).walls.find(w => w.id === id).matIn.scale).toBeUndefined();
+  applyMaterial(s, { kind: 'wall', id, side: 'in' }, { id: 'tile-white-300', offset: [0, 0], angle: 0, scale: [600, 450] });
+  const tiled = parseProject(serializeProject(s.get()));
+  expect(activeFloor(tiled).walls.find(w => w.id === id).matIn.scale).toEqual([600, 450]);
+});

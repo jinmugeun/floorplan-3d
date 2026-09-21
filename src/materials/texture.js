@@ -12,13 +12,25 @@ const defaultCanvas = () => (typeof document === 'undefined' ? null : document.c
 const cache = new Map();
 export function clearTextureCache() { for (const t of cache.values()) t?.dispose?.(); cache.clear(); }
 
-// 재질 하나의 텍스처(무늬 한 칸). 같은 id는 한 장만 만들어 캐시한다.
-// 캐시 키는 id뿐이다 — 같은 id를 다른 makeCanvas로 다시 불러도 먼저 만든 텍스처가 돌아온다
+// 타일 크기 덮어쓰기(§13.3): 마감재 배정이 쓸 수 있는 scale을 들고 있으면 재질의 기본 scale 대신 쓴다.
+// 값 검사는 normalizeAssignment가 이미 했지만, 정규화를 지나지 않은 객체(미리보기·테스트)로도 불린다.
+// 여기서 100~2000 mm 범위를 다시 자르지 않는다(정규화가 이미 했다) — 양수인지만 본다.
+export function assignScale(assignment, material) {
+  const s = assignment?.scale;
+  if (Array.isArray(s) && Number(s[0]) > 0 && Number(s[1]) > 0) return [Number(s[0]), Number(s[1])];
+  return material?.scale ?? [1000, 1000];
+}
+
+// 재질 하나의 텍스처(무늬 한 칸). 같은 (id, scale)은 한 장만 만들어 캐시한다.
+// 캐시 키는 id와 scale뿐이다 — 같은 키를 다른 makeCanvas로 다시 불러도 먼저 만든 텍스처가 돌아온다
 // (makeCanvas는 document가 없는 node 테스트용 주입이라 한 세션에 한 종류만 쓴다. 바꾸려면 clearTextureCache).
-export function materialTexture(id, { makeCanvas = null } = {}) {
+export function materialTexture(id, { makeCanvas = null, scale = null } = {}) {
   const m = materialById(id);
   if (!m) return null;
-  if (cache.has(id)) return cache.get(id);
+  // 캐시 키에 scale을 넣는다(§13.3). 지금의 무늬 그림은 한 칸을 정사각 캔버스에 그려 scale과 무관하지만,
+  // 키를 나눠 두면 무늬가 scale에 따라 달라지게 바뀌어도 옛 그림이 남지 않는다.
+  const key = Array.isArray(scale) ? `${id}@${scale[0]}x${scale[1]}` : id;
+  if (cache.has(key)) return cache.get(key);
   const canvas = (makeCanvas ?? factory ?? defaultCanvas)();
   if (!canvas) return null;                       // 캔버스를 만들 수 없으면 무늬 없이(바탕색만) 간다
   canvas.width = TEX_PX; canvas.height = TEX_PX;
@@ -29,7 +41,7 @@ export function materialTexture(id, { makeCanvas = null } = {}) {
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;          // three 0.169
   tex.needsUpdate = true;
-  cache.set(id, tex);
+  cache.set(key, tex);
   return tex;
 }
 
@@ -38,8 +50,8 @@ export function materialTexture(id, { makeCanvas = null } = {}) {
 // ExtrudeGeometry는 build.js가 벽 축으로 잰 거리를 uv에 넣는다)는 uv에 이미 면 크기가 들어 있다. 그래서 repeat은
 // 면 크기와 무관한 "미터당 반복 수" = 1000 / scale(mm)이고, 실제 반복 수 = uv 범위(m) × repeat = 면 크기(mm) /
 // scale(mm)로 0~1 uv와 같은 결과가 된다. 이 말은 uv가 면을 따라 잰 거리일 때만 참이다(build.js의 UVGenerator 참고).
-export function faceRepeat(material, faceSizeMm, { worldUv = false } = {}) {
-  const [sw, sh] = material?.scale ?? [1000, 1000];
+export function faceRepeat(material, faceSizeMm, { worldUv = false, scale = null } = {}) {
+  const [sw, sh] = scale ?? material?.scale ?? [1000, 1000];
   if (worldUv) return [Math.max(0.05, 1000 / (sw || 1000)), Math.max(0.05, 1000 / (sh || 1000))];
   const [fw, fh] = Array.isArray(faceSizeMm) ? faceSizeMm : [1000, 1000];
   return [Math.max(0.05, Math.abs(Number(fw) || 0) / (sw || 1000)), Math.max(0.05, Math.abs(Number(fh) || 0) / (sh || 1000))];
@@ -52,17 +64,18 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   if (!assignment || display === 'white') return threeMaterial;
   const m = materialById(assignment.id);
   if (!m) return threeMaterial;
-  const tex = materialTexture(assignment.id, { makeCanvas });
+  const sc = assignScale(assignment, m);          // 배정의 scale이 있으면 그것이 무늬 한 칸의 크기다
+  const tex = materialTexture(assignment.id, { makeCanvas, scale: assignment?.scale ? sc : null });
   if (!tex) { threeMaterial.color.set(m.base); return threeMaterial; }
   // 반복·오프셋·각도는 면마다 다르므로 캐시 원본을 복제해 쓴다(원본은 그림만 들고 있다).
   const t = tex.clone();
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
-  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv });
+  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sc });
   t.repeat.set(rx, ry);
   // offset은 repeat을 곱한 뒤 더해지는 텍스처 공간 값이라 두 uv 모드에서 같은 식(offset mm ÷ 무늬 한 칸 mm)을 쓴다.
   const shifted = i => Number(assignment.offset?.[i]) || 0;
-  t.offset.set(shifted(0) / (m.scale[0] || 1000), shifted(1) / (m.scale[1] || 1000));
+  t.offset.set(shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000));
   t.center.set(0, 0);                             // center 0.5는 setUvTransform에 repeat에 비례한 항을 넣어 위상을 깨뜨린다(원점 기준 회전)
   t.rotation = ((Number(assignment.angle) || 0) * Math.PI) / 180;
   t.userData.clone = true;                        // disposeGroup이 복제본만 정리한다

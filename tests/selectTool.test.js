@@ -230,7 +230,7 @@ test('context menu items depend on what is under the cursor', () => {
   const wallItems = t.onContextMenu([2000, 0], { shiftKey: false });
   expect(ui.get().selection).toEqual({ type: 'wall', id: f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id }); // 우클릭이 먼저 선택한다
   expect(wallItems.map(i => (i === 'sep' ? 'sep' : i.label)))
-    .toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', 'sep', '삭제']);
+    .toEqual(['벽 나누기', '곡선벽 전환', '재질 교체', '타일 배치', '마감재 복사', '마감재 방 전체 벽에 적용', '마감재 편집기로 이동', 'sep', '삭제']);
   expect(pick(wallItems, '곡선벽 전환').disabled).toBe(true);
   expect(pick(wallItems, '곡선벽 전환').title).toBe('미지원');
   pick(wallItems, '벽 나누기').onSelect();

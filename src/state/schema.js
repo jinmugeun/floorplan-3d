@@ -107,19 +107,26 @@ export function normalizeItem(it) {
   return out;
 }
 
-export const MAT_RANGE = { offset: [0, 1000], angle: [0, 360] };
+export const MAT_RANGE = { offset: [0, 1000], angle: [0, 360], scale: [100, 2000] };
 
 // 마감재 지정 한 칸. 카탈로그에 없는 id는 미지정(null)으로 만든다(옛 파일·지워진 재질).
+// scale(타일 크기 덮어쓰기, §13.3)은 선택 필드다: 쓸 수 있는 값이면 100~2000 mm로 자르고,
+// 없으면 **필드를 만들지 않는다** — 옛 파일이 그대로 열리고 그대로 저장된다(저장 형식 무변경 원칙).
 export function normalizeAssignment(a) {
   const src = obj(a);
   const id = str(src.id, '');
   if (!materialById(id)) return null;
   const off = Array.isArray(src.offset) ? src.offset : [];
-  return {
+  const out = {
     id,
     offset: [num(off[0], 0, MAT_RANGE.offset[0], MAT_RANGE.offset[1]), num(off[1], 0, MAT_RANGE.offset[0], MAT_RANGE.offset[1])],
     angle: deg360(src.angle),
   };
+  const sc = Array.isArray(src.scale) && src.scale.length === 2 ? src.scale : null;
+  if (sc && Number.isFinite(Number(sc[0])) && Number.isFinite(Number(sc[1]))) {
+    out.scale = [num(sc[0], 300, MAT_RANGE.scale[0], MAT_RANGE.scale[1]), num(sc[1], 300, MAT_RANGE.scale[0], MAT_RANGE.scale[1])];
+  }
+  return out;
 }
 // 벽 면의 일부를 덮는 영역. band는 벽 전체 폭이라 u0/u1을 무시하고 0~len으로 채운다.
 // 재질이 없거나 범위가 뒤집혔으면 null(호출자가 걸러낸다).

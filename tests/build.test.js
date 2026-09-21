@@ -5,7 +5,7 @@ import { buildFloorGroup, disposeGroup, sceneSignature, TRANSPARENT_OPACITY } fr
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addFloor, setActiveFloor } from "../src/state/floorOps.js";
-import { setCanvasFactory, clearTextureCache, materialTexture, faceRepeat, applyAssignment, TEX_PX } from '../src/materials/texture.js';
+import { setCanvasFactory, clearTextureCache, materialTexture, faceRepeat, applyAssignment, assignScale, TEX_PX } from '../src/materials/texture.js';
 import { materialById } from '../src/materials/catalog.js';
 import * as THREE from 'three';
 
@@ -646,4 +646,29 @@ test('sceneSignature는 성능 모드가 바뀌면 달라진다', () => {
   expect(sceneSignature(store.get())).not.toBe(before);
   store.dispatch(d => { d.view.perfMode = 'display'; }, { record: false });
   expect(sceneSignature(store.get())).toBe(before);
+});
+
+// §13.3: 배정의 scale이 재질의 기본 무늬 크기를 덮어쓴다(견적 면적은 영향 없음 — 계산에 안 쓴다).
+test('assignScale과 faceRepeat가 assignment.scale을 우선한다(소수 크기)', () => {
+  const tile = materialById('tile-white-300');                 // scale [300, 300]
+  expect(assignScale({ id: 'tile-white-300', scale: [600, 450] }, tile)).toEqual([600, 450]);
+  expect(assignScale({ id: 'tile-white-300' }, tile)).toEqual([300, 300]);
+  expect(assignScale({ id: 'tile-white-300', scale: ['a', 5] }, tile)).toEqual([300, 300]);
+  expect(assignScale(null, null)).toEqual([1000, 1000]);
+  expect(faceRepeat(tile, [3000, 2400])).toEqual([10, 8]);
+  expect(faceRepeat(tile, [3000, 2400], { scale: [600, 600] })).toEqual([5, 4]);
+  expect(faceRepeat(tile, [3000.5, 2400], { scale: [100, 100] })[0]).toBeCloseTo(30.005, 9);
+  expect(faceRepeat(tile, null, { worldUv: true, scale: [500, 250] })).toEqual([2, 4]);
+});
+
+test('applyAssignment는 assignment.scale로 반복·오프셋을 잡고 텍스처 캐시 키를 나눈다', () => {
+  const m = new THREE.MeshStandardMaterial();
+  applyAssignment(m, { id: 'tile-white-300', offset: [150, 0], angle: 0, scale: [600, 600] }, [3000, 2400]);
+  expect(m.map.repeat.x).toBeCloseTo(5, 9);
+  expect(m.map.repeat.y).toBeCloseTo(4, 9);
+  expect(m.map.offset.x).toBeCloseTo(0.25, 9);                 // 150 / 600
+  const base = materialTexture('tile-white-300');
+  const scaled = materialTexture('tile-white-300', { scale: [600, 600] });
+  expect(scaled).not.toBe(base);                               // 키가 다르다
+  expect(materialTexture('tile-white-300', { scale: [600, 600] })).toBe(scaled);
 });

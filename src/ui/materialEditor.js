@@ -2,7 +2,7 @@
 // 영역 좌표는 벽 왼쪽 끝(a)에서 u(mm), 바닥에서 z(mm)다. band는 벽 전체 폭이라 u를 무시한다.
 import { MATERIALS, materialById } from '../materials/catalog.js';
 import { drawPattern } from '../materials/pattern.js';
-import { activeFloor, uid } from '../state/schema.js';
+import { activeFloor, uid, MAT_RANGE } from '../state/schema.js';
 import { regionsOf, setWallRegions } from '../state/materialOps.js';
 import { wallLength } from '../geom/walls.js';
 import { esc } from '../util/html.js';
@@ -26,6 +26,9 @@ export function validateRegion(r, { len, height }) {
 
 const numCell = (name, value, min, max) => `<input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="any" aria-label="${name}">`;
 const matOptions = id => MATERIALS.map(m => `<option value="${m.id}" ${m.id === id ? 'selected' : ''}>${esc(`${m.category} · ${m.name}`)}</option>`).join('');
+// 영역(면 단위) 타일 크기(§13.3). 값이 없으면 그 재질의 기본 scale을 보여 준다.
+const clampScale = v => Math.min(MAT_RANGE.scale[1], Math.max(MAT_RANGE.scale[0], Math.round(Number(v) || MAT_RANGE.scale[0])));
+const scaleOf = r => r.mat.scale ?? materialById(r.mat.id)?.scale ?? [1000, 1000];
 
 export function openMaterialEditor({ store, wallId, side = 'in', onClose = () => {} }) {
   const existing = document.querySelector('.modal.mat-editor');
@@ -36,7 +39,7 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
   if (!w0) return { close: () => {} };
   const len = wallLength(w0), height = w0.height;
   // 편집 중 목록은 대화상자가 들고 있다([적용]에서 한 번에 저장한다).
-  let rows = regionsOf(activeFloor(store.get()), { kind: 'wall', id: wallId, side: s }).map(r => ({ ...r, mat: { ...r.mat, offset: [...r.mat.offset] } }));
+  let rows = regionsOf(activeFloor(store.get()), { kind: 'wall', id: wallId, side: s }).map(r => ({ ...r, mat: { ...r.mat, offset: [...r.mat.offset], ...(r.mat.scale ? { scale: [...r.mat.scale] } : {}) } }));
 
   const root = document.createElement('div');
   root.className = 'modal mat-editor';
@@ -60,6 +63,7 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
       <select name="kind" aria-label="종류"><option value="band" ${r.kind === 'band' ? 'selected' : ''}>수평 띠</option><option value="rect" ${r.kind === 'rect' ? 'selected' : ''}>사각형</option></select>
       ${numCell('u0', r.u0, 0, Math.round(len))}${numCell('u1', r.u1, 0, Math.round(len))}
       ${numCell('z0', r.z0, 0, Math.round(height))}${numCell('z1', r.z1, 0, Math.round(height))}
+      ${numCell('scaleW', scaleOf(r)[0], MAT_RANGE.scale[0], MAT_RANGE.scale[1])}${numCell('scaleH', scaleOf(r)[1], MAT_RANGE.scale[0], MAT_RANGE.scale[1])}
       <select name="mat" aria-label="재질">${matOptions(r.mat.id)}</select>
       <button type="button" name="del" aria-label="영역 삭제">삭제</button>
     </div>`).join('') : '<p class="hint">영역이 없습니다. 수평 띠나 사각형을 추가하세요.</p>';
@@ -123,7 +127,18 @@ export function openMaterialEditor({ store, wallId, side = 'in', onClose = () =>
     const r = rows[Number(row.dataset.region)];
     const name = ev.target.name;
     if (name === 'kind') { r.kind = ev.target.value === 'rect' ? 'rect' : 'band'; if (r.kind === 'band') { r.u0 = 0; r.u1 = len; } }
-    else if (name === 'mat') r.mat = { id: ev.target.value, offset: [...r.mat.offset], angle: r.mat.angle };
+    else if (name === 'mat') {
+      // 재질을 바꾸면 타일 크기 덮어쓰기를 버린다(새 재질의 기본 scale을 따르는 것이 놀랍지 않다).
+      r.mat = { id: ev.target.value, offset: [...r.mat.offset], angle: r.mat.angle };
+      // 행을 다시 그리지는 않는다(C-6: 호출자가 잡아 둔 행 노드가 떨어지면 이후 입력의 change가
+      // root까지 올라오지 않는다). 두 칸의 값만 새 재질의 기본값으로 고쳐 준다.
+      const [sw, sh] = scaleOf(r);
+      row.querySelector('[name="scaleW"]').value = String(sw);
+      row.querySelector('[name="scaleH"]').value = String(sh);
+    }
+    else if (name === 'scaleW' || name === 'scaleH') {
+      r.mat = { ...r.mat, scale: [clampScale(row.querySelector('[name="scaleW"]').value), clampScale(row.querySelector('[name="scaleH"]').value)] };
+    }
     else if (['u0', 'u1', 'z0', 'z1'].includes(name)) { const v = Number(ev.target.value); if (Number.isFinite(v)) r[name] = v; }
     part('error').textContent = '';
     // 값 입력 중에는 행을 다시 그리지 않는다: renderRows()가 part('rows').innerHTML을 갈아 끼우면

@@ -22,6 +22,8 @@ export function wallMenuItems({ store, ui, wallId, roomId = null, side = 'in', i
     { label: '벽 나누기', onSelect: () => ui.set({ selection: { type: 'wall', id: wallId }, splitWall: true }) },
     { label: '곡선벽 전환', disabled: true, title: '미지원' }, // 2A가 정한 UI 약속: 곡선벽은 범위 밖임을 비활성 항목으로 알린다(I-20)
     { label: '재질 교체', disabled: !actions.replaceMaterial, onSelect: () => actions.replaceMaterial?.(target) },
+    // 타일은 크기를 면마다 정하고 여러 면에 연속으로 바르는 일이 많다: 재질 교체와 다른 항목이다(§13.3).
+    { label: '타일 배치', disabled: !actions.placeTile, onSelect: () => actions.placeTile?.(target) },
     copyItem(ui, mat),
     { label: '마감재 방 전체 벽에 적용', disabled: !room || !mat, onSelect: () => applyRoomWalls(store, room, mat) },
     { label: '마감재 편집기로 이동', disabled: !actions.openEditor, onSelect: () => actions.openEditor?.(wallId, target.side) },

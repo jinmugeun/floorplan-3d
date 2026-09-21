@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
-import { createEmptyProject, activeFloor, normalizeProject, normalizeAssignment, normalizeRegion } from '../src/state/schema.js';
+import { createEmptyProject, activeFloor, normalizeProject, normalizeAssignment, normalizeRegion, MAT_RANGE } from '../src/state/schema.js';
 import { addWalls, duplicateRoom, addFloor } from '../src/state/floorOps.js';
 import { applyMaterial, applyRoomWalls, setWallRegions, assignmentOf, regionsOf, faceArea } from '../src/state/materialOps.js';
 import { rectWalls, makeWall, splitWall, wallLength } from '../src/geom/walls.js';
@@ -18,6 +18,18 @@ describe('마감재 정규화', () => {
     expect(normalizeAssignment({ id: 'wood-oak' })).toEqual({ id: 'wood-oak', offset: [0, 0], angle: 0 });
     expect(normalizeAssignment({ id: '없는재질' })).toBeNull();
     expect(normalizeAssignment(null)).toBeNull();
+  });
+
+  // §13.3: 타일 크기 덮어쓰기. 값이 없으면 필드를 만들지 않는다(옛 파일이 그대로 열리고 그대로 저장된다).
+  test('normalizeAssignment는 scale을 100~2000 mm로 자르고 없으면 만들지 않는다', () => {
+    expect(MAT_RANGE.scale).toEqual([100, 2000]);
+    expect(normalizeAssignment({ id: 'tile-white-300', scale: [600, 450.5] }).scale).toEqual([600, 450.5]);
+    expect(normalizeAssignment({ id: 'tile-white-300', scale: [10, 9999] }).scale).toEqual([100, 2000]);
+    expect(normalizeAssignment({ id: 'tile-white-300' }).scale).toBeUndefined();
+    expect('scale' in normalizeAssignment({ id: 'tile-white-300' })).toBe(false);
+    expect(normalizeAssignment({ id: 'tile-white-300', scale: [300] }).scale).toBeUndefined();     // 두 칸이 아니면 버린다
+    expect(normalizeAssignment({ id: 'tile-white-300', scale: 'x' }).scale).toBeUndefined();
+    expect(normalizeAssignment({ id: 'tile-white-300', scale: ['a', 'b'] }).scale).toBeUndefined();
   });
 
   test('normalizeRegion은 재질·범위를 검사하고 band는 벽 전체 폭이 된다', () => {
@@ -239,5 +251,39 @@ describe('마감재 상태 연산', () => {
     expect(net).toBeCloseTo(gross - (900 * 2100) / 1e6, 6);
     // 옵션을 생략하면(기본 false) 여전히 총면적이다.
     expect(faceArea(g0, { kind: 'wall', id: w.id, side: 'in' })).toBeCloseTo(gross, 6);
+  });
+});
+
+// §13.3: applyMaterial·applyRoomWalls는 scale 배열을 벽마다 따로 복사해야 한다
+// (store.dispatch는 mutate 전에 스냅샷을 복제하므로, 넣은 배열은 호출자와 공유된다).
+describe('타일 크기 덮어쓰기 저장', () => {
+  test('applyMaterial이 scale을 저장하고 배열을 공유하지 않는다', () => {
+    const s = setup();
+    const id = activeFloor(s.get()).walls[0].id;
+    const a = mat('tile-white-300', { scale: [600.5, 5000] });
+    applyMaterial(s, { kind: 'wall', id, side: 'in' }, a);
+    const saved = activeFloor(s.get()).walls.find(w => w.id === id).matIn;
+    expect(saved.scale).toEqual([600.5, 2000]);              // 범위 밖은 잘린다
+    a.scale[0] = 111;
+    expect(activeFloor(s.get()).walls.find(w => w.id === id).matIn.scale[0]).toBe(600.5);
+    applyMaterial(s, { kind: 'wall', id, side: 'in' }, mat('tile-white-300'));
+    expect(activeFloor(s.get()).walls.find(w => w.id === id).matIn.scale).toBeUndefined();
+  });
+
+  test('applyRoomWalls는 벽마다 다른 scale 배열을 준다', () => {
+    const s = setup();
+    const room = activeFloor(s.get()).rooms[0].id;
+    applyRoomWalls(s, room, mat('tile-gray-600', { scale: [400, 400] }));
+    const walls = activeFloor(s.get()).walls.filter(w => w.matIn);
+    expect(walls.length).toBeGreaterThan(1);
+    expect(walls.every(w => w.matIn.scale[0] === 400)).toBe(true);
+    expect(walls[0].matIn.scale).not.toBe(walls[1].matIn.scale);
+  });
+
+  test('setWallRegions는 영역마다 scale을 지킨다', () => {
+    const s = setup();
+    const id = activeFloor(s.get()).walls[0].id;
+    setWallRegions(s, id, 'in', [{ kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 1200, mat: mat('tile-mosaic-100', { scale: [150, 150] }) }]);
+    expect(regionsOf(activeFloor(s.get()), { kind: 'wall', id, side: 'in' })[0].mat.scale).toEqual([150, 150]);
   });
 });
