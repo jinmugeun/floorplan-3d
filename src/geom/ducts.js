@@ -2,6 +2,7 @@
 // three도 DOM도 스토어도 쓰지 않는다 — ductTool·ductSelect·ducts2d·ducts3d·풍량이 모두 여기를 부른다.
 import { add, sub, mul, norm, perp, dist, lerp } from './vec.js';
 import { distToSegment } from './walls.js';
+import { pointInItem } from './items.js';
 
 export const DUCT_SNAP_TOL = 300;   // 설비 접속점 스냅 허용 거리(mm, 명세 DT-02)
 
@@ -60,9 +61,13 @@ export function movePoint(duct, i, p) {
 }
 
 // 구간 segment 위의 점 p를 그 구간 뒤에 끼운다. 새 구간은 나뉜 구간의 단면을 복제한다(DT-05).
+// 쪼개지는 구간 위의 댐퍼는 t를 다시 스케일해 같은 자리에 남는다(쪼개지지 않는 구간은 인덱스만 밀린다).
 export function insertPoint(duct, segment, p) {
   const n = duct?.points?.length ?? 0;
   if (!(Number.isInteger(segment) && segment >= 0 && segment < n - 1)) return duct;
+  const a = duct.points[segment], b = duct.points[segment + 1];
+  const L = dist(a, b);
+  const ts = L ? Math.min(1, Math.max(0, dist(a, p) / L)) : 0;   // 쪼개는 지점이 구간에서 차지하는 비율
   const points = duct.points.map(q => [...q]);
   points.splice(segment + 1, 0, [p[0], p[1]]);
   const segments = duct.segments.map(s => ({ ...s }));
@@ -70,21 +75,47 @@ export function insertPoint(duct, segment, p) {
   return {
     ...duct, points, segments,
     connections: duct.connections.map(c => ({ ...c, point: c.point > segment ? c.point + 1 : c.point })),
-    dampers: duct.dampers.map(x => ({ ...x, segment: x.segment > segment ? x.segment + 1 : x.segment })),
+    dampers: duct.dampers.map(x => {
+      if (x.segment > segment) return { ...x, segment: x.segment + 1 };
+      if (x.segment < segment) return { ...x };
+      const t = Math.min(1, Math.max(0, Number(x.t) || 0));
+      return t < ts
+        ? { ...x, t: ts > 0 ? Math.min(1, Math.max(0, t / ts)) : 0 }
+        : { ...x, segment: segment + 1, t: ts < 1 ? Math.min(1, Math.max(0, (t - ts) / (1 - ts))) : 1 };
+    }),
   };
 }
 
-// 점 2개짜리 덕트는 점을 지울 수 없다(null). 지운 점에 붙은 구간 하나와 그 구간의 댐퍼가 함께 사라진다.
+// 점 2개짜리 덕트는 점을 지울 수 없다(null). 안쪽 점을 지우면 앞뒤 두 구간이 하나로 합쳐지고 그 위의
+// 댐퍼는 t를 다시 스케일해 같은 자리에 남는다. 끝 점을 지우면 사라지는 구간의 댐퍼도 함께 사라진다.
 export function deletePoint(duct, i) {
   const n = duct?.points?.length ?? 0;
   if (n <= 2 || !(Number.isInteger(i) && i >= 0 && i < n)) return null;
   const drop = Math.min(i, n - 2);            // 끝 점을 지우면 마지막 구간이 사라진다
+  const interior = i > 0 && i < n - 1;
+  const keep = drop - 1;                      // 합쳐진 구간이 남는 자리(끝 점 삭제면 쓰지 않는다)
+  const L1 = interior ? dist(duct.points[i - 1], duct.points[i]) : 0;
+  const L2 = interior ? dist(duct.points[i], duct.points[i + 1]) : 0;
+  const sum = L1 + L2;
+  const dampers = [];
+  for (const x of duct.dampers) {
+    const t = Math.min(1, Math.max(0, Number(x.t) || 0));
+    if (interior && x.segment === keep) {
+      dampers.push({ ...x, t: sum ? Math.min(1, Math.max(0, (t * L1) / sum)) : t });
+    } else if (interior && x.segment === drop) {
+      dampers.push({ ...x, segment: keep, t: sum ? Math.min(1, Math.max(0, (L1 + t * L2) / sum)) : t });
+    } else if (x.segment === drop) {
+      continue;                                // 끝 점 삭제: 사라지는 구간의 댐퍼도 사라진다
+    } else {
+      dampers.push({ ...x, segment: x.segment > drop ? x.segment - 1 : x.segment });
+    }
+  }
   return {
     ...duct,
     points: duct.points.filter((_, k) => k !== i).map(q => [...q]),
     segments: duct.segments.filter((_, k) => k !== drop).map(s => ({ ...s })),
     connections: duct.connections.filter(c => c.point !== i).map(c => ({ ...c, point: c.point > i ? c.point - 1 : c.point })),
-    dampers: duct.dampers.filter(x => x.segment !== drop).map(x => ({ ...x, segment: x.segment > drop ? x.segment - 1 : x.segment })),
+    dampers,
   };
 }
 
@@ -92,13 +123,15 @@ export function deletePoint(duct, i) {
 export const connectionPoint = item => [item?.pos?.[0] ?? 0, item?.pos?.[1] ?? 0];
 
 // 가장 가까운 "보이는" 설비. 숨긴 설비에는 붙지 않는다(보이지 않는 것에 연결하지 않는다).
+// 설비 풋프린트 안이면 거리와 무관하게 스냅한다(명세 DT-02 "설비 위를 클릭"), 풋프린트 밖이라도
+// 중심에서 tol 이내면 붙는다(작은 설비 옆을 스치는 클릭). 여럿이 걸리면 중심이 가장 가까운 쪽을 고른다.
 export function snapToEquipment(items, p, tol = DUCT_SNAP_TOL) {
   let best = null;
   for (const it of items ?? []) {
     if (it?.kind !== 'equipment' || it.hidden) continue;
     const c = connectionPoint(it);
     const d = dist(p, c);
-    if (d <= tol && (!best || d < best.d)) best = { itemId: it.id, pos: c, d };
+    if ((pointInItem(p, it, 0) || d <= tol) && (!best || d < best.d)) best = { itemId: it.id, pos: c, d };
   }
   return best ? { itemId: best.itemId, pos: [...best.pos] } : null;
 }

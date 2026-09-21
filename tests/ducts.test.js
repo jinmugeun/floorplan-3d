@@ -45,12 +45,57 @@ describe('덕트 기하', () => {
     expect(ins.segments[1]).toEqual({ w: 600, h: 400, z: 2650 });  // 나눈 구간의 단면을 복제
     expect(ins.connections[0].point).toBe(3);
     expect(ins.dampers[0].segment).toBe(2);
+    expect(ins.dampers[0].t).toBeCloseTo(0.4, 9);                   // 쪼개지지 않은 구간은 t가 그대로다
     const del = deletePoint(d, 1);
     expect(del.points).toEqual([[0, 0], [3000, 4000]]);
     expect(del.segments).toHaveLength(1);
     expect(del.connections[0].point).toBe(1);
-    expect(del.dampers).toEqual([]);                                // 사라진 구간의 댐퍼도 사라진다
+    // 안쪽 점을 지우면 구간 0·1이 합쳐진다(길이 3000·4000). 옛 구간 1(t=0.4)의 댐퍼는 사라지지 않고
+    // 합쳐진 구간 0으로 옮아 t' = (L1 + t·L2)/(L1+L2) = (3000 + 0.4·4000)/7000이 된다.
+    expect(del.dampers).toHaveLength(1);
+    expect(del.dampers[0]).toMatchObject({ segment: 0, type: 'VD' });
+    expect(del.dampers[0].t).toBeCloseTo((3000 + 0.4 * 4000) / 7000, 9);
     expect(deletePoint(normalizeDuct({ points: [[0, 0], [1, 0]] }), 0)).toBeNull();
+  });
+
+  test('점을 끼우면 쪼개진 구간의 댐퍼는 t가 다시 스케일되어 같은 mm 위치에 남는다', () => {
+    const d = normalizeDuct({ points: [[0, 0], [1000.4, 0]], dampers: [{ segment: 0, t: 0.8, type: 'VD' }] });
+    const before = damperPos(d, d.dampers[0]);
+    const ins = insertPoint(d, 0, [500.2, 0]);   // 구간 중점에 끼운다(ts = 0.5)
+    expect(ins.points).toEqual([[0, 0], [500.2, 0], [1000.4, 0]]);
+    // t=0.8 > ts=0.5 → 오른쪽 조각(구간 1)으로 넘어가고 t' = (0.8-0.5)/(1-0.5) = 0.6
+    expect(ins.dampers[0]).toMatchObject({ segment: 1, type: 'VD' });
+    expect(ins.dampers[0].t).toBeCloseTo(0.6, 9);
+    const after = damperPos(ins, ins.dampers[0]);
+    expect(after[0]).toBeCloseTo(before[0], 9);
+    expect(after[1]).toBeCloseTo(before[1], 9);
+
+    // 왼쪽 조각에 남는 경우: t=0.2 < ts=0.5 → 구간 0에 남고 t' = 0.2/0.5 = 0.4
+    const d2 = normalizeDuct({ points: [[0, 0], [1000.4, 0]], dampers: [{ segment: 0, t: 0.2, type: 'VD' }] });
+    const before2 = damperPos(d2, d2.dampers[0]);
+    const ins2 = insertPoint(d2, 0, [500.2, 0]);
+    expect(ins2.dampers[0]).toMatchObject({ segment: 0, type: 'VD' });
+    expect(ins2.dampers[0].t).toBeCloseTo(0.4, 9);
+    const after2 = damperPos(ins2, ins2.dampers[0]);
+    expect(after2[0]).toBeCloseTo(before2[0], 9);
+    expect(after2[1]).toBeCloseTo(before2[1], 9);
+  });
+
+  test('안쪽 점을 지우면 합쳐진 구간의 댐퍼는 t가 다시 스케일되어 같은 mm 위치에 남는다', () => {
+    // 일직선 3점 덕트(소수 좌표): 점 1을 지우면 구간 0·1이 곧은 구간 하나로 합쳐진다.
+    const d = normalizeDuct({
+      points: [[0, 0], [1000.4, 0], [3000.6, 0]],
+      dampers: [{ segment: 0, t: 0.5, type: 'VD' }, { segment: 1, t: 0.5, type: 'FVD' }],
+    });
+    const beforeA = damperPos(d, d.dampers[0]);
+    const beforeB = damperPos(d, d.dampers[1]);
+    const del = deletePoint(d, 1);
+    expect(del.points).toEqual([[0, 0], [3000.6, 0]]);
+    expect(del.dampers).toHaveLength(2);
+    const afterA = damperPos(del, del.dampers.find(x => x.type === 'VD'));
+    const afterB = damperPos(del, del.dampers.find(x => x.type === 'FVD'));
+    expect(afterA[0]).toBeCloseTo(beforeA[0], 9);
+    expect(afterB[0]).toBeCloseTo(beforeB[0], 9);
   });
 
   test('설비 스냅은 가장 가까운 보이는 설비를 잡는다', () => {
@@ -61,8 +106,23 @@ describe('덕트 기하', () => {
     ];
     expect(snapToEquipment(items, [1100, 520])).toEqual({ itemId: 'h1', pos: [1000.5, 500.25] });
     expect(snapToEquipment(items, [9000, 9000])).toBeNull();
-    expect(snapToEquipment(items, [1000.5 + DUCT_SNAP_TOL + 1, 500.25])).toBeNull();
+    // h1 풋프린트(반폭 800×반깊이 600) 밖이면서 중심에서 tol도 넘는 점 — 어느 쪽으로도 스냅하지 않는다.
+    expect(snapToEquipment(items, [1000.5, 500.25 + 600 + DUCT_SNAP_TOL + 1])).toBeNull();
     expect(connectionPoint(items[0])).toEqual([1000.5, 500.25]);
+  });
+
+  test('설비 스냅은 풋프린트 안이면 중심에서 멀어도 잡는다(DT-02 "설비 위를 클릭")', () => {
+    // 1800×1100 후드(소수 좌표 중심): 반폭 900, 반깊이 550 — DUCT_SNAP_TOL(300)보다 훨씬 크다.
+    const hood = { id: 'h1', kind: 'equipment', pos: [1000.5, 500.25], size: [1800, 1100, 600], z: 2300 };
+    const items = [hood];
+    // 중심에서 800 mm(> tol) 떨어졌지만 풋프린트(반폭 900) 안이므로 스냅한다.
+    const inside = [hood.pos[0] + 800, hood.pos[1]];
+    expect(snapToEquipment(items, inside)).toEqual({ itemId: 'h1', pos: [1000.5, 500.25] });
+    // 풋프린트 가장자리(반폭 900)에서 350 mm 더 나간 점은 풋프린트 밖이고 tol도 넘으므로 스냅하지 않는다.
+    const outside = [hood.pos[0] + 900 + 350, hood.pos[1]];
+    expect(snapToEquipment(items, outside)).toBeNull();
+    // 설비가 없는 자리는 null이다.
+    expect(snapToEquipment(items, [9000, 9000])).toBeNull();
   });
 
   test('라이저는 설비 윗면과 구간 아랫면을 잇고 너무 짧으면 없다', () => {
