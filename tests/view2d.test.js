@@ -400,3 +400,22 @@ test('dragleave·dragend가 onDragLeave를 부르고 destroy가 리스너를 뗀
   canvas.dispatchEvent(new Event('dragleave', { bubbles: true }));
   expect(left).toBe(2);
 });
+
+// §14.7: 도구의 hint가 단계마다 바뀌므로, 렌더 중에 달라진 것을 알려 배너를 다시 그리게 한다.
+test('tool.hint가 바뀐 프레임에 onHint를 한 번 부른다', async () => {
+  const store = createStore(createEmptyProject());
+  const hints = [];
+  const v = createView2D(makeCanvas(), store, createUiState(), { onHint: h => hints.push(h) });
+  let step = 1;
+  v.setTool({ name: 't', opts: {}, get hint() { return `단계 ${step}`; }, onPointerDown() {}, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {} });
+  await new Promise(r => requestAnimationFrame(r));
+  expect(hints).toEqual(['단계 1']);
+  v.requestRender();
+  await new Promise(r => requestAnimationFrame(r));
+  expect(hints).toEqual(['단계 1']);          // 바뀌지 않으면 부르지 않는다
+  step = 2;
+  v.requestRender();
+  await new Promise(r => requestAnimationFrame(r));
+  expect(hints).toEqual(['단계 1', '단계 2']);
+  v.destroy();
+});

@@ -74,8 +74,8 @@ export function createStructTool({ store, ui, view, kind = 'column-square', opts
 
   return {
     name: k, opts, kind: k,
-    // 개구부는 벽 위에만 앉는다(결정 #9): 왜 안 놓이는지 배너에서 먼저 알린다(M-8).
-    hint: `${STRUCT_LABELS[k]}을(를) 놓을 위치를 클릭해주세요. 클릭할 때마다 하나씩 놓습니다.${k === 'opening' ? ' 개구부는 벽 위에만 놓입니다.' : ''} [Esc]를 누르면 종료됩니다.`,
+    // 단계 안내(§14.7). 개구부는 벽 위에만 앉으므로(결정 #9) 왜 안 놓이는지 배너에서 먼저 알린다.
+    get hint() { return `${STRUCT_LABELS[k]} — 놓을 자리를 클릭 · 옵션 바에서 크기 · [Esc] 종료${k === 'opening' ? ' · 개구부는 벽 위에만 놓입니다' : ''}`; },
     getGhost: () => ghost,
     onPointerMove(p, ev) { ghost = ghostAt(p, !!ev?.ctrlKey); },
     onPointerDown(p, ev) {

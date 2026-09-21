@@ -23,6 +23,8 @@ export function createWallTool({ store, onDone = () => {}, opts: given = null })
   const finish = () => { const had = points.length > 0; reset(); if (had) onDone(); return had; };
   return {
     name: 'wall', opts,
+    // 단계 안내(§14.7).
+    get hint() { return last() ? '다음 점을 클릭 · [Enter] 완료 · [Esc] 취소' : '첫 점을 클릭하세요 (1/2)'; },
     onPointerDown(p) {
       const r = snap(p); cursor = r.point; guides = r.guides;
       if (points.length >= 2 && dist(cursor, points[0]) <= 150) { addSegment(last(), points[0]); finish(); return; }

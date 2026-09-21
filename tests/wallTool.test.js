@@ -120,3 +120,16 @@ test('in mm mode feet/inch characters are ignored while typing a length', () => 
   expect(t.onKey(key("'"))).toBe(true);
   expect(t.getPreview().typed).toBe("2500'");
 });
+
+// §14.7
+test('벽 도구는 단계에 따라 안내가 바뀐다', () => {
+  const store = createStore(createEmptyProject());
+  const t = createWallTool({ store, onDone() {} });
+  expect(t.hint).toBe('첫 점을 클릭하세요 (1/2)');
+  t.onPointerDown([0.5, 0.25]);
+  expect(t.hint).toBe('다음 점을 클릭 · [Enter] 완료 · [Esc] 취소');
+  t.onKey({ key: 'Escape', preventDefault() {} });
+  expect(t.hint).toBe('첫 점을 클릭하세요 (1/2)');
+  // 그리는 중의 첫 [Esc]는 도구가 소비하고(체인만 지운다), 체인이 없으면 소비하지 않는다 → 키맵이 선택으로(결정 19b).
+  expect(t.onKey({ key: 'Escape', preventDefault() {} })).toBe(false);   // 체인이 없으면 소비하지 않는다(키맵이 선택으로)
+});

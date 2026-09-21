@@ -4,6 +4,7 @@ import { downloadText } from '../io/file.js';
 import { setTable } from './keymap.js';
 import { loadOverrides, saveOverrides, effectiveKeymap, buildTable, exportJson, importJson, reset, keyLabel, conflictAction, labelOf } from './keyBindings.js';
 import { openOnboarding } from './onboarding.js';
+import { stickyTools, setStickyTools } from './prefs.js';
 
 // 키 칸: action이 있는 행만 다시 지정할 수 있다(마우스 조작·1인칭 이동은 표시 전용).
 function keymapRows(keymap) {
@@ -33,6 +34,7 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
       <label class="field"><span>배경</span><input type="color" name="background" value="${esc(s.background)}"></label>
       <label class="check"><input type="checkbox" name="pyeong" ${s.pyeong ? 'checked' : ''}> 평 면적 표기</label>
       <label class="check"><input type="checkbox" name="showUnit" ${s.showUnit ? 'checked' : ''}> 치수 단위 표시</label>
+      <label class="check"><input type="checkbox" name="stickyTools" ${stickyTools() ? 'checked' : ''}> 그린 뒤 도구 유지</label>
       <p class="hint">자동 저장: 5분 간격으로 브라우저에 저장됩니다.</p>
       <button type="button" name="replayOnboarding">시작 안내 다시 보기</button>
     </section>
@@ -101,6 +103,8 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
   // 설정은 프로젝트에 저장하지만 되돌릴 단계는 만들지 않는다.
   root.addEventListener('change', ev => {
     const el = ev.target, name = el.name;
+    // 로컬 설정은 프로젝트가 아니라 브라우저에 남는다(§14.7).
+    if (name === 'stickyTools') { setStickyTools(el.checked); return; }
     if (!['pyeong', 'showUnit', 'background'].includes(name)) return;
     store.dispatch(d => { d.settings[name] = el.type === 'checkbox' ? el.checked : el.value; }, { record: false });
   });

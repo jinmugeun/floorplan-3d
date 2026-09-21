@@ -142,3 +142,10 @@ describe('구조물 도구(기둥·개구부)', () => {
     expect(Array.isArray(t.getGhost().guides)).toBe(true);
   });
 });
+
+// §14.7: 기둥·개구부는 옵션 바에서 크기를 바꿀 수 있고 [Esc]로 끝난다는 것을 배너가 말한다.
+test('구조물 도구 안내에 §14.7 문구와 종류·개구부 규칙이 들어 있다', () => {
+  expect(setup('column-square').t.hint).toContain('놓을 자리를 클릭 · 옵션 바에서 크기 · [Esc] 종료');
+  expect(setup('column-square').t.hint).toContain('사각 기둥');
+  expect(setup('opening').t.hint).toContain('개구부는 벽 위에만 놓입니다');
+});

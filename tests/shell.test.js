@@ -648,3 +648,16 @@ test('도구·모드·레일·단위·잠금 토글이 aria-pressed와 title을 
   view.click();
   expect(view.getAttribute('aria-expanded')).toBe('false');
 });
+
+// §14.7: 셸은 배너를 다시 그릴 수 있는 문을 열어 둔다(2D 뷰가 hint 변화를 알려 준다).
+test('refreshBanner가 현재 도구의 hint를 다시 읽는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  let step = 1;
+  shell.setOptionBar({ name: 'room', opts: {}, get hint() { return `단계 ${step}`; } });
+  const banner = root.querySelector('#banner');
+  expect(banner.textContent).toContain('단계 1');
+  step = 2;
+  shell.refreshBanner();
+  expect(banner.textContent).toContain('단계 2');
+});

@@ -15,6 +15,7 @@ export function createMeasureTool({ store, opts: given = null, view = null }) {
   const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, walls: f.walls, snap: opts.snap }).point; };
   return {
     name: 'measure', opts,
+    get hint() { return a ? '끝점을 클릭 (2/2)' : '시작점을 클릭 (1/2) · [Esc] 종료'; },
     onPointerDown(p) {
       const f = activeFloor(store.get());
       if (!a) { // 새 측정 시작 전에 기존 측정선을 클릭하면 지운다

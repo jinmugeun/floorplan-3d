@@ -40,7 +40,9 @@ import { openOnboarding, isOnboarded } from './ui/onboarding.js';
 import { createTopbar, projectIsEmpty, confirmLeave, savedLabel, showSaved } from './app/topbar.js';
 import { templateProject, saveTemplate, listTemplates, BUILTIN_TEMPLATES } from './templates/projectTemplates.js';
 import { loadSample } from './samples/gangdang.js';
-import { serializeProject, parseProject, downloadText, readTextFile, startAutosave, loadAutosave, filenameFor, capture2D } from './io/file.js';
+import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
+import { createFileActions } from './app/fileActions.js';
+import { stickyTools } from './ui/prefs.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -49,7 +51,7 @@ const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D �
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 let dnd = null;     // 같은 이유로 여기서 선언한다(드래그 옵션이 닫아서 읽는다 — 배선은 startPlace 다음에 만든다)
 const menu = createContextMenu(document.body);
-const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender(), onDragOver: p => dnd?.onDragOver(p), onDrop: p => dnd?.onDrop(p), onDragLeave: () => dnd?.onDragLeave() }); // 태스크 5의 onCameraChange를 유지한다
+const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender(), onDragOver: p => dnd?.onDragOver(p), onDrop: p => dnd?.onDrop(p), onDragLeave: () => dnd?.onDragLeave(), onHint: () => shell.refreshBanner() }); // 태스크 5의 onCameraChange를 유지한다
 const { createDeleteTool, deleteSelection, deleteOrTool } = createDeleteActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const arrange = createArrangeActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
@@ -130,6 +132,9 @@ store.subscribe(s => {
   if (solo !== u.soloRoom) ui.set({ soloRoom: solo });
 });
 
+// §14.7: 방·벽 도구는 커밋 뒤에도 켜진 채다(kvp.stickyTools, 기본 켜짐). [Esc]가 선택으로 돌아간다.
+// 기둥·개구부(structTool)는 계획 5부터 이미 연속 배치이고, onDone은 [Esc] 경로다.
+const stickyDone = () => { if (!stickyTools()) setTool('select'); };
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS }, duct: { ...DUCT_TOOL_DEFAULTS } };
 // 구조물 도구 옵션도 세션 동안 유지된다. 다만 기둥 높이 기본값이 층고라, 활성 층·층 높이가 바뀌면
@@ -145,8 +150,8 @@ const structTool = kind => () => {
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
   select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
-  room: () => createRoomTool({ store, opts: toolOpts.room, onDone: () => setTool('select') }),
-  wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: () => setTool('select') }),
+  room: () => createRoomTool({ store, opts: toolOpts.room, onDone: stickyDone }),
+  wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: stickyDone }),
   delete: createDeleteTool,
   'column-square': structTool('column-square'),
   'column-round': structTool('column-round'),
@@ -247,35 +252,10 @@ const actions = {
 };
 createTopbar({ store, ui, shell, menu, view3d, actions });
 
-async function loadFile(file) {
-  if (!file) return; // 파일 선택 취소
-  try { store.replace(parseProject(await readTextFile(file))); view.fit(); shell.toast('불러왔습니다'); }
-  catch (e) { shell.toast(e.message); }
-}
-
-document.getElementById('btnLoad').addEventListener('click', () => {
-  const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json';
-  i.onchange = () => loadFile(i.files[0]);
-  i.click();
-});
-const captureNow = async () => {
-  try { const url = ui.get().mode === '2d' ? await capture2D(store, ui) : view3d.capture(); const a = document.createElement('a'); a.href = url; a.download = filenameFor(store.get()).replace('.json', '.png'); a.click(); }
-  catch (e) { shell.toast(e.message); }
-};
-document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventListener('click', captureNow));
-
-const canvasWrap = document.getElementById('canvasWrap');
-canvasWrap.addEventListener('dragover', ev => ev.preventDefault());
-canvasWrap.addEventListener('drop', async ev => {
-  ev.preventDefault();
-  const file = ev.dataTransfer.files[0];
-  if (!file) return;
-  if (file.type === 'application/json' || /\.json$/i.test(file.name)) {
-    loadFile(file);
-  } else if (/^image\//.test(file.type)) {
-    openBackgroundDialog({ store });
-  }
-});
+const files = createFileActions({ store, ui, view, view3d, toast: shell.toast });
+document.getElementById('btnLoad').addEventListener('click', () => files.openFileDialog());
+document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventListener('click', () => files.captureNow()));
+files.wireDrop(document.getElementById('canvasWrap'));
 
 setTable(buildTable(effectiveKeymap(loadOverrides()))); // 저장된 단축키 재지정을 적용한다
 window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions }));

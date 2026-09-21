@@ -259,5 +259,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     renderBanner();   // 충돌 건수는 스토어가 바뀔 때만 달라진다(§14.8)
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { bottom?.destroy(); resizeWatch.destroy(); splitters.forEach(s => s.destroy()); } };
+  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, refreshBanner: () => renderBanner(), destroy() { bottom?.destroy(); resizeWatch.destroy(); splitters.forEach(s => s.destroy()); } };
 }

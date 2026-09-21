@@ -8,6 +8,7 @@ export function createGuideTool({ store, view, opts: given = null }) {
   const px = n => n / view.camera.scale;
   return {
     name: 'guide', opts,
+    hint: '보조선을 놓을 자리를 클릭 · 다시 클릭하면 지웁니다 · [Esc] 종료',
     onPointerDown(p) {
       const f = activeFloor(store.get());
       const hit = f.guides.find(g => (g.type === 'v' ? Math.abs(g.pos - p[0]) : Math.abs(g.pos - p[1])) <= px(6));

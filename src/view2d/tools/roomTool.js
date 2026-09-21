@@ -26,6 +26,9 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
   };
   return {
     name: 'room', opts,
+    // 단계 안내(§14.7). 배너는 shell의 renderBanner가 이 getter를 읽는다 — 도구는 상태만 바꾸고
+    // view.requestRender()가 돌 때 onHint가 배너를 다시 그린다.
+    get hint() { return start ? '맞은편 모서리를 클릭 (2/2)' : '첫 모서리를 클릭 (1/2)'; },
     onPointerDown(p) { const s = snap(p); if (!start) { start = s; cur = s; } else { cur = s; commit(typed.w || typed.h ? dims().end : s); } },
     onPointerMove(p) { if (start) cur = snap(p); },
     onPointerUp() {},

@@ -86,3 +86,14 @@ test('in mm mode feet/inch characters are ignored while typing dimensions', () =
   expect(t.onKey(key("'"))).toBe(true); // ft·in에서는 받는다
   expect(t.getPreview().typed.w).toBe("1500'");
 });
+
+// §14.7: 도구가 켜졌는데 배너가 비어 있어 "무엇을 클릭해야 하는지" 알 수 없었다.
+test('방 도구는 단계에 따라 안내가 바뀐다', () => {
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store, onDone() {} });
+  expect(t.hint).toBe('첫 모서리를 클릭 (1/2)');
+  t.onPointerDown([0.5, 0.25]);
+  expect(t.hint).toBe('맞은편 모서리를 클릭 (2/2)');
+  t.onPointerDown([4000.5, 3000.25]);
+  expect(t.hint).toBe('첫 모서리를 클릭 (1/2)');   // 커밋하면 다시 1단계다(도구는 켜진 채)
+});

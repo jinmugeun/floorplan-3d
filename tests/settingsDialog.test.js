@@ -184,3 +184,19 @@ test('tab: "keys"로 열면 단축키 탭이 먼저 보인다', () => {
   expect(document.querySelectorAll('.modal.settings')).toHaveLength(1);
   expect(document.querySelector('.modal.settings #tabGeneral').hidden).toBe(false);
 });
+
+// §14.7: "그린 뒤 도구 유지"는 프로젝트가 아니라 브라우저에 남는다(kvp.stickyTools).
+test('일반 탭의 "그린 뒤 도구 유지"가 kvp.stickyTools를 쓴다', () => {
+  localStorage.clear();
+  const store = createStore(createEmptyProject());
+  const dlg = openSettingsDialog({ store });
+  const modal = document.querySelector('.modal.settings');
+  const cb = modal.querySelector('[name="stickyTools"]');
+  expect(cb.checked).toBe(true);                         // 기본은 켜짐
+  cb.checked = false; cb.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(localStorage.getItem('kvp.stickyTools')).toBe('0');
+  expect(store.canUndo()).toBe(false);                   // 되돌릴 단계가 아니다
+  expect(JSON.stringify(store.get())).not.toContain('stickyTools');  // 저장 형식은 그대로다
+  dlg.close();
+  localStorage.clear();
+});
