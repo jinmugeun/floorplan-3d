@@ -111,9 +111,15 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
 // 뷰가 층 하나를 프리뷰 자리로 바꿔(previewFloor) 벽 개구부·라벨·충돌·선택 표시가 모두 같은
 // 자리를 보게 한다 — 모듈마다 preview를 따로 받으면 어느 하나가 빠져 한 프레임 어긋난다.
 export const previewed = (item, preview = null) => preview?.get?.(item?.id) ?? item;
+// 프리뷰로 받을 수 있는 것은 itemDrag의 Map<id, item> 하나뿐이다. 그리기 도구(wall·room·duct·
+// pathArray)의 getPreview()는 이름만 같은 고스트 정보(평범한 객체)라서, 뷰가 그것을 프리뷰로
+// 착각하면 `[...preview.keys()]`가 매 프레임 터진다. 정규화를 한 자리에 두고 뷰가 여기로만
+// 들어오게 한다: Map이 아니면 "프리뷰 없음"이다.
+export const dragPreview = preview => (preview instanceof Map ? preview : null);
 export function previewFloor(floor, preview = null) {
-  if (!preview?.size) return floor;
-  return { ...floor, items: (floor.items ?? []).map(it => previewed(it, preview)) };
+  const pv = dragPreview(preview);
+  if (!pv?.size) return floor;
+  return { ...floor, items: (floor.items ?? []).map(it => previewed(it, pv)) };
 }
 
 export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = null, labels = true, dim = null, shown = null } = {}) {

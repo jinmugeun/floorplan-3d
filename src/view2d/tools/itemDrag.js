@@ -168,8 +168,9 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
 
   return {
     pick, pickInBox, handleHit, start, apply, finish, cancel, drawOverlay,
-    // 뷰가 그리기에 쓰는 드래그 중 자리(§15.2). 드래그가 없으면 null이다.
-    getPreview: () => drag?.preview ?? null,
+    // 뷰가 그리기에 쓰는 드래그 중 자리(§15.2). 드래그가 없으면 null이다. 이름이 그리기 도구의
+    // getPreview()(고스트 객체)와 겹치지 않아야 뷰가 둘을 섞지 않는다.
+    getDragPreview: () => drag?.preview ?? null,
     // 테스트와 오버레이가 읽는 좁은 뷰(내부 base·startP는 내보내지 않는다)
     getDrag: () => (drag ? { kind: drag.kind, guides: drag.guides, gaps: drag.gaps } : null),
   };

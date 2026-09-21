@@ -2,7 +2,7 @@ import { activeFloor } from '../state/schema.js';
 import { endpoints } from '../geom/walls.js';
 import { roomInnerPolygon, pointInPolygon } from '../geom/rooms.js';
 import { fmtLen, fmtArea } from '../util/units.js';   // api로 도구·라벨에 넘긴다
-import { drawItems, ITEM_DRAG_KINDS, previewFloor } from './items2d.js';
+import { drawItems, ITEM_DRAG_KINDS, previewFloor, dragPreview } from './items2d.js';
 import { drawDucts } from './ducts2d.js';
 import { memoCollisions, collidingFor } from '../geom/collide.js';
 import { drawWalls } from './walls2d.js';
@@ -108,7 +108,8 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
     // 드래그 중이면 이 프레임의 "층"은 프리뷰 자리다(§15.2). 벽 개구부·라벨·충돌·아이템이 모두
     // 같은 층을 본다. 드래그가 없으면 previewFloor가 같은 객체를 돌려주므로 비용이 0이다.
-    const preview = tool?.getPreview?.() ?? null;
+    // 프리뷰는 아이템 드래그(itemDrag·selectTool)의 Map뿐이다 — 그리기 도구의 getPreview()는 다른 뜻이다.
+    const preview = dragPreview(tool?.getDragPreview?.());
     const pf = previewFloor(f, preview);
     ctx.fillStyle = state.settings?.background ?? '#f3f4f6'; ctx.fillRect(0, 0, w, h);
     const solo = ui.get().soloRoom ?? null;

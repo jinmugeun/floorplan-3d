@@ -435,3 +435,40 @@ test('프리뷰 층은 아이템 자리를 프리뷰로 바꾼다', async () => 
   expect(pf.walls).toBe(floor.walls);
   expect(previewed(floor.items[1], map)).toBe(floor.items[1]);
 });
+
+// 회귀(계획 7): 그리기 도구도 `getPreview()`를 갖고 있지만 그것은 고스트 정보(평범한 객체)다.
+// 뷰가 그것을 드래그 프리뷰로 받으면 `[...preview.keys()]`가 매 프레임 터졌다
+// (벽·방·덕트·경로 배열 그리기 중 "preview.keys is not a function"). 뷰는 Map만 프리뷰로 본다.
+test('그리기 도구의 getPreview 고스트는 드래그 프리뷰로 새지 않는다', async () => {
+  const { createWallTool } = await import('../src/view2d/tools/wallTool.js');
+  const { addItem } = await import('../src/state/floorOps.js');
+  const { dragPreview, previewFloor } = await import('../src/view2d/items2d.js');
+  const rafs = []; const realRaf = globalThis.requestAnimationFrame, realCancel = globalThis.cancelAnimationFrame;
+  // raf 콜백을 우리가 직접 돌려서, 렌더 중의 예외가 이 테스트로 올라오게 한다(진짜 raf에서는 삼켜진다).
+  globalThis.requestAnimationFrame = cb => rafs.push(cb);
+  globalThis.cancelAnimationFrame = () => {};
+  try {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+    addItem(store, { id: 'it1', name: '소파', code: 'S1', pos: [1500, 1500], size: [600, 600, 700], rot: 0 });
+    const v = createView2D(makeCanvas(), store, createUiState());
+    const flush = () => { while (rafs.length) rafs.shift()(0); };
+    v.fit(0); flush();
+    const wall = createWallTool({ store, onDone() {} });
+    wall.onPointerDown([0, 0]); wall.onPointerMove([2000, 0]);
+    expect(wall.getPreview() instanceof Map).toBe(false);     // 그리기 도구가 실제로 넘기던 모양이다
+    v.setTool(wall);
+    expect(() => flush()).not.toThrow();
+    // Map이 아닌 어떤 값이 와도(고스트 객체·배열·undefined) 프리뷰는 없는 것으로 본다
+    const stub = { name: 't', opts: {}, onPointerDown() {}, onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {} };
+    for (const ghost of [wall.getPreview(), { points: [] }, [], undefined, null]) {
+      expect(dragPreview(ghost)).toBeNull();
+      v.setTool({ ...stub, getDragPreview: () => ghost });
+      v.requestRender();
+      expect(() => flush()).not.toThrow();
+    }
+    const floor = { items: [{ id: 'a', pos: [0, 0] }], walls: [] };
+    expect(previewFloor(floor, { points: [], cursor: [1, 2] })).toBe(floor);
+    v.destroy();
+  } finally { globalThis.requestAnimationFrame = realRaf; globalThis.cancelAnimationFrame = realCancel; }
+});

@@ -49,12 +49,12 @@ describe('아이템 선택과 이동', () => {
     const { store, t, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
     t.onPointerDown([2000, 1500], {});
     t.onPointerMove([2000, 560], { ctrlKey: true });
-    expect(t.getPreview().get(ids[0]).pos).toEqual([2000, 560]);
+    expect(t.getDragPreview().get(ids[0]).pos).toEqual([2000, 560]);
     expect(item(store, ids[0]).pos).toEqual([2000, 1500]);   // 스토어는 아직 옛 자리다
     expect(t.getDrag().guides).toEqual([]);
     t.onPointerUp([2000, 560], {});
     expect(item(store, ids[0]).pos).toEqual([2000, 560]);    // 커밋은 pointerup에서 한 번
-    expect(t.getPreview()).toBeNull();
+    expect(t.getDragPreview()).toBeNull();
   });
 
   test('드래그 중 노란 가이드와 벽까지 거리가 준비된다', () => {
@@ -323,9 +323,9 @@ test('드래그 중 [Esc]는 프리뷰만 버리고 스토어를 되돌리지 �
   const { store, t, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
   t.onPointerDown([2000, 1500], {});
   t.onPointerMove([2000, 900], { ctrlKey: true });
-  expect(t.getPreview().get(ids[0]).pos).toEqual([2000, 900]);
+  expect(t.getDragPreview().get(ids[0]).pos).toEqual([2000, 900]);
   expect(t.onKey({ key: 'Escape' })).toBe(true);
-  expect(t.getPreview()).toBeNull();
+  expect(t.getDragPreview()).toBeNull();
   expect(item(store, ids[0]).pos).toEqual([2000, 1500]);
   expect(store.canUndo()).toBe(true);        // setup의 addWalls·addItem 두 단계뿐이다
   store.undo();                              // 드래그가 undo 단계를 남기지 않았다: 직전 단계는 setup의 addItem이다
@@ -340,7 +340,7 @@ test('벽 부착 제품과 다중 선택도 같은 프리뷰 경로를 쓴다', 
   a.store.dispatch(d => { const it = activeFloor(d).items[0]; it.wallId = top.id; it.t = 0.5; it.pos = [2000, 0]; it.rot = 0; });
   a.t.onPointerDown([2000, 0], {});
   a.t.onPointerMove([2600, 300], {});
-  const prev = a.t.getPreview().get(a.ids[0]);
+  const prev = a.t.getDragPreview().get(a.ids[0]);
   expect(prev.pos[1]).toBe(0);               // 프리뷰도 벽을 따라 미끄러진다
   expect(prev.wallId).toBe(top.id);
   a.t.onPointerUp([2600, 300], {});
@@ -350,7 +350,7 @@ test('벽 부착 제품과 다중 선택도 같은 프리뷰 경로를 쓴다', 
   b.ui.set({ selection: { type: 'multi', kind: 'item', ids: [...b.ids] } });
   b.t.onPointerDown([2000, 1000], {});
   b.t.onPointerMove([2000, 1300], { ctrlKey: true });
-  expect([...b.t.getPreview().keys()].sort()).toEqual([...b.ids].sort());
+  expect([...b.t.getDragPreview().keys()].sort()).toEqual([...b.ids].sort());
   b.t.onPointerUp([2000, 1300], {});
   expect(item(b.store, b.ids[0]).pos).toEqual([1000, 1300]);
   expect(item(b.store, b.ids[1]).pos).toEqual([2000, 1300]);
