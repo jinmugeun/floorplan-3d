@@ -6,7 +6,8 @@ import { applyMaterial, setWallRegions } from '../src/state/materialOps.js';
 import { rectWalls, wallLength } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { materialById } from '../src/materials/catalog.js';
-import { estimateRows, estimateCsv } from '../src/io/estimate.js';
+import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2 } from '../src/io/estimate.js';
+import { normalizeDuct } from '../src/state/ductSchema.js';
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -90,7 +91,7 @@ describe('견적서 계산', () => {
 
   test('빈 층은 빈 견적이 된다', () => {
     const rows = estimateRows({ items: [], walls: [], rooms: [] });
-    expect(rows).toEqual({ products: [], materials: [], total: 0 });
+    expect(rows).toEqual({ products: [], materials: [], ducts: [], total: 0 });
   });
 
   test('CSV는 BOM으로 시작하고 두 구역과 합계를 담는다', () => {
@@ -104,5 +105,38 @@ describe('견적서 계산', () => {
     expect(csv).toContain('제품,3인 소파,SF-3P,2100×900×800,1,890000,890000');
     expect(csv).toContain('마감재,오크 원목마루');
     expect(lines.at(-1).startsWith('합계')).toBe(true);
+  });
+
+  test('덕트 물량은 둘레 × 길이의 표면적이고 같은 계통·단면은 한 줄로 합친다', () => {
+    const floor = {
+      walls: [], rooms: [], items: [],
+      ducts: [
+        normalizeDuct({ kind: 'exhaust', system: 'F-3', points: [[0, 0], [3000, 0], [3000, 2000.5]], segments: [{ w: 1000, h: 450, z: 2625 }] }),
+        normalizeDuct({ kind: 'exhaust', system: 'F-3', points: [[0, 5000], [4000, 5000]], segments: [{ w: 1000, h: 450, z: 2625 }] }),
+        normalizeDuct({ kind: 'supply', system: 'OA', points: [[0, 9000], [1000, 9000]], segments: [{ w: 500, h: 350, z: 2675 }] }),
+      ],
+    };
+    const rows = ductRows(floor);
+    expect(rows).toHaveLength(2);
+    const f3 = rows.find(r => r.system === 'F-3');
+    expect(f3.size).toBe('1000×450');
+    // 소수 케이스(2000.5 mm)는 round2 전 9.0005 m / 26.10145 m²이고, ductRows가 마지막에 소수 둘째
+    // 자리로 맞춘다(표시·금액이 그 값으로 나간다).
+    expect(f3.lengthM).toBe(9);                                   // 3 + 2.0005 + 4 = 9.0005 → 9
+    expect(f3.areaM2).toBe(26.1);                                 // 둘레 2(1.0 + 0.45) = 2.9 m → 26.10145 → 26.1
+    expect(f3.unitPrice).toBe(DUCT_PRICE_PER_M2);
+    expect(f3.total).toBe(Math.round(f3.areaM2 * DUCT_PRICE_PER_M2));
+    expect(rows.map(r => r.system)).toEqual(['F-3', 'OA']);
+  });
+
+  test('견적 합계에 설비 단가와 덕트 물량이 함께 든다', () => {
+    const hood = createItem(productById('hood-box'), { pos: [1000, 1000] });
+    const floor = { walls: [], rooms: [], items: [hood], ducts: [normalizeDuct({ system: 'F-3', points: [[0, 0], [1000, 0]], segments: [{ w: 500, h: 300, z: 2700 }] })] };
+    const rows = estimateRows(floor);
+    expect(rows.products.find(r => r.productId === 'hood-box').unitPrice).toBe(productById('hood-box').price);
+    expect(rows.ducts).toHaveLength(1);
+    expect(rows.total).toBe(rows.products[0].total + rows.ducts[0].total);
+    expect(estimateCsv(rows)).toContain('덕트');
+    expect(estimateCsv(rows)).toContain('500×300');
   });
 });

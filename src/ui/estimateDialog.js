@@ -12,9 +12,10 @@ function tableHtml(rows) {
   const body = [
     ...rows.products.map(r => `<tr><td>제품</td><td>${esc(r.name)}</td><td>${esc(r.code)}</td><td>${esc(r.size)}</td><td>${r.qty}</td><td>${won(r.unitPrice)}</td><td>${won(r.total)}</td></tr>`),
     ...rows.materials.map(r => `<tr><td>마감재</td><td>${esc(r.name)}</td><td>${esc(r.id)}</td><td>${r.areaM2} m²</td><td>1</td><td>${won(r.unitPrice)}/m²</td><td>${won(r.total)}</td></tr>`),
+    ...(rows.ducts ?? []).map(r => `<tr><td>덕트</td><td>${esc(`${r.kind === 'supply' ? '급기' : '배기'} ${r.system}`)}</td><td>${esc(r.size)}</td><td>${r.lengthM} m / ${r.areaM2} m²</td><td>1</td><td>${won(r.unitPrice)}/m²</td><td>${won(r.total)}</td></tr>`),
   ].join('');
   return `<table class="est-table"><thead><tr><th>구분</th><th>이름</th><th>코드</th><th>규격</th><th>수량</th><th>단가</th><th>금액</th></tr></thead>
-    <tbody>${body || '<tr><td colspan="7">배치된 제품과 마감재가 없습니다.</td></tr>'}</tbody></table>`;
+    <tbody>${body || '<tr><td colspan="7">배치된 제품·마감재·덕트가 없습니다.</td></tr>'}</tbody></table>`;
 }
 
 let current = null;                                        // 마지막으로 연 인스턴스: 다시 열 때 구독을 정리한다(누수 방지)
@@ -31,7 +32,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
   </div>`;
   document.body.appendChild(root);
   const part = n => root.querySelector(`[data-part="${n}"]`);
-  let rows = { products: [], materials: [], total: 0 };
+  let rows = { products: [], materials: [], ducts: [], total: 0 };
   function render() {
     rows = estimateRows(activeFloor(store.get()));
     part('table').innerHTML = tableHtml(rows);

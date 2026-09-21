@@ -6,7 +6,8 @@ import { createEmptyProject, activeFloor, createItem } from '../src/state/schema
 import { addWalls, addItem, updateRoom } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { createLayersPanel } from '../src/ui/layersPanel.js';
+import { createLayersPanel, ductRoomId } from '../src/ui/layersPanel.js';
+import { addDuct } from '../src/state/ductOps.js';
 
 function setup() {
   const store = createStore(createEmptyProject()), ui = createUiState();
@@ -105,5 +106,37 @@ describe('레이어 패널', () => {
     panel.destroy();
     addItem(store, createItem(productById('bed-queen'), { pos: [1000, 1000] }));
     expect(el.querySelectorAll('.layer-item')).toHaveLength(0);
+  });
+
+  test('덕트가 첫 점이 든 방 아래에 뜨고 보기·잠금이 동작한다', () => {
+    const { store, ui, el } = setup();
+    addDuct(store, { id: 'd1', kind: 'supply', system: 'OA', points: [[2000, 1500], [3000, 1500]], segments: [{ w: 500, h: 300, z: 2700 }] });
+    addDuct(store, { id: 'd2', kind: 'exhaust', points: [[9000, 9000], [9000, 10000]] });   // 방 밖 → 미지정
+    const f0 = activeFloor(store.get());
+    expect(ductRoomId(f0, f0.ducts[0])).toBe(f0.rooms[0].id);
+    expect(ductRoomId(f0, f0.ducts[1])).toBeNull();
+    const rooms = [...el.querySelectorAll('.layer-room')];
+    expect(rooms[0].textContent).toContain('덕트 급기 · OA');
+    expect(rooms[0].textContent).toContain('1000');                       // 총 길이 1000 mm
+    expect(rooms.at(-1).textContent).toContain('덕트 배기');
+    el.querySelector('[data-duct-hide="d1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(activeFloor(store.get()).ducts.find(d => d.id === 'd1').hidden).toBe(true);
+    el.querySelector('[data-duct-lock="d1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(activeFloor(store.get()).ducts.find(d => d.id === 'd1').locked).toBe(true);
+    el.querySelector('[data-duct-select="d1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(ui.get().selection).toEqual({ type: 'duct', id: 'd1', segment: null, vertex: null });
+  });
+
+  test('"모두 보기"가 제품과 덕트를 한 단계로 함께 켜고 끈다', () => {
+    const { store, el } = setup();
+    addDuct(store, { id: 'd1', points: [[2000, 1500], [3000, 1500]], hidden: true });
+    const box = el.querySelector('input[name="showAll"]');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    const f = activeFloor(store.get());
+    expect(f.items.every(i => !i.hidden)).toBe(true);
+    expect(f.ducts.every(d => !d.hidden)).toBe(true);
+    store.undo();
+    expect(activeFloor(store.get()).ducts[0].hidden).toBe(true);          // 되돌림 한 단계
   });
 });

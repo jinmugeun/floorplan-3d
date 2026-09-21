@@ -30,7 +30,7 @@ describe('시방서 대화상자', () => {
     expect(a.root.querySelector('h2').textContent).toBe('시방서');
     expect(a.root.querySelectorAll('[name="paper"] option')).toHaveLength(2);
     expect(a.root.querySelector('[name="landscape"]').type).toBe('checkbox');
-    expect(a.root.querySelectorAll('[data-section]')).toHaveLength(6);
+    expect(a.root.querySelectorAll('[data-section]')).toHaveLength(7);
     expect(a.root.querySelector('[name="notes"]').tagName).toBe('TEXTAREA');
   });
 

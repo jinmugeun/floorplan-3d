@@ -4,12 +4,14 @@ import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
 import { wallLength } from '../geom/walls.js';
 import { fmtLen, fmtArea } from '../util/units.js';
+import { roomAirflow, systemAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // src/io/ → src/ui/ import는 계층 역전이다(아키텍처 §9)
 import { esc } from '../util/html.js';
 
-export const SPEC_SECTIONS = [['plan', '평면도'], ['elevations', '입면도'], ['products', '제품 목록'], ['rooms', '공간 목록'], ['walls', '벽 목록'], ['notes', '비고']];
+export const SPEC_SECTIONS = [['plan', '평면도'], ['elevations', '입면도'], ['products', '제품 목록'], ['rooms', '공간 목록'], ['walls', '벽 목록'], ['airflow', '풍량 집계'], ['notes', '비고']];
 export const PAPER = { A4: [210, 297], A3: [297, 420] };
 const ELEVATIONS = [['front', '정면도'], ['back', '배면도'], ['left', '좌측면도'], ['right', '우측면도'], ['top', '천장 평면도']];
+const FLOW_LABELS = { supply: '급기', exhaust: '배기', mixed: '급·배기' };
 
 const typeLabel = t => ROOM_TYPES.find(([v]) => v === t)?.[1] ?? '미지정';
 const matName = a => (a?.id ? materialById(a.id)?.name ?? a.id : '-');
@@ -46,6 +48,11 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     `W${i + 1}`, len(wallLength(w)), len(w.thickness), len(w.height ?? f.height),
     esc(matName(w.matIn)), esc(matName(w.matOut)),
   ]);
+  // 풍량 집계(명세 §11.3). 설비도 덕트도 없는 층에서는 빈 표가 되고, table()이 "항목이 없습니다"를 찍는다.
+  const cmh = n => Number(n || 0).toLocaleString('ko-KR');
+  const airRows = roomAirflow(f).filter(r => r.EA || r.SA || r.design.EA || r.design.SA)
+    .map(r => [esc(r.name), cmh(r.EA), cmh(r.SA), cmh(r.design.EA), cmh(r.design.SA), r.ratio === null ? '-' : `${r.ratio.toFixed(1)}%`]);
+  const sysRows = systemAirflow(f).map(x => [esc(x.system), FLOW_LABELS[x.kind], cmh(x.EA), cmh(x.SA), x.itemIds.length]);
   const img = (src, label) => (src ? `<figure><img src="${esc(src)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>` : '');
   const elevFigs = ELEVATIONS.map(([k, l]) => img(images[k], l)).join('');
   const noImage = '<p class="meta">이미지가 없습니다.</p>';
@@ -71,5 +78,6 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   ${on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H)', '수량'], productRows)}` : ''}
   ${on('rooms') ? `<h2>공간 목록</h2>${table(['공간', '타입', '면적', `높이(${uLabel})`, '바닥 마감', '천장 마감'], roomRows)}` : ''}
   ${on('walls') ? `<h2>벽 목록</h2>${table(['기호', `길이(${uLabel})`, `두께(${uLabel})`, `높이(${uLabel})`, '내벽 마감', '외벽 마감'], wallRows)}` : ''}
+  ${on('airflow') ? `<h2>풍량 집계</h2>${table(['공간', 'EA', 'SA', '설계 EA', '설계 SA', '급기율'], airRows)}${table(['계통', '구분', 'EA', 'SA', '설비 수'], sysRows)}` : ''}
   ${on('notes') ? `<h2>비고</h2><pre class="notes">${esc(notes)}</pre>` : ''}`;
 }

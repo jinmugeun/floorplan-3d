@@ -4,8 +4,35 @@ import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
 import { faceArea } from '../state/materialOps.js';
 import { wallLength } from '../geom/walls.js';
+import { segmentLength } from '../geom/ducts.js';
 
 const round2 = n => Math.round(n * 100) / 100;
+
+// 덕트 단가(원/m²). 아연도강판 제작·설치 기준의 정적 값이다(실판매 연동은 범위 밖 — 명세 §17).
+export const DUCT_PRICE_PER_M2 = 68000;
+
+// 덕트 물량은 표면적이다: 둘레 2(w + h) × 구간 길이. 같은 급배기·계통·단면은 한 줄로 합친다.
+export function ductRows(floor) {
+  const m = new Map();
+  for (const d of floor.ducts ?? []) {
+    const system = String(d.system ?? '').trim() || '미지정';
+    for (let i = 0; i < d.segments.length; i++) {
+      const s = d.segments[i];
+      const len = segmentLength(d, i);
+      if (!(len > 0)) continue;
+      const size = `${Math.round(s.w)}×${Math.round(s.h)}`;
+      const key = `${d.kind}|${system}|${size}`;
+      const row = m.get(key) ?? { key, system, kind: d.kind, size, lengthM: 0, areaM2: 0, unitPrice: DUCT_PRICE_PER_M2, total: 0 };
+      row.lengthM += len / 1000;
+      row.areaM2 += ((2 * (s.w + s.h)) / 1000) * (len / 1000);
+      m.set(key, row);
+    }
+  }
+  // 소수는 마지막에 한 번만 맞춘다(구간마다 반올림하면 합계가 어긋난다). 금액은 그 표시값으로 낸다.
+  return [...m.values()]
+    .map(r => { const areaM2 = round2(r.areaM2); return { ...r, lengthM: round2(r.lengthM), areaM2, total: Math.round(areaM2 * r.unitPrice) }; })
+    .sort((a, b) => a.system.localeCompare(b.system, 'ko') || a.size.localeCompare(b.size));
+}
 
 export function estimateRows(floor) {
   const prod = new Map();
@@ -52,8 +79,10 @@ export function estimateRows(floor) {
     return { id, name: m?.name ?? id, areaM2, unitPrice, total: Math.round(areaM2 * unitPrice) };
   }).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   const products = [...prod.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-  const total = products.reduce((s, r) => s + r.total, 0) + materials.reduce((s, r) => s + r.total, 0);
-  return { products, materials, total };
+  // ducts는 빈 배열이어도 늘 함께 돌려준다 — estimateCsv·estimateDialog가 rows.ducts를 읽는 자리를 한 곳으로 둔다.
+  const ducts = ductRows(floor);
+  const total = products.reduce((s, r) => s + r.total, 0) + materials.reduce((s, r) => s + r.total, 0) + ducts.reduce((s, r) => s + r.total, 0);
+  return { products, materials, ducts, total };
 }
 
 // 엑셀이 한글을 깨뜨리지 않게 BOM으로 시작한다. 쉼표·따옴표가 든 이름은 감싸 준다.
@@ -62,6 +91,7 @@ export function estimateCsv(rows) {
   const lines = ['견적서', '구분,이름,코드,규격,수량,단가,금액'];
   for (const r of rows.products) lines.push(['제품', r.name, r.code, r.size, r.qty, r.unitPrice, r.total].map(cell).join(','));
   for (const r of rows.materials) lines.push(['마감재', r.name, r.id, `${r.areaM2} m²`, 1, r.unitPrice, r.total].map(cell).join(','));
+  for (const r of rows.ducts ?? []) lines.push(['덕트', `${r.kind === 'supply' ? '급기' : '배기'} ${r.system}`, r.size, `${r.lengthM} m / ${r.areaM2} m²`, 1, r.unitPrice, r.total].map(cell).join(','));
   lines.push(`합계,,,,,,${rows.total}`);
   return `﻿${lines.join('\n')}`;
 }
