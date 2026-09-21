@@ -1,4 +1,4 @@
-:root { --bg: #eef1f4; --ink: #1b2430; --muted: #5b6775; --panel: #ffffff; --line: #c9d1da; --accent: #1f5fd0; --supply: #2b6be0; --exhaust: #d8452c; }
+:root { --bg: #eef1f4; --ink: #1b2430; --muted: #5b6775; --panel: #ffffff; --line: #c9d1da; --accent: #1f5fd0; --supply: #2b6be0; --exhaust: #d8452c; --on-accent: #fff; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif; font-size: 13px; }
 [hidden] { display: none !important; } /* display:flex 등이 hidden 속성을 덮어쓰지 않게 */
@@ -14,7 +14,7 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #layout.panel-off #panelSplitter, #layout.right-off #rightSplitter { display: none; }
 #topbar { grid-area: top; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
 #topbar .group { display: flex; gap: 8px; align-items: center; }
-#topbar button { padding: 5px 9px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; } #topbar .primary { border-color: var(--accent); }
+#topbar button:not(.primary) { padding: 5px 9px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
 @media (max-width: 1200px) { #topbar { overflow-x: auto; } }
 #projectName { font: inherit; font-weight: 600; border: 1px solid transparent; padding: 4px 6px; border-radius: 4px; } #projectName:focus { border-color: var(--accent); outline: none; }
 #rail { grid-area: rail; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); }
@@ -68,7 +68,7 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
    open()이 클래스를 건드리지 않아 `.popover.help` 같은 선택자는 어디에서도 맞지 않는다(죽은 규칙). */
 .help-list { margin: 4px 0 8px; padding-left: 18px; max-width: 340px; } .help-list li { margin: 3px 0; line-height: 1.4; }
 kbd { font-family: "IBM Plex Mono", monospace; font-size: 10px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--muted); }
-.muted { color: var(--muted); font-size: 12px; } .hint { font-size: 12px; color: var(--muted); } .primary { background: var(--accent); color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+.muted { color: var(--muted); font-size: 12px; } .hint { font-size: 12px; color: var(--muted); }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; z-index: 50; } .modal-card { background: #fff; border-radius: 8px; width: min(960px, 96vw); padding: 16px; } .modal-card header { display: flex; justify-content: space-between; align-items: center; } .modal .toolbar { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; } .modal canvas { width: 100%; background: #f4f6f8; border: 1px solid var(--line); cursor: crosshair; }
 #toasts { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 60; } .toast { background: #1b2430; color: #fff; padding: 8px 14px; border-radius: 6px; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -114,7 +114,7 @@ canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid
 .mat-editor canvas { margin: 8px 0; } .mat-editor .error:empty { display: none; }
 .tpl-filters { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 10px; }
 .tpl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 50vh; overflow: auto; }
-.tpl-card { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; } .tpl-card .row { display: flex; gap: 6px; margin-top: 4px; } .tpl-card button { padding: 5px 8px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: 12px; }
+.tpl-card { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; } .tpl-card .row { display: flex; gap: 6px; margin-top: 4px; } .tpl-card button:not(.primary) { padding: 5px 8px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-size: 12px; }
 @media (max-width: 900px) { .tpl-filters { grid-template-columns: 1fr 1fr; } }
 .start-sub { font-size: 12px; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
 .start-card.tpl { border-left: 3px solid var(--accent); }
@@ -138,3 +138,8 @@ canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid
 .air-table th:first-child, .air-table td:first-child { width: 38%; word-break: keep-all; overflow-wrap: anywhere; }
 .air-table th:not(:first-child), .air-table td:not(:first-child) { text-align: right; white-space: nowrap; }
 .air-table td small { font-size: 10px; font-weight: 400; }
+
+/* 상태 클래스 — 파일 맨 뒤에 둔다(§14.2). 특이도로 다투는 대신 "뒤에 오는 규칙이 이긴다"를 쓴다:
+   #topbar button·.tpl-card button 같은 컨텍스트 규칙은 :not(.primary)로 자기 몫만 칠하고, 주 동작
+   버튼의 배색은 여기 한 곳에서 토큰으로 정한다. 새 컨텍스트 규칙을 더할 때도 이 절보다 위에 둔다. */
+.primary { background: var(--accent); color: var(--on-accent); border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; font: inherit; }
