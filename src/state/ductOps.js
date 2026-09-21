@@ -68,6 +68,23 @@ export const deleteDuctPoint = (store, id, i, opts) => put(store, id, d => (d.lo
 export const translateDuct = (store, id, delta, opts) =>
   put(store, id, d => (d.locked ? null : { ...d, points: d.points.map(p => [p[0] + delta[0], p[1] + delta[1]]) }), opts);
 
+// Delete 키·패널 삭제 버튼이 함께 쓰는 판정(아키텍처 §11.3): 꼭짓점을 골랐고 점이 3개 이상이면
+// 점 하나만, 아니면 덕트 전체를 지운다. view2d(선택 도구)와 ui(패널) 둘 다 이 함수만 부르고
+// 각자 선택 상태·토스트는 알아서 처리한다(§9 — 상태 판정은 state 계층에, DOM 부수효과는 호출자에).
+// sel은 ui.selection 모양 그대로({ type, id, segment, vertex, ... }); duct 선택이 아니면 손대지 않는다.
+export function deleteDuctSelection(store, sel) {
+  if (sel?.type !== 'duct') return { deleted: null };
+  const d = ductById(activeFloor(store.get()), sel.id);
+  if (!d) return { deleted: null, missing: true };
+  if (d.locked) return { deleted: null, locked: true };
+  if (Number.isInteger(sel.vertex) && d.points.length > 2) {
+    deleteDuctPoint(store, d.id, sel.vertex);
+    return { deleted: 'point' };
+  }
+  deleteDucts(store, [d.id]);
+  return { deleted: 'duct' };
+}
+
 export const addDamper = (store, id, damper, opts) =>
   put(store, id, d => ({ ...d, dampers: [...d.dampers, { segment: 0, t: 0.5, type: 'VD', ...damper }] }), opts);
 export const updateDamper = (store, id, index, patch, opts) =>

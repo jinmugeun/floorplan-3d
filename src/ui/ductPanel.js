@@ -1,8 +1,7 @@
 // 덕트 속성 패널(아키텍처 §11.6). propsPanel이 sel.type === 'duct'면 이 HTML을 그대로 쓴다.
 // 구간 목록에서 고른 구간의 W·H·Z만 편집하고, "모든 구간에 적용"이 그 값을 나머지 구간에 퍼뜨린다(DT-04).
 import { activeFloor } from '../state/schema.js';
-import { ductById, updateDuct, updateSegment, setAllSegments, addDamper, updateDamper, deleteDamper, disconnectDuct } from '../state/ductOps.js';
-import { deleteDuctSelection } from '../view2d/tools/ductSelect.js';
+import { ductById, updateDuct, updateSegment, setAllSegments, addDamper, updateDamper, deleteDamper, disconnectDuct, deleteDuctSelection } from '../state/ductOps.js';
 import { ductLength, segmentLength } from '../geom/ducts.js';
 import { DUCT_RANGE, DAMPER_TYPES } from '../state/ductSchema.js';
 import { field, numValue, lenField, readLen, withUnit } from './fieldUtils.js';
@@ -92,8 +91,15 @@ export function ductPanelClick(store, ui, sel, el) {
   const d = ductById(activeFloor(store.get()), sel.id);
   if (!d) return true;
   if (name === 'ductSeg') { ui.set({ selection: { type: 'duct', id: d.id, segment: Number(el.dataset.i), vertex: null } }); return true; }
-  // 삭제 규칙은 Delete 키와 같은 함수를 지난다(잠금 검사·선택 비우기도 그 안에 있다).
-  if (name === 'ductDelete') { deleteDuctSelection({ store, ui, toast }); return true; }
+  // 삭제 규칙은 Delete 키와 같은 상태 함수(state/ductOps.js)를 지난다(잠금 검사도 그 안에 있다).
+  // 패널엔 꼭짓점 선택 개념이 없지만 판정 함수는 sel 그대로 받으므로 여기서도 안전하다.
+  if (name === 'ductDelete') {
+    const r = deleteDuctSelection(store, sel);
+    if (r.locked) toast('잠긴 덕트는 삭제할 수 없습니다');
+    else if (r.deleted === 'point') ui.set({ selection: { type: 'duct', id: d.id, segment: null, vertex: null } });
+    else if (r.deleted === 'duct') ui.set({ selection: null });
+    return true;
+  }
   if (d.locked) { toast('잠긴 덕트는 편집할 수 없습니다'); return true; }
   const i = Math.min(segIndex(sel), d.segments.length - 1);
   if (name === 'segAll') { const s = d.segments[i]; setAllSegments(store, d.id, { w: s.w, h: s.h, z: s.z }); return true; }

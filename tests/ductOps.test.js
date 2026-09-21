@@ -4,7 +4,7 @@ import { createEmptyProject, activeFloor, createItem } from '../src/state/schema
 import { addItem, deleteItems, addWalls, addFloor, selectionStillValid, pruneSelection } from '../src/state/floorOps.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { addDuct, updateDuct, deleteDucts, updateSegment, setAllSegments, moveDuctPoint, insertDuctPoint, deleteDuctPoint, translateDuct, addDamper, updateDamper, deleteDamper, connectDuct, disconnectDuct, setDuctFlag, ductById, ductsOf, movableDucts } from '../src/state/ductOps.js';
+import { addDuct, updateDuct, deleteDucts, updateSegment, setAllSegments, moveDuctPoint, insertDuctPoint, deleteDuctPoint, translateDuct, addDamper, updateDamper, deleteDamper, connectDuct, disconnectDuct, setDuctFlag, ductById, ductsOf, movableDucts, deleteDuctSelection } from '../src/state/ductOps.js';
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -173,5 +173,42 @@ describe('덕트 액션', () => {
     store.endTransaction();
     expect(ductById(floor(), id).points[0]).toEqual([2004.5, 1504.25]);
     expect(undoCount(store)).toBe(baseSteps + 1);                         // 5번의 드래그가 한 단계
+  });
+
+  // Delete 키·패널 삭제 버튼이 함께 쓰는 판정(아키텍처 §11.3·§9). view2d/tools/ductSelect.js와
+  // ui/ductPanel.js는 이 함수만 부르고 선택·토스트 같은 DOM 부수효과만 각자 처리한다.
+  test('deleteDuctSelection: 꼭짓점을 골랐고 점이 3개 이상이면 점 하나만, 아니면 덕트 전체를 한 단계로 지운다', () => {
+    const { store, id, floor } = setup();                                 // 점 3개: [2000.5,1500.25] [6000,1500.25] [6000,4000]
+    const baseSteps = undoCount(setup().store);
+
+    const r1 = deleteDuctSelection(store, { type: 'duct', id, segment: null, vertex: 1 });
+    expect(r1).toEqual({ deleted: 'point' });
+    expect(ductById(floor(), id).points).toEqual([[2000.5, 1500.25], [6000, 4000]]);
+
+    const r2 = deleteDuctSelection(store, { type: 'duct', id, segment: 0, vertex: null }); // 이제 점 2개 → 덕트 전체
+    expect(r2).toEqual({ deleted: 'duct' });
+    expect(floor().ducts).toHaveLength(0);
+
+    expect(undoCount(store)).toBe(baseSteps + 2);                         // 점 삭제 1단계 + 덕트 삭제 1단계, 빈 단계 없음
+  });
+
+  test('deleteDuctSelection: duct 선택이 아니거나 없는 id면 상태를 바꾸지 않고 알려 준다', () => {
+    const { store, id, floor } = setup();
+    const before = floor().ducts;
+
+    expect(deleteDuctSelection(store, { type: 'item', id })).toEqual({ deleted: null });
+    expect(deleteDuctSelection(store, null)).toEqual({ deleted: null });
+    expect(deleteDuctSelection(store, { type: 'duct', id: '없음' })).toEqual({ deleted: null, missing: true });
+    expect(floor().ducts).toBe(before);                                   // 참조까지 그대로(빈 단계도 없다)
+  });
+
+  test('deleteDuctSelection: 잠긴 덕트는 지우지 않고 알려 준다', () => {
+    const { store, id, floor } = setup();
+    store.dispatch(s => { activeFloor(s).ducts[0].locked = true; });
+    const locked = floor().ducts;
+
+    const r = deleteDuctSelection(store, { type: 'duct', id, segment: null, vertex: 1 });
+    expect(r).toEqual({ deleted: null, locked: true });
+    expect(floor().ducts).toBe(locked);                                   // 참조까지 그대로
   });
 });

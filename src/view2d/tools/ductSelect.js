@@ -3,25 +3,21 @@
 import { activeFloor } from '../../state/schema.js';
 import { hitDuct, snapToEquipment, DUCT_SNAP_TOL } from '../../geom/ducts.js';
 import { lerp } from '../../geom/vec.js';
-import { ductById, moveDuctPoint, translateDuct, deleteDucts, deleteDuctPoint, connectDuct, disconnectDuct } from '../../state/ductOps.js';
+import { ductById, moveDuctPoint, translateDuct, connectDuct, disconnectDuct, deleteDuctSelection as deleteDuctSelectionOp } from '../../state/ductOps.js';
 import { ductMenuItems } from '../../ui/ductMenu.js';
 import { drawDuctSelection, ductVisible } from '../ducts2d.js';
 
-// Delete 키의 덕트 규칙: 꼭짓점을 골랐고 점이 3개 이상이면 점 하나, 아니면 덕트 전체(아키텍처 §11.3).
-// main.js의 deleteSelection도 이 함수를 부른다 — 규칙이 두 곳에 갈리지 않게 모듈 함수로 둔다.
+// Delete 키의 덕트 규칙(판정은 state/ductOps.js의 deleteDuctSelection에 있다 — 아키텍처 §11.3·§9).
+// main.js의 deleteSelection과 ui/ductPanel.js의 삭제 버튼도 그 판정 함수를 부른다: 이 함수는
+// 선택 상태를 읽고(ui.get()) 판정 결과에 맞춰 선택·토스트를 처리하는 view2d 쪽 얇은 래퍼일 뿐이다.
 export function deleteDuctSelection({ store, ui, toast = () => {} }) {
   const s = ui.get().selection;
   if (s?.type !== 'duct') return false;
-  const d = ductById(activeFloor(store.get()), s.id);
-  if (!d) { ui.set({ selection: null }); return true; }
-  if (d.locked) { toast('잠긴 덕트는 삭제할 수 없습니다'); return true; }
-  if (Number.isInteger(s.vertex) && d.points.length > 2) {
-    deleteDuctPoint(store, d.id, s.vertex);
-    ui.set({ selection: { type: 'duct', id: d.id, segment: null, vertex: null } });
-    return true;
-  }
-  deleteDucts(store, [d.id]);
-  ui.set({ selection: null });
+  const r = deleteDuctSelectionOp(store, s);
+  if (r.missing) { ui.set({ selection: null }); return true; }
+  if (r.locked) { toast('잠긴 덕트는 삭제할 수 없습니다'); return true; }
+  if (r.deleted === 'point') { ui.set({ selection: { type: 'duct', id: s.id, segment: null, vertex: null } }); return true; }
+  ui.set({ selection: null });   // r.deleted === 'duct'
   return true;
 }
 
