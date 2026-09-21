@@ -45,6 +45,33 @@ describe('2D 아이템 렌더링', () => {
     expect(ctx.calls.some(c => c[0] === 'rect')).toBe(true);
   });
 
+  test('글자 부품은 반전·회전에도 똑바로 선다(로컬 좌표계 밖에서 그린다)', () => {
+    const ctx = fakeCtx();
+    const v = { ...view, label: (text, at, opt) => ctx.calls.push(['label', text, at, opt]) };
+    // 팬 심벌의 글자 부품은 로컬 (0, r*0.55) = (0, 192.5)에 있다(700×700 → r = 350).
+    drawItem(ctx, v, mk('fan-exhaust-700', { pos: [1000, 2000], rot: 90, flipH: true, flipV: true }));
+    const label = ctx.calls.find(c => c[0] === 'label');
+    expect(label[1]).toBe('F-2');                    // 팬 번호(기본값)
+    expect(label[2][0]).toBeCloseTo(1192.5, 6);      // 반전(y → −y) 뒤 90° 회전해 월드로 옮긴 위치
+    expect(label[2][1]).toBeCloseTo(2000, 6);
+    expect(label[3].size).toBeCloseTo(21, 6);        // 화면 px(9~28로 자른다)
+    // 글자는 아이템 로컬 좌표계(rotate·scale) 안에서 그리지 않는다: 캔버스에 fillText가 없고,
+    // 라벨은 restore 뒤 화면 좌표계에서 나간다 — 그래서 반전·회전에도 뒤집히거나 거울이 되지 않는다.
+    expect(ctx.calls.some(c => c[0] === 'fillText')).toBe(false);
+    const names = ctx.calls.map(c => c[0]);
+    expect(names.indexOf('label')).toBeGreaterThan(names.lastIndexOf('restore'));
+    // 회전·반전이 무엇이든 라벨은 같은 글자·같은 크기로 한 번만 나간다.
+    for (const patch of [{}, { rot: 37 }, { flipH: true }, { flipV: true }, { rot: 180, flipH: true, flipV: true }]) {
+      const c2 = fakeCtx();
+      const v2 = { ...view, label: (text, at, opt) => c2.calls.push(['label', text, at, opt]) };
+      drawItem(c2, v2, mk('fan-exhaust-700', { pos: [1000, 2000], ...patch }));
+      const ls = c2.calls.filter(c => c[0] === 'label');
+      expect(ls, JSON.stringify(patch)).toHaveLength(1);
+      expect(ls[0][1]).toBe('F-2');
+      expect(ls[0][3].size).toBeCloseTo(21, 6);
+    }
+  });
+
   test('drawItems는 숨김·보기 옵션을 건너뛴다', () => {
     const floor = { items: [mk('sofa-3', { pos: [0, 0] }), mk('bed-queen', { pos: [3000, 0], hidden: true }), mk('light-pendant', { pos: [1000, 1000] })], walls: [], rooms: [] };
     const all = fakeCtx(); drawItems(all, view, floor, { flags: {} });
