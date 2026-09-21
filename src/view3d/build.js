@@ -7,6 +7,7 @@ import { openingsOnWall, wallPieces, clipRectByOpenings } from '../geom/openings
 import { wallAxis, RAD } from '../geom/items.js';
 import { buildItems } from './items3d.js';
 import { buildDucts } from './ducts3d.js';
+import { buildLabels } from './labels3d.js';
 import { applyAssignment } from '../materials/texture.js';
 
 const M = v => v / 1000;
@@ -236,13 +237,16 @@ export function buildFloorGroup(floor, view) {
   }
   g.add(buildItems(floor, view));
   g.add(buildDucts(floor, view));
+  g.add(buildLabels(floor, view));
   return g;
 }
 
 // 그룹을 씬에서 뺀 뒤 GPU 자원을 해제한다. 재질은 모두 메시 전용(perMesh)이라 함께 dispose한다.
 export function disposeGroup(g) {
   g.traverse(o => {
-    if (o.geometry) o.geometry.dispose();
+    // 스프라이트의 지오메트리는 three가 모듈 수준에서 모든 스프라이트와 공유한다 — 층을 다시
+    // 지을 때마다 공용 GPU 버퍼를 버리면 다음에 만드는 스프라이트가 버려진 버퍼를 쓴다.
+    if (o.geometry && !o.isSprite) o.geometry.dispose();
     if (o.material?.userData?.perMesh) {
       if (o.material.map?.userData?.clone) o.material.map.dispose(); // 캐시 원본은 남긴다
       o.material.dispose();
