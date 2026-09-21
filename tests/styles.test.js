@@ -52,3 +52,15 @@ test('활성 버튼의 kbd는 currentColor를 쓰고 하위 카테고리는 칩�
   // §14.8: 맨 .error 규칙이 있어야 속성 패널의 충돌 한 줄이 경고 색으로 보인다(.modal .error만으로는 안 된다).
   expect(CSS).toMatch(/^\.error\s*\{[^}]*color:\s*var\(--exhaust\)/m);
 });
+
+// Task 8 리뷰 Important 1: 드래그 중 캔버스 높이가 바뀌는 문제를 "배너를 캔버스 위로 띄워서" 고치지
+// 않았다 — 캔버스 위에 떠서 클릭(elementFromPoint)을 가로채는 요소를 두지 않는다는 불변식 때문이다.
+// 배너는 계속 캔버스 위쪽 레이아웃 행이고, 행 변화는 shell.js가 드래그가 끝날 때까지 미룬다.
+test('#banner는 캔버스 위에 뜨지 않는 레이아웃 행이다', () => {
+  const rule = CSS.match(/#banner\s*\{[^}]*\}/)?.[0] ?? '';
+  expect(rule).toMatch(/flex:\s*0 0 auto/);
+  expect(rule).toMatch(/min-height:\s*32px/);      // 행 높이는 고정이다(문구가 길어도 한 줄 — nowrap)
+  expect(rule).toMatch(/white-space:\s*nowrap/);
+  expect(rule).not.toMatch(/position:\s*(absolute|fixed)/);
+  expect(rule).not.toMatch(/z-index/);
+});

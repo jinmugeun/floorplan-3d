@@ -5,6 +5,9 @@
 // 충돌(§14.8) — 배너는 건수를, 속성 패널은 고른 제품 한 줄을 말한다.
 export const COLLISION_BANNER = n => `충돌 ${n}건 — 빨간 테두리 제품을 옮겨 주세요`;
 export const COLLISION_ITEM = '다른 제품과 겹칩니다';
+// "실시간 충돌 감지"를 끈 채로 제품을 끌고 있는 동안에는 빨간 테두리가 보이지 않는다(view2d.js).
+// 그 사이에만 쓰는 같은 건수의 문구다 — "빨간 테두리"라는 단서만 뺀다(배너 자체는 §14.8대로 남는다).
+export const COLLISION_BANNER_QUIET = n => `충돌 ${n}건 — 겹친 제품을 옮겨 주세요`;
 
 // 값 범위(§14.10) — 입력이 조용히 잘리던 것을 알린다.
 export const CLAMP_MAX = (max, unit = 'mm') => `최대 ${max} ${unit}까지`;

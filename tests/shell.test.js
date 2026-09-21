@@ -6,7 +6,7 @@ import { createEmptyProject, createItem } from '../src/state/schema.js';
 import { createShell, gizmoBtnVisible } from '../src/ui/shell.js';
 import { addItem } from '../src/state/floorOps.js';
 import { productById } from '../src/products/catalog.js';
-import { COLLISION_BANNER } from '../src/ui/messages.js';
+import { COLLISION_BANNER, COLLISION_BANNER_QUIET } from '../src/ui/messages.js';
 
 test('shell renders regions and option bar reflects tool opts', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
@@ -660,4 +660,66 @@ test('refreshBanner가 현재 도구의 hint를 다시 읽는다', () => {
   step = 2;
   shell.refreshBanner();
   expect(banner.textContent).toContain('단계 2');
+});
+
+// Task 8 리뷰 Important 1: #banner는 #canvasWrap의 레이아웃 행이라, 드래그 중에 행이 생기거나
+// 사라지면 캔버스 높이가 ~33 px 달라지고(중심 기준 좌표 변환) 끌던 제품이 커서 아래에서 튄다.
+// 그래서 드래그 중에는 행의 생성·삭제를 미루고 pointerup에 한 번 반영한다.
+test('드래그 중에는 충돌 배너 행이 생기거나 사라지지 않고 pointerup에 한 번 반영된다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  createShell(root, { store, ui });
+  const banner = root.querySelector('#banner');
+  // 앞선 테스트들이 같은 document에 열린 팝오버를 남긴다: 팝오버의 document 캡처 리스너는
+  // 바깥 pointerdown을 stopPropagation으로 삼켜(popover.js) 캔버스까지 내려보내지 않는다.
+  document.querySelectorAll('.popover').forEach(el => { el.hidden = true; });
+  const down = () => root.querySelector('#canvasStack').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  const up = () => window.dispatchEvent(new Event('pointerup'));
+  expect(banner.hidden).toBe(true);
+  down();
+  const a = addItem(store, createItem(productById('sofa-3'), { pos: [1000, 1000] }));
+  addItem(store, createItem(productById('sofa-3'), { pos: [1100, 1000] }));
+  expect(banner.hidden).toBe(true);            // 행이 끼어들지 않는다(캔버스 높이가 그대로다)
+  expect(banner.innerHTML).toBe('');
+  // 순서는 그대로다: 드래그 중이라도 배너가 이미 떠 있으면 ui 상태 배너가 충돌보다 앞선다(§14.8).
+  up();
+  expect(banner.hidden).toBe(false);           // 손을 떼면 한 번에 반영된다
+  expect(banner.textContent).toContain(COLLISION_BANNER(2));
+  down();
+  ui.set({ matPick: { assignment: { id: 'paint-white' } } });
+  expect(banner.hidden).toBe(false);
+  expect(banner.textContent).toContain('재질을 적용할 면을 클릭');   // 내용만 바뀌는 갱신은 미루지 않는다
+  ui.set({ matPick: null });
+  expect(banner.textContent).toContain('충돌 2건');
+  // 반대 방향(겹침이 풀려 행이 접히는 것)도 드래그가 끝날 때까지 미룬다.
+  store.dispatch(d => { const f = d.floors[0]; f.items = f.items.filter(i => i.id !== a); });
+  expect(banner.hidden).toBe(false);
+  up();
+  expect(banner.hidden).toBe(true);
+});
+
+// Task 8 리뷰 Minor 1: "실시간 충돌 감지"를 끄면 드래그 중에만 빨간 테두리가 감춰지므로(view2d),
+// 그 사이의 문구에서만 "빨간 테두리" 절을 뺀다. 배너를 감추면 §14.8("드래그 밖에서도")을 깬다.
+test('실시간 충돌 감지를 끈 드래그 중에만 "빨간 테두리" 절이 빠지고 배너는 남는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  createShell(root, { store, ui: createUiState() });
+  const banner = root.querySelector('#banner');
+  store.dispatch(d => { d.view.v2.collisionLive = false; }, { record: false });
+  addItem(store, createItem(productById('sofa-3'), { pos: [1000, 1000] }));
+  addItem(store, createItem(productById('sofa-3'), { pos: [1100, 1000] }));
+  expect(banner.hidden).toBe(false);
+  expect(banner.textContent).toContain(COLLISION_BANNER(2));        // 드래그 밖에서는 그대로다
+  // 앞선 테스트들이 같은 document에 열린 팝오버를 남긴다: 팝오버의 document 캡처 리스너는
+  // 바깥 pointerdown을 stopPropagation으로 삼켜(popover.js) 캔버스까지 내려보내지 않는다.
+  document.querySelectorAll('.popover').forEach(el => { el.hidden = true; });
+  root.querySelector('#canvasStack').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  store.dispatch(d => { d.floors[0].items[0].pos = [1010, 1000]; }, { record: false });
+  expect(banner.hidden).toBe(false);                                 // 배너 자체는 남는다
+  expect(banner.textContent).toContain(COLLISION_BANNER_QUIET(2));
+  expect(banner.textContent).not.toContain('빨간 테두리');
+  window.dispatchEvent(new Event('pointerup'));
+  store.dispatch(d => { d.floors[0].items[0].pos = [1011, 1000]; }, { record: false });
+  expect(banner.textContent).toContain(COLLISION_BANNER(2));         // 놓으면 바로 교정된다
 });
