@@ -151,8 +151,9 @@ describe('덕트 선택과 편집', () => {
 
   test('고른 덕트의 꼭짓점 핸들은 설비보다 먼저 잡힌다 — 자동 연결 해제에 닿는 유일한 경로', () => {
     const { store, ui, st, id, hood, floor } = setup();
-    // 아무것도 고르지 않았으면 일반 히트 순서 그대로 후드가 이긴다(연결점 = 후드 중심).
-    st.onPointerDown([2000.5, 1500.25]); st.onPointerUp([2000.5, 1500.25]);
+    // 아무것도 고르지 않았어도 덕트 꼭짓점이 아이템보다 먼저다(§14.6). 후드를 고르려면
+    // 꼭짓점 핸들 반경(화면 8 px) 밖의 몸통을 누른다.
+    st.onPointerDown([2600.5, 1900.25]); st.onPointerUp([2600.5, 1900.25]);
     expect(ui.get().selection.type).toBe('item');
     // 구간을 눌러 덕트를 먼저 고르면(1단계) 그 덕트의 꼭짓점 핸들이 아이템보다 먼저다(2단계).
     st.onPointerDown([5000.5, 1500.25]); st.onPointerUp([5000.5, 1500.25]);
@@ -177,16 +178,21 @@ describe('덕트 선택과 편집', () => {
     expect(pickItem(menu, '설비 연결 해제').disabled).toBe(false);
     pickItem(menu, '설비 연결 해제').onSelect();
     expect(ductById(floor(), id).connections).toEqual([]);
-    // 고른 덕트가 없으면 같은 자리 우클릭은 그대로 아이템 메뉴다.
+    // 고른 덕트가 없어도 꼭짓점 위 우클릭은 덕트 메뉴다(§14.6). 후드 몸통 쪽은 그대로 제품 메뉴다.
     ui.set({ selection: null });
-    expect(pickItem(st.onContextMenu([2000.5, 1500.25]), '설비 연결 해제')).toBeUndefined();
+    expect(pickItem(st.onContextMenu([2000.5, 1500.25]), '설비 연결 해제')).toBeTruthy();
+    ui.set({ selection: null });
+    expect(pickItem(st.onContextMenu([2600.5, 1900.25]), '설비 연결 해제')).toBeUndefined();
     expect(ui.get().selection.type).toBe('item');
   });
 
-  test('선택 도구는 아이템 다음·벽 앞에서 덕트를 잡는다', () => {
+  test('선택 도구는 덕트를 아이템보다 먼저, 벽보다 먼저 잡는다(§14.6)', () => {
     const { ui, st, id } = setup();
-    // 고른 덕트가 없을 때의 히트 순서다: 후드가 덕트보다 먼저다(고른 덕트의 꼭짓점 핸들만 예외).
+    // 후드 중심 = 덕트 0번 꼭짓점: 이제 덕트가 이긴다(예전에는 후드가 이겼다).
     st.onPointerDown([2000, 1500]); st.onPointerUp([2000, 1500]);
+    expect(ui.get().selection).toEqual({ type: 'duct', id, segment: null, vertex: 0 });
+    // 꼭짓점 밖의 후드 몸통은 후드다.
+    st.onPointerDown([2600, 1900]); st.onPointerUp([2600, 1900]);
     expect(ui.get().selection.type).toBe('item');
     st.onPointerDown([5000, 1500]); st.onPointerUp([5000, 1500]);
     expect(ui.get().selection).toEqual({ type: 'duct', id, segment: 0, vertex: null });

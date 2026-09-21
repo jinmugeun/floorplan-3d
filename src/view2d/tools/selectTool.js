@@ -10,6 +10,7 @@ import { createDuctSelect } from './ductSelect.js';
 import { drawItemSelection, ITEM_COLORS } from '../items2d.js';
 import { itemMenuItems } from '../../ui/itemMenu.js';
 import { wallMenuItems, roomMenuItems } from '../../ui/surfaceMenu.js';
+import { pickAt } from './pick.js';
 
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
@@ -75,25 +76,16 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         drag = { kind: 'box', startP: p, cur: p }; // Shift+드래그: 영역 선택
         return;
       }
-      // 선택된 아이템이 하나면 크기·회전 핸들을 먼저 본다
+      // 이미 고른 것의 핸들이 먼저다(아이템 크기·회전 핸들 → 벽 꼭짓점 → 다중 선택된 벽 묶음).
+      // 이 셋은 "지금 고른 것을 편집하는 손잡이"라 일반 히트 순서보다 앞선다.
       const one = selIds().length === 1 ? f.items.find(x => x.id === selIds()[0]) : null;
       const h = one && items.handleHit(one, p);
       if (h) { items.start(h.kind, [one.id], p, h.kind === 'scale' ? { index: h.index } : {}); return; }
-      // 같은 규칙을 덕트에도 쓴다: 이미 고른 덕트의 꼭짓점 핸들은 아이템 히트보다 먼저 본다.
-      // 연결된 꼭짓점은 늘 설비 중심이라 이 예외가 없으면 영원히 잡히지 않는다(그린 핸들도 자동
-      // 연결 해제도 메뉴의 `설비 연결 해제`도 도달 불가). 고른 덕트가 없으면 아무 일도 하지 않는다.
-      if (ducts.onDownHandle(p)) return;
-      // 아이템이 벽·방보다 먼저 잡힌다. 도면 잠금은 아이템 편집을 막지 않는다(locked() 가드보다 앞).
-      const it = items.pick(p);
-      if (it) {
-        let ids = selIds();
-        if (!ids.includes(it.id)) ids = [it.id];
-        ids = expandGroups(f, ids);
-        setItemSelection(ids);
-        if (ids.length) items.start('items', ids, p);
-        return;
+      if (sel?.type === 'wall') {
+        const w = f.walls.find(x => x.id === sel.id);
+        const v = w && [w.a, w.b].find(q => dist(q, p) <= px(8));
+        if (v) { if (locked()) { onLocked(); return; } drag = { kind: 'vertex', point: [...v], startP: p, base: f.walls }; store.beginTransaction(); return; }
       }
-      if (ducts.onDown(p)) return;   // 아이템 다음, 벽·방보다 먼저(아키텍처 §11.3)
       if (multi) {
         const hit = hitWall(f.walls, p, px(6));
         if (hit && multi.includes(hit.id)) {
@@ -106,15 +98,27 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
           return;
         }
       }
-      if (sel?.type === 'wall') {
-        const w = f.walls.find(x => x.id === sel.id);
-        const v = w && [w.a, w.b].find(q => dist(q, p) <= px(8));
-        if (v) { if (locked()) { onLocked(); return; } drag = { kind: 'vertex', point: [...v], startP: p, base: f.walls }; store.beginTransaction(); return; }
+      // 그다음은 2D의 단 하나뿐인 히트 순서다(§14.6): 덕트 꼭짓점 → 덕트 구간 → 아이템 → 벽 → 방.
+      // 도면 잠금은 아이템·덕트 편집을 막지 않는다(locked() 가드는 벽·방·배경에만 있다).
+      const hit = pickAt(store, ui, p, { scale: view.camera.scale });
+      if (hit?.type === 'duct') { ducts.begin(hit, p); return; }
+      if (hit?.type === 'item') {
+        let ids = selIds();
+        if (!ids.includes(hit.item.id)) ids = [hit.item.id];
+        ids = expandGroups(f, ids);
+        setItemSelection(ids);
+        if (ids.length) items.start('items', ids, p);
+        return;
       }
-      const w = hitWall(f.walls, p, px(6));
-      if (w) { ui.set({ selection: { type: 'wall', id: w.id } }); if (locked()) { onLocked(); return; } drag = { kind: 'wall', id: w.id, startP: p, base: f.walls }; store.beginTransaction(); return; }
-      const r = f.rooms.find(x => pointInPolygon(p, x.points));
-      if (r) {
+      if (hit?.type === 'wall') {
+        ui.set({ selection: { type: 'wall', id: hit.wall.id } });
+        if (locked()) { onLocked(); return; }
+        drag = { kind: 'wall', id: hit.wall.id, startP: p, base: f.walls };
+        store.beginTransaction();
+        return;
+      }
+      if (hit?.type === 'room') {
+        const r = hit.room;
         ui.set({ selection: { type: 'room', id: r.id } });
         if (locked()) { onLocked(); return; }
         const pts = new Set();
@@ -197,20 +201,24 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
     },
     onContextMenu(p) {
       const f = floor();
-      if (ducts.pickHandle(p)) return ducts.menuItems(p);   // 고른 덕트의 꼭짓점 핸들은 아이템 메뉴보다 먼저
-      const it = items.pick(p);
-      if (it) { const cur = selIds(); const ids = expandGroups(f, cur.includes(it.id) ? cur : [it.id]); setItemSelection(ids); return itemMenuItems({ store, ui, ids, itemActions }); }
-      const ductItems = ducts.menuItems(p);
-      if (ductItems) return ductItems;
-      const w = hitWall(f.walls, p, px(6));
-      // 우클릭은 먼저 대상을 선택한다(다중 선택에 이미 든 벽이면 다중 선택을 유지한다).
-      const sel = ui.get().selection;
-      if (w && !(sel?.type === 'multi' && sel.ids.includes(w.id))) ui.set({ selection: { type: 'wall', id: w.id } });
-      if (w) return wallMenuItems({ store, ui, wallId: w.id, side: 'in', in3d: false, actions: surfaceActions });
-      const r = f.rooms.find(x => pointInPolygon(p, x.points));
-      if (r) {
-        ui.set({ selection: { type: 'room', id: r.id } });
-        return roomMenuItems({ store, ui, roomId: r.id, in3d: false, actions: surfaceActions });
+      // 우클릭은 좌클릭과 같은 대상을 고른다(§14.6 — 둘이 다른 히트 코드를 갖고 있던 것이 감사 #20이다).
+      const hit = pickAt(store, ui, p, { scale: view.camera.scale });
+      if (hit?.type === 'duct') return ducts.menuFor(hit);
+      if (hit?.type === 'item') {
+        const cur = selIds();
+        const ids = expandGroups(f, cur.includes(hit.item.id) ? cur : [hit.item.id]);
+        setItemSelection(ids);
+        return itemMenuItems({ store, ui, ids, itemActions });
+      }
+      if (hit?.type === 'wall') {
+        // 다중 선택에 이미 든 벽이면 다중 선택을 유지한다.
+        const sel = ui.get().selection;
+        if (!(sel?.type === 'multi' && sel.ids.includes(hit.wall.id))) ui.set({ selection: { type: 'wall', id: hit.wall.id } });
+        return wallMenuItems({ store, ui, wallId: hit.wall.id, side: 'in', in3d: false, actions: surfaceActions });
+      }
+      if (hit?.type === 'room') {
+        ui.set({ selection: { type: 'room', id: hit.room.id } });
+        return roomMenuItems({ store, ui, roomId: hit.room.id, in3d: false, actions: surfaceActions });
       }
       return [
         { label: '전체 선택', shortcut: 'Ctrl+A', onSelect: () => { const ids = floor().walls.map(x => x.id); ui.set({ selection: ids.length ? { type: 'multi', kind: 'wall', ids } : null }); } },

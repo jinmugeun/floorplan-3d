@@ -53,7 +53,8 @@ export function createDuctSelect({ store, ui, view, toast = () => {} }) {
     return best ? { ductId: best.ductId, vertex: best.vertex } : null;
   }
 
-  // 히트 하나를 선택으로 바꾸고, 움직일 수 있으면 드래그를 시작한다(onDown·onDownHandle 공용).
+  // 히트 하나를 선택으로 바꾸고, 움직일 수 있으면 드래그를 시작한다.
+  // onDown·onDownHandle(자체 피커)과 selectTool(pick.pickAt의 결과)이 함께 쓴다(§14.6).
   function begin(hit, p) {
     const d = ductById(floor(), hit.ductId);
     ui.set({ selection: { type: 'duct', id: hit.ductId, segment: hit.segment ?? null, vertex: hit.vertex ?? null } });
@@ -116,17 +117,19 @@ export function createDuctSelect({ store, ui, view, toast = () => {} }) {
   }
   function cancel() { if (drag) { store.cancelTransaction(); drag = null; } }
 
-  function menuItems(p) {
-    // 우클릭도 같은 예외를 쓴다: 고른 덕트의 꼭짓점 위면 설비 발자국 안이어도 그 꼭짓점을 겨눈다.
-    const hit = pickHandle(p) ?? pick(p);
+  // 히트 하나에서 덕트 메뉴를 만든다(§14.6: 우클릭 대상은 좌클릭 대상과 같아야 하므로
+  // 판정은 pick.pickAt이 하고 여기서는 그 결과를 메뉴로 바꾼다).
+  function menuFor(hit) {
     if (!hit) return null;
     const next = { type: 'duct', id: hit.ductId, segment: hit.segment ?? null, vertex: hit.vertex ?? null };
     ui.set({ selection: next });
     // 구간 히트면 hitDuct가 돌려준 t로 중심선 위의 점을 넘긴다(클릭은 띠 반폭만큼 벗어날 수 있다).
     const d = ductById(floor(), hit.ductId);
     const a = hit.segment != null ? d?.points[hit.segment] : null, b = hit.segment != null ? d?.points[hit.segment + 1] : null;
-    return ductMenuItems({ store, ui, sel: next, at: a && b ? lerp(a, b, hit.t) : null });
+    return ductMenuItems({ store, ui, sel: next, at: a && b ? lerp(a, b, hit.t ?? 0.5) : null });
   }
+  // 우클릭도 같은 예외를 쓴다: 고른 덕트의 꼭짓점 위면 설비 발자국 안이어도 그 꼭짓점을 겨눈다.
+  function menuItems(p) { return menuFor(pickHandle(p) ?? pick(p)); }
 
   function draw(ctx, v) {
     const s = current();
@@ -136,7 +139,7 @@ export function createDuctSelect({ store, ui, view, toast = () => {} }) {
   }
 
   return {
-    pick, pickHandle, onDown, onDownHandle, apply, finish, cancel, menuItems, draw,
+    pick, pickHandle, onDown, onDownHandle, begin, apply, finish, cancel, menuItems, menuFor, draw,
     deleteSelected: () => deleteSelectedDuct({ store, ui, toast }),
     getDrag: () => (drag ? { kind: drag.kind, id: drag.id, index: drag.index } : null),
   };
