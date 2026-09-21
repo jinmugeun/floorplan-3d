@@ -17,7 +17,7 @@ export function obbOverlap(a, b, tol = 1) {
 
 // 같은 층의 바닥 아이템끼리 겹치는 것들의 id. 벽·천장 부착과 숨긴 아이템은 보지 않는다.
 export function collidingIds(items, { tol = 1 } = {}) {
-  const list = (items ?? []).filter(i => !i.hidden && (i.attach === 'floor' || i.attach === 'floorLay'));
+  const list = (Array.isArray(items) ? items : []).filter(i => !i.hidden && (i.attach === 'floor' || i.attach === 'floorLay'));
   const out = new Set();
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
@@ -35,9 +35,11 @@ export function collidingIds(items, { tol = 1 } = {}) {
 // 2D는 매 프레임(패닝·줌·선택 표시 변화마다) 충돌을 물어보므로, 캐시 없이는 도면을 움직이기만 해도
 // SAT를 N² 번 돈다. WeakMap이라 옛 스냅샷은 GC가 알아서 가져간다.
 // tol마다 결과가 다르므로 배열 하나당 tol별로 따로 들고 있다(tol은 사실상 1뿐이라 칸이 늘지 않는다).
+// 돌려주는 Set은 캐시에 든 내부 객체다: 호출자는 읽기 전용으로만 쓴다(add·delete는 캐시를 오염시킨다 — M-3).
 const memo = new WeakMap();
 export function memoCollisions(items, { tol = 1 } = {}) {
-  if (!items || typeof items !== 'object') return collidingIds(items, { tol });
+  // 배열이 아니면 캐시 칸을 잡지 않는다(객체는 typeof 'object'를 지나 collidingIds에서 던졌다 — M-2).
+  if (!Array.isArray(items)) return collidingIds(items, { tol });
   let byTol = memo.get(items);
   if (!byTol) memo.set(items, (byTol = new Map()));
   if (!byTol.has(tol)) byTol.set(tol, collidingIds(items, { tol }));

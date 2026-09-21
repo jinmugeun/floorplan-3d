@@ -18,7 +18,7 @@ export function clearTextureCache() { for (const t of cache.values()) t?.dispose
 export function assignScale(assignment, material) {
   const s = assignment?.scale;
   if (Array.isArray(s) && Number(s[0]) > 0 && Number(s[1]) > 0) return [Number(s[0]), Number(s[1])];
-  return material?.scale ?? [1000, 1000];
+  return material?.scale ? [...material.scale] : [1000, 1000];   // 카탈로그의 배열을 그대로 내주지 않는다(M-4)
 }
 
 // 재질 하나의 텍스처(무늬 한 칸). 같은 (id, scale)은 한 장만 만들어 캐시한다.
@@ -65,7 +65,9 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   const m = materialById(assignment.id);
   if (!m) return threeMaterial;
   const sc = assignScale(assignment, m);          // 배정의 scale이 있으면 그것이 무늬 한 칸의 크기다
-  const tex = materialTexture(assignment.id, { makeCanvas, scale: assignment?.scale ? sc : null });
+  // 재질의 기본 크기와 같은 scale은 캐시 키에 넣지 않는다: 같은 그림을 두 장 들고 있지 않게(M-5).
+  const own = Array.isArray(m.scale) && sc[0] === Number(m.scale[0]) && sc[1] === Number(m.scale[1]);
+  const tex = materialTexture(assignment.id, { makeCanvas, scale: assignment?.scale && !own ? sc : null });
   if (!tex) { threeMaterial.color.set(m.base); return threeMaterial; }
   // 반복·오프셋·각도는 면마다 다르므로 캐시 원본을 복제해 쓴다(원본은 그림만 들고 있다).
   const t = tex.clone();

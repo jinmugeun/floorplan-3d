@@ -58,3 +58,18 @@ test('Enter submits and Escape closes the dialog without changes', () => {
   expect(document.querySelector('.modal')).toBeNull();
   expect(store.get().floors).toHaveLength(2);
 });
+
+// M-1: 한글 조합 중의 Enter는 "글자 확정"이지 "추가"가 아니다.
+test('a composing Enter does not submit the floor dialog', () => {
+  const store = createStore(createEmptyProject());
+  openFloorDialog({ store, mode: 'add' });
+  const modal = document.querySelector('.modal');
+  const input = modal.querySelector('[name="floorName"]');
+  input.value = '지하';
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }));
+  expect(document.querySelector('.modal')).not.toBeNull();
+  expect(store.get().floors).toHaveLength(1);
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(document.querySelector('.modal')).toBeNull();
+  expect(store.get().floors.map(f => f.name)).toEqual(['Floor 1', '지하']);
+});

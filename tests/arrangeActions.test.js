@@ -7,6 +7,7 @@ import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createArrangeActions, PATH_TOOL, spacingDefault } from '../src/app/arrangeActions.js';
+import { PATH_FP_HINT } from '../src/ui/itemMenu.js';
 
 const fakeView = { camera: { scale: 0.1 }, requestRender: () => {} };
 function setup(productId = 'dining-6') {
@@ -81,7 +82,24 @@ describe('경로 배열 배선', () => {
     a.ui.set({ fpPick: true, mode: '2d' });
     expect(a.pathArray([a.id])).toBe(false);
     expect(a.tools).toEqual([]);
-    expect(a.toasts).toEqual(['2D에서 사용']);
+    // M-10: 그때는 mode가 '2d'이므로 "2D에서 사용"이 사실과 어긋난다 — 이유를 갈라 적는다.
+    expect(a.toasts).toEqual([PATH_FP_HINT]);
+    expect(PATH_FP_HINT).toContain('1인칭');
+  });
+
+  // M-11: 상한 판정은 선택 id 수가 아니라 실제로 찾은 아이템 수를 곱한다(죽은 id가 섞여도 같은 결과다).
+  test('죽은 id가 섞여도 상한 판정은 실제 아이템 수로 센다', () => {
+    const a = setup();
+    a.pathArray([a.id, 'i-없는-아이템']);
+    const tool = a.createPathTool();
+    tool.onPointerDown([2000.5, 1000.25], {});
+    tool.onPointerDown([2000.5, 151000.25], {});        // 150 m → 500 mm 간격이면 301개
+    tool.onKey({ key: 'Enter', preventDefault() {} });
+    modal().querySelector('[name="spacing"]').value = '500';
+    modal().querySelector('[name="apply"]').click();
+    // 선택 id 수(2)를 곱하면 602개로 상한(500)을 넘어 거절됐다 — 실제 아이템은 하나뿐이다.
+    expect(a.toasts).toContain('301개 복사했습니다');
+    expect(a.floor().items).toHaveLength(302);
   });
 
   // I-1: 200 m 경로 + 최소 간격이 20001개를 만들려다 arrayCopy의 push 스프레드에서 RangeError를 냈다.

@@ -671,4 +671,12 @@ test('applyAssignment는 assignment.scale로 반복·오프셋을 잡고 텍스�
   const scaled = materialTexture('tile-white-300', { scale: [600, 600] });
   expect(scaled).not.toBe(base);                               // 키가 다르다
   expect(materialTexture('tile-white-300', { scale: [600, 600] })).toBe(scaled);
+  // M-5: 재질의 기본 크기와 같은 scale은 키를 나누지 않는다(같은 그림을 두 장 들고 있지 않게).
+  const m2 = new THREE.MeshStandardMaterial();
+  applyAssignment(m2, { id: 'tile-white-300', offset: [0, 0], angle: 0, scale: [300, 300] }, [3000, 2400]);
+  expect(m2.map.image).toBe(base.image);                       // 캐시 원본을 복제해 쓴다 = 같은 캔버스
+  // assignScale은 카탈로그 배열을 그대로 내주지 않는다(M-4).
+  const sc = assignScale({ id: 'tile-white-300' }, materialById('tile-white-300'));
+  sc[0] = 1;
+  expect(materialById('tile-white-300').scale).toEqual([300, 300]);
 });

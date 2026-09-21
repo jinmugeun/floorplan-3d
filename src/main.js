@@ -11,7 +11,7 @@ import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.j
 import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
 import { createDuctTool, DUCT_TOOL_DEFAULTS } from './view2d/tools/ductTool.js';
 import { createPlaceTool } from './view2d/tools/placeTool.js';
-import { createStructTool, structDefaults } from './view2d/tools/structTool.js';
+import { createStructTool, structDefaults, structOptsKey, ensureStructuresVisible } from './view2d/tools/structTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
 import { createShell } from './ui/shell.js';
@@ -130,9 +130,16 @@ store.subscribe(s => {
 
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS }, duct: { ...DUCT_TOOL_DEFAULTS } };
-// 구조물 도구 옵션도 세션 동안 유지된다. 기둥 높이 기본값이 층고라 처음 켤 때 활성 층에서 읽는다.
+// 구조물 도구 옵션도 세션 동안 유지된다. 다만 기둥 높이 기본값이 층고라, 활성 층·층 높이가 바뀌면
+// 옵션을 비워 도구를 켤 때 새 층고를 다시 읽게 한다(M-6).
 const structOpts = {};
-const structTool = kind => () => createStructTool({ store, ui, view, kind, opts: (structOpts[kind] ??= structDefaults(kind, activeFloor(store.get()).height)), onDone: () => setTool('select') });
+let structKey = null;
+const structTool = kind => () => {
+  const key = structOptsKey(store.get());
+  if (key !== structKey) { structKey = key; for (const k of Object.keys(structOpts)) delete structOpts[k]; }
+  if (ensureStructuresVisible(store)) shell.toast('"건축/자재" 보기를 다시 켰습니다'); // 꺼져 있으면 놓아도 보이지 않는다(M-9)
+  return createStructTool({ store, ui, view, kind, opts: (structOpts[kind] ??= structDefaults(kind, activeFloor(store.get()).height)), onDone: () => setTool('select'), toast: shell.toast });
+};
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
   select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),

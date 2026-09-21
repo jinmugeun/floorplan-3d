@@ -66,6 +66,18 @@ test('Enter는 적용, Esc는 취소다', () => {
   expect(got).toHaveLength(1);
 });
 
+// M-1: 한글 조합 중의 Enter는 "글자 확정"이지 "적용"이 아니다.
+test('조합 중인 Enter는 적용하지 않는다', () => {
+  const got = [];
+  openRelativeMoveDialog({ onApply: v => got.push(v) });
+  set('dx', '120.5');
+  q('[name="dx"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }));
+  expect(got).toHaveLength(0);
+  expect(q('.modal')).not.toBeNull();
+  q('[name="dx"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(got).toEqual([{ dx: 120.5, dy: 0, copy: false }]);
+});
+
 // I-1: 간격 하한 10 mm · 개수 상한 500. 대화상자가 스스로 허용하는 최소값이 1 mm였다.
 test('경로 배열 간격은 10 mm 아래로 못 내려가고 개수는 500에서 잘린다', () => {
   const got = [];

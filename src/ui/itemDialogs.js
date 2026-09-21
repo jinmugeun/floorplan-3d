@@ -24,7 +24,8 @@ function openDialog(kind, body, collect, { onApply = () => {}, onClose = () => {
   const close = () => { root.remove(); onClose(); };
   root.querySelector('[name="close"]').onclick = close;
   root.querySelector('[name="apply"]').onclick = () => { onApply(collect(root)); close(); };
-  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } else if (ev.key === 'Enter') { ev.preventDefault(); root.querySelector('[name="apply"]').click(); } }); // Enter로 확정, Esc로 닫기
+  // Enter로 확정, Esc로 닫기. 한글 조합 중의 Enter는 "글자 확정"이라 확정으로 보지 않는다(M-1).
+  root.addEventListener('keydown', ev => { if (ev.isComposing || ev.keyCode === 229) return; if (ev.key === 'Escape') { ev.stopPropagation(); close(); } else if (ev.key === 'Enter') { ev.preventDefault(); root.querySelector('[name="apply"]').click(); } });
   root.querySelector('input')?.focus();
   return { close };
 }

@@ -1,6 +1,10 @@
 import { activeFloor } from '../state/schema.js';
 import { ductLinksOf } from '../state/ductOps.js';
 
+// 경로 배열을 못 쓰는 두 이유. 문구는 메뉴 title과 단축키 토스트(app/arrangeActions.js)가 나눠 쓴다(M-10).
+export const PATH_2D_HINT = '2D에서 사용';
+export const PATH_FP_HINT = '1인칭 위치를 먼저 찍거나 [Esc]로 취소해주세요';
+
 // 2A의 contextMenu가 먹는 배열을 만든다. 실제 동작은 main.js가 넘기는 itemActions가 한다.
 export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
   const f = activeFloor(store.get());
@@ -12,7 +16,10 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
   const allHidden = items.every(i => i.hidden);
   const allLocked = items.every(i => i.locked);
   // 경로 배열 복사는 2D 캔버스에 경로를 그려야 한다: 3D에서는 비활성으로 두고 이유를 알린다(§13.1).
-  const in2d = ui.get().mode === '2d';
+  // 1인칭 위치 찍기(fpPick)는 mode가 '2d'지만 첫 클릭을 1인칭 진입이 가져간다: 배선이 막는 것과 표시를 맞춘다(M-10).
+  const u = ui.get();
+  const in2d = u.mode === '2d' && !u.fpPick;
+  const why = u.fpPick ? PATH_FP_HINT : PATH_2D_HINT;
   // 설비에 이어진 덕트 꼭짓점은 설비 아래에 숨는다: 메뉴에서 바로 그 꼭짓점을 고를 수 있게 한다(§12.5).
   // "연결된 덕트가 있으면"만 보인다 — 설비가 아니거나 연결이 없으면 항목 자체를 뺀다(비활성 표시가 아니다).
   const link = items.length === 1 && items[0].kind === 'equipment' ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
@@ -26,7 +33,7 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
     { label: '직선 배열 복사', shortcut: 'Alt+A', onSelect: call('arrayCopy', 'linear') },
     { label: '원형 배열 복사', shortcut: 'Alt+C', onSelect: call('arrayCopy', 'circular') },
     { label: '회전 복사', shortcut: 'Alt+X', onSelect: call('arrayCopy', 'rotate') },
-    { label: '경로 배열 복사', shortcut: 'Alt+S', disabled: !in2d, ...(in2d ? {} : { title: '2D에서 사용' }), onSelect: call('pathArray') },
+    { label: '경로 배열 복사', shortcut: 'Alt+S', disabled: !in2d, ...(in2d ? {} : { title: why }), onSelect: call('pathArray') },
     'sep',
     { label: '복사', shortcut: 'Ctrl+C', onSelect: call('copy') },
     { label: '붙여넣기', shortcut: 'Ctrl+V', disabled: !(ui.get().clipboard?.length), onSelect: call('paste') },

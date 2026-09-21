@@ -28,6 +28,9 @@ export function promptDialog({ title = '이름 입력', label = '이름', value 
     html,
     focus: '[name="text"]',
     onKey(ev, { root, close }) {
+      // 한글 조합 중의 확정 [Enter]는 isComposing으로 한 번 먼저 온다: 그 키로 닫으면 한 박자 일찍 닫힌다
+      // (keymap.js:112·shell.js:229와 같은 방어 — M-1).
+      if (ev.isComposing || ev.keyCode === 229) return;
       if (ev.key === 'Escape') { ev.preventDefault(); close(null); return; }
       if (ev.key !== 'Enter') return;      // 글자 키는 입력란이 그대로 받는다(막지 않는다)
       ev.preventDefault();

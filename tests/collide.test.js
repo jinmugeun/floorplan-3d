@@ -71,5 +71,6 @@ describe('충돌 계산 캐시(memoCollisions)', () => {
     expect(memoCollisions(items, { tol: 1 })).toBe(tight); // 원래 tol로 돌아오면 캐시가 그대로 있다
     expect([...memoCollisions(null)]).toEqual([]);
     expect([...memoCollisions(undefined)]).toEqual([]);
+    expect([...memoCollisions({})]).toEqual([]);        // 배열이 아닌 객체도 던지지 않는다(M-2)
   });
 });

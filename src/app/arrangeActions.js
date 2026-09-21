@@ -5,6 +5,7 @@
 import { itemsOf, arrayCopy } from '../state/floorOps.js';
 import { MAX_PLACEMENTS, pathPlacementCount } from '../geom/arrange.js';
 import { openArrayDialog, MIN_SPACING, MAX_COUNT } from '../ui/itemDialogs.js';
+import { PATH_2D_HINT, PATH_FP_HINT } from '../ui/itemMenu.js';
 import { createPathArrayTool } from '../view2d/tools/pathArrayTool.js';
 
 export const PATH_TOOL = 'pathArray';
@@ -12,7 +13,8 @@ export { MAX_PLACEMENTS, MIN_SPACING };
 
 // 대화상자가 이미 자르는 값(min/max)을 여기서 한 번 더 자른다: 단축키·메뉴가 아닌 경로나
 // 브라우저 검증을 건너뛴 입력이 와도 배치 수가 터지지 않게 하는 마지막 관문이다.
-// 총 배치 수는 아이템마다 같은 경로를 따르므로 개수 × 선택 수다(arrangeOps의 'path' 분기).
+// 총 배치 수는 아이템마다 같은 경로를 따르므로 개수 × 실제 아이템 수다(arrangeOps의 'path' 분기).
+// 선택 id 수가 아니라 itemsOf가 찾아낸 수를 곱한다: 죽은 id가 섞이면 실제보다 많이 세어 정당한 요청을 거절한다(M-11).
 const clampParams = params => ({
   ...params,
   spacing: Math.max(MIN_SPACING, Math.abs(Number(params?.spacing)) || MIN_SPACING),
@@ -30,11 +32,12 @@ export function createArrangeActions({ store, ui, view, toast = () => {}, setToo
 
   // 3D에는 캔버스에 점을 찍을 자리가 없다(메뉴 항목도 비활성이지만, 단축키 경로를 위해 여기서도 막는다).
   // 1인칭 찍기(fpPick)도 막는다: mode는 '2d'지만 첫 클릭을 1인칭 진입 리스너가 가져가므로
-  // 도구가 보이지 않게 켜진 채 남는다(M-1).
+  // 도구가 보이지 않게 켜진 채 남는다(M-1). 그때는 "2D에서 사용"이 사실과 어긋나므로 이유를 갈라 적는다(M-10).
   function pathArray(selected) {
     if (!selected?.length) return false;
     const u = ui.get();
-    if (u.mode !== '2d' || u.fpPick) { toast('2D에서 사용'); return false; }
+    if (u.mode !== '2d') { toast(PATH_2D_HINT); return false; }
+    if (u.fpPick) { toast(PATH_FP_HINT); return false; }
     ids = [...selected];
     setTool(PATH_TOOL);
     return true;
@@ -54,7 +57,7 @@ export function createArrangeActions({ store, ui, view, toast = () => {}, setToo
       onApply: raw => {
         const params = { ...clampParams(raw), points };
         // 간격으로 채우는 모드에는 개수 입력이 없으니 놓을 수를 먼저 세고, 상한을 넘으면 만들지 않는다.
-        if (pathPlacementCount(points, params) * target.length > MAX_PLACEMENTS) {
+        if (pathPlacementCount(points, params) * found.length > MAX_PLACEMENTS) {
           toast(`배치 수가 너무 많습니다(최대 ${MAX_PLACEMENTS})`);
           return;
         }
