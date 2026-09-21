@@ -4,6 +4,7 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
 import { addWalls, addFloor, setActiveFloor, addItem } from '../src/state/floorOps.js';
+import { deleteFloor } from '../src/state/floorMgmt.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { createPropsPanel, applyNumber, lenField, withUnit, readLen } from '../src/ui/propsPanel.js';
@@ -578,4 +579,20 @@ test('층 삭제는 인앱 확인을 받고 취소하면 남는다', async () =>
   document.querySelector('.modal.confirm [name="ok"]').click();
   await new Promise(r => setTimeout(r, 0));
   expect(store.get().floors).toHaveLength(1);
+});
+
+// 결정 19: 확인 뒤에 대상을 **다시 찾는다**. 인덱스를 들고 가면 대화상자가 열려 있는 동안 앞 층이
+// 사라졌을 때(undo·다른 경로) 같은 인덱스가 다른 층을 가리켜 엉뚱한 층이 지워진다.
+test('층 삭제는 확인 뒤에 대상을 id로 다시 찾는다(앞 층이 사라져도 그 층만 지운다)', async () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addFloor(store, { name: '2층', copy: 'none' });
+  addFloor(store, { name: '3층', copy: 'none' });
+  setActiveFloor(store, 1);                          // 지울 대상은 '2층'(인덱스 1)
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  el.querySelector('button[name="floorDelete"]').click();
+  expect(document.querySelector('.modal.confirm').textContent).toContain('"2층" 층을 삭제할까요?');
+  deleteFloor(store, 0);                             // 확인을 기다리는 동안 맨 앞 층이 사라진다 → '2층'은 인덱스 0
+  document.querySelector('.modal.confirm [name="ok"]').click();
+  await new Promise(r => setTimeout(r, 0));
+  expect(store.get().floors.map(f => f.name)).toEqual(['3층']);   // 인덱스를 그대로 썼다면 '3층'이 지워진다
 });

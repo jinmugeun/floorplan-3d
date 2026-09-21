@@ -263,7 +263,7 @@ test('drawEmptyGuide는 빈 도면 + 선택 도구일 때만 그린다', () => {
   expect(calls[0][0]).toBe(EMPTY_GUIDE_LINES[0]);
   // 명세가 정한 안내 문구는 그대로 찍힌다(위의 제목 줄은 덧붙인 것이다 — 두 줄 형태를 고정한다).
   expect(EMPTY_GUIDE_LINES).toHaveLength(2);
-  expect(calls[1][0]).toBe('F로 방을 그리거나, 시작 화면에서 샘플을 열어 보세요');
+  expect(calls[1][0]).toBe('[F]로 방을 그리거나, 시작 화면에서 샘플을 열어 보세요');
   expect(calls[0][1][0]).toBeCloseTo(4000.25);              // 화면 중앙(소수 좌표)
   expect(calls[1][1][1]).toBeGreaterThan(calls[0][1][1]);   // 둘째 줄이 아래에 온다
   expect(drawEmptyGuide(ctx, v, { walls: [{ id: 'w1' }] }, {}, { toolName: 'select' })).toBe(false);

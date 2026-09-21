@@ -272,10 +272,18 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       const p = store.get();
       if (p.floors.length <= 1) { toast('마지막 층은 삭제할 수 없습니다'); return; }
       const idx = p.activeFloor ?? 0;
-      const name = p.floors[idx].name;
-      // 대화상자가 열려 있는 동안 층이 바뀔 수 있다: 확인 뒤에 마지막 층 규칙을 다시 본다.
+      const { id, name } = p.floors[idx];
+      // 대화상자가 열려 있는 동안 층 목록이 바뀔 수 있다: 확인 뒤에 마지막 층 규칙을 다시 보고,
+      // 인덱스가 아니라 id로 대상을 **다시 찾는다**(결정 19 — 확인 뒤에 대상을 다시 찾는다).
+      // idx를 그대로 들고 가면 그사이 앞 층이 지워졌을 때 엉뚱한 층을 지운다.
       confirmDialog({ title: '층 삭제', message: `"${name}" 층을 삭제할까요?`, ok: '삭제', danger: true })
-        .then(okay => { if (okay && store.get().floors.length > 1) deleteFloor(store, idx); });
+        .then(okay => {
+          if (!okay) return;
+          const next = store.get();
+          if (next.floors.length <= 1) return;
+          const at = next.floors.findIndex(fl => fl.id === id);
+          if (at >= 0) deleteFloor(store, at);
+        });
       return;
     }
     if (ev.target.name === 'delete' && ui.get().selection) { deleteSelection(); return; }

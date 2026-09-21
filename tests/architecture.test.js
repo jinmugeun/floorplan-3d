@@ -3,8 +3,11 @@
 import { test, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SRC = new URL('../src', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+// fileURLToPath를 쓴다: URL.pathname은 퍼센트 인코딩된 채라 경로에 공백·한글이 있으면 %20·%ED…가
+// 남아 readdirSync가 ENOENT로 던진다(드라이브 문자 앞의 / 제거까지 이 함수가 맡는다).
+const SRC = fileURLToPath(new URL('../src', import.meta.url));
 const walk = dir => readdirSync(dir, { withFileTypes: true })
   .flatMap(e => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
 const jsFiles = walk(SRC).filter(f => f.endsWith('.js'));
@@ -22,9 +25,13 @@ test('src/**/*.js는 한 파일 300줄을 넘지 않는다', () => {
 // 반대가 생기면 순환이 만들어지고, ui 테스트가 three·캔버스를 끌고 오게 된다.
 test('ui/는 view2d/·view3d/·app/을 import하지 않는다', () => {
   const bad = [];
+  // 그물은 규칙 이름만큼 넓어야 한다: 쌍따옴표, 부수효과 전용 `import '…'`, 동적 `import('…')`까지 본다
+  // (홑따옴표 `from '…'`만 보면 그 세 형태로 규칙을 조용히 빠져나갈 수 있다).
+  const IMPORTS = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]/g;
   for (const f of jsFiles.filter(f => rel(f).startsWith('ui/'))) {
-    for (const m of readFileSync(f, 'utf8').matchAll(/from\s+'([^']+)'/g)) {
-      if (/^\.\.\/(view2d|view3d|app)\//.test(m[1])) bad.push(`${rel(f)} → ${m[1]}`);
+    for (const m of readFileSync(f, 'utf8').matchAll(IMPORTS)) {
+      const spec = m[1] ?? m[2] ?? m[3];
+      if (/^\.\.\/(view2d|view3d|app)\//.test(spec)) bad.push(`${rel(f)} → ${spec}`);
     }
   }
   expect(bad).toEqual([]);
