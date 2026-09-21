@@ -5,7 +5,9 @@ import { updateItem, updateRoom, resizeItem } from '../state/floorOps.js';
 import { field, num, numValue, lenField, readLen, withUnit } from './fieldUtils.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
-import { EQUIP_TYPE_LABELS, APPLIANCE_KINDS, HEAT_KINDS, FLOW_KINDS, DIFFUSER_SYMBOLS, VENTCAP_DIAS, EQUIP_RANGE, equipType, isEquip } from '../vent/equipment.js';
+import { EQUIP_TYPE_LABELS, APPLIANCE_KINDS, HEAT_KINDS, FLOW_KINDS, DIFFUSER_SYMBOLS, VENTCAP_DIAS, EQUIP_RANGE, equipType, isEquip, equipLabel } from '../vent/equipment.js';
+import { ductLinksOf } from '../state/ductOps.js';
+import { pointInPolygon } from '../geom/rooms.js';
 
 export const EQUIP_SECTION_TITLE = '설비 속성';
 
@@ -13,20 +15,31 @@ const drop = (name, options, value) =>
   `<select name="${name}">${options.map(([v, l]) => `<option value="${esc(String(v))}" ${String(value ?? '') === String(v) ? 'selected' : ''}>${esc(String(l))}</option>`).join('')}</select>`;
 const check = (name, label, on) => `<label class="check"><input type="checkbox" name="${name}" ${on ? 'checked' : ''}> ${label}</label>`;
 const cmh = n => Number(n || 0).toLocaleString('ko-KR');
-// 같은 층의 후드 목록(조리기구의 "상단 후드"). 후드 번호로 보여 준다.
-// 같은 번호가 두 줄 나오는 것은 정상이다: M-106 규격표가 ⑤·⑦을 서로 다른 두 후드에 쓰므로
-// 강당중 샘플에서는 "후드 5"와 "후드 7"이 각각 두 줄이다(값은 id라서 서로 구별된다).
-const hoodOptions = floor => [['', '없음'], ...(floor?.items ?? []).filter(i => equipType(i) === 'hood').map(h => [h.id, `후드 ${h.props.no}`])];
+// 같은 층의 후드 목록(조리기구의 "상단 후드"). 규격표가 같은 번호를 두 후드에 쓰므로(⑤·⑦),
+// 번호만 찍으면 두 줄이 똑같아 보인다 → 원문자 + 그 후드가 선 방 이름을 병기한다(§12.5).
+const hoodOptions = floor => [['', '없음'], ...(floor?.items ?? []).filter(i => equipType(i) === 'hood').map(h => {
+  const label = `후드 ${equipLabel(h) ?? h.props.no}`;
+  const room = (floor?.rooms ?? []).find(r => pointInPolygon(h.pos, r.points));
+  return [h.id, room?.name ? `${label} · ${room.name}` : label];
+})];
 
-export function equipRowsHtml(item, { units = 'mm', showUnit = false, floor = null } = {}) {
-  const t = equipType(item);
-  if (!t) return '';
+// 설비에 이어진 덕트 목록. 연결된 꼭짓점은 설비 발자국 아래에 숨어 2D에서 클릭하기 어렵다(§12.5).
+function ductLinksHtml(floor, item) {
+  const links = ductLinksOf(floor, item.id);
+  if (!links.length) return '<h3>연결된 덕트</h3><p class="hint">연결된 덕트가 없습니다. 덕트 도구로 설비 위를 클릭하면 연결됩니다.</p>';
+  const row = l => {
+    const kind = l.kind === 'supply' ? '급기' : '배기';
+    const system = l.system ? ` · ${esc(l.system)}` : '';
+    return `<li><span>${kind}${system} · ${l.point + 1}번 점</span><button type="button" name="ventDuctSelect" data-d="${esc(l.ductId)}" data-p="${l.point}">선택</button></li>`;
+  };
+  return `<h3>연결된 덕트</h3><ul class="duct-list duct-conns">${links.map(row).join('')}</ul>`;
+}
+
+function typeRows(t, item, { units, showUnit, floor }) {
   const p = item.props;
-  const head = `<h3>${EQUIP_SECTION_TITLE} · ${EQUIP_TYPE_LABELS[t]}</h3>`;
   const len = (label, name, v, range) => lenField(withUnit(label, units, showUnit), name, v, range[0], range[1], false, units, 10);
   if (t === 'hood') {
-    return head
-      + field('후드 번호', num('eqNo', p.no, EQUIP_RANGE.no[0], EQUIP_RANGE.no[1], 1))
+    return field('후드 번호', num('eqNo', p.no, EQUIP_RANGE.no[0], EQUIP_RANGE.no[1], 1))
       + check('eqFilter', '필터 있음', p.filter)
       + field('면풍속 (m/s)', num('eqFaceVelocity', p.faceVelocity, EQUIP_RANGE.faceVelocity[0], EQUIP_RANGE.faceVelocity[1], 0.05))
       + field('풍량 (CMH)', `<output name="eqCmh">${cmh(p.cmh)}</output>`)
@@ -34,29 +47,34 @@ export function equipRowsHtml(item, { units = 'mm', showUnit = false, floor = nu
       + field('배기 계통', `<input type="text" name="eqSystem" value="${esc(p.system)}" placeholder="F-3">`);
   }
   if (t === 'appliance') {
-    return head
-      + field('종류', drop('eqKind', APPLIANCE_KINDS, p.kind))
+    return field('종류', drop('eqKind', APPLIANCE_KINDS, p.kind))
       + field('열원', drop('eqHeat', HEAT_KINDS, p.heat))
       + field('상단 후드', drop('eqHoodId', hoodOptions(floor), p.hoodId ?? ''));
   }
   if (t === 'diffuser') {
-    return head
-      + field('심벌', drop('eqSymbol', DIFFUSER_SYMBOLS.map(s => [s, s]), p.symbol))
+    return field('심벌', drop('eqSymbol', DIFFUSER_SYMBOLS.map(s => [s, s]), p.symbol))
       + field('급기/배기', drop('eqFlow', FLOW_KINDS, p.flow))
       + len('A (가로)', 'eqA', p.a, EQUIP_RANGE.ab)
       + len('B (세로)', 'eqB', p.b, EQUIP_RANGE.ab)
       + field('개당 풍량 (CMH)', num('eqCmhIn', p.cmh, EQUIP_RANGE.cmh[0], EQUIP_RANGE.cmh[1], 10));
   }
   if (t === 'fan') {
-    return head
-      + field('팬 번호', `<input type="text" name="eqFanId" value="${esc(p.fanId)}" placeholder="F-2">`)
+    return field('팬 번호', `<input type="text" name="eqFanId" value="${esc(p.fanId)}" placeholder="F-2">`)
       + field('급기/배기', drop('eqFlow', FLOW_KINDS, p.flow))
       + len('소음 챔버 W', 'eqChamberW', p.chamber[0], EQUIP_RANGE.chamber)
       + len('소음 챔버 D', 'eqChamberD', p.chamber[1], EQUIP_RANGE.chamber)
       + len('소음 챔버 H', 'eqChamberH', p.chamber[2], EQUIP_RANGE.chamber)
       + field('풍량 (CMH)', num('eqCmhIn', p.cmh, EQUIP_RANGE.cmh[0], EQUIP_RANGE.cmh[1], 10));
   }
-  return head + field('지름', drop('eqDia', VENTCAP_DIAS.map(d => [d, `Ø${d}`]), p.dia));
+  return field('지름', drop('eqDia', VENTCAP_DIAS.map(d => [d, `Ø${d}`]), p.dia));
+}
+
+export function equipRowsHtml(item, { units = 'mm', showUnit = false, floor = null } = {}) {
+  const t = equipType(item);
+  if (!t) return '';
+  return `<h3>${EQUIP_SECTION_TITLE} · ${EQUIP_TYPE_LABELS[t]}</h3>`
+    + typeRows(t, item, { units, showUnit, floor })
+    + ductLinksHtml(floor, item);
 }
 
 // 방 패널의 설계 풍량 두 칸(+ Task 10이 주는 현재 합계·비율).
@@ -143,5 +161,14 @@ export function applyVentField(store, ui, sel, el) {
     return true;
   }
   updateItem(store, it.id, { props });
+  return true;
+}
+
+// "연결된 덕트" 행의 [선택] 버튼. 그 덕트의 그 꼭짓점을 고른다(설비 우클릭 메뉴와 같은 동작).
+export function ventRowsClick(ui, el) {
+  if (el?.name !== 'ventDuctSelect') return false;
+  const id = el.dataset.d, point = Number(el.dataset.p);
+  if (!id || !Number.isInteger(point)) return true;
+  ui.set({ selection: { type: 'duct', id, segment: null, vertex: point } });
   return true;
 }

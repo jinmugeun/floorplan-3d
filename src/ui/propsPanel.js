@@ -8,7 +8,7 @@ import { confirmDialog } from './confirmDialog.js';
 import { toast } from './toast.js';
 import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
-import { equipRowsHtml, roomDesignRowsHtml, applyVentField } from './equipRows.js';
+import { equipRowsHtml, roomDesignRowsHtml, applyVentField, ventRowsClick } from './equipRows.js';
 import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
 import { roomAirflow } from '../vent/airflow.js';
@@ -253,6 +253,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     }
   };
   const onClick = ev => {
+    if (ventRowsClick(ui, ev.target)) return;                              // 설비의 "연결된 덕트" 선택
     if (ductPanelClick(store, ui, ui.get().selection, ev.target)) return;  // 덕트 구간·댐퍼·연결·삭제
     if (ev.target.name === 'split') { ui.set({ splitWall: true }); return; }
     if (ev.target.name === 'matReplace') { surfaceActions.replaceMaterial?.(targetFor(ui.get().selection, ev.target.dataset.side)); return; }

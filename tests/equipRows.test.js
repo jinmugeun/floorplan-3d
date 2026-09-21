@@ -8,6 +8,7 @@ import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createPropsPanel } from '../src/ui/propsPanel.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField, EQUIP_SECTION_TITLE } from '../src/ui/equipRows.js';
+import { addDuct } from '../src/state/ductOps.js';
 
 function setup(productId, patch = {}) {
   const store = createStore(createEmptyProject());
@@ -28,6 +29,17 @@ function setup(productId, patch = {}) {
 }
 
 describe('설비 속성 섹션', () => {
+  test('설비 패널의 "연결된 덕트" 행을 누르면 그 꼭짓점이 선택된다', () => {
+    const a = setup('hood-box');
+    expect(a.el.textContent).toContain('연결된 덕트가 없습니다');
+    const ductId = addDuct(a.store, { kind: 'exhaust', system: 'F-3', points: [[2000.5, 1500.25], [5000, 1500.25]], segments: [{ w: 750, h: 400, z: 2650 }], connections: [{ point: 0, itemId: a.id }] });
+    const row = a.el.querySelector('[name="ventDuctSelect"]');
+    expect(row).not.toBeNull();
+    expect(a.el.textContent).toContain('배기 · F-3 · 1번 점');
+    row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(a.ui.get().selection).toEqual({ type: 'duct', id: ductId, segment: null, vertex: 0 });
+  });
+
   test('후드: 번호·필터·면풍속을 고치면 풍량이 따라 바뀐다(읽기 전용)', () => {
     const { el, item, change } = setup('hood-box');
     expect(el.textContent).toContain(`${EQUIP_SECTION_TITLE} · 후드`);
@@ -91,7 +103,10 @@ describe('설비 속성 섹션', () => {
     createPropsPanel(el, store, ui);
     ui.set({ selection: { type: 'item', id: range } });
     const opts = [...el.querySelectorAll('select[name="eqHoodId"] option')].map(o => [o.value, o.textContent]);
-    expect(opts).toEqual([['', '없음'], [hood, '후드 4']]);
+    expect(opts).toEqual([['', '없음'], [hood, '후드 ④']]);      // 번호 대신 원문자(중복 번호를 눈으로 구별한다)
+    updateRoom(store, activeFloor(store.get()).rooms[0].id, { name: '가열조리실' });
+    const named = [...el.querySelectorAll('select[name="eqHoodId"] option')].map(o => o.textContent);
+    expect(named).toEqual(['없음', '후드 ④ · 가열조리실']);      // 방 이름 병기(§12.5)
     const s = el.querySelector('select[name="eqHoodId"]');
     s.value = hood; s.dispatchEvent(new Event('change', { bubbles: true }));
     expect(activeFloor(store.get()).items.find(i => i.id === range).props.hoodId).toBe(hood);
