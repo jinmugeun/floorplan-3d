@@ -55,6 +55,10 @@ describe('설비 속성 섹션', () => {
     expect(item().props.faceVelocity).toBe(0.7);
     expect(item().props.cmh).toBe(4838);
     expect(el.querySelector('output[name="eqCmh"]').textContent).toBe('4,838');
+    // §15.9(감사 §21): 0.05 step 칸이 부동소수 먼지를 그대로 저장했다.
+    change('eqFaceVelocity', 1.0499999999999998);
+    expect(item().props.faceVelocity).toBeCloseTo(1.05, 10);
+    expect(String(item().props.faceVelocity)).toBe('1.05');
     change('eqSystem', ' F-3 ');
     expect(item().props.system).toBe('F-3');
   });

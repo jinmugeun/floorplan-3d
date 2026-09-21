@@ -4,6 +4,7 @@ import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 import { optionBarHtml, applyOptionInput } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
+import { trackFields } from './fieldUtils.js';
 import { shellHtml } from './shellHtml.js';
 import { createBottomBar } from './bottomBar.js';
 import { createBanner } from './banner.js';
@@ -129,6 +130,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   q('#btnGizmoMode').addEventListener('click', () => { gizmoMode = gizmoMode === 'rotate' ? 'translate' : 'rotate'; syncGizmoBtn(); onGizmoMode(gizmoMode); });
   syncGizmoBtn();
 
+  // 입력 칸의 [Esc] 되돌리기는 "포커스 시점 값"이 필요하다(§15.9): 앱 전체에 한 번만 건다.
+  const fieldTrack = trackFields(root);
   const pop = createPopover(root);
   let popKind = null;
   // 도움말은 현재 화면에 맞는 규칙을 보여 준다: 덕트 도구가 켜져 있으면 덕트, 아니면 2D/3D.
@@ -260,5 +263,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, refreshBanner: () => renderBanner(),
     // 셸을 버리면 구독·관찰자·document 리스너까지 함께 뗀다: 남아 있으면 스토어가 바뀔 때
     // syncTop이 사라진 #btnUndo에서 던진다(m-8).
-    destroy() { unsubs.forEach(u => u?.()); banner.destroy(); bottom?.destroy(); pop.destroy(); miniRo?.disconnect(); resizeWatch.destroy(); splitters.forEach(s => s.destroy()); } };
+    destroy() { unsubs.forEach(u => u?.()); banner.destroy(); bottom?.destroy(); pop.destroy(); miniRo?.disconnect(); resizeWatch.destroy(); fieldTrack.destroy(); splitters.forEach(s => s.destroy()); } };
 }

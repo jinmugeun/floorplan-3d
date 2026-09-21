@@ -392,3 +392,38 @@ test('메뉴를 열 것이 없으면 키를 삼키지 않는다', () => {
   h(e);
   expect(e.prevented).toBe(false);
 });
+
+// §15.9(감사 §5): 벽 두께 칸에서 Esc가 값도 포커스도 바꾸지 못했다(INPUT이면 먼저 return했다).
+test('입력 칸의 [Esc]는 값을 되돌리고 [Enter]는 확정한다', async () => {
+  const { rememberFieldValue } = await import('../src/ui/fieldUtils.js');
+  const a = setup();
+  const el = document.createElement('input');
+  el.type = 'number'; el.step = '10'; el.value = '200';
+  document.body.appendChild(el);
+  const changes = [];
+  el.addEventListener('change', () => changes.push(el.value));
+  el.focus();
+  rememberFieldValue(el);
+  el.value = '3200';
+  a.key('Escape', { target: el });               // key 헬퍼가 target·preventDefault를 채운다
+  expect(el.value).toBe('200');
+  expect(changes).toEqual([]);
+  expect(a.calls.setTool).toEqual([]);          // 도구 전환은 일어나지 않는다(칸에서 탈출만 한다)
+  el.focus(); el.value = '250';
+  a.key('Enter', { target: el });
+  expect(changes).toEqual(['250']);
+  // 글자 키는 예전처럼 브라우저에 맡긴다(단축키가 되지 않는다).
+  a.key('f', { target: el });
+  expect(a.calls.setTool).toEqual([]);
+});
+
+test('이미 처리된 [Enter](옵션 바)는 두 번 확정하지 않는다', () => {
+  const a = setup();
+  const el = document.createElement('input');
+  el.type = 'text'; el.value = 'x';
+  document.body.appendChild(el);
+  const changes = [];
+  el.addEventListener('change', () => changes.push(1));
+  a.key('Enter', { target: el, defaultPrevented: true });
+  expect(changes).toEqual([]);
+});

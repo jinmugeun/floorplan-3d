@@ -1,5 +1,6 @@
 // 단축키 한 곳: 핸들러와 설정 > 단축키 표가 같은 표를 읽는다.
 // action이 null인 항목은 표시 전용(마우스 조작, 1인칭 이동 등).
+import { revertField, commitField } from './fieldUtils.js';
 export const KEYMAP = [
   { group: '일반', label: '선택 모드 / 도구 종료', keys: ['Esc'], action: 'escape' },
   { group: '일반', label: '실행 취소', keys: ['Ctrl+Z'], action: 'undo' },
@@ -113,7 +114,16 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
   };
   return ev => {
     if (ev.isComposing || ev.keyCode === 229) return; // 한글 입력 조합 중인 키는 단축키가 아니다
-    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target?.tagName)) return;
+    // §15.9: 입력 중에도 [Esc]로 되돌리고 [Enter]로 확정할 수 있어야 한다(감사 §5: 벽 두께 칸에서
+    // Esc가 값도 포커스도 바꾸지 못했다). 그 둘만 통과시키고 나머지 키는 예전처럼 브라우저에 맡긴다.
+    // 이미 누군가 처리한 키(옵션 바의 [Enter], 모달)는 건드리지 않는다 — 두 번 확정하지 않게.
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target?.tagName)) {
+      if (!ev.defaultPrevented && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        if (ev.key === 'Escape') { if (revertField(ev.target)) ev.preventDefault(); }
+        else if (ev.key === 'Enter') { if (commitField(ev.target)) ev.preventDefault(); }
+      }
+      return;
+    }
     // 선택한 대상의 메뉴를 키보드로 연다(§15.3). 열 것이 없으면 키를 삼키지 않는다.
     if ((ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey)) && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
       if (contextMenu()) { ev.preventDefault(); return; }
