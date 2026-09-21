@@ -3,14 +3,9 @@ import { activeFloor } from '../state/schema.js';
 import { toast } from './toast.js';
 import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
-import { fmtLen, parseLen } from '../util/units.js';
+import { optionBarHtml, applyOptionInput } from './optionBar.js';
 
 
-const LABELS = { reference: '기준선', thickness: '두께', snap: '스냅 모드', ortho: '직교 모드', direction: '방향', kind: '종류', w: '단면 너비', h: '단면 높이', z: '중심 높이', system: '계통' };
-// 길이 옵션은 라벨에 현재 단위를 붙이고, ft·in 모드에서는 속성 패널과 같은 텍스트 입력이 된다.
-const LEN_OPTS = new Set(['thickness', 'w', 'h', 'z']);
-const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
-const REF = [['center', '중심선'], ['inner', '내벽선'], ['outer', '외벽선']];
 // 기즈모 모드 토글은 3D 궤도 뷰에서 기즈모가 실제로 붙는 아이템 하나를 골랐을 때만 쓸 일이 있다.
 // 1인칭·2D 투영(ortho)에는 기즈모가 없고, 벽 부착·잠긴 아이템에도 붙지 않으므로 버튼도 숨긴다.
 export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {}) {
@@ -61,15 +56,17 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
       <section data-panel="layers" hidden><h3>리소스 관리</h3><div id="layers"></div></section>
     </aside>
     <main id="canvasWrap">
-      <canvas id="c2d"></canvas>
-      <div id="c3d" hidden></div>
       <div id="optionBar" hidden></div>
       <div id="banner" hidden></div>
-      <div id="imageStrip" hidden>
-        <span class="muted">이미지 세팅</span>
-        <label>투명도 <input type="range" name="stripOpacity" min="0" max="1" step="0.05"></label>
-        <label><input type="checkbox" name="stripVisible"> 표시</label>
-        <button type="button" id="btnBgLock" aria-label="배경 도면 잠금">잠금</button>
+      <div id="canvasStack">
+        <canvas id="c2d"></canvas>
+        <div id="c3d" hidden></div>
+        <div id="imageStrip" hidden>
+          <span class="muted">이미지 세팅</span>
+          <label>투명도 <input type="range" name="stripOpacity" min="0" max="1" step="0.05"></label>
+          <label><input type="checkbox" name="stripVisible"> 표시</label>
+          <button type="button" id="btnBgLock" aria-label="배경 도면 잠금">잠금</button>
+        </div>
       </div>
     </main>
     <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
@@ -152,36 +149,36 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   root.querySelectorAll('[data-popover]').forEach(b => b.addEventListener('click', () => openPopover(b.dataset.popover, b)));
 
   let currentTool = null;
-  function setOptionBar(tool) {
-    currentTool = tool;
-    const hasOpts = tool && tool.opts && Object.keys(tool.opts).length;
-    const hint = tool?.hint;
-    if (!hasOpts && !hint) { els.optionBar.hidden = true; els.optionBar.innerHTML = ''; return; }
-    els.optionBar.hidden = false;
-    els.optionBar.innerHTML = hasOpts ? Object.entries(tool.opts).map(([k, v]) => {
-      const label = `${LABELS[k] ?? k}${LEN_OPTS.has(k) ? ` (${unitLabel(store.get().units ?? 'mm')})` : ''}`;
-      if (typeof v === 'boolean') return `<label><input type="checkbox" name="${k}" ${v ? 'checked' : ''}> ${label}</label>`;
-      if (typeof v === 'number') {
-        const units = store.get().units ?? 'mm';
-        // 길이 옵션(두께)은 ft·in 모드에서 텍스트 입력이 된다(속성 패널의 lenField와 같은 규칙).
-        if (LEN_OPTS.has(k) && units === 'ftin') return `<label>${label} <input type="text" name="${k}" data-len="1" value="${esc(fmtLen(v, 'ftin'))}"></label>`;
-        return `<label>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
-      }
-      if (k === 'reference') return `<label>${label} <select name="${k}">${REF.map(([val, l]) => `<option value="${val}" ${v === val ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
-      if (k === 'kind') return `<label>${label} <select name="${k}"><option value="supply" ${v === 'supply' ? 'selected' : ''}>급기</option><option value="exhaust" ${v === 'exhaust' ? 'selected' : ''}>배기</option></select></label>`;
-      if (k === 'direction') return `<label>${label} <select name="${k}"><option value="v" ${v === 'v' ? 'selected' : ''}>세로</option><option value="h" ${v === 'h' ? 'selected' : ''}>가로</option></select></label>`;
-      return `<label>${label} <input type="text" name="${k}" value="${v}"></label>`;
-    }).join('') : '';
-    if (hint) { const span = document.createElement('span'); span.className = 'hint'; span.dataset.action = 'hintCancel'; span.textContent = hint; els.optionBar.appendChild(span); }
+  // 옵션 바는 캔버스 위에 뜬 팝업이 아니라 캔버스 위쪽 행이다(§12.1): 옵션이 없으면 행이 접히고(hidden),
+  // 안내 문구(hint)는 배너가 맡는다 — 캔버스를 가리고 클릭을 가로채는 요소를 남기지 않는다.
+  function renderOptions() {
+    const html = optionBarHtml(currentTool, { units: store.get().units ?? 'mm' });
+    els.optionBar.hidden = !html;
+    els.optionBar.innerHTML = html;
   }
-  els.optionBar.addEventListener('change', ev => {
-    const el = ev.target, k = el.name; if (!currentTool || !k) return;
-    // ft·in 텍스트 입력은 mm로 되돌려 저장한다. 읽을 수 없는 입력은 값을 바꾸지 않고 현재 값으로 되돌린다.
-    if (el.dataset.len) { const mm = parseLen(el.value, store.get().units ?? 'mm'); if (mm === null) { el.value = fmtLen(currentTool.opts[k], 'ftin'); return; } currentTool.opts[k] = Math.round(mm); return; }
-    currentTool.opts[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
-  });
+  // 배너는 한 번에 하나만 보인다: ui 상태(1인칭 찍기 · 마감재 적용 · 단일 공간 모드)가 도구 안내보다 앞선다.
+  function renderBanner(s = ui.get()) {
+    const exitSolo = '<button type="button" id="btnExitSolo">도면 전체 보기</button>';
+    const show = html => { els.banner.hidden = false; els.banner.innerHTML = html; };
+    const wireSolo = () => { q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); };
+    if (s.fpPick) { show('👆 1인칭으로 확인할 위치를 클릭해주세요. [Esc]로 취소'); return; }
+    if (s.matPick) {
+      // 단일 공간 모드 중에도 모드를 빠져나갈 버튼을 남긴다.
+      // 키 표기는 전역 규칙대로 [Esc] 한 가지다(예전 대문자 표기를 여기서 바로잡는다 — Task 10의
+      // grep이 소스에 대문자 표기가 하나도 없음을 확인하므로 주석에도 쓰지 않는다).
+      // 이 문구는 shell.test.js:272의 기대값과 짝이다: 둘을 함께 고친다.
+      show('🎨 재질을 적용할 면을 클릭해주세요. [Esc]를 누르면 종료됩니다.' + (s.soloRoom ? ` ${exitSolo}` : ''));
+      if (s.soloRoom) wireSolo();
+      return;
+    }
+    if (s.soloRoom) { show(`단일 공간 모드 ${exitSolo}`); wireSolo(); return; }
+    if (currentTool?.hint) { show(`<span class="hint" data-action="hintCancel">${esc(currentTool.hint)}</span>`); return; }
+    els.banner.hidden = true; els.banner.innerHTML = '';
+  }
+  function setOptionBar(tool) { currentTool = tool; renderOptions(); renderBanner(); }
+  els.optionBar.addEventListener('change', ev => { applyOptionInput(currentTool, ev.target, store.get().units ?? 'mm'); });
   // 안내 문구를 누르면 도구가 스스로 취소한다(배치 도구의 "메시지를 누르면 취소").
-  els.optionBar.addEventListener('click', ev => { if (ev.target.dataset.action === 'hintCancel') currentTool?.onHintClick?.(); });
+  els.banner.addEventListener('click', ev => { if (ev.target.dataset.action === 'hintCancel') currentTool?.onHintClick?.(); });
 
   // 2D 투영 뷰 이름. view3d가 onOrthoView로 알려 주면 setOrtho로 들어온다(기즈모 버튼 표시가 여기에 걸린다).
   let orthoName = null;
@@ -199,15 +196,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     q('#btnCam').hidden = !isIso; q('#btnSun').hidden = !isIso;
     syncGizmoVisible(s);
     if (!isIso && (popKind === 'cam' || popKind === 'sun')) pop.close();
-    if (s.fpPick) { els.banner.hidden = false; els.banner.innerHTML = '👆 1인칭으로 확인할 위치를 클릭해주세요. [ESC]로 취소'; }
-    else if (s.matPick) {
-      els.banner.hidden = false;
-      // 단일 공간 모드 중에도 모드를 빠져나갈 버튼을 남긴다(배너는 한 번에 하나만 보인다).
-      els.banner.innerHTML = '🎨 재질을 적용할 면을 클릭해주세요. [ESC] 키를 누르면 종료됩니다.' + (s.soloRoom ? ' <button type="button" id="btnExitSolo">도면 전체 보기</button>' : '');
-      if (s.soloRoom) q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null });
-    }
-    else if (s.soloRoom) { els.banner.hidden = false; els.banner.innerHTML = '단일 공간 모드 <button type="button" id="btnExitSolo">도면 전체 보기</button>'; q('#btnExitSolo').onclick = () => ui.set({ soloRoom: null }); }
-    else { els.banner.hidden = true; els.banner.innerHTML = ''; }
+    renderBanner(s);
     if (pop.isOpen() && popKind === 'view') refreshPopover();
     strip.hidden = !store.get().background || s.mode !== '2d'; // 모드가 바뀌면 이미지 세팅 스트립도 따라간다
   });
@@ -215,7 +204,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   const syncTop = s => {
     q('#btnUndo').disabled = !store.canUndo(); q('#btnRedo').disabled = !store.canRedo();
     const u = s.units ?? 'mm';
-    if (u !== lastUnits) { lastUnits = u; if (currentTool) setOptionBar(currentTool); } // 단위가 바뀌면 옵션 바 라벨도 다시 그린다(바뀔 때만: 타이핑 중 입력을 지우지 않게)
+    if (u !== lastUnits) { lastUnits = u; if (currentTool) renderOptions(); } // 단위가 바뀌면 옵션 바 라벨도 다시 그린다(바뀔 때만: 타이핑 중 입력을 지우지 않게)
     if (q('#projectName').value !== s.name) q('#projectName').value = s.name;
     root.querySelectorAll('[data-units]').forEach(b => b.classList.toggle('on', b.dataset.units === (s.units ?? 'mm')));
     q('#btnLock').classList.toggle('on', !!s.view.lockPlan);

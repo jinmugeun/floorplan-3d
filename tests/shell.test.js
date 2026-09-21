@@ -19,12 +19,19 @@ test('shell renders regions and option bar reflects tool opts', () => {
   expect(tool.opts.reference).toBe('inner');
 });
 
-test('option bar shows a hint when opts is empty but hint is set', () => {
+test('안내 문구는 옵션 바가 아니라 배너에 찍히고, 누르면 도구가 취소된다', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
   const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
-  shell.setOptionBar({ name: 'delete', opts: {}, hint: '안내' });
-  expect(root.querySelector('#optionBar').hidden).toBe(false);
-  expect(root.querySelector('#optionBar').textContent).toContain('안내');
+  let cancelled = 0;
+  shell.setOptionBar({ name: 'delete', opts: {}, hint: '안내', onHintClick: () => { cancelled += 1; } });
+  expect(root.querySelector('#optionBar').hidden).toBe(true);
+  const banner = root.querySelector('#banner');
+  expect(banner.hidden).toBe(false);
+  expect(banner.textContent).toContain('안내');
+  banner.querySelector('[data-action="hintCancel"]').click();
+  expect(cancelled).toBe(1);
+  shell.setOptionBar({ name: 'select', opts: {} });
+  expect(banner.hidden).toBe(true);
 });
 
 test('option bar hides when both opts and hint are empty', () => {
@@ -159,11 +166,11 @@ test('length option labels carry the active unit and the lock button says what a
   const shell = createShell(root, { store, ui: createUiState() });
   const tool = { name: 'wall', opts: { thickness: 200, snap: true } };
   shell.setOptionBar(tool);
-  expect(root.querySelector('#optionBar').textContent).toContain('두께 (mm)');
+  expect(root.querySelector('#optionBar').textContent).toContain('W (mm)');
   store.dispatch(d => { d.units = 'ftin'; }, { record: false });
   shell.setOptionBar(tool); // 옵션 바는 도구를 다시 세울 때 그려진다
-  expect(root.querySelector('#optionBar').textContent).toContain('두께 (ft·in)');
-  expect(root.querySelector('#optionBar').textContent).not.toContain('두께 (mm)');
+  expect(root.querySelector('#optionBar').textContent).toContain('W (ft·in)');
+  expect(root.querySelector('#optionBar').textContent).not.toContain('W (mm)');
   store.dispatch(d => { d.background = { src: 'data:,', width: 10, height: 10, scale: 1, offset: [0, 0], opacity: 0.5, visible: true, locked: true }; }, { record: false });
   expect(root.querySelector('#btnBgLock').textContent).toBe('잠금 해제'); // 잠긴 상태 → 누르면 풀린다
   root.querySelector('#btnBgLock').click();
@@ -176,9 +183,9 @@ test('switching units re-renders the option bar label', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   const shell = createShell(root, { store, ui });
   shell.setOptionBar({ name: 'wall', opts: { thickness: 200, snap: true } });
-  expect(root.querySelector('#optionBar').textContent).toContain('두께 (mm)');
+  expect(root.querySelector('#optionBar').textContent).toContain('W (mm)');
   root.querySelector('[data-units="ftin"]').click();
-  expect(root.querySelector('#optionBar').textContent).toContain('두께 (ft·in)');
+  expect(root.querySelector('#optionBar').textContent).toContain('W (ft·in)');
 });
 
 test('기즈모 모드 버튼은 3D에서 아이템을 골랐을 때만 보이고 이동/회전을 뒤집는다', () => {
@@ -269,7 +276,7 @@ test('마감재 레일 탭과 적용 모드 배너', () => {
   ui.set({ matPick: { assignment: { id: 'wood-oak', offset: [0, 0], angle: 0 } } });
   const banner = root.querySelector('#banner');
   expect(banner.hidden).toBe(false);
-  expect(banner.textContent).toContain('재질을 적용할 면을 클릭해주세요. [ESC] 키를 누르면 종료됩니다.');
+  expect(banner.textContent).toContain('재질을 적용할 면을 클릭해주세요. [Esc]를 누르면 종료됩니다.');
   // M-34: 단일 공간 모드에서 재질을 바르는 동안에도 모드를 빠져나갈 버튼이 남는다.
   ui.set({ soloRoom: 'r1' });
   expect(root.querySelector('#banner #btnExitSolo')).not.toBeNull();
@@ -342,4 +349,27 @@ test('미니맵 크기가 바뀌면 ResizeObserver 경로로 높이를 저장하
     expect(localStorage.getItem('kvp.minimapH')).toBe('241');
     expect(redraws).toBe(1);
   } finally { globalThis.ResizeObserver = prev; localStorage.clear(); }
+});
+
+test('옵션 바와 배너는 캔버스 위에 떠 있지 않고 캔버스 위쪽 행이다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const wrap = root.querySelector('#canvasWrap');
+  expect([...wrap.children].map(c => c.id)).toEqual(['optionBar', 'banner', 'canvasStack']);
+  const stack = root.querySelector('#canvasStack');
+  expect([...stack.children].map(c => c.id)).toEqual(['c2d', 'c3d', 'imageStrip']);
+});
+
+test('배너는 ui 상태가 도구 안내보다 앞선다(한 번에 하나만)', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState();
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui });
+  shell.setOptionBar({ name: 'place', opts: {}, hint: '배치할 위치를 클릭' });
+  const banner = root.querySelector('#banner');
+  expect(banner.textContent).toContain('배치할 위치를 클릭');
+  ui.set({ matPick: { assignment: { id: 'wood-oak', offset: [0, 0], angle: 0 } } });
+  expect(banner.textContent).toContain('재질을 적용할 면을 클릭해주세요');
+  expect(banner.textContent).not.toContain('배치할 위치를 클릭');
+  ui.set({ matPick: null });
+  expect(banner.textContent).toContain('배치할 위치를 클릭'); // 상태가 풀리면 도구 안내가 돌아온다
 });

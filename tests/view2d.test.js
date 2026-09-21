@@ -236,3 +236,19 @@ test('items are drawn after walls and follow the v2 toggles', async () => {
   expect(calls.some(x => x[0] === 'rotate')).toBe(false);
   v.destroy();
 });
+
+// 옵션 바 행이 생기고 사라지면 캔버스 높이가 바뀌지만 window의 resize는 오지 않는다(§12.1).
+test('캔버스를 ResizeObserver로 관찰하고 destroy에서 끊는다', () => {
+  const observed = []; let disconnects = 0;
+  const prev = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; } observe(el) { observed.push({ el, cb: this.cb }); } disconnect() { disconnects += 1; } };
+  try {
+    const canvas = makeCanvas();
+    const v = createView2D(canvas, createStore(createEmptyProject()), createUiState());
+    const entry = observed.find(o => o.el === canvas);
+    expect(entry).toBeTruthy();
+    entry.cb([]);              // 콜백이 던지지 않는다(다시 그리기 요청만 한다)
+    v.destroy();
+    expect(disconnects).toBe(1);
+  } finally { globalThis.ResizeObserver = prev; }
+});

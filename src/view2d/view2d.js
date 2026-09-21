@@ -168,13 +168,15 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
   canvas.addEventListener('wheel', onWheel, { passive: false }); canvas.addEventListener('contextmenu', onMenu);
   const unsubs = [store.subscribe(() => { if (readonly) fit(500); else requestRender(); }), ui.subscribe(requestRender)];
   const onResize = () => requestRender(); window.addEventListener('resize', onResize);
+  // 옵션 바·배너 행이 생기고 사라지면 캔버스 높이만 바뀐다(window resize가 오지 않는다 — §12.1).
+  const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => requestRender()) : null; ro?.observe(canvas);
 
   const api = { camera, toScreen, toWorld, fit, zoomAt, zoomBy, centerOn, viewportRect, requestRender, label, poly, COLORS, fmtLen, fmtArea,
     get units() { return store.get().units ?? 'mm'; },
     get showUnit() { return !!store.get().settings?.showUnit; },
     get tool() { return tool; },
     setTool(t) { tool?.cancel?.(); tool = t; requestRender(); },
-    destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); } };
+    destroy() { unsubs.forEach(u => u()); if (raf) { cancelAnimationFrame(raf); raf = 0; } if (bgCache.img) bgCache.img.onload = null; ro?.disconnect(); window.removeEventListener('resize', onResize); canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onMenu); } };
   requestRender();
   return api;
 }
