@@ -5,6 +5,7 @@ import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 import { optionBarHtml, applyOptionInput } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, applyPanelWidths, createSplitter, togglePanel } from './layout.js';
+import { createHelpButton } from './helpPopover.js';
 
 
 // 기즈모 모드 토글은 3D 궤도 뷰에서 기즈모가 실제로 붙는 아이템 하나를 골랐을 때만 쓸 일이 있다.
@@ -13,14 +14,14 @@ export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {})
   return mode !== '2d' && mode !== 'fp' && !ortho && !!item && !item.locked && !(item.attach === 'wall' && item.wallId);
 }
 
-export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {} }) {
+export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {} }) {
   root.innerHTML = `
   <div id="layout">
     <header id="topbar">
       <div class="group"><button id="btnUndo" aria-label="실행 취소">↶</button><button id="btnRedo" aria-label="다시 실행">↷</button></div>
       <div class="group"><input id="projectName" aria-label="프로젝트 이름" value="${esc(store.get().name)}"><span id="savedAt" class="muted">저장 이력 없음</span></div>
       <div class="group"><button id="btnRender">렌더샷</button><button id="btnGallery">갤러리</button><button id="btnEstimate">실시간 견적서</button><button id="btnSpec">시방서</button><button id="btnNew">새로만들기</button><button id="btnMore" aria-label="더보기">더보기 ▾</button></div>
-      <div class="group"><button id="btnSettings" aria-label="설정">설정</button><button id="btnCapture" data-action="capture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
+      <div class="group"><button id="btnHelp" aria-label="도움말">?</button><button id="btnSettings" aria-label="설정">설정</button><button id="btnCapture" data-action="capture">캡처</button><button id="btnLoad">불러오기</button><button id="btnSave" class="primary">저장</button></div>
     </header>
     <nav id="rail" aria-label="작업 영역">
       <button data-panel="draw" class="on"><span>도면 그리기</span></button>
@@ -175,6 +176,18 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     refreshPopover(); // 슬라이더 위치를 새 값으로 다시 그린다
   }
   root.querySelectorAll('[data-popover]').forEach(b => b.addEventListener('click', () => openPopover(b.dataset.popover, b)));
+  // 도움말이 열리면 "지금 열린 팝오버 종류"를 지운다: popKind이 'view'로 남아 있으면 모드가 바뀔 때
+  // refreshPopover가 도움말 내용을 보기 옵션으로 덮어쓴다(캡처 단계라 아래 클릭 처리보다 먼저 돈다).
+  q('#btnHelp').addEventListener('click', () => { popKind = 'help'; }, true);
+  // 도움말은 현재 화면에 맞는 규칙을 보여 준다: 덕트 도구가 켜져 있으면 덕트, 아니면 2D/3D.
+  // onClose로 popKind를 되돌린다: 'help'로 남으면 refreshPopover()가 [data-popover="help"]를 못 찾아
+  // anchor.getBoundingClientRect()에서 던진다(refreshPopover는 반환값으로 공개돼 있다).
+  const helpBtn = createHelpButton(q('#btnHelp'), {
+    popover: pop,
+    getMode: () => (ui.get().tool === 'duct' ? 'duct' : ui.get().mode === '2d' ? '2d' : '3d'),
+    onOpenKeymap,
+    onClose: () => { popKind = null; },
+  });
 
   let currentTool = null;
   // 옵션 바는 캔버스 위에 뜬 팝업이 아니라 캔버스 위쪽 행이다(§12.1): 옵션이 없으면 행이 접히고(hidden),
@@ -246,5 +259,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { splitters.forEach(s => s.destroy()); } };
+  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { splitters.forEach(s => s.destroy()); helpBtn.destroy(); } };
 }

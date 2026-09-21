@@ -9,6 +9,25 @@ import { collidingIds } from '../geom/collide.js';
 
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
+export const EMPTY_GUIDE_LINES = [
+  '아직 도면이 없습니다.',
+  '[F] 방 그리기로 첫 방을 그리거나, 시작 화면에서 샘플을 열어 보세요.',
+];
+// 벽도 배경 도면도 없고 그리기 도구도 꺼져 있을 때만 캔버스 중앙에 옅은 안내를 그린다(§12.4).
+// 그렸으면 true. 순수 그리기 함수라 테스트가 가짜 v·ctx로 직접 부를 수 있다.
+export function drawEmptyGuide(ctx, v, floor, state, { toolName = null } = {}) {
+  if ((floor?.walls?.length ?? 0) > 0 || state?.background) return false;
+  if (toolName && toolName !== 'select') return false;
+  const [p0, p1] = v.viewportRect();
+  const cx = (p0[0] + p1[0]) / 2, cy = (p0[1] + p1[1]) / 2;
+  const dy = 26 / (v.camera.scale || 1);            // 줄 간격은 화면 26 px
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  EMPTY_GUIDE_LINES.forEach((t, i) => v.label(t, [cx, cy + (i - (EMPTY_GUIDE_LINES.length - 1) / 2) * dy], { size: i ? 13 : 16, color: v.COLORS.text }));
+  ctx.restore();
+  return true;
+}
+
 export function createView2D(canvas, store, ui, { readonly = false, labels = true, overlay = null, onPick = null, menu = null, onCameraChange = null } = {}) {
   const ctx = canvas.getContext('2d');
   const camera = { cx: 4000, cy: 3000, scale: 0.08 };
@@ -125,6 +144,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
       ctx.strokeStyle = COLORS.guide; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.stroke(); ctx.lineWidth = 1;
       if (labels) label(fmtLen(dist(m.a, m.b), units, { unit: showUnit }), [(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2], { bg: '#fff', color: COLORS.dim });
     }
+    if (!readonly && labels) drawEmptyGuide(ctx, api, f, state, { toolName: tool?.name ?? null });
     if (tool && !readonly) tool.draw(ctx, api);
     if (overlay) overlay(ctx, api);
   }

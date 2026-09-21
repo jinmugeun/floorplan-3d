@@ -15,9 +15,13 @@ function keymapRows(keymap) {
   }).join('')).join('');
 }
 
-export function openSettingsDialog({ store, onClose = () => {} }) {
+export function openSettingsDialog({ store, tab = 'general', onClose = () => {} }) {
   const existing = document.querySelector('.modal.settings');
-  if (existing) { existing.querySelector('[name="close"]')?.focus(); return { close: () => existing.remove() }; } // 두 번 열지 않는다
+  if (existing) {   // 두 번 열지 않는다
+    existing.querySelector(`[data-tab="${tab === 'keys' ? 'keys' : 'general'}"]`)?.click();   // 열려 있으면 탭만 바꾼다
+    existing.querySelector('[name="close"]')?.focus();
+    return { close: () => existing.remove() };
+  }
   const s = store.get().settings;
   const root = document.createElement('div');
   root.className = 'modal settings';
@@ -63,11 +67,12 @@ export function openSettingsDialog({ store, onClose = () => {} }) {
   // Esc는 대화상자만 닫고 전역 단축키(도구 전환 등)까지 내려가지 않는다.
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !waiting) { ev.stopPropagation(); close(); } });
   q('[name="close"]').focus();
-  root.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
-    root.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b));
-    q('#tabGeneral').hidden = b.dataset.tab !== 'general';
-    q('#tabKeys').hidden = b.dataset.tab !== 'keys';
-  }));
+  const selectTab = name => {
+    root.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+    q('#tabGeneral').hidden = name !== 'general';
+    q('#tabKeys').hidden = name !== 'keys';
+  };
+  root.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => selectTab(b.dataset.tab)));
   root.addEventListener('click', ev => {
     const cell = ev.target.closest('[data-bind]');
     if (cell) {
@@ -100,5 +105,6 @@ export function openSettingsDialog({ store, onClose = () => {} }) {
     store.dispatch(d => { d.settings[name] = el.type === 'checkbox' ? el.checked : el.value; }, { record: false });
   });
   renderKeys();
+  selectTab(tab === 'keys' ? 'keys' : 'general');
   return { close };
 }

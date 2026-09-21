@@ -5,7 +5,7 @@ import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { createView2D } from '../src/view2d/view2d.js';
+import { createView2D, drawEmptyGuide, EMPTY_GUIDE_LINES } from '../src/view2d/view2d.js';
 
 function makeCanvas() {
   const c = document.createElement('canvas');
@@ -251,4 +251,20 @@ test('캔버스를 ResizeObserver로 관찰하고 destroy에서 끊는다', () =
     v.destroy();
     expect(disconnects).toBe(1);
   } finally { globalThis.ResizeObserver = prev; }
+});
+
+// 벽도 배경 도면도 없으면 캔버스 중앙에 옅은 안내를 그린다(§12.4).
+test('drawEmptyGuide는 빈 도면 + 선택 도구일 때만 그린다', () => {
+  const calls = [];
+  const v = { viewportRect: () => [[0, 0], [8000.5, 6000.25]], camera: { scale: 0.08 }, COLORS: { text: '#5b6775' }, label: (t, p, o) => calls.push([t, p, o]) };
+  const ctx = { save() {}, restore() {}, globalAlpha: 1 };
+  expect(drawEmptyGuide(ctx, v, { walls: [] }, {}, { toolName: 'select' })).toBe(true);
+  expect(calls).toHaveLength(EMPTY_GUIDE_LINES.length);
+  expect(calls[0][0]).toBe(EMPTY_GUIDE_LINES[0]);
+  expect(calls[0][1][0]).toBeCloseTo(4000.25);              // 화면 중앙(소수 좌표)
+  expect(calls[1][1][1]).toBeGreaterThan(calls[0][1][1]);   // 둘째 줄이 아래에 온다
+  expect(drawEmptyGuide(ctx, v, { walls: [{ id: 'w1' }] }, {}, { toolName: 'select' })).toBe(false);
+  expect(drawEmptyGuide(ctx, v, { walls: [] }, { background: { src: 'data:,' } }, { toolName: 'select' })).toBe(false);
+  expect(drawEmptyGuide(ctx, v, { walls: [] }, {}, { toolName: 'wall' })).toBe(false);   // 도구가 켜지면 사라진다
+  expect(drawEmptyGuide(ctx, v, null, null, {})).toBe(true);                             // 층이 없어도 던지지 않는다
 });

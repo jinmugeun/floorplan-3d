@@ -1,0 +1,55 @@
+// 상단 바 [?] 도움말(아키텍처 §12.4). 지금 보고 있는 화면에서 바로 쓸 규칙 여섯 줄만 보여 주고,
+// 나머지는 설정의 단축키 표로 넘긴다(같은 내용을 두 곳에 적지 않는다).
+import { esc } from '../util/html.js';
+
+// 탭 이름은 곧은 따옴표(")가 아니라 “ ”로 감싼다: esc가 "를 &quot;로 바꾸므로 곧은 따옴표를 쓰면
+// 화면에 &quot;가 그대로 보이는 대신 HTML만 커지고, 문구를 그대로 찾는 테스트도 맞지 않는다.
+export const HELP_TITLES = { '2d': '2D 도면 조작', '3d': '3D 보기 조작', duct: '덕트 그리기' };
+export const HELP_LINES = {
+  '2d': [
+    '[F] 방 그리기 · [L] 벽 그리기 — 점을 클릭해 그리고 [Enter]로 끝냅니다.',
+    '빈 곳을 클릭하면 선택이 풀리고, 가운데 버튼이나 오른쪽 버튼 드래그로 화면을 옮깁니다.',
+    '제품은 “제품” 탭에서 고른 뒤 캔버스를 클릭해 놓습니다.',
+    '고른 제품은 드래그로 옮기고, 네 귀퉁이 핸들로 크기를, 아래 핸들로 각도를 바꿉니다.',
+    '오른쪽 버튼을 누르면 제품·덕트·벽·방에 맞는 메뉴가 열립니다.',
+    '[T] 덕트 · [M] 측정 · [E] 보조선 · [0] 화면 맞추기 · [⌫] 삭제.',
+  ],
+  '3d': [
+    '왼쪽 드래그로 회전, 오른쪽 드래그로 이동, 휠로 확대·축소합니다.',
+    '벽·바닥·천장을 클릭하면 그 면이 선택되고 오른쪽 버튼으로 면 메뉴가 열립니다.',
+    '“마감재” 탭에서 재질을 고른 뒤 면을 클릭하면 발립니다. [Esc]로 끝냅니다.',
+    '제품을 클릭하면 기즈모가 붙습니다(하단 바에서 이동 ↔ 회전 전환).',
+    '[2] 평면 · [3] 3D · [4] 1인칭 · 하단 바 2D로 도면으로 돌아옵니다.',
+    '벽 컷어웨이·투명화·제품 윤곽선은 하단 바 “보기”에서 켜고 끕니다.',
+  ],
+  duct: [
+    '[T]로 덕트 그리기를 켜고 점을 차례로 클릭해 경로를 만듭니다.',
+    '옵션 바에서 급기·배기와 단면 W·H, 중심 높이 Z, 계통을 먼저 정합니다.',
+    '설비 위를 클릭하면 접속점에 붙고 연결로 기록됩니다(허용 300 mm).',
+    '[Enter]나 더블클릭으로 완료, [Backspace]로 마지막 점 취소, [Esc]로 전체 취소.',
+    '직교 모드를 끄면 비스듬한 구간을 그릴 수 있습니다.',
+    '그린 뒤에는 꼭짓점·구간을 클릭해 고치고, 오른쪽 버튼 메뉴로 점·댐퍼를 다룹니다.',
+  ],
+};
+
+export function helpHtml(mode = '2d') {
+  const key = HELP_LINES[mode] ? mode : '2d';
+  return `<h4>${esc(HELP_TITLES[key])}</h4>`
+    + `<ul class="help-list">${HELP_LINES[key].map(t => `<li>${esc(t)}</li>`).join('')}</ul>`
+    + '<div class="pop-row"><button type="button" data-help="keymap">단축키 표 열기</button></div>';
+}
+
+// 상단 바의 [?] 버튼. shell의 팝오버를 그대로 쓴다(다른 팝오버와 열림·닫힘 규칙이 같다).
+export function createHelpButton(btn, { popover, getMode = () => '2d', onOpenKeymap = () => {}, onClose = () => {} } = {}) {
+  const onClick = () => {
+    // onClose를 반드시 넘긴다: shell이 "지금 열린 팝오버 종류"를 되돌려야 한다. 넘기지 않으면
+    // 도움말을 닫아도 popKind === 'help'가 남고, 그 상태에서 refreshPopover()가 불리면
+    // root.querySelector('[data-popover="help"]')가 null이라 getBoundingClientRect()에서 던진다.
+    popover.open(btn, helpHtml(getMode()), {
+      onClick: ev => { if (ev.target?.dataset?.help === 'keymap') { popover.close(); onOpenKeymap(); } },
+      onClose,
+    });
+  };
+  btn?.addEventListener('click', onClick);
+  return { destroy() { btn?.removeEventListener('click', onClick); } };
+}

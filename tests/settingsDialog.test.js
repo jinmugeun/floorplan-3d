@@ -171,3 +171,16 @@ test('일반 탭의 "시작 안내 다시 보기"가 설정을 닫고 온보딩�
   document.querySelector('.modal.onboarding [name="skip"]').click();
   localStorage.clear();
 });
+
+test('tab: "keys"로 열면 단축키 탭이 먼저 보인다', () => {
+  document.body.innerHTML = '';
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store, tab: 'keys' });
+  const modal = document.querySelector('.modal.settings');
+  expect(modal.querySelector('#tabKeys').hidden).toBe(false);
+  expect(modal.querySelector('#tabGeneral').hidden).toBe(true);
+  expect(modal.querySelector('[data-tab="keys"]').classList.contains('on')).toBe(true);
+  openSettingsDialog({ store, tab: 'general' });          // 이미 열려 있으면 탭만 바꾼다
+  expect(document.querySelectorAll('.modal.settings')).toHaveLength(1);
+  expect(document.querySelector('.modal.settings #tabGeneral').hidden).toBe(false);
+});

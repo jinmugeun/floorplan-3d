@@ -290,7 +290,29 @@ test('상단 바에 출력 버튼이 순서대로 있다', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
   createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
   const ids = [...root.querySelectorAll('#topbar button')].map(b => b.id).filter(Boolean);
-  expect(ids).toEqual(['btnUndo', 'btnRedo', 'btnRender', 'btnGallery', 'btnEstimate', 'btnSpec', 'btnNew', 'btnMore', 'btnSettings', 'btnCapture', 'btnLoad', 'btnSave']);
+  expect(ids).toEqual(['btnUndo', 'btnRedo', 'btnRender', 'btnGallery', 'btnEstimate', 'btnSpec', 'btnNew', 'btnMore', 'btnHelp', 'btnSettings', 'btnCapture', 'btnLoad', 'btnSave']);
+});
+
+test('[?] 버튼은 현재 모드의 도움말을 열고 단축키 표 콜백을 부른다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const ui = createUiState(); const asked = [];
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui, onOpenKeymap: () => asked.push(1) });
+  const btn = root.querySelector('#btnHelp');
+  expect(btn.getAttribute('aria-label')).toBe('도움말');
+  btn.click();
+  // 반드시 root 안에서 찾는다: shell.test.js에는 beforeEach도 body 비우기도 없고 테스트마다 새 셸을
+  // 붙이므로 이 시점 문서에는 .popover가 20개 넘게 있다. document.querySelector('.popover')는
+  // 맨 처음 셸의 빈 팝오버를 돌려줘 textContent가 ''이 된다(세 단정이 모두 실패한다).
+  expect(root.querySelector('.popover').textContent).toContain('2D 도면 조작');
+  root.querySelector('.popover [data-help="keymap"]').click();
+  expect(asked).toEqual([1]);
+  ui.set({ mode: 'iso' });
+  btn.click();
+  expect(root.querySelector('.popover').textContent).toContain('3D 보기 조작');
+  shell.popover.close();
+  ui.set({ tool: 'duct' });
+  btn.click();
+  expect(root.querySelector('.popover').textContent).toContain('덕트 그리기');
 });
 
 test('옵션 바 두께는 ft·in 모드에서 텍스트 입력이 되고 mm로 저장된다', () => {
