@@ -44,7 +44,7 @@ export function createDuctTool({ store, ui, view, opts: given = null, onDone = (
 
   return {
     name: 'duct', opts,
-    hint: '점을 차례로 클릭해 덕트를 그립니다. 설비 위를 클릭하면 연결됩니다. [Enter] 완료 · [ESC] 취소 (중심 높이 = 덕트 중심. 천장보다 h/2 아래로 두세요)',
+    hint: '점을 차례로 클릭해 덕트를 그립니다. 설비 위를 클릭하면 연결됩니다. [Enter] 완료 · [Esc] 취소 (중심 높이 = 덕트 중심. 천장보다 h/2 아래로 두세요)',
     onPointerDown(p) {
       const r = resolve(p);
       cursor = r.point; guides = r.guides; snapped = r.itemId;

@@ -57,7 +57,7 @@ export function createLayersPanel(container, { store, ui }) {
     const pyeong = !!store.get().settings?.pyeong;
     container.innerHTML = `
       <label class="check"><input type="checkbox" name="showAll" ${allShown ? 'checked' : ''}> 모두 보기</label>
-      <label class="check"><input type="checkbox" name="showHidden" ${showHidden() ? 'checked' : ''}> 가려진 제품 보기</label>
+      <label class="check"><input type="checkbox" name="showHidden" ${showHidden() ? 'checked' : ''}> 숨긴 항목 보기</label>
       <ul class="layer-tree">${buckets().map(b => {
         const rows = b.items.filter(it => showHidden() || !it.hidden).map(itemRow).join('')
           + b.ducts.filter(d => showHidden() || !d.hidden).map(ductRow).join('');

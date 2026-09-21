@@ -86,8 +86,9 @@ describe('레이어 패널', () => {
     expect(activeFloor(store.get()).items.every(i => !i.hidden)).toBe(true);
   });
 
-  test('가려진 제품 보기를 끄면 숨긴 제품이 목록에서 빠진다', () => {
+  test('숨긴 항목 보기를 끄면 숨긴 제품이 목록에서 빠진다', () => {
     const { el, inRoom } = setup();
+    expect(el.textContent).toContain('숨긴 항목 보기');   // 제품과 덕트를 함께 거른다
     click(el, `[data-hide="${inRoom}"]`);
     expect(el.querySelectorAll('.layer-item')).toHaveLength(2);
     const f = el.querySelector('input[name="showHidden"]');

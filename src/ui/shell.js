@@ -212,6 +212,17 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   }
   function setOptionBar(tool) { currentTool = tool; renderOptions(); renderBanner(); }
   els.optionBar.addEventListener('change', ev => { applyOptionInput(currentTool, ev.target, store.get().units ?? 'mm'); });
+  // 길이 입력은 change뿐 아니라 [Enter]로도 반영한다(값을 고치고 Enter만 누르면 그대로였다 — §12.5).
+  // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다).
+  // 값이 바뀐 상태로 Enter를 누르면 실제 브라우저에서는 네이티브 change까지 더해 applyOptionInput이
+  // 두 번 돈다 — 멱등하므로(같은 값을 같은 키에 두 번 쓴다) 결과는 같다. select는 INPUT이 아니라
+  // 애초에 걸리지 않고, 체크박스는 Enter로 값이 바뀌지 않으므로 여기서 뺀다.
+  els.optionBar.addEventListener('keydown', ev => {
+    if (ev.key !== 'Enter' || ev.target?.tagName !== 'INPUT' || !ev.target.name) return;
+    if (ev.target.type === 'checkbox') return;
+    ev.preventDefault();
+    ev.target.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   // 안내 문구를 누르면 도구가 스스로 취소한다(배치 도구의 "메시지를 누르면 취소").
   els.banner.addEventListener('click', ev => { if (ev.target.dataset.action === 'hintCancel') currentTool?.onHintClick?.(); });
 

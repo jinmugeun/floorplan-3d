@@ -19,7 +19,7 @@ function setup(productId) {
 describe('배치 도구', () => {
   test('안내 문구에 제품 이름이 들어간다', () => {
     const { t } = setup('sofa-3');
-    expect(t.hint).toBe('3인 소파을(를) 배치할 위치를 클릭해주세요. 메시지를 누르거나 [ESC] 키를 누르면 취소됩니다.');
+    expect(t.hint).toBe('3인 소파을(를) 배치할 위치를 클릭해주세요. 메시지를 누르거나 [Esc]를 누르면 취소됩니다.');
     expect(t.name).toBe('place');
   });
 

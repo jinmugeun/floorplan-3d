@@ -60,7 +60,7 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     part('tabs').innerHTML = TABS.map(([k, l]) => `<button type="button" data-tab="${k}" class="${st.tab === k ? 'on' : ''}">${l}</button>`).join('');
     const note = part('note');
     note.hidden = st.mode !== 'replace';
-    note.textContent = '교체할 재질을 선택하세요. [ESC] 키를 누르면 취소됩니다.';
+    note.textContent = '교체할 재질을 선택하세요. [Esc]를 누르면 취소됩니다.';
   }
   function renderCrumbs() {
     const c = part('crumbs');

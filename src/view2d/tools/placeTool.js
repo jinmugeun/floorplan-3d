@@ -28,7 +28,7 @@ export function createPlaceTool({ store, ui, view, product, onDone = () => {} })
 
   return {
     name: 'place', opts: {}, product,
-    hint: `${product.name}을(를) 배치할 위치를 클릭해주세요. 메시지를 누르거나 [ESC] 키를 누르면 취소됩니다.`,
+    hint: `${product.name}을(를) 배치할 위치를 클릭해주세요. 메시지를 누르거나 [Esc]를 누르면 취소됩니다.`,
     getGhost: () => ghost,
     onPointerMove(p, ev) { ghost = ghostAt(p, !!ev?.ctrlKey); },
     onPointerDown(p, ev) {

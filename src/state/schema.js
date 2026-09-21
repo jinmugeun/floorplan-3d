@@ -159,6 +159,13 @@ function normalizeFloor(f, index) {
   const walls = arr(src.walls).map(normalizeWall);
   const items = arr(src.items).map(normalizeItem);
   const itemIds = new Set(items.map(i => i.id));
+  // 조리기구의 "상단 후드"는 아이템 id 참조다: 사라진 아이템이나 후드가 아닌 것을 가리키면 로드 때 비운다
+  // (§12.5 — 후드를 지우고 저장한 파일이 유령 참조를 들고 다니지 않게. 덕트 연결은 normalizeDuct가 이미 거른다).
+  const hoodIds = new Set(items.filter(i => i.kind === 'equipment' && i.props?.type === 'hood').map(i => i.id));
+  for (let i = 0; i < items.length; i++) {
+    const p = items[i].props;
+    if (p?.hoodId && !hoodIds.has(p.hoodId)) items[i] = { ...items[i], props: { ...p, hoodId: null } };
+  }
   const rooms = arr(src.rooms).filter(r => r && typeof r === 'object').map(r => ({
     ...r, points: arr(r.points).map(p => pair(p)), wallIds: arr(r.wallIds),
     seats: Math.floor(num(r.seats, 0, 0, 999)), matchWallHeight: !!r.matchWallHeight,

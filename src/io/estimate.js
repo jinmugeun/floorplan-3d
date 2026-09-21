@@ -1,4 +1,6 @@
-// 실시간 견적서(순수 계산). 제품은 카탈로그 단가 × 수량, 마감재는 m² 단가 × 면적.
+// 실시간 견적서(순수 계산). 제품은 카탈로그 단가 × 수량, 마감재는 m² 단가 × 면적, 덕트는 표면적 단가.
+// **숨긴 것은 세지 않는다**(아이템·덕트 모두) — 풍량 집계(vent/airflow.js)와 같은 규칙이다(§12.5에서 통일했다).
+// 레이어에서 감춘 것은 "이 도면에 없는 것"으로 다루고, 다시 보이게 하면 두 표에 함께 돌아온다.
 // 실판매 연동은 범위 밖이므로 단가는 정적 값이다.
 import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
@@ -15,6 +17,7 @@ export const DUCT_PRICE_PER_M2 = 68000;
 export function ductRows(floor) {
   const m = new Map();
   for (const d of floor.ducts ?? []) {
+    if (d.hidden) continue;                              // 숨긴 덕트는 세지 않는다(풍량과 같은 규칙)
     const system = String(d.system ?? '').trim() || '미지정';
     for (let i = 0; i < d.segments.length; i++) {
       const s = d.segments[i];
@@ -37,7 +40,7 @@ export function ductRows(floor) {
 export function estimateRows(floor) {
   const prod = new Map();
   for (const it of floor.items ?? []) {
-    if (it.kind === 'opening') continue;                 // 벽에 뚫는 구멍은 살 물건이 아니다
+    if (it.kind === 'opening' || it.hidden) continue;     // 벽 구멍은 살 물건이 아니고, 숨긴 것은 세지 않는다
     const p = productById(it.productId);
     const key = it.productId || it.id;
     const row = prod.get(key);

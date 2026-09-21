@@ -4,7 +4,7 @@
 import { activeFloor } from './schema.js';
 import { placeOnWall, isEmbed } from '../geom/items.js';
 import { itemsOf, movableItems, updateItems } from './floorOps.js';
-import { reattach, seatCopies } from './floorInternal.js';
+import { reattach, seatCopies, pruneEquipRefs } from './floorInternal.js';
 
 export const sameProductIds = (floor, productId) => floor.items.filter(i => i.productId === productId).map(i => i.id);
 
@@ -47,7 +47,20 @@ export function replaceProduct(store, ids, product, opts = {}) {
     }
     return { id: it.id, patch };
   });
-  return patches.length ? updateItems(store, patches, opts) : store.get();
+  if (!patches.length) return store.get();
+  // 설비를 설비가 아닌 제품으로(또는 후드를 다른 종류로) 바꾸면 그 설비를 가리키던 덕트 연결과
+  // 조리기구의 상단 후드가 유령 참조로 남는다(§12.5). 교체와 정리를 한 트랜잭션으로 묶어
+  // 되돌림은 한 단계로 둔다(안쪽 호출은 둘 다 { record: false }).
+  if (!itemsOf(store.get(), ids).some(it => it.kind === 'equipment')) return updateItems(store, patches, opts);
+  // 되돌릴 단계가 아닌 호출(opts.record === false)에서는 트랜잭션도 열지 않는다: endTransaction은
+  // 상태가 바뀌었으면 무조건 히스토리에 한 단계를 쌓으므로(store.js의 closeTransaction) 여는 것만으로
+  // "보기·UI 쓰기는 undo 단계를 만들지 않는다"는 전역 규칙이 깨진다.
+  const record = opts.record !== false;
+  if (record) store.beginTransaction();
+  updateItems(store, patches, { ...opts, record: false });
+  store.dispatch(d => { pruneEquipRefs(activeFloor(d)); }, { record: false });
+  if (record) store.endTransaction();
+  return store.get();
 }
 
 // 스냅샷은 `ui.clipboard`에 남아 있는 남의 객체다. 복제해서 넣는다(붙여넣기를 두 번 해도 서로 얽히지 않는다).

@@ -37,7 +37,7 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
       <button type="button" name="replayOnboarding">시작 안내 다시 보기</button>
     </section>
     <section id="tabKeys" hidden>
-      <p class="hint">키 칸을 누르고 새 키를 누르세요. [ESC]로 취소합니다. 키를 누르면 그 동작의 모든 키가 새 키 하나로 바뀝니다.</p>
+      <p class="hint">키 칸을 누르고 새 키를 누르세요. [Esc]로 취소합니다. 키를 누르면 그 동작의 모든 키가 새 키 하나로 바뀝니다.</p>
       <div class="toolbar"><button type="button" name="keyExport">내보내기</button><button type="button" name="keyImport">업로드</button><button type="button" name="keyReset">초기화</button></div>
       <table id="keymapTable"><thead><tr><th>구분</th><th>기능</th><th>키</th></tr></thead><tbody></tbody></table>
     </section>

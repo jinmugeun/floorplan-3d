@@ -140,3 +140,23 @@ describe('견적서 계산', () => {
     expect(estimateCsv(rows)).toContain('500×300');
   });
 });
+
+test('숨긴 제품과 숨긴 덕트는 견적에 들어가지 않는다(풍량 집계와 같은 규칙)', () => {
+  const visible = createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] });
+  const hidden = createItem(productById('sofa-3'), { pos: [3000, 1000], hidden: true });
+  const floor = {
+    walls: [], rooms: [], items: [visible, hidden],
+    ducts: [
+      { id: 'd1', kind: 'exhaust', system: 'F-3', points: [[0, 0], [3000.5, 0]], segments: [{ w: 750, h: 400, z: 2650 }], connections: [], dampers: [] },
+      // 숨긴 덕트는 **다른 단면**으로 둔다: 같은 계통·단면이면 ductRows가 두 덕트를 한 줄로 합쳐
+      // toHaveLength(1)이 고치기 전에도 통과해 버린다(단면이 다르면 고치기 전 2줄 → 고친 뒤 1줄).
+      { id: 'd2', kind: 'exhaust', system: 'F-3', points: [[0, 500], [3000.5, 500]], segments: [{ w: 500, h: 300, z: 2650 }], connections: [], dampers: [], hidden: true },
+    ],
+  };
+  const rows = estimateRows(floor);
+  expect(rows.products).toHaveLength(1);
+  expect(rows.products[0].qty).toBe(1);                 // 숨긴 소파는 세지 않는다
+  expect(rows.ducts).toHaveLength(1);                   // 숨긴 덕트 줄이 사라진다
+  expect(rows.ducts[0].size).toBe('750×400');           // 남은 줄은 보이는 덕트다
+  expect(rows.ducts[0].lengthM).toBe(3);
+});

@@ -62,20 +62,34 @@ export function seatCopies(drafts, ctx = {}) {
   return drafts.map(d => { const c = seatCopy(d, { ...ctx, items: acc }); acc.push(c); return c; });
 }
 
-// 설비가 사라지면 그 설비를 가리키던 덕트 연결도 사라진다(아키텍처 §11.2). 조리기구가 가리키던
-// 후드(props.hoodId)도 같이 비운다 — 둘 다 "아이템 id를 들고 있는 참조"라 같은 자리에서 정리한다.
-// reattach가 도는 자리가 아니라 "아이템이 줄어드는" 모든 자리에서 부른다
-// (floorOps.deleteItems, templates/roomTemplates.applyRoomTemplate — 활성 층의 items가 줄어드는 곳은 이 둘뿐이다).
-export function pruneDuctConnections(f) {
-  const live = new Set((f.items ?? []).map(i => i.id));
+// 아이템 id를 들고 있는 참조는 두 가지다: 덕트의 connections[].itemId와 조리기구의 props.hoodId.
+// 둘을 같은 골격으로 정리한다(어느 한쪽만 고치면 유령 참조가 남는다).
+function pruneRefs(f, keepConnection, keepHood) {
   f.ducts = (f.ducts ?? []).map(d => {
-    const keep = (d.connections ?? []).filter(c => live.has(c.itemId));
+    const keep = (d.connections ?? []).filter(c => keepConnection(c.itemId));
     return keep.length === (d.connections ?? []).length ? d : { ...d, connections: keep };
   });
   for (let i = 0; i < (f.items ?? []).length; i++) {
     const it = f.items[i];
-    if (it?.props?.hoodId && !live.has(it.props.hoodId)) f.items[i] = { ...it, props: { ...it.props, hoodId: null } };
+    if (it?.props?.hoodId && !keepHood(it.props.hoodId)) f.items[i] = { ...it, props: { ...it.props, hoodId: null } };
   }
+}
+
+// 설비가 사라지면 그 설비를 가리키던 덕트 연결도 사라진다(아키텍처 §11.2). 조리기구가 가리키던
+// 후드(props.hoodId)도 같이 비운다. reattach가 도는 자리가 아니라 "아이템이 줄어드는" 모든 자리에서
+// 부른다(floorOps.deleteItems, templates/roomTemplates.applyRoomTemplate).
+export function pruneDuctConnections(f) {
+  const live = new Set((f.items ?? []).map(i => i.id));
+  pruneRefs(f, id => live.has(id), id => live.has(id));
+}
+
+// 아이템은 그대로 있지만 "종류"가 바뀐 자리(itemOps.replaceProduct)에서 부른다(§12.5):
+// 더는 설비가 아니면 덕트 연결을, 더는 후드가 아니면 그것을 가리키는 상단 후드 참조를 비운다.
+export function pruneEquipRefs(f) {
+  const items = f.items ?? [];
+  const equip = new Set(items.filter(i => i.kind === 'equipment').map(i => i.id));
+  const hoods = new Set(items.filter(i => i.kind === 'equipment' && i.props?.type === 'hood').map(i => i.id));
+  pruneRefs(f, id => equip.has(id), id => hoods.has(id));
 }
 
 // 잠긴 아이템은 이동·정렬·상대이동·반전으로 움직이지 않는다(계획 I16). 패치를 만드는 자리마다

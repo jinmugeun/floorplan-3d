@@ -460,3 +460,38 @@ test('제품 교체가 벽 부착 제품을 벽에 다시 앉힌다', () => {
   expect(it.pos).toEqual([2000, 0]);   // 개구부는 벽 두께 안에 박힌다(embed)
   expect(it.rot).toBe(0);
 });
+
+test('replaceProduct로 설비가 아닌 제품이 되면 덕트 연결·상단 후드 참조가 정리된다(한 단계)', async () => {
+  const { addDuct, ductById } = await import('../src/state/ductOps.js');
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [8000.5, 6000.25], 200));
+  const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000.5, 1500.25] }));
+  const range = addItem(store, createItem(productById('range-gas-high'), { pos: [2000.5, 1500.25], props: { type: 'appliance', kind: 'range', heat: 'gas', hoodId: hood } }));
+  const ductId = addDuct(store, { points: [[2000.5, 1500.25], [6000, 1500.25]], segments: [{ w: 750, h: 400, z: 2650 }], connections: [{ point: 0, itemId: hood }] });
+  const f = () => activeFloor(store.get());
+  expect(ductById(f(), ductId).connections).toHaveLength(1);
+  expect(f().items.find(i => i.id === range).props.hoodId).toBe(hood);
+
+  replaceProduct(store, [hood], productById('cabinet-upper'));    // 설비가 아닌 제품으로 교체
+  expect(f().items.find(i => i.id === hood).kind).toBe('product');
+  expect(f().items.find(i => i.id === hood).props).toBeUndefined();
+  expect(ductById(f(), ductId).connections).toEqual([]);           // 유령 연결이 남지 않는다
+  expect(f().items.find(i => i.id === range).props.hoodId).toBeNull();
+  store.undo();                                                    // 교체 + 정리가 한 단계다
+  expect(ductById(f(), ductId).connections).toHaveLength(1);
+  expect(f().items.find(i => i.id === range).props.hoodId).toBe(hood);
+});
+
+test('설비를 다른 설비로 바꾸면 덕트 연결은 남고, 후드가 아니게 되면 상단 후드만 비워진다', async () => {
+  const { addDuct, ductById } = await import('../src/state/ductOps.js');
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [8000, 6000], 200));
+  const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000, 1500] }));
+  const range = addItem(store, createItem(productById('range-gas-high'), { pos: [2000, 1500], props: { type: 'appliance', kind: 'range', heat: 'gas', hoodId: hood } }));
+  const ductId = addDuct(store, { points: [[2000, 1500], [6000, 1500]], segments: [{ w: 750, h: 400, z: 2650 }], connections: [{ point: 0, itemId: hood }] });
+  const f = () => activeFloor(store.get());
+  replaceProduct(store, [hood], productById('diffuser-650'));      // 설비이지만 후드가 아니다
+  expect(f().items.find(i => i.id === hood).props.type).toBe('diffuser');
+  expect(ductById(f(), ductId).connections).toHaveLength(1);       // 설비끼리면 연결은 유지된다
+  expect(f().items.find(i => i.id === range).props.hoodId).toBeNull();
+});

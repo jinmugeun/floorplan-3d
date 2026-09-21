@@ -463,3 +463,26 @@ test('레일 버튼을 같은 탭에서 다시 누르면 패널이 접히고 다
   expect(panel.classList.contains('collapsed')).toBe(false);
   expect(root.querySelector('#panel section[data-panel="materials"]').hidden).toBe(false);
 });
+
+test('옵션 바 길이 입력은 [Enter]로도 반영된다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const store = createStore(createEmptyProject());
+  const shell = createShell(root, { store, ui: createUiState() });
+  const tool = { name: 'wall', opts: { thickness: 200 } };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionBar input[name="thickness"]');
+  el.value = '250';
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(tool.opts.thickness).toBe(250);
+  // 실제 브라우저는 Enter 뒤 blur에서 네이티브 change까지 쏜다 → 같은 값을 두 번 반영해도 결과가 같다.
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(tool.opts.thickness).toBe(250);
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  shell.setOptionBar(tool);
+  const ft = root.querySelector('#optionBar input[name="thickness"]');
+  ft.value = `1' 0"`;
+  ft.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(tool.opts.thickness).toBe(305);
+  ft.dispatchEvent(new Event('change', { bubbles: true }));   // Enter + blur가 겹쳐도 한 번과 같다
+  expect(tool.opts.thickness).toBe(305);
+});

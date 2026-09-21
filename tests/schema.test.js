@@ -102,3 +102,22 @@ test('settings.background accepts only hex colours', () => {
     expect(normalizeProject({ settings: { background: bad } }).settings.background).toBe(DEFAULT_SETTINGS.background);
   }
 });
+
+test('로드할 때 조리기구의 상단 후드 참조를 정리한다', () => {
+  const p = migrate({
+    version: 1,
+    floors: [{
+      walls: [], rooms: [], ducts: [], guides: [], measures: [], groups: [],
+      items: [
+        { id: 'h1', kind: 'equipment', productId: 'hood-box', pos: [1000.5, 500.25], size: [1600, 1200, 600], props: { type: 'hood', no: 3 } },
+        { id: 'a1', kind: 'equipment', productId: 'range-gas-high', pos: [1000.5, 500.25], size: [1200, 750, 850], props: { type: 'appliance', kind: 'range', heat: 'gas', hoodId: 'h1' } },
+        { id: 'a2', kind: 'equipment', productId: 'range-gas-high', pos: [2000, 500], size: [1200, 750, 850], props: { type: 'appliance', kind: 'range', heat: 'gas', hoodId: '사라진후드' } },
+        { id: 'a3', kind: 'equipment', productId: 'range-gas-high', pos: [3000, 500], size: [1200, 750, 850], props: { type: 'appliance', kind: 'range', heat: 'gas', hoodId: 'a1' } },
+      ],
+    }],
+  });
+  const items = p.floors[0].items;
+  expect(items.find(i => i.id === 'a1').props.hoodId).toBe('h1');          // 살아 있는 후드는 그대로
+  expect(items.find(i => i.id === 'a2').props.hoodId).toBeNull();          // 없는 아이템
+  expect(items.find(i => i.id === 'a3').props.hoodId).toBeNull();          // 후드가 아닌 아이템
+});
