@@ -256,6 +256,12 @@ test('context menu items depend on what is under the cursor', () => {
   emptyItems[0].onSelect();
   expect(ui.get().selection.type).toBe('multi');
   expect(ui.get().selection.ids).toHaveLength(activeFloor(store.get()).walls.length);
+
+  // §15.3: 키보드로 연 메뉴는 좌표를 다시 픽하지 않고 지금 선택의 메뉴를 준다(선택도 바뀌지 않는다).
+  ui.set({ selection: { type: 'room', id: f.rooms[0].id } });
+  const keyItems = t.onContextMenu([-9000, -9000], { key: true });
+  expect(keyItems.map(i => (i === 'sep' ? 'sep' : i.label))).toEqual(roomItems.map(i => (i === 'sep' ? 'sep' : i.label)));
+  expect(ui.get().selection).toEqual({ type: 'room', id: f.rooms[0].id });
 });
 
 test('an unlocked background moves with an empty-canvas drag; a locked one does not', () => {

@@ -369,3 +369,26 @@ test('1인칭에서 [Esc] 한 번이 ISO로 되돌린다(선택은 건드리지 
   expect(a.calls.setTool).toEqual(['select']);
   expect(a.ui.get().selection).toBeNull();
 });
+
+// §15.3: 마우스 없이도 선택한 대상의 메뉴를 열 수 있어야 한다.
+test('[Shift+F10]과 [ContextMenu] 키가 선택 메뉴를 연다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn() };
+  let opens = 0;
+  const h = createKeyHandler({ store, ui, view, setTool: () => {}, setMode: () => {}, openBackground: () => {}, deleteSelection: () => {}, contextMenu: () => { opens++; return true; } });
+  const ev = (key, extra = {}) => { const e = { key, target: document.body, prevented: false, preventDefault() { this.prevented = true; }, ...extra }; h(e); return e; };
+  expect(ev('F10', { shiftKey: true }).prevented).toBe(true);
+  expect(ev('ContextMenu').prevented).toBe(true);
+  expect(opens).toBe(2);
+  expect(ev('F10').prevented).toBe(false);          // Shift 없는 F10은 브라우저 것이다
+  expect(opens).toBe(2);
+});
+
+test('메뉴를 열 것이 없으면 키를 삼키지 않는다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const view = { tool: { onKey: vi.fn(() => false) }, requestRender: vi.fn() };
+  const h = createKeyHandler({ store, ui, view, setTool: () => {}, setMode: () => {}, openBackground: () => {}, deleteSelection: () => {}, contextMenu: () => false });
+  const e = { key: 'ContextMenu', target: document.body, prevented: false, preventDefault() { this.prevented = true; } };
+  h(e);
+  expect(e.prevented).toBe(false);
+});

@@ -33,7 +33,7 @@ test('arrow keys skip disabled items, Enter runs the focused one, Escape closes'
   const menu = createContextMenu(root);
   const first = vi.fn(), third = vi.fn();
   menu.open(10, 10, [{ label: 'A', onSelect: first }, { label: 'B', disabled: true, onSelect: () => {} }, { label: 'C', onSelect: third }]);
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  expect(document.activeElement.textContent).toContain('A');   // 열면 첫 항목에 포커스(§15.3)
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   expect(third).toHaveBeenCalledTimes(1);
@@ -82,4 +82,32 @@ test('item text is not interpreted as HTML', () => {
   expect(item.hasAttribute('onmouseover')).toBe(false);
   expect(window.__pwned).toBeUndefined();
   menu.close();
+});
+
+// §15.3: 메뉴는 role="menu"/menuitem이고, 닫히면 열기 전 포커스로 돌아온다.
+test('메뉴에 role이 붙고 닫으면 포커스가 되돌아온다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const opener = document.createElement('button'); document.body.appendChild(opener);
+  const menu = createContextMenu(root);
+  opener.focus();
+  menu.open(10, 10, [{ label: 'A', onSelect: () => {} }, 'sep', { label: 'B', onSelect: () => {} }]);
+  const el = root.querySelector('.ctx-menu');
+  expect(el.getAttribute('role')).toBe('menu');
+  expect([...el.querySelectorAll('.ctx-item')].every(b => b.getAttribute('role') === 'menuitem')).toBe(true);
+  expect(el.querySelector('.ctx-sep').getAttribute('role')).toBe('separator');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(menu.isOpen()).toBe(false);
+  expect(document.activeElement).toBe(opener);
+});
+
+test('항목을 골라 닫아도 포커스가 되돌아온다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const opener = document.createElement('button'); document.body.appendChild(opener);
+  const menu = createContextMenu(root);
+  opener.focus();
+  const hit = vi.fn();
+  menu.open(10, 10, [{ label: 'A', onSelect: hit }]);
+  root.querySelector('.ctx-item').click();
+  expect(hit).toHaveBeenCalledTimes(1);
+  expect(document.activeElement).toBe(opener);
 });

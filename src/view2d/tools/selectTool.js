@@ -202,8 +202,17 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
       if (ev.key.toLowerCase() === 'q' && ids.length && !ev.ctrlKey && !ev.altKey) { rotateItems(store, ids, 90); return true; }
       return false;
     },
-    onContextMenu(p) {
+    // 키보드로 연 메뉴는 다시 픽하지 않는다(§15.3): 이미 고른 대상의 메뉴이고, 다시 픽하면
+    // 선택 중심에 놓인 다른 것이 잡혀 선택까지 바뀐다(방 중심의 제품·빈 자리의 무게중심).
+    onContextMenu(p, { key = false } = {}) {
       const f = floor();
+      const sel = ui.get().selection;
+      if (key && sel) {
+        if (sel.type === 'duct') return ducts.menuFor({ type: 'duct', ductId: sel.id, vertex: sel.vertex ?? null, segment: sel.segment ?? null, handle: false });
+        if (sel.type === 'item' || (sel.type === 'multi' && sel.kind === 'item')) return itemMenuItems({ store, ui, ids: expandGroups(f, selIds()), itemActions });
+        if (sel.type === 'wall' || (sel.type === 'multi' && sel.kind === 'wall')) return wallMenuItems({ store, ui, wallId: sel.type === 'wall' ? sel.id : sel.ids[0], side: 'in', in3d: false, actions: surfaceActions });
+        if (sel.type === 'room') return roomMenuItems({ store, ui, roomId: sel.id, in3d: false, actions: surfaceActions });
+      }
       // 우클릭은 좌클릭과 같은 대상을 고른다(§14.6 — 둘이 다른 히트 코드를 갖고 있던 것이 감사 #20이다).
       const hit = pickAt(store, ui, p, { scale: view.camera.scale });
       if (hit?.type === 'duct') return ducts.menuFor(hit);

@@ -87,7 +87,7 @@ export function tokenOf(ev) {
   return `${ctrl ? 'ctrl+' : ''}${ctrl && ev.shiftKey ? 'shift+' : ''}${k}`;
 }
 
-export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null, selectAll = () => {}, openSettings = () => {}, zoomIn = () => {}, zoomOut = () => {}, fit = () => {}, cancelReplace = () => {}, itemActions = {} }) {
+export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null, selectAll = () => {}, openSettings = () => {}, zoomIn = () => {}, zoomOut = () => {}, fit = () => {}, cancelReplace = () => {}, itemActions = {}, contextMenu = () => false }) {
   const run = action => {
     if (action === 'escape') {
       const u = ui.get();
@@ -114,6 +114,10 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
   return ev => {
     if (ev.isComposing || ev.keyCode === 229) return; // 한글 입력 조합 중인 키는 단축키가 아니다
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(ev.target?.tagName)) return;
+    // 선택한 대상의 메뉴를 키보드로 연다(§15.3). 열 것이 없으면 키를 삼키지 않는다.
+    if ((ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey)) && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      if (contextMenu()) { ev.preventDefault(); return; }
+    }
     const token = tokenOf(ev);
     // Esc는 라이브러리 "교체할 제품을 선택하세요" 모드를 늘 끈다(배너가 약속한 동작이다).
     // 선택이 있으면 선택 도구가 Esc를 먹고 run('escape')까지 오지 않으므로 도구보다 앞에서 부른다.

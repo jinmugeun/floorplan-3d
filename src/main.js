@@ -33,6 +33,7 @@ import { createContextMenu } from './ui/contextMenu.js';
 import { createDeleteActions } from './app/deleteActions.js';
 import { createArrangeActions } from './app/arrangeActions.js';
 import { createDndActions } from './app/dndActions.js';
+import { createMenuActions } from './app/menuActions.js';
 import { confirmDialog } from './ui/confirmDialog.js';
 import { promptDialog } from './ui/promptDialog.js';
 import { openStartScreen } from './ui/startScreen.js';
@@ -263,6 +264,7 @@ document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventList
 files.wireDrop(document.getElementById('canvasWrap'));
 
 setTable(buildTable(effectiveKeymap(loadOverrides()))); // 저장된 단축키 재지정을 적용한다
-window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions }));
+const menuActions = createMenuActions({ store, ui, view, menu, canvas: canvas2d });
+window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions, contextMenu: () => menuActions.openSelectionMenu() }));
 setTool('select'); view.fit(); minimap.fit(500);
 if (import.meta.env.DEV) window.__app = { store, ui, view, view3d, actions }; // 브라우저 검증용, 개발 빌드에서만

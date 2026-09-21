@@ -75,3 +75,56 @@ test('the closing click keeps its default action outside the canvas, so an input
   pop.destroy();
   wrap.remove(); input.remove();
 });
+
+// §15.3(감사 §1): 팝오버가 열려도 포커스가 들어가지 않아 Tab이 뒤쪽 상단 바로 새어 나갔다.
+test('열리면 첫 항목으로 포커스가 들어가고 Tab은 안에서 돈다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const outside = document.createElement('button'); document.body.appendChild(outside);
+  const pop = createPopover(root);
+  const anchor = anchorAt();
+  anchor.focus();
+  pop.open(anchor, '<h4>보기 모드</h4><label><input type="checkbox" data-v2="grid"> 격자</label><select aria-label="성능 모드"><option>a</option></select>');
+  const [cb, sel] = pop.focusables();
+  expect(document.activeElement).toBe(cb);
+  expect(pop.el.getAttribute('role')).toBe('dialog');
+  expect(pop.el.getAttribute('aria-modal')).toBe('false');
+  expect(pop.el.getAttribute('aria-labelledby')).toBe(pop.el.querySelector('h4').id);
+  // 마지막 항목에서 Tab을 누르면 첫 항목으로 돌아온다(뒤쪽 앱으로 새지 않는다).
+  sel.focus();
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  document.dispatchEvent(tab);
+  expect(tab.defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(cb);
+  // Shift+Tab은 거꾸로 돈다.
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(sel);
+  pop.destroy();
+});
+
+test('[Esc]로 닫으면 호출 버튼으로 포커스가 돌아온다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const pop = createPopover(root);
+  const anchor = anchorAt();
+  pop.open(anchor, '<button type="button">첫 항목</button>');
+  expect(document.activeElement).toBe(pop.el.querySelector('button'));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(pop.isOpen()).toBe(false);
+  expect(document.activeElement).toBe(anchor);
+  pop.destroy();
+});
+
+// 보기 옵션을 키보드로 토글하면 셸이 refreshPopover()로 같은 팝오버를 다시 그린다:
+// 그때 포커스를 첫 항목으로 되돌리면 두 번째 체크박스를 켤 수 없다.
+test('열린 채 다시 그려도 포커스를 옮기지 않는다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const outside = document.createElement('button'); document.body.appendChild(outside);
+  const pop = createPopover(root);
+  const anchor = anchorAt();
+  pop.open(anchor, '<input type="checkbox" data-v2="grid"><input type="checkbox" data-v2="guides">');
+  expect(document.activeElement).toBe(pop.focusables()[0]);   // 처음 열 때는 첫 항목
+  outside.focus();
+  pop.open(anchor, '<input type="checkbox" data-v2="grid" checked><input type="checkbox" data-v2="guides">');
+  expect(document.activeElement).toBe(outside);               // 다시 그리기는 포커스를 건드리지 않는다
+  expect(pop.isOpen()).toBe(true);
+  pop.destroy();
+});

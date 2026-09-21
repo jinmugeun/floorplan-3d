@@ -9,6 +9,10 @@ let current = null;   // { key, promise, focus() }
 
 export const openDialogKey = () => current?.key ?? null;
 
+// 포커스 가능한 요소의 정의는 한 곳이다(팝오버·컨텍스트 메뉴·모달이 같은 목록을 쓴다 — §15.3·§15.10).
+export const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+export const focusables = root => [...(root?.querySelectorAll?.(FOCUSABLE) ?? [])].filter(el => !el.hidden && !el.closest('[hidden]'));
+
 // [Tab]/[Shift+Tab]을 list 안에서만 돌린다. 처리했으면 true.
 // 포커스가 목록 밖(또는 없음)이면 앞으로는 첫 번째, 뒤로는 마지막으로 간다.
 export function trapTab(ev, list) {
