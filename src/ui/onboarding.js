@@ -56,6 +56,17 @@ export function openOnboarding({ store = null, onDone = () => {} } = {}) {
   // 읽는 중에 누른 키가 도면을 바꾼다(실제로 [L]이 벽 그리기로 도구를 바꿨고 Delete·Ctrl+Z도 샜다).
   // 예외는 Tab 하나뿐 — 대화상자 안에서 [건너뛰기]·[다음] 사이를 포커스로 오갈 수 있어야 한다.
   // preventDefault는 우리가 쓰는 키에만 건다(브라우저 새로고침·스페이스 버튼 활성화를 막지 않게).
+  //
+  // stopPropagation만으로는 부족해 stopImmediatePropagation까지 부른다: 전역 단축키(keymap.js)는
+  // document에 **버블** 단계로 붙지만, 같은 document의 **캡처** 단계에 이미 붙어 있는 다른
+  // 리스너는 stopPropagation이 막지 못한다(같은 노드·같은 단계의 나머지 리스너까지 끊는 것은
+  // stopImmediatePropagation뿐이다). 그 "나머지"가 우리 것을 덮어쓰지 않게 여기서 끊는다.
+  // 그렇다고 다른 오버레이와 충돌하지는 않는다: document 캡처 keydown을 쓰는 다른 것은
+  // popover.js·contextMenu.js·confirmDialog.js 세 개뿐이고 모두 **포인터로만** 열린다(팝오버
+  // 버튼 클릭·우클릭·삭제 확인). 안내는 불투명한 .modal 백드롭(inset: 0, z-index: 50)으로
+  // 화면 전체를 덮어 그 포인터 입력을 먼저 받으므로, 안내가 떠 있는 동안에는 그 셋이 열릴 수
+  // 없다 → 우리가 끊을 캡처 리스너가 애초에 없다. 반대 순서(먼저 열린 대화상자 위에 안내)도
+  // 없다: openOnboarding은 시작 화면 직후 한 번만 불린다.
   function onKey(ev) {
     if (ev.key === 'Tab') return;
     ev.stopPropagation();

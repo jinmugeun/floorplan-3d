@@ -149,6 +149,25 @@ describe('덕트 기하', () => {
     expect(riser(near, duct, { point: 0, itemId: 'd2' })).toBeNull();
   });
 
+  // 꼭짓점 하나가 두 구간을 만나므로 단면을 어느 쪽에서 읽을지 정해 두어야 한다. 규칙은 "구간 = 점 번호"
+  // (그 꼭짓점에서 시작하는 뒤쪽 구간)이고, 마지막 점만 마지막 구간으로 자른다(min(i, segments-1)).
+  test('안쪽 꼭짓점의 라이저는 그 점에서 시작하는 구간(= 점 번호)의 단면을 쓴다', () => {
+    const duct = normalizeDuct({
+      points: [[0, 0], [1000.5, 0], [1000.5, 2000.25]],
+      segments: [{ w: 500, h: 300, z: 2400 }, { w: 900, h: 700, z: 3000 }],
+    });
+    const item = { id: 'f1', kind: 'equipment', pos: [1000.5, 0], size: [600, 600, 600], z: 0 };
+    // 안쪽 꼭짓점 1 → 구간 1(z 3000, h 700): 설비 윗면 600 ↔ 구간 아랫면 2650, 단면 min(900,700)=700.
+    // (앞 구간 0을 골랐다면 아랫면 2250 · 단면 300이 나온다.)
+    expect(riser(item, duct, { point: 1, itemId: 'f1' })).toEqual({ pos: [1000.5, 0], z0: 600, z1: 2650, w: 700, h: 700 });
+    // 첫 점 0 → 구간 0, 마지막 점 2 → 뒤쪽 구간이 없어 마지막 구간 1로 자른다.
+    expect(riser({ ...item, pos: [0, 0] }, duct, { point: 0, itemId: 'f1' })).toMatchObject({ z1: 2250, w: 300, h: 300 });
+    expect(riser({ ...item, pos: [1000.5, 2000.25] }, duct, { point: 2, itemId: 'f1' })).toMatchObject({ z1: 2650, w: 700, h: 700 });
+    // 3D에서 라이저 메시를 맞혔을 때 고르는 구간도 같은 규칙이다(눈에 보이는 굵기와 선택이 어긋나지 않게).
+    expect(segmentForMeshData(duct, { point: 1 })).toBe(1);
+    expect(segmentForMeshData(duct, { point: 2 })).toBe(1);
+  });
+
   test('라이저·댐퍼 메시를 맞히면 인접 구간을 고른다', () => {
     const d = normalizeDuct({
       points: [[0, 0], [1000.5, 0], [1000.5, 2000.25]],

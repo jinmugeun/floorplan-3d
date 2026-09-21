@@ -148,6 +148,14 @@ export function snapToEquipment(items, p, tol = DUCT_SNAP_TOL) {
 // 늘 "설비 윗면 ↔ 구간 아랫면"으로 잡던 예전 규칙은 천장 디퓨저처럼 설비가 덕트보다 위에 있을 때
 // 두 면을 지나쳐 잡아 라이저가 900 mm 가까이 부풀었다. 10 mm 미만이면 만들지 않는다.
 // 단면은 그 구간 단면의 짧은 변 정사각형이다.
+//
+// **어느 구간을 쓰는지는 연결 점 번호 하나로 결정한다**: 연결은 꼭짓점(conn.point = i)에 붙지만
+// 단면(w·h·z)은 구간마다 다르므로 꼭짓점 하나가 만나는 두 구간 중 하나를 골라야 한다. 규칙은
+// **구간 i — 즉 그 꼭짓점에서 시작하는(뒤쪽) 구간** 이고, 마지막 꼭짓점(i = points.length - 1)만
+// 뒤쪽 구간이 없어 `min(i, segments.length - 1)`로 마지막 구간에 붙는다. 그래서 점 3개 덕트의
+// 가운데 꼭짓점(i = 1)에 붙은 라이저는 앞 구간 0이 아니라 **구간 1**의 단면·높이를 쓴다.
+// 인접 두 구간의 단면이 다르면 라이저 굵기·길이가 달라지므로 이 선택은 눈에 보인다 — 임의로
+// 바꾸지 않는다(segmentForMeshData의 point → 구간 매핑도 같은 규칙이라 3D 클릭 결과와 일치한다).
 export function riser(item, duct, conn) {
   const i = conn?.point ?? 0;
   const seg = duct?.segments?.[Math.min(i, (duct?.segments?.length ?? 1) - 1)];
