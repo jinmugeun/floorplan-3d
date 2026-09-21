@@ -1,6 +1,7 @@
 // 1인칭의 시선·이동·탈출(§15.1). 감사 §8: 포인터 락이 거부되면 둘러볼 수도, 걸을 수도, 나갈 수도
 // 없었다. 여기서 세 가지를 보장한다.
-//   ① 락 실패(pointerlockerror · lock()이 던짐 · 300 ms 안에 pointerlockchange 없음)를 감지해
+//   ① 락 실패(pointerlockerror · 요청 거부(Promise 거부·동기 throw) · 300 ms 안에
+//      pointerlockchange 없음)를 감지해
 //      "락 없는 1인칭"으로 내려간다 — 캔버스 왼쪽 드래그가 시선이다(0.25°/px).
 //   ② WASD·Q/E·방향키는 락 여부와 무관하게 늘 동작한다.
 //   ③ exit()은 리스너·키 집합·포인터 락을 한 곳에서 정리한다(호출자가 ISO로 되돌린다).
@@ -42,7 +43,9 @@ export function lookNext({ yaw = 0, pitch = 0 } = {}, dx = 0, dy = 0, { deg = LO
 
 export function createFirstPerson({ dom = null, controls = null, camera = () => null, requestRender = () => {}, onFallback = () => {}, timeout = LOCK_TIMEOUT_MS } = {}) {
   const keys = new Set();
-  let active = false, fallback = false, timer = 0, lastT = 0, look = { yaw: 0, pitch: 0 }, drag = null;
+  let active = false, fallback = false, timer = 0, lastT = 0, look = { yaw: 0, pitch: 0 }, drag = null, reqId = 0;
+  const doc = () => dom?.ownerDocument ?? document;   // PLC와 같은 문서·창을 본다(주입된 캔버스 기준)
+  const win = () => doc().defaultView ?? window;
   const typing = el => ['INPUT', 'SELECT', 'TEXTAREA'].includes(el?.tagName);
   const isLocked = () => !!controls?.isLocked;
   const DRAG_END = ['pointerup', 'pointercancel', 'lostpointercapture'];
@@ -71,6 +74,23 @@ export function createFirstPerson({ dom = null, controls = null, camera = () => 
   };
   const onKeyUp = ev => { const k = keyCodeOf(ev); if (k) keys.delete(k); };
   const onLockError = () => goFallback();
+  // 락 요청을 PLC를 통하지 않고 직접 건다: Chromium의 requestPointerLock()은 Promise를 돌려주는데
+  // three의 lock()은 그것을 버려서 거부가 unhandled rejection(uncaught page error)으로 새어 나갔다.
+  // PLC의 isLocked는 pointerlockchange로 갱신되니 동작은 그대로다. 진입마다 표(reqId)를 새로 발급해
+  // exit() 뒤에 늦게 온 응답은 무시한다. goFallback()은 멱등하니 거부·error·타임아웃이 겹쳐도 1회다.
+  const requestLock = () => {
+    const req = ++reqId;
+    try {
+      const p = dom?.requestPointerLock ? dom.requestPointerLock() : (controls?.lock?.(), null);
+      if (p && typeof p.then === 'function') p.then(null, () => { if (req === reqId) goFallback(); });
+    } catch { goFallback(); }                          // 사용자 제스처 밖의 요청은 동기로 던질 수 있다
+  };
+  // exit() 뒤에 늦게 잡힌 락은 아무도 풀지 않는다(리스너가 이미 없다) — ISO에서 마우스가 카메라를
+  // 돌려 OrbitControls와 겹치는 것을 막으려고 한 번만 그물을 쳐 둔다.
+  const onLateLock = () => {
+    doc().removeEventListener('pointerlockchange', onLateLock);
+    if (!active) controls?.unlock?.();
+  };
   const onLockChange = () => { if (!active) return; clearTimer(); if (!isLocked()) goFallback(); };
   // 락이 없을 때만 드래그로 둘러본다(락이 걸려 있으면 PointerLockControls가 이미 마우스를 받는다).
   const onDown = ev => {
@@ -95,14 +115,16 @@ export function createFirstPerson({ dom = null, controls = null, camera = () => 
       if (active) return;
       active = true; fallback = false; keys.clear(); lastT = 0; drag = null;
       look = { yaw, pitch };
-      window.addEventListener('keydown', onKeyDown);
-      window.addEventListener('keyup', onKeyUp);
-      document.addEventListener('pointerlockerror', onLockError);
-      document.addEventListener('pointerlockchange', onLockChange);
+      const d = doc(), w = win();
+      d.removeEventListener('pointerlockchange', onLateLock);   // 지난 진입이 남긴 그물은 걷는다
+      w.addEventListener('keydown', onKeyDown);
+      w.addEventListener('keyup', onKeyUp);
+      d.addEventListener('pointerlockerror', onLockError);
+      d.addEventListener('pointerlockchange', onLockChange);
       dom?.addEventListener('pointerdown', onDown);
       dom?.addEventListener('pointermove', onMove);
       for (const t of DRAG_END) dom?.addEventListener(t, onUp);
-      try { controls?.lock(); } catch { goFallback(); }   // 사용자 제스처 밖의 lock()은 던질 수 있다
+      requestLock();
       if (!fallback && !isLocked()) timer = setTimeout(() => { timer = 0; if (active && !isLocked()) goFallback(); }, timeout);
     },
     step(t) {
@@ -120,15 +142,18 @@ export function createFirstPerson({ dom = null, controls = null, camera = () => 
     exit() {
       if (!active) return;
       clearTimer();
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      document.removeEventListener('pointerlockerror', onLockError);
-      document.removeEventListener('pointerlockchange', onLockChange);
+      const d = doc(), w = win();
+      w.removeEventListener('keydown', onKeyDown);
+      w.removeEventListener('keyup', onKeyUp);
+      d.removeEventListener('pointerlockerror', onLockError);
+      d.removeEventListener('pointerlockchange', onLockChange);
       dom?.removeEventListener('pointerdown', onDown);
       dom?.removeEventListener('pointermove', onMove);
       for (const t of DRAG_END) dom?.removeEventListener(t, onUp);
       keys.clear(); drag = null; active = false;
-      if (isLocked()) controls?.unlock?.();
+      reqId++;                                         // 진행 중인 락 요청을 무효화한다(늦은 거부 → 폴백 없음)
+      controls?.unlock?.();                            // 락이 없을 때의 exitPointerLock()은 no-op다
+      d.addEventListener('pointerlockchange', onLateLock);   // 그래도 잡히면 곧바로 풀어 준다
       if (fallback) { fallback = false; onFallback(false); }
     },
     isActive: () => active,

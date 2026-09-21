@@ -75,6 +75,16 @@ describe('락이 잡히는 환경', () => {
     expect(a.controls.unlocks).toBe(1);
     expect(a.fp.isActive()).toBe(false);
   });
+
+  test('락이 잡히면 드래그는 시선을 만들지 않는다(PLC와 이중 적용 없음)', () => {
+    const a = setup({ lockable: true });
+    a.fp.enter();
+    expect(a.fp.isFallback()).toBe(false);
+    pointer(a.dom, 'pointerdown', 100, 100);
+    pointer(a.dom, 'pointermove', 200, 160);
+    expect(a.fp.getLook()).toEqual({ yaw: 0, pitch: 0 });   // 회전은 PLC의 onMouseMove만 쓴다
+    a.fp.exit();
+  });
 });
 
 describe('락이 거부되는 환경(감사 §8 ①)', () => {
@@ -139,5 +149,103 @@ describe('락이 거부되는 환경(감사 §8 ①)', () => {
     key('keydown', 'KeyW');                               // 나간 뒤의 키는 모으지 않는다
     a.fp.step(1048);
     expect(a.controls.moved).toEqual([]);
+  });
+});
+
+// Chromium의 requestPointerLock()은 Promise를 돌려주므로 거부는 동기 throw가 아니다.
+// three의 lock()이 그 Promise를 버려서 1인칭 진입마다 uncaught page error가 남던 것을 고친 자리다.
+const flush = async () => { for (let i = 0; i < 3; i++) await Promise.resolve(); await new Promise(r => setTimeout(r, 0)); };
+const past = ms => new Promise(r => setTimeout(r, ms));
+function catchRejections() {
+  const seen = [];
+  const on = r => seen.push(r);
+  process.on('unhandledRejection', on);
+  return { seen, done: () => process.off('unhandledRejection', on) };
+}
+
+describe('락 요청의 거부와 취소', () => {
+  test('Promise 거부를 직접 잡아 내려간다 — unhandled rejection이 남지 않는다', async () => {
+    const guard = catchRejections();
+    const a = setup({ lockable: true });
+    a.dom.requestPointerLock = () => Promise.reject(new Error('The root document of this element is not valid for pointer lock.'));
+    a.fp.enter();
+    expect(a.controls.locks).toBe(0);                 // PLC의 lock()을 거치지 않는다(Promise를 버리지 않으려고)
+    expect(a.fp.isFallback()).toBe(false);            // 거부는 마이크로태스크 뒤에 온다
+    await flush();
+    expect(a.fp.isFallback()).toBe(true);
+    expect(a.falls).toEqual([true]);                  // 토스트 1회
+    expect(guard.seen).toEqual([]);
+    a.fp.exit();
+    guard.done();
+  });
+
+  test('요청이 동기로 던지면 곧바로 내려간다', () => {
+    const a = setup({ lockable: true });
+    a.dom.requestPointerLock = () => { throw new Error('요청은 사용자 제스처 안에서만'); };
+    a.fp.enter();
+    expect(a.fp.isFallback()).toBe(true);
+    expect(a.falls).toEqual([true]);
+    a.fp.exit();
+  });
+
+  test('거부·pointerlockerror·타임아웃이 겹쳐도 폴백과 토스트는 진입당 1회다', async () => {
+    const guard = catchRejections();
+    const a = setup({ lockable: true });
+    a.dom.requestPointerLock = () => { document.dispatchEvent(new Event('pointerlockerror')); return Promise.reject(new Error('refused')); };
+    a.fp.enter();
+    expect(a.falls).toEqual([true]);                  // error가 먼저 내려갔다
+    await flush();
+    await past(LOCK_TIMEOUT_MS + 20);                 // 타임아웃까지 지나도 더 내려가지 않는다
+    expect(a.falls).toEqual([true]);
+    expect(guard.seen).toEqual([]);
+    a.fp.exit();
+    expect(a.falls).toEqual([true, false]);
+    guard.done();
+  });
+
+  test('요청 중에 나가면 늦게 온 거부는 폴백도 토스트도 만들지 않는다', async () => {
+    const guard = catchRejections();
+    const a = setup({ lockable: true });
+    let reject = null;
+    a.dom.requestPointerLock = () => new Promise((_, rj) => { reject = rj; });
+    a.fp.enter();
+    a.fp.exit();                                      // 응답 전에 [Esc]/[나가기]
+    expect(a.controls.unlocks).toBe(1);               // 진행 중인 요청도 무조건 취소한다(락이 없으면 no-op)
+    reject(new Error('late'));
+    await flush();
+    await past(LOCK_TIMEOUT_MS + 20);
+    expect(a.fp.isActive()).toBe(false);
+    expect(a.fp.isFallback()).toBe(false);
+    expect(a.falls).toEqual([]);
+    expect(guard.seen).toEqual([]);
+    guard.done();
+  });
+
+  test('요청 중에 나갔는데 락이 늦게 잡히면 곧바로 풀어 준다(ISO에 락이 남지 않는다)', async () => {
+    const a = setup({ lockable: true });
+    a.dom.requestPointerLock = () => new Promise(() => {});   // 응답이 없는 요청
+    a.fp.enter();
+    a.fp.exit();
+    a.controls.isLocked = true;                       // 나간 뒤 브라우저가 락을 허용했다
+    document.dispatchEvent(new Event('pointerlockchange'));
+    expect(a.controls.isLocked).toBe(false);
+    expect(a.falls).toEqual([]);                      // 늦은 락이 토스트를 띄우지도 않는다
+    document.dispatchEvent(new Event('pointerlockchange'));   // 그물은 한 번만 쓰인다
+    expect(a.controls.unlocks).toBe(2);               // exit()의 1회 + 늦은 락의 1회
+  });
+
+  test('다시 들어가면 지난 진입의 늦은 거부는 무시된다', async () => {
+    const a = setup({ lockable: true });
+    let reject = null;
+    a.dom.requestPointerLock = () => new Promise((_, rj) => { reject = rj; });
+    a.fp.enter();
+    const stale = reject;
+    a.fp.exit();
+    a.fp.enter();                                     // 두 번째 진입(새 표)
+    stale(new Error('stale'));
+    await flush();
+    expect(a.fp.isFallback()).toBe(false);
+    expect(a.falls).toEqual([]);
+    a.fp.exit();
   });
 });
