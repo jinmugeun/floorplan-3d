@@ -5,7 +5,8 @@ import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, uid, MAT_RANGE } from '../state/schema.js';
 import { regionsOf, setWallRegions } from '../state/materialOps.js';
 import { wallLength } from '../geom/walls.js';
-import { esc } from '../util/html.js';
+import { regionRowsHtml, scaleOf } from './materialEditorRows.js';
+import { focusTrap } from './dialogBase.js';
 
 const SIDE_LABEL = { in: '내벽', out: '외벽' };
 
@@ -24,15 +25,11 @@ export function validateRegion(r, { len, height }) {
   return null;
 }
 
-// 숫자 칸의 접근 가능한 이름(§14.10 이월): 예전에는 aria-label이 'u0'·'scaleW' 같은 내부 이름이었다.
-const CELL_LABELS = { u0: '가로 시작', u1: '가로 끝', z0: '높이 시작', z1: '높이 끝', scaleW: '타일 너비', scaleH: '타일 높이' };
-const numCell = (name, value, min, max) => `<input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="any" aria-label="${CELL_LABELS[name] ?? name}">`;
-const matOptions = id => MATERIALS.map(m => `<option value="${m.id}" ${m.id === id ? 'selected' : ''}>${esc(`${m.category} · ${m.name}`)}</option>`).join('');
-// 영역(면 단위) 타일 크기(§13.3). 값이 없으면 그 재질의 기본 scale을 보여 준다.
+// 영역(면 단위) 타일 크기(§13.3). 행 마크업과 기본값은 materialEditorRows.js에 있다(§15.11).
 const clampScale = v => Math.min(MAT_RANGE.scale[1], Math.max(MAT_RANGE.scale[0], Math.round(Number(v) || MAT_RANGE.scale[0])));
-const scaleOf = r => r.mat.scale ?? materialById(r.mat.id)?.scale ?? [1000, 1000];
 
 export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = true, onClose = () => {} }) {
+  const opener = document.activeElement;                 // 닫을 때 포커스를 여기로 되돌린다(§15.10)
   const existing = document.querySelector('.modal.mat-editor');
   if (existing) existing.remove();                       // 두 개를 띄우지 않는다
   const s = side === 'out' ? 'out' : 'in';
@@ -59,20 +56,13 @@ export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = t
     <div data-part="rows"></div>
     <canvas data-part="preview" width="520" height="220"></canvas>
     <p class="error" data-part="error"></p>
-    <div class="toolbar"><button type="button" name="apply" class="primary">적용</button></div>
+    <div class="toolbar"><button type="button" name="cancel">취소</button><button type="button" name="apply" class="primary">적용</button></div>
   </div>`;
   document.body.appendChild(root);
   const part = n => root.querySelector(`[data-part="${n}"]`);
 
   function renderRows() {
-    part('rows').innerHTML = rows.length ? rows.map((r, i) => `<div class="region-row" data-region="${i}">
-      <select name="kind" aria-label="종류"><option value="band" ${r.kind === 'band' ? 'selected' : ''}>수평 띠</option><option value="rect" ${r.kind === 'rect' ? 'selected' : ''}>사각형</option></select>
-      ${numCell('u0', r.u0, 0, Math.round(len))}${numCell('u1', r.u1, 0, Math.round(len))}
-      ${numCell('z0', r.z0, 0, Math.round(height))}${numCell('z1', r.z1, 0, Math.round(height))}
-      ${numCell('scaleW', scaleOf(r)[0], MAT_RANGE.scale[0], MAT_RANGE.scale[1])}${numCell('scaleH', scaleOf(r)[1], MAT_RANGE.scale[0], MAT_RANGE.scale[1])}
-      <select name="mat" aria-label="재질">${matOptions(r.mat.id)}</select>
-      <button type="button" name="del" aria-label="영역 삭제">삭제</button>
-    </div>`).join('') : '<p class="hint">영역이 없습니다. 수평 띠나 사각형을 추가하세요.</p>';
+    part('rows').innerHTML = regionRowsHtml(rows, { len, height });
     for (const row of part('rows').querySelectorAll('[data-region]')) {
       const i = Number(row.dataset.region);
       // 수평 띠는 벽 전체 폭이라 가로 입력을 쓰지 않는다.
@@ -105,7 +95,8 @@ export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = t
   }
   const render = () => { renderRows(); renderPreview(); };
 
-  const close = () => { root.remove(); onClose(); };
+  // 닫는 길은 하나다(✕ · [취소] · Esc · [적용]): 모두 여기를 지나 트랩을 거둔다(§15.10).
+  const close = () => { root.remove(); trap.destroy(); onClose(); };
   // 새 영역 하나. wallLength가 float라(예: 4000 mm 벽이 3999.9999999999995) 기본 u1을 반올림해
   // 넣는다 — validateRegion도 이 값을 범위 안으로 받아들인다.
   function newRow(kind, { len: L, height: H }) {
@@ -121,7 +112,8 @@ export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = t
   };
   root.addEventListener('click', ev => {
     const name = ev.target.name;
-    if (name === 'close') { close(); return; }
+    // ✕와 [취소]는 같은 일을 한다: 적용하지 않고 닫는다 = 열 때의 배정이 그대로 남는다(§15.11).
+    if (name === 'close' || name === 'cancel') { close(); return; }
     if (name === 'addBand') { addRow('band'); return; }
     if (name === 'addRect') { addRow('rect'); return; }
     if (name === 'del') { rows.splice(Number(ev.target.closest('[data-region]').dataset.region), 1); render(); return; }
@@ -173,6 +165,6 @@ export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = t
     else if (k === 'f') { ev.preventDefault(); addRow('rect'); }
   });
   render();
-  root.querySelector('[name="addBand"]').focus();
+  const trap = focusTrap(root, { focus: '[name="addBand"]', opener });   // §15.10의 트랩·복원을 함께 얻는다
   return { close };
 }

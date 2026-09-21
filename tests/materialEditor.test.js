@@ -222,3 +222,61 @@ test('편집기는 기본 영역 하나를 갖고 열리고 숫자 칸 이름이
   expect(labels).toEqual(['가로 시작', '가로 끝', '높이 시작', '높이 끝', '타일 너비', '타일 높이']);
   dlg.close();
 });
+
+// §15.11: 열 제목과 [취소]가 생기고, 타일 기본값이 패널과 같은 300이 된다.
+test('영역 행에 열 제목이 붙고 값이 잘리지 않을 칸 폭을 갖는다', () => {
+  const a = setup();
+  click(a.root, '[name="addRect"]');
+  const head = a.q('.region-head');
+  expect(head).not.toBeNull();
+  expect([...head.querySelectorAll('span')].map(s => s.textContent)).toEqual(['종류', '시작 u', '끝 u', '아래 z', '위 z', '타일 W', 'H', '재질', '']);
+  const row = a.q('.region-row');
+  expect(row.querySelector('[name="u0"]').getAttribute('aria-label')).toBe('가로 시작');
+  expect(row.querySelector('[name="scaleH"]').getAttribute('aria-label')).toBe('타일 높이');
+});
+
+test('[취소]는 적용하지 않고 닫는다(열 때의 배정이 그대로 남는다)', () => {
+  const a = setup();
+  const before = JSON.stringify(a.wall().regions ?? {});
+  click(a.root, '[name="addBand"]');
+  expect(a.q('.region-row')).not.toBeNull();
+  click(a.root, '[name="cancel"]');
+  expect(document.querySelector('.modal.mat-editor')).toBeNull();
+  expect(JSON.stringify(a.wall().regions ?? {})).toBe(before);
+});
+
+test('타일 크기 기본값은 300이다(마감재 패널과 같다)', async () => {
+  const { MATERIALS } = await import('../src/materials/catalog.js');
+  const plain = MATERIALS.find(m => !Array.isArray(m.scale)) ?? null;
+  const a = setup();
+  click(a.root, '[name="addBand"]');
+  const row = a.q('.region-row');
+  if (plain) {
+    set(row.querySelector('[name="mat"]'), plain.id);
+    expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(300);
+  }
+  // 모든 재질이 scale을 갖는 카탈로그라면 기본값 상수만 확인한다(같은 값을 두 곳에 두지 않는다).
+  const { DEFAULT_TILE_SCALE } = await import('../src/ui/materialEditorRows.js');
+  expect(DEFAULT_TILE_SCALE).toEqual([300, 300]);
+});
+
+// §15.10(Task 10 리뷰 추가분): 편집기는 자기 DOM을 직접 만드는 모달이라 Task 10의 파일 목록에
+// 없었다 — 트랩도 복원도 없었다. 이제 dialogBase의 focusTrap을 열기·닫기 경로에 함께 쓴다.
+test('편집기도 [Tab]을 안에서 돌리고 닫을 때 부른 곳으로 포커스를 되돌린다', async () => {
+  const { focusables } = await import('../src/ui/dialogBase.js');
+  const opener = document.createElement('button');
+  document.body.appendChild(opener);
+  opener.focus();
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  const wallId = activeFloor(store.get()).walls[0].id;
+  openMaterialEditor({ store, wallId, side: 'in' });
+  const root = document.querySelector('.modal.mat-editor');
+  expect(document.activeElement).toBe(root.querySelector('[name="addBand"]'));
+  const inside = focusables(root);
+  inside[inside.length - 1].focus();
+  root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(inside[0]);        // 모달 밖으로 나가지 않는다
+  click(root, '[name="cancel"]');
+  expect(document.activeElement).toBe(opener);           // 부른 버튼이 다시 포커스를 갖는다
+});

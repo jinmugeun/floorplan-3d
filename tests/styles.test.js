@@ -95,3 +95,11 @@ test('하단 바 압축 규칙과 조건부 sticky 꼬리', () => {
   // 꼬리의 기본 규칙은 sticky 그대로이고(아래 단정과 짝), 넘치지 않을 때만 static으로 되돌린다.
   expect(CSS).toMatch(/#bottombar:not\(\.tail-sticky\) #bottomTail[^{]*\{[^}]*position:\s*static/);
 });
+
+// §15.11: 영역 행의 숫자 칸은 값이 잘리지 않게 64 px 이상이고, 제목 행은 같은 격자를 쓴다.
+test('영역 행과 제목 행은 같은 격자이고 숫자 칸은 64 px 이상이다', () => {
+  const rule = CSS.match(/\.region-row,\s*\.region-head\s*\{[^}]*\}/)?.[0] ?? '';
+  expect(rule).toMatch(/display:\s*grid/);
+  expect(rule).toMatch(/repeat\(6,\s*minmax\(64px/);
+  expect(CSS).toMatch(/\.region-head span\s*\{[^}]*color:\s*var\(--muted\)/);
+});

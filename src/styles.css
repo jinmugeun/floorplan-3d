@@ -124,7 +124,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid var(--line); display: block; }
 .mat-row { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; } .mat-label { font-size: 11px; color: var(--muted); }
 .mat-main { display: flex; gap: 8px; align-items: center; margin: 4px 0 6px; } .mat-text { display: flex; flex-direction: column; line-height: 1.3; } .mat-text b { font-size: 12px; }
-.region-row { display: grid; grid-template-columns: 92px repeat(6, 56px) minmax(140px, 1fr) auto; gap: 6px; align-items: center; margin-bottom: 6px; } .region-row input, .region-row select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; width: 100%; box-sizing: border-box; } .mat-editor [data-part="rows"] { overflow-x: auto; }
+/* §15.11: 숫자 칸 여섯은 값이 잘리지 않게 64 px 이상이다(5000·1200·1000이 56 px에서 "500("으로
+   잘렸다 — 감사 §13). 제목 행은 같은 격자를 써서 칸과 제목이 어긋나지 않는다. */
+.region-row, .region-head { display: grid; grid-template-columns: 92px repeat(6, minmax(64px, 1fr)) minmax(140px, 1fr) auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+.region-head span { font-size: 10px; color: var(--muted); letter-spacing: .02em; }
+.region-row input, .region-row select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; width: 100%; box-sizing: border-box; } .mat-editor [data-part="rows"] { overflow-x: auto; }
 .mat-editor canvas { margin: 8px 0; }
 .tpl-filters { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 10px; }
 .tpl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 50vh; overflow: auto; }
