@@ -1,6 +1,6 @@
 // §14.8: 같은 문구가 두 곳에서 갈라지지 않게 상수로 모은다(계획 4의 CONFIRM_ROOM_DELETE와 같은 자리).
 import { test, expect } from 'vitest';
-import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE } from '../src/ui/messages.js';
+import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE, DAMPER_ADDED, DAMPER_DELETED, PASTE_RESULT, CURVED_WALL_TITLE, CANVAS_LABEL, MINIMAP_LABEL } from '../src/ui/messages.js';
 
 test('§14가 글자까지 정한 문구는 그대로다', () => {
   expect(COLLISION_BANNER(3)).toBe('충돌 3건 — 빨간 테두리 제품을 옮겨 주세요');
@@ -42,4 +42,13 @@ test('저장 표시·불러오기 확인 문구는 §15.7·§15.13이 정한 글
   expect(CONFIRM_LOAD.message).toBe('현재 도면이 대체됩니다. 자동 저장본은 남습니다');
   expect(CONFIRM_LOAD.title).toBe('불러오기');
   expect(CONFIRM_LOAD.ok).toBe('불러오기');
+});
+
+test('피드백·이름 문구는 한 곳에서 온다(§15.14)', () => {
+  expect(DAMPER_ADDED(3)).toBe('3구간에 댐퍼를 추가했습니다');
+  expect(DAMPER_DELETED).toBe('댐퍼를 삭제했습니다');
+  expect(PASTE_RESULT(2)).toBe('2개 붙여넣었습니다');
+  expect(CURVED_WALL_TITLE).toBe('곡선벽은 아직 지원하지 않습니다');
+  expect(CANVAS_LABEL).toBe('도면 캔버스');
+  expect(MINIMAP_LABEL).toBe('미니맵 — 클릭하면 그 자리로 이동합니다');
 });

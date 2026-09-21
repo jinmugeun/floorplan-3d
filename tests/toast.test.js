@@ -14,3 +14,13 @@ test('#toasts는 role="status" aria-live="polite"를 갖고 이미 있던 호스
   toast('처음부터', 10);
   expect(document.getElementById('toasts').getAttribute('role')).toBe('status');
 });
+
+// §15.14: 이미 있는 호스트를 쓰고 새로 만들지 않는다(셸이 상주시킨다).
+test('상주하는 #toasts를 그대로 쓴다', () => {
+  document.body.innerHTML = '<div id="toasts" role="status" aria-live="polite"></div>';
+  const host = document.getElementById('toasts');
+  toast('안녕');
+  expect(document.querySelectorAll('#toasts').length).toBe(1);
+  expect(host.querySelectorAll('.toast')).toHaveLength(1);
+  expect(host.textContent).toContain('안녕');
+});

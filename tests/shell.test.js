@@ -473,7 +473,8 @@ test('패널 폭은 CSS 변수로 들어가고 스플리터 두 개가 그리드
     const ids = [...layout.children].map(c => c.id);
     // #bottomMore는 #layout의 아홉 번째 자식이다: #bottombar가 overflow-x: auto라 팝오버를 그 안에
     // 둘 수 없고(잘린다 — 결정 8), position: fixed라 그리드 흐름을 차지하지 않는다.
-    expect(ids).toEqual(['topbar', 'rail', 'panel', 'panelSplitter', 'canvasWrap', 'rightSplitter', 'right', 'bottombar', 'bottomMore']);
+    // §15.14: #toasts가 열 번째 자식으로 상주한다(position: fixed라 그리드를 차지하지 않는다).
+    expect(ids).toEqual(['topbar', 'rail', 'panel', 'panelSplitter', 'canvasWrap', 'rightSplitter', 'right', 'bottombar', 'bottomMore', 'toasts']);
     expect(root.querySelector('#panelSplitter').getAttribute('aria-label')).toBe('작업 패널 폭 조절');
   } finally { localStorage.clear(); window.innerWidth = vw; }
 });
@@ -850,5 +851,22 @@ test('화면 맞추기 버튼은 넓은 라벨과 아이콘을 함께 갖고 이
   expect(fit.querySelector('.wide').textContent).toBe('화면 맞추기');
   expect(fit.querySelector('.narrow').textContent).toBe('⤢');
   expect(fit.querySelector('.narrow').getAttribute('aria-hidden')).toBe('true');
+  shell.destroy();
+});
+
+// §15.14: 첫 알림도 낭독되어야 한다(라이브 영역은 갱신 **전에** 존재해야 한다 — 감사 (d)10).
+test('#toasts가 셸 마크업에 상주하고 캔버스·미니맵에 이름이 있다', () => {
+  const root = document.createElement('div'); root.id = 'app'; document.body.appendChild(root);
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  const shell = createShell(root, { store, ui });
+  const host = root.querySelector('#toasts');
+  expect(host).not.toBeNull();
+  expect(host.getAttribute('role')).toBe('status');
+  expect(host.getAttribute('aria-live')).toBe('polite');
+  const c2d = root.querySelector('#c2d');
+  expect(c2d.getAttribute('role')).toBe('application');
+  expect(c2d.getAttribute('aria-label')).toBe('도면 캔버스');
+  const mini = root.querySelector('#minimap canvas');
+  expect(mini.getAttribute('aria-label')).toBe('미니맵 — 클릭하면 그 자리로 이동합니다');
   shell.destroy();
 });

@@ -2,6 +2,7 @@
 // shell.js가 277줄이라 "더하기 전에 나눈다"는 전역 규칙을 따랐다: 이 파일은 문자열만 만들고
 // 스토어·DOM·이벤트를 모른다(그래서 마크업을 고치는 태스크가 배선 코드를 건드리지 않는다).
 import { esc } from '../util/html.js';
+import { CANVAS_LABEL, MINIMAP_LABEL } from './messages.js';
 
 export function shellHtml({ name = '' } = {}) {
   return `
@@ -55,7 +56,7 @@ export function shellHtml({ name = '' } = {}) {
       <div id="optionBar" hidden></div>
       <div id="banner" hidden></div>
       <div id="canvasStack">
-        <canvas id="c2d"></canvas>
+        <canvas id="c2d" role="application" aria-label="${CANVAS_LABEL}"></canvas>
         <div id="c3d" hidden></div>
         <div id="imageStrip" hidden>
           <span class="muted">이미지 세팅</span>
@@ -66,7 +67,7 @@ export function shellHtml({ name = '' } = {}) {
       </div>
     </main>
     <div id="rightSplitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="속성 패널 폭 조절"></div>
-    <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
+    <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas aria-label="${MINIMAP_LABEL}"></canvas></div><div id="props"></div></aside>
     <footer id="bottombar">
       <div class="seg"><button data-mode="2d" class="on" title="2D 도면 [1]" aria-pressed="true">2D</button><button data-mode="plan" title="평면 뷰어 [2]" aria-pressed="false">평면 <kbd>2</kbd></button><button data-mode="iso" title="ISO 3D [3]" aria-pressed="false">3D <kbd>3</kbd></button><button data-mode="fp" title="1인칭 [4]" aria-pressed="false">1인칭 <kbd>4</kbd></button></div>
       <div class="seg"><button id="btnView" data-popover="view" aria-expanded="false">보기</button></div>
@@ -88,5 +89,8 @@ export function shellHtml({ name = '' } = {}) {
       </div>
     </footer>
     <div id="bottomMore" class="bottom-more" hidden></div>
+    <!-- 알림 영역은 상주한다(§15.14): 라이브 영역은 갱신 전에 DOM에 있어야 첫 알림도 낭독된다.
+         position: fixed라 #layout의 그리드 흐름을 차지하지 않는다(#bottomMore와 같다). -->
+    <div id="toasts" role="status" aria-live="polite"></div>
   </div>`;
 }

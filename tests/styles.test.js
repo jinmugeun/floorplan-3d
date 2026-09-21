@@ -103,3 +103,21 @@ test('영역 행과 제목 행은 같은 격자이고 숫자 칸은 64 px 이상
   expect(rule).toMatch(/repeat\(6,\s*minmax\(64px/);
   expect(CSS).toMatch(/\.region-head span\s*\{[^}]*color:\s*var\(--muted\)/);
 });
+
+// §15.14(감사 §4): 포커스 링이 세 종류였다 — 버튼은 앱 링, 스플리터·select·summary는 브라우저
+// 기본 링, #projectName은 아예 없었다(outline: none).
+test('포커스 링은 한 가지다', () => {
+  const ring = CSS.match(/[^}]*:focus-visible[^{]*\{[^}]*outline:\s*2px solid var\(--accent\)[^}]*\}/)?.[0] ?? '';
+  for (const sel of ['button:focus-visible', 'input:focus-visible', 'select:focus-visible', 'summary:focus-visible', '.splitter:focus-visible']) {
+    expect(ring).toContain(sel);
+  }
+  expect(CSS).not.toMatch(/#projectName:focus\s*\{[^}]*outline:\s*none/);
+  // 비활성 danger 버튼은 빨갛지 않다(감사: disabled인데 danger 색을 유지했다).
+  expect(CSS).toMatch(/\.danger:disabled\s*\{[^}]*color:\s*var\(--muted\)/);
+});
+
+// §15.14: 레일 라벨 "도면 그리기"가 두 줄로 잘렸다(높이 28 px, 다른 라벨 12 px).
+test('레일 라벨은 한 줄이고 미니맵 이름은 그림 위에서 읽힌다', () => {
+  expect(CSS).toMatch(/#rail button span\s*\{[^}]*white-space:\s*nowrap/);
+  expect(CSS).toMatch(/#minimap \.mm-label\s*\{[^}]*background:/);
+});

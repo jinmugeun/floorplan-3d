@@ -64,3 +64,13 @@ export const SAVED_NONE = '저장 이력 없음';
 
 // 불러오기 확인(§15.13) — 자동 저장본이 남는다는 사실까지 말해 준다(되돌릴 길이 있다).
 export const CONFIRM_LOAD = { title: '불러오기', message: '현재 도면이 대체됩니다. 자동 저장본은 남습니다', ok: '불러오기' };
+
+// 피드백(§15.14 · 감사 §20·§30): 댐퍼·붙여넣기는 결과를 말하지 않아 "먹었나?" 싶었다.
+export const DAMPER_ADDED = segment => `${segment}구간에 댐퍼를 추가했습니다`;
+export const DAMPER_DELETED = '댐퍼를 삭제했습니다';
+export const PASTE_RESULT = n => `${n}개 붙여넣었습니다`;
+// 범위 밖 항목은 비활성 + 사유를 말한다(감사 §10: 눌러도 아무 일도 없었다).
+export const CURVED_WALL_TITLE = '곡선벽은 아직 지원하지 않습니다';
+// 접근 가능한 이름(§15.14 · 감사 §2): 캔버스와 미니맵에 이름이 없었다.
+export const CANVAS_LABEL = '도면 캔버스';
+export const MINIMAP_LABEL = '미니맵 — 클릭하면 그 자리로 이동합니다';
