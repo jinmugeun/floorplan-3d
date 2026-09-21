@@ -31,7 +31,7 @@ export function drawSwatch(canvas, material) {
 
 // 타일 크기 덮어쓰기(§13.3). 범위는 normalizeAssignment가 자르는 값과 같은 곳에서 온다.
 export const TILE_CATEGORY = '타일';
-export const TILE_SCALE_RANGE = MAT_RANGE.scale;
+export const TILE_SCALE_RANGE = [...MAT_RANGE.scale];   // 카탈로그·스키마의 배열을 그대로 내주지 않는다(M-4)
 const clampScale = v => Math.min(TILE_SCALE_RANGE[1], Math.max(TILE_SCALE_RANGE[0], Math.round(Number(v) || TILE_SCALE_RANGE[0])));
 export const tileScaleHtml = ([w, h]) => `<div class="mat-scale">
   <span class="muted">타일 크기</span>
@@ -117,7 +117,9 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
       return;
     }
     // 배치 모드: 연속 적용을 켠다(Esc로 끝난다). 타일 카테고리에서는 위 두 칸의 크기를 함께 싣는다(§13.3).
-    const tiling = st.category === TILE_CATEGORY;
+    // 검색 중에는 목록이 전 카테고리라 카테고리 필터가 실제로 걸려 있지 않다: 그때 나온 비-타일에
+    // 타일 크기를 실으면 그 재질이 자기 scale 대신 타일 크기로 반복되고 저장 파일에도 남는다(I-1).
+    const tiling = st.category === TILE_CATEGORY && !st.q.trim();
     const scale = tiling ? [...(st.scale ?? defaultTileScale())] : null;
     ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0, ...(scale ? { scale } : {}) }, ...(tiling ? { category: TILE_CATEGORY } : {}) } });
     onPick(m, { mode: 'place', target: null });
@@ -127,10 +129,13 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     const name = ev.target.name;
     if (name === 'q') { st.q = ev.target.value; renderCrumbs(); renderList(); return; }
     if (name !== 'scaleW' && name !== 'scaleH') return;
+    if (st.category !== TILE_CATEGORY) return;              // 타일 칸이 남아 있는 다른 카테고리에서는 읽지 않는다
     st.scale = [clampScale(container.querySelector('[name="scaleW"]').value), clampScale(container.querySelector('[name="scaleH"]').value)];
     // 이미 켜져 있는 적용 모드도 새 크기를 따라가게 한다(다음 클릭부터 바로 먹는다).
+    // 타일 흐름에서 켠 matPick만 따라간다: 벽 메뉴 "마감재 복사"가 넣어 둔 비-타일 배정에
+    // 타일 크기를 주입하지 않게 category까지 본다(I-1).
     const pick = ui.get().matPick;
-    if (pick?.assignment) ui.set({ matPick: { ...pick, assignment: { ...pick.assignment, scale: [...st.scale] } } });
+    if (pick?.assignment && pick.category === TILE_CATEGORY) ui.set({ matPick: { ...pick, assignment: { ...pick.assignment, scale: [...st.scale] } } });
   };
   container.addEventListener('click', onClick);
   container.addEventListener('input', onInput);

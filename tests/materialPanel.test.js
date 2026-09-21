@@ -136,6 +136,31 @@ describe('타일 배치와 타일 크기', () => {
     expect(ui.get().matPick.assignment.scale).toEqual([600, 2000]);
   });
 
+  // I-1: 검색 중에는 목록이 전 카테고리라 "타일 카테고리"라는 상태가 더 이상 필터가 아니다.
+  test('타일 카테고리에서 검색해 나온 비-타일에는 타일 크기가 실리지 않는다', () => {
+    const { el, ui } = setup();
+    click(el, '[data-cat="타일"]');
+    const q = el.querySelector('input[name="q"]');
+    q.value = '오크'; q.dispatchEvent(new Event('input', { bubbles: true }));
+    click(el, '.tile[data-id="wood-oak"]');
+    expect(ui.get().matPick).toEqual({ assignment: mat('wood-oak') });
+    expect('scale' in ui.get().matPick.assignment).toBe(false);
+    expect(ui.get().matPick.category).toBeUndefined();
+  });
+
+  // I-1: 벽 우클릭 "마감재 복사"는 category 없이 matPick만 넣는다 — 타일 칸을 건드려도 그 배정은 그대로다.
+  test('타일 흐름이 아닌 matPick에는 타일 크기를 주입하지 않는다', () => {
+    const { el, ui } = setup();
+    click(el, '[data-cat="타일"]');
+    const copied = { assignment: { id: 'wood-oak', offset: [0.5, 0.25], angle: 0 } };
+    ui.set({ matPick: copied });
+    const w = el.querySelector('[name="scaleW"]');
+    w.value = '600';
+    w.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ui.get().matPick).toBe(copied);                            // 손대지 않았다
+    expect('scale' in ui.get().matPick.assignment).toBe(false);
+  });
+
   test('placeTile()이 타일 카테고리를 열고 첫 타일로 적용 모드를 켠다', () => {
     const { el, ui, panel } = setup();
     click(el, '[data-cat="벽돌"]');
