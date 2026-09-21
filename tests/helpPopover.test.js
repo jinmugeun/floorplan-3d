@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
-import { describe, test, expect, beforeEach } from 'vitest';
-import { createPopover } from '../src/ui/popover.js';
-import { helpHtml, createHelpButton, HELP_LINES, HELP_TITLES } from '../src/ui/helpPopover.js';
+import { describe, test, expect } from 'vitest';
+import { helpHtml, HELP_LINES, HELP_TITLES } from '../src/ui/helpPopover.js';
 
-beforeEach(() => { document.body.innerHTML = ''; });
-
+// 버튼 배선(열림·닫힘 토글, "단축키 표 열기" 콜백)은 shell이 다른 팝오버 버튼과 같은 경로로
+// 맡는다(shell.test.js). 여기서는 helpHtml이 만드는 내용만 검사한다.
 describe('도움말 팝오버', () => {
   test('모드마다 핵심 규칙 6줄과 단축키 표 버튼', () => {
     for (const mode of ['2d', '3d', 'duct']) {
@@ -17,26 +16,5 @@ describe('도움말 팝오버', () => {
     }
     expect(helpHtml('없는모드')).toBe(helpHtml('2d'));   // 모르는 모드는 2D로 떨어진다
     expect(helpHtml()).toBe(helpHtml('2d'));
-  });
-
-  test('버튼이 현재 모드의 도움말을 열고 "단축키 표 열기"가 콜백을 부른다', () => {
-    const root = document.createElement('div'); document.body.appendChild(root);
-    const btn = document.createElement('button'); root.appendChild(btn);
-    const pop = createPopover(root);
-    let mode = '2d'; const opened = [];
-    const help = createHelpButton(btn, { popover: pop, getMode: () => mode, onOpenKeymap: () => opened.push(1) });
-    btn.click();
-    expect(pop.isOpen()).toBe(true);
-    expect(document.querySelector('.popover').textContent).toContain(HELP_LINES['2d'][0]);
-    document.querySelector('.popover [data-help="keymap"]').click();
-    expect(opened).toEqual([1]);
-    expect(pop.isOpen()).toBe(false);          // 단축키 표로 넘어가며 닫힌다
-    mode = 'duct';
-    btn.click();
-    expect(document.querySelector('.popover').textContent).toContain(HELP_LINES.duct[0]);
-    help.destroy();
-    pop.close();
-    btn.click();
-    expect(pop.isOpen()).toBe(false);          // destroy 뒤에는 열리지 않는다
   });
 });

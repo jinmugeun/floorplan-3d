@@ -267,4 +267,8 @@ test('drawEmptyGuide는 빈 도면 + 선택 도구일 때만 그린다', () => {
   expect(drawEmptyGuide(ctx, v, { walls: [] }, { background: { src: 'data:,' } }, { toolName: 'select' })).toBe(false);
   expect(drawEmptyGuide(ctx, v, { walls: [] }, {}, { toolName: 'wall' })).toBe(false);   // 도구가 켜지면 사라진다
   expect(drawEmptyGuide(ctx, v, null, null, {})).toBe(true);                             // 층이 없어도 던지지 않는다
+  // 벽 없이 아이템만 놓인 도면(소수 좌표)에서는 안내가 아이템 위에 겹쳐 그려지므로 숨긴다.
+  expect(drawEmptyGuide(ctx, v, { walls: [], items: [{ id: 'i1', pos: [12.5, 34.75] }] }, {}, { toolName: 'select' })).toBe(false);
+  expect(drawEmptyGuide(ctx, v, { walls: [], items: [], ducts: [{ id: 'd1' }] }, {}, { toolName: 'select' })).toBe(false); // 덕트만 있어도 숨긴다
+  expect(drawEmptyGuide(ctx, v, { walls: [], items: [], ducts: [] }, {}, { toolName: 'select' })).toBe(true); // 비어 있으면 다시 나타난다
 });

@@ -32,24 +32,11 @@ export const HELP_LINES = {
   ],
 };
 
+// 상단 바 [?] 버튼은 shell의 다른 팝오버 버튼([보기]/[카메라 설정]/[햇빛])과 같은 data-popover 경로로
+// 열리고 닫힌다(openPopover가 토글을 맡는다) — 이 함수는 그 팝오버의 내용만 만든다.
 export function helpHtml(mode = '2d') {
   const key = HELP_LINES[mode] ? mode : '2d';
   return `<h4>${esc(HELP_TITLES[key])}</h4>`
     + `<ul class="help-list">${HELP_LINES[key].map(t => `<li>${esc(t)}</li>`).join('')}</ul>`
     + '<div class="pop-row"><button type="button" data-help="keymap">단축키 표 열기</button></div>';
-}
-
-// 상단 바의 [?] 버튼. shell의 팝오버를 그대로 쓴다(다른 팝오버와 열림·닫힘 규칙이 같다).
-export function createHelpButton(btn, { popover, getMode = () => '2d', onOpenKeymap = () => {}, onClose = () => {} } = {}) {
-  const onClick = () => {
-    // onClose를 반드시 넘긴다: shell이 "지금 열린 팝오버 종류"를 되돌려야 한다. 넘기지 않으면
-    // 도움말을 닫아도 popKind === 'help'가 남고, 그 상태에서 refreshPopover()가 불리면
-    // root.querySelector('[data-popover="help"]')가 null이라 getBoundingClientRect()에서 던진다.
-    popover.open(btn, helpHtml(getMode()), {
-      onClick: ev => { if (ev.target?.dataset?.help === 'keymap') { popover.close(); onOpenKeymap(); } },
-      onClose,
-    });
-  };
-  btn?.addEventListener('click', onClick);
-  return { destroy() { btn?.removeEventListener('click', onClick); } };
 }

@@ -315,6 +315,21 @@ test('[?] 버튼은 현재 모드의 도움말을 열고 단축키 표 콜백을
   expect(root.querySelector('.popover').textContent).toContain('덕트 그리기');
 });
 
+// [?]도 #btnView/#btnCam/#btnSun과 같은 openPopover(kind, anchor) 경로를 타야 한다: 이미 열려 있는
+// 채로 다시 누르면(두 번째 클릭) 닫혀야 하고, 그다음 클릭에서 다시 열려야 한다.
+test('[?] 버튼은 다른 팝오버 버튼처럼 두 번째 클릭에 닫힌다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const btn = root.querySelector('#btnHelp');
+  btn.click();
+  expect(shell.popover.isOpen()).toBe(true);
+  btn.click();                                    // 두 번째 클릭 = 닫는다
+  expect(shell.popover.isOpen()).toBe(false);
+  btn.click();                                    // 세 번째 클릭 = 다시 연다
+  expect(shell.popover.isOpen()).toBe(true);
+  expect(root.querySelector('.popover').textContent).toContain('2D 도면 조작');
+});
+
 test('옵션 바 두께는 ft·in 모드에서 텍스트 입력이 되고 mm로 저장된다', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
   const store = createStore(createEmptyProject()); const ui = createUiState();

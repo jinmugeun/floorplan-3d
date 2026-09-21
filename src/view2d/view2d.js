@@ -11,12 +11,14 @@ const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: 
 
 export const EMPTY_GUIDE_LINES = [
   '아직 도면이 없습니다.',
-  '[F] 방 그리기로 첫 방을 그리거나, 시작 화면에서 샘플을 열어 보세요.',
+  'F로 방을 그리거나, 시작 화면에서 샘플을 열어 보세요',
 ];
-// 벽도 배경 도면도 없고 그리기 도구도 꺼져 있을 때만 캔버스 중앙에 옅은 안내를 그린다(§12.4).
-// 그렸으면 true. 순수 그리기 함수라 테스트가 가짜 v·ctx로 직접 부를 수 있다.
+// 벽·배경·아이템·덕트가 하나도 없고 그리기 도구도 꺼져 있을 때만 캔버스 중앙에 옅은 안내를 그린다(§12.4).
+// 아이템·덕트만 있는 도면(벽 없이 배치부터 한 경우)에서는 안내가 이미 놓인 것 위에 겹쳐 그려져
+// 헷갈리므로 함께 걸러낸다. 그렸으면 true. 순수 그리기 함수라 테스트가 가짜 v·ctx로 직접 부를 수 있다.
 export function drawEmptyGuide(ctx, v, floor, state, { toolName = null } = {}) {
   if ((floor?.walls?.length ?? 0) > 0 || state?.background) return false;
+  if ((floor?.items?.length ?? 0) > 0 || (floor?.ducts?.length ?? 0) > 0) return false;
   if (toolName && toolName !== 'select') return false;
   const [p0, p1] = v.viewportRect();
   const cx = (p0[0] + p1[0]) / 2, cy = (p0[1] + p1[1]) / 2;
