@@ -11,6 +11,18 @@ export const ductsOf = (state, ids) => { const set = new Set(ids); return (activ
 // 잠긴 덕트는 어떤 이동 경로로도 움직이지 않는다(잠긴 아이템의 movable과 같은 규칙).
 export const movableDucts = (state, ids) => ductsOf(state, ids).filter(d => !d.locked);
 
+// 설비 하나에 이어진 덕트 연결 목록(순수 조회). 설비 우클릭 메뉴와 설비 속성 패널이
+// "연결 덕트 선택"에 쓴다 — 연결된 꼭짓점은 설비 아래에 숨어 2D에서 직접 클릭하기 어렵다(§12.5).
+export function ductLinksOf(floor, itemId) {
+  const out = [];
+  for (const d of floor?.ducts ?? []) {
+    for (const c of d.connections ?? []) {
+      if (c.itemId === itemId) out.push({ ductId: d.id, point: c.point, kind: d.kind, system: d.system ?? '' });
+    }
+  }
+  return out;
+}
+
 const liveItemIds = f => new Set((f.items ?? []).map(i => i.id));
 
 // 덕트 하나를 함수로 바꿔 제자리에 다시 넣는다. fn이 null을 돌려주거나 정규화한 결과가

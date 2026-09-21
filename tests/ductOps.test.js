@@ -4,7 +4,7 @@ import { createEmptyProject, activeFloor, createItem } from '../src/state/schema
 import { addItem, deleteItems, addWalls, addFloor, selectionStillValid, pruneSelection } from '../src/state/floorOps.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { addDuct, updateDuct, deleteDucts, updateSegment, setAllSegments, moveDuctPoint, insertDuctPoint, deleteDuctPoint, translateDuct, addDamper, updateDamper, deleteDamper, connectDuct, disconnectDuct, setDuctFlag, ductById, ductsOf, movableDucts, deleteDuctSelection } from '../src/state/ductOps.js';
+import { addDuct, updateDuct, deleteDucts, updateSegment, setAllSegments, moveDuctPoint, insertDuctPoint, deleteDuctPoint, translateDuct, addDamper, updateDamper, deleteDamper, connectDuct, disconnectDuct, setDuctFlag, ductById, ductsOf, movableDucts, ductLinksOf, deleteDuctSelection } from '../src/state/ductOps.js';
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -21,6 +21,13 @@ function undoCount(store) {
 }
 
 describe('덕트 액션', () => {
+  test('ductLinksOf는 설비에 이어진 덕트 연결을 돌려준다', () => {
+    const { id, hood, floor } = setup();                    // 0번 점이 후드에 연결돼 있다
+    expect(ductLinksOf(floor(), hood)).toEqual([{ ductId: id, point: 0, kind: 'exhaust', system: '' }]);
+    expect(ductLinksOf(floor(), '없는설비')).toEqual([]);
+    expect(ductLinksOf(null, hood)).toEqual([]);
+  });
+
   test('추가·수정·삭제가 각각 한 단계로 되돌려진다', () => {
     const { store, id, floor } = setup();
     expect(floor().ducts).toHaveLength(1);

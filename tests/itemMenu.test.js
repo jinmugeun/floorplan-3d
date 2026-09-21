@@ -7,6 +7,7 @@ import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { itemMenuItems } from '../src/ui/itemMenu.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
+import { addDuct } from '../src/state/ductOps.js';
 
 function setup(defs = []) {
   const store = createStore(createEmptyProject()), ui = createUiState();
@@ -20,7 +21,7 @@ describe('아이템 컨텍스트 메뉴', () => {
   test('오늘의집과 같은 항목과 단축키 표기', () => {
     const { store, ui, ids } = setup([['sofa-3', { pos: [2000, 1500] }]]);
     const menu = itemMenuItems({ store, ui, ids, itemActions: {} });
-    expect(labels(menu)).toEqual(['좌우 반전', '상하 반전', '제품 교체', '상대이동', '직선 배열 복사', '원형 배열 복사', '회전 복사', '복사', '붙여넣기', '그룹화', '그룹 해제', '같은 제품 선택', '숨김', '잠금', '삭제']);
+    expect(labels(menu)).toEqual(['좌우 반전', '상하 반전', '제품 교체', '연결 덕트 선택', '상대이동', '직선 배열 복사', '원형 배열 복사', '회전 복사', '복사', '붙여넣기', '그룹화', '그룹 해제', '같은 제품 선택', '숨김', '잠금', '삭제']);
     const byLabel = l => menu.find(m => m !== 'sep' && m.label === l);
     expect(byLabel('좌우 반전').shortcut).toBe('Alt+H');
     expect(byLabel('상하 반전').shortcut).toBe('Alt+V');
@@ -34,6 +35,20 @@ describe('아이템 컨텍스트 메뉴', () => {
     expect(byLabel('잠금').shortcut).toBe('Ctrl+L');
     expect(byLabel('삭제').danger).toBe(true);
     expect(menu.filter(m => m === 'sep').length).toBeGreaterThan(2);
+  });
+
+  test('"연결 덕트 선택"은 연결이 있을 때만 켜지고 그 꼭짓점을 고른다', () => {
+    const { store, ui } = setup([['sofa-3', { pos: [2000, 1500] }]]);
+    const hood = addItem(store, createItem(productById('hood-box'), { pos: [3000, 1500] }));
+    const plain = activeFloor(store.get()).items.find(i => i.kind !== 'equipment').id;
+    const off = itemMenuItems({ store, ui, ids: [plain], itemActions: {} });
+    expect(off.find(m => m.label === '연결 덕트 선택').disabled).toBe(true);
+    const ductId = addDuct(store, { points: [[3000, 1500], [6000, 1500]], segments: [{ w: 500, h: 300, z: 2400 }], connections: [{ point: 0, itemId: hood }] });
+    const on = itemMenuItems({ store, ui, ids: [hood], itemActions: {} });
+    const pickDuct = on.find(m => m.label === '연결 덕트 선택');
+    expect(pickDuct.disabled).toBe(false);
+    pickDuct.onSelect();
+    expect(ui.get().selection).toEqual({ type: 'duct', id: ductId, segment: null, vertex: 0 });
   });
 
   test('상태에 따라 항목이 잠긴다', () => {

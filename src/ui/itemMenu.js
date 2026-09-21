@@ -1,4 +1,5 @@
 import { activeFloor } from '../state/schema.js';
+import { ductLinksOf } from '../state/ductOps.js';
 
 // 2A의 contextMenu가 먹는 배열을 만든다. 실제 동작은 main.js가 넘기는 itemActions가 한다.
 export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
@@ -10,10 +11,13 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
   const grouped = (f.groups ?? []).some(g => g.itemIds.some(id => ids.includes(id)));
   const allHidden = items.every(i => i.hidden);
   const allLocked = items.every(i => i.locked);
+  // 설비에 이어진 덕트 꼭짓점은 설비 아래에 숨는다: 메뉴에서 바로 그 꼭짓점을 고를 수 있게 한다(§12.5).
+  const link = items.length === 1 ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
   return [
     { label: '좌우 반전', shortcut: 'Alt+H', onSelect: call('mirror', 'h') },
     { label: '상하 반전', shortcut: 'Alt+V', onSelect: call('mirror', 'v') },
     { label: '제품 교체', onSelect: call('replace') },
+    { label: '연결 덕트 선택', disabled: !link, onSelect: () => { if (link) ui.set({ selection: { type: 'duct', id: link.ductId, segment: null, vertex: link.point } }); } },
     'sep',
     { label: '상대이동', shortcut: 'Alt+R', onSelect: call('relativeMove') },
     { label: '직선 배열 복사', shortcut: 'Alt+A', onSelect: call('arrayCopy', 'linear') },
