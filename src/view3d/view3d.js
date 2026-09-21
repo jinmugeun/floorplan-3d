@@ -12,6 +12,8 @@ import { headingDeg, toWorldXY } from './camera.js';
 import { createFirstPerson } from './firstPerson.js';
 import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js';
 import { createFacePicker } from './facePick.js';
+import { createOrthoView } from './orthoView.js';
+import { cullLabels, LABEL_DEBOUNCE_MS } from './labels3d.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -41,44 +43,29 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   });
   const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000 }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) }; };
   const center = () => bounds().center;
-  let ortho2 = null, useOrtho = false, orthoName = null;
-  // 2D 투영(정면/배면/좌/우/평면/저면): 도면을 도면처럼 고정된 직교 카메라로 본다.
-  function setOrthoView(name) {
-    const b = bounds(), w = container.clientWidth || 1, h = container.clientHeight || 1;
-    const p = orthoViewParams(name, { center: b.center, extent: b.extent, height: activeFloor(store.get()).height, aspect: w / h });
-    if (!ortho2) ortho2 = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
-    ortho2.left = -p.halfW; ortho2.right = p.halfW; ortho2.top = p.halfH; ortho2.bottom = -p.halfH;
-    ortho2.position.set(...p.pos); ortho2.up.set(...p.up);
-    ortho2.lookAt(new THREE.Vector3(...p.target));
-    ortho2.updateProjectionMatrix();
-    useOrtho = true; orthoName = name; controls.enabled = false;  // 고정 뷰(도면처럼 본다)
-    picker.detach();                                // 편집할 수 없는 고정 뷰이므로 기즈모도 떼어 둔다
-    onOrthoView(name);
-    requestRender();
-  }
-  function clearOrthoView() {
-    if (!useOrtho) return;                             // 투영 중이 아니면 할 일이 없다(하단 바 "—" 선택이 늘 부른다)
-    useOrtho = false; orthoName = null; controls.enabled = mode !== 'fp';
-    reattachPicker();                                  // 투영에서 빠져나오면 선택한 아이템에 기즈모를 다시 붙인다
-    onOrthoView(null);
-    requestRender();
-  }
+  // 2D 투영(정면/배면/좌/우/평면/저면)의 고정 직교 카메라는 orthoView.js에 있다(§15.12 Step 9a).
+  // 피커는 콜백으로만 넘긴다: orthoView가 pick3d를 직접 import하지 않게.
+  const ov = createOrthoView({
+    container, store, controls, bounds, onOrthoView, getMode: () => mode,
+    requestRender: () => requestRender(), detachPicker: () => picker.detach(), reattachPicker: () => reattachPicker(),
+  });
   // rebuild가 picker를 읽으므로 picker를 먼저 만든다(TDZ).
   // 기즈모를 다시 붙여도 되는 상황(1인칭·투영 아님, 드래그 중 아님)에서만 붙인다.
-  const reattachPicker = () => { if (mode === 'fp' || useOrtho) picker.detach(); else if (!picker.isDragging()) picker.attach(ui.get().selection); };
+  const reattachPicker = () => { if (mode === 'fp' || ov.isActive()) picker.detach(); else if (!picker.isDragging()) picker.attach(ui.get().selection); };
   // 컷어웨이가 감춘 벽을 모두 되돌린다(1인칭·투영 뷰는 벽을 숨기지 않는다). 밑동 윤곽만 계속 숨긴다.
   const showAllWalls = () => group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; });
   const dragLatch = createDragLatch(); // 기즈모 드래그가 끝난 클릭은 두 피커 모두 무시한다
-  const picker = createItemPicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), controls, scene, store, ui, getGroup: () => group, getMode: () => mode, requestRender, openMenu, itemActions, dragLatch });
+  const picker = createItemPicker({ renderer, getCamera: () => ov.camera() ?? camera, controls, scene, store, ui, getGroup: () => group, getMode: () => mode, requestRender, openMenu, itemActions, dragLatch });
   // 아이템 피커 다음에 등록한다: 아이템을 맞히지 못한 클릭이 비워 놓은 선택을 면 피커가 덮어쓴다.
-  const facePicker = createFacePicker({ renderer, getCamera: () => (useOrtho && ortho2 ? ortho2 : camera), scene, getGroup: () => group, store, ui, openMenu, surfaceActions, getMode: () => mode, requestRender, dragLatch });
-  function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); reattachPicker(); }
+  const facePicker = createFacePicker({ renderer, getCamera: () => ov.camera() ?? camera, scene, getGroup: () => group, store, ui, openMenu, surfaceActions, getMode: () => mode, requestRender, dragLatch });
+  function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); reattachPicker(); scheduleLabelCull(); }
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
     renderer.setSize(w, h);
     persp.aspect = w / h; persp.updateProjectionMatrix();
     if (camera === ortho) frustum();
-    if (useOrtho && orthoName) setOrthoView(orthoName); // 2D 투영의 절두체는 화면 비율을 따른다
+    ov.resize();     // 2D 투영의 절두체는 화면 비율을 따른다
+    scheduleLabelCull();
   }
   // 직교 카메라의 절두체를 원근 카메라와 같은 화각으로 맞춘다(전환 때 크기가 튀지 않게).
   function frustum() {
@@ -154,7 +141,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   function renderImage({ width = 1920, height = 1080, preset = null } = {}) {
     const prev = new THREE.Vector2(); renderer.getSize(prev);
     const prevRatio = renderer.getPixelRatio();
-    let cam = useOrtho && ortho2 ? ortho2 : camera;
+    let cam = ov.camera() ?? camera;
     if (preset) {
       const b = bounds();
       const p = orthoViewParams(preset, { center: b.center, extent: b.extent, height: activeFloor(store.get()).height, aspect: width / height });
@@ -183,7 +170,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     return url;
   }
   function setMode(m, opts = {}) {
-    if (useOrtho) { useOrtho = false; orthoName = null; controls.enabled = true; onOrthoView(null); } // 모드 버튼을 누르면 투영에서 빠져나온다(하단 바 선택도 비운다)
+    ov.clearOrthoView(); // 모드 버튼을 누르면 투영에서 빠져나온다(하단 바 선택도 비운다)
     resize(); // 숨겨져 있다가 보이는 경우 크기를 다시 맞춘다
     mode = m;
     if (m === 'fp') {
@@ -231,17 +218,31 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   function frame(t) {
     raf = 0; if (!alive) return;
     if (mode === 'fp') {
-      fpCtl.step(t); showAllWalls(); renderer.render(scene, useOrtho ? ortho2 : camera);
+      fpCtl.step(t); showAllWalls(); renderer.render(scene, ov.camera() ?? camera);
       requestRender(); return;
     }
     controls.update();
     // 2D 투영은 정면·평면 도면이다: 궤도 카메라 기준의 컷어웨이로 벽을 지우면 도면이 비어 보인다.
-    if (useOrtho) showAllWalls();
+    if (ov.isActive()) showAllWalls();
     else applyCutaway();
-    applySolo(); renderer.render(scene, useOrtho ? ortho2 : camera);
+    applySolo(); renderer.render(scene, ov.camera() ?? camera);
   }
   function requestRender() { if (!raf) raf = requestAnimationFrame(frame); }
   controls.addEventListener('change', requestRender);
+  // 3D 라벨 겹침 억제(§15.12 · 감사 §11): 매 프레임 76개를 투영하면 궤도가 무거워지므로
+  // 카메라가 멈춘 뒤 120 ms에 한 번만 잰다. 씬을 다시 짓거나 창이 바뀔 때도 다시 잰다.
+  let labelTimer = 0;
+  function scheduleLabelCull() {
+    clearTimeout(labelTimer);
+    labelTimer = setTimeout(() => {
+      labelTimer = 0;
+      const g = group?.children.find(m => m.name === 'labels');
+      if (!g || !g.children.length) return;
+      cullLabels(g, ov.camera() ?? camera, { width: container.clientWidth || 1, height: container.clientHeight || 1 });
+      requestRender();
+    }, LABEL_DEBOUNCE_MS);
+  }
+  controls.addEventListener('change', scheduleLabelCull);
   let lastPreset = null, lastSun = null, lastPerf = null;
   function applyViewSettings() {
     const v = store.get().view;
@@ -269,5 +270,5 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView, clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

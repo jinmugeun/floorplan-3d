@@ -10,6 +10,7 @@ import { wallLength } from '../geom/walls.js';
 import { damperPos } from '../geom/ducts.js';
 import { itemAABB } from '../geom/items.js';
 import { sub, norm, perp, dist } from '../geom/vec.js';
+import { textWidth } from '../geom/textWidth.js';
 import { fmtLen, fmtArea } from '../util/units.js';
 import { sizeLabel, ductVisible, DUCT_COLORS, LABEL_BG } from './ducts2d.js';
 import { itemVisible, itemTextLabels, drawnByWall, ITEM_COLORS } from './items2d.js';
@@ -27,16 +28,10 @@ export const ROOM_AREA_DY = 4;      // 방 중심에서 아래로(화면 px)
 export const WALL_DIM_MIN_PX = 40;  // 이보다 짧게 보이는 벽에는 치수를 쓰지 않는다(기존 LOD 규칙)
 
 // v.label이 그리는 배경 상자와 근사한 크기로 잰다(폭 = Σ글자폭 + 8, 높이 = size + 6 — v.label은
-// ctx.measureText를 쓰므로 "같은" 크기가 아니라 근사다). 여기서 measureText를 쓰면 순수 함수가
-// 아니게 되고 node 테스트에 캔버스가 필요해진다.
-// 글자폭은 실 브라우저 실측(Chromium, IBM Plex Sans KR)에 맞춘다: 한글·CJK·원문자·전각은 글자당
-// 1.0 em(실측 0.892 — 조금 넉넉히 잡아 "겹치면 생략" 쪽으로 안전하게), ASCII·숫자는 0.62 em
-// (실측 0.50~0.60). 글자수 × 0.62로 재던 예전 식은 한글 이름을 44% 좁게 잡아, 실제로는 겹치는
-// 낮은 우선순위 라벨이 컬링을 통과해 방 이름을 덮었다.
-export const WIDE_CHAR = /[ᄀ-ᇿ①-⓿　-〿぀-ヿ㄰-㆏㐀-鿿가-힯豈-﫿！-｠￠-￦]/;
-export const CHAR_EM = { wide: 1, narrow: 0.62 };
-export const textWidth = (text, size) =>
-  [...String(text)].reduce((w, ch) => w + (WIDE_CHAR.test(ch) ? CHAR_EM.wide : CHAR_EM.narrow), 0) * size;
+// ctx.measureText를 쓰므로 "같은" 크기가 아니라 근사다).
+// 글자폭 규칙의 정본은 geom/textWidth.js다(§15.12): 3D 라벨도 같은 값을 써야 하므로 geom으로
+// 옮기고 여기서 다시 내보낸다(이 모듈을 import하던 기존 코드·테스트는 그대로 쓴다).
+export { WIDE_CHAR, CHAR_EM, textWidth } from '../geom/textWidth.js';
 export function labelBox({ sp = [0, 0], text = '', size = 12 } = {}) {
   const w = textWidth(text, size) + 8, h = size + 6;
   return [sp[0] - w / 2, sp[1] - h / 2, sp[0] + w / 2, sp[1] + h / 2];

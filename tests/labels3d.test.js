@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import * as THREE from 'three';
-import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_PX } from '../src/view3d/labels3d.js';
+import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_H_PX, labelTextureSize, cullSprites, cullLabels, LABEL3D_PRIORITY } from '../src/view3d/labels3d.js';
 import { DEFAULT_VIEW, createItem } from '../src/state/schema.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
 import { productById } from '../src/products/catalog.js';
@@ -22,7 +22,8 @@ describe('3D 라벨', () => {
     const s = labelSprite('③');
     expect(s.isSprite).toBe(true);
     expect(s.material.map.isCanvasTexture).toBe(true);
-    expect(s.material.map.image.width).toBe(LABEL_PX);
+    expect(s.material.map.image.width).toBe(labelTextureSize('③').w);
+    expect(s.material.map.image.height).toBe(LABEL_H_PX);
     expect(s.material.userData.perMesh).toBe(true);
     expect(labelSprite(null)).toBeNull();
     expect(labelSprite('')).toBeNull();
@@ -60,6 +61,30 @@ describe('3D 라벨', () => {
     const range = createItem(productById('range-gas-high'), { pos: [7650, 18800] });
     expect(buildLabels({ items: [range], ducts: [] }, {}).children).toHaveLength(0);
   });
+
+  test('텍스처와 스프라이트 폭이 글자 폭을 따른다(감사 §11)', () => {
+    const short = labelSprite('③'), long = labelSprite('750×400');
+    expect(labelTextureSize('750×400').w).toBeGreaterThan(labelTextureSize('③').w);
+    expect(long.material.map.image.width).toBe(labelTextureSize('750×400').w);
+    // 스프라이트 가로/세로 비율 = 텍스처 비율(글자가 눌리거나 잘리지 않는다).
+    const box = labelTextureSize('750×400');
+    expect(long.scale.x / long.scale.y).toBeCloseTo(box.w / box.h, 6);
+    expect(short.scale.x / short.scale.y).toBeCloseTo(labelTextureSize('③').w / box.h, 6);
+    expect(long.scale.y).toBeCloseTo(0.4, 6);        // 높이는 예전과 같다(0.4 m)
+  });
+
+  test('cullSprites는 겹치면 낮은 우선순위를 숨긴다(설비 번호 > 덕트 단면)', () => {
+    expect(LABEL3D_PRIORITY).toEqual(['equip', 'ductSize']);
+    const keep = cullSprites([
+      { key: 'duct1', kind: 'ductSize', text: '750×400', sp: [100.5, 100.25], size: 12 },
+      { key: 'eq1', kind: 'equip', text: '③', sp: [104, 102], size: 12 },
+      { key: 'duct2', kind: 'ductSize', text: '600×300', sp: [400, 400], size: 12 },
+    ]);
+    expect(keep.has('eq1')).toBe(true);
+    expect(keep.has('duct1')).toBe(false);           // 설비 번호에 자리를 내준다
+    expect(keep.has('duct2')).toBe(true);            // 멀리 있는 것은 그대로
+    expect(cullSprites([]).size).toBe(0);
+  });
 });
 
 describe('보기 옵션', () => {
@@ -95,4 +120,21 @@ test('성능 우선 모드는 라벨을 만들지 않고 빈 labels 그룹을 �
   const off = buildLabels(fl, { v3: { equipLabels: true }, perfMode: 'performance' });
   expect(off.name).toBe('labels');
   expect(off.children).toHaveLength(0);
+});
+
+// §15.12: 컬링은 카메라가 멈춘 뒤 한 번 돈다(view3d가 120 ms 디바운스). 투영은 주입할 수 있다.
+test('cullLabels는 그룹의 스프라이트 visible을 맞춘다', () => {
+  const g = buildLabels({ items: [hood], ducts: [duct] }, {});
+  expect(g.children).toHaveLength(2);
+  // 둘을 같은 화면 자리로 투영하면 우선순위가 낮은 덕트 라벨이 숨는다.
+  const keep = cullLabels(g, null, { width: 800, height: 600, project: () => [400, 300] });
+  const eq = g.children.find(c => c.userData.itemId === hood.id);
+  const dl = g.children.find(c => c.userData.ductId === 'd1');
+  expect(eq.visible).toBe(true);
+  expect(dl.visible).toBe(false);
+  expect(keep.has(eq.uuid)).toBe(true);
+  // 서로 멀면 둘 다 보인다.
+  let n = 0;
+  cullLabels(g, null, { width: 800, height: 600, project: () => [100 + (n++) * 300, 300] });
+  expect(g.children.every(c => c.visible)).toBe(true);
 });
