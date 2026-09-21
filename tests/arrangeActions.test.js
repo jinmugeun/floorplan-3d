@@ -73,4 +73,62 @@ describe('경로 배열 배선', () => {
     expect(a.tools).toEqual([]);
     expect(a.toasts).toEqual(['2D에서 사용']);
   });
+
+  // M-1: 1인칭 찍기는 mode가 '2d'라서 mode 검사만으로는 통과했다. 그 상태에서 도구를 켜면
+  // 첫 클릭을 1인칭 진입 리스너가 가져가고 도구가 보이지 않게 남는다.
+  test('1인칭 찍기 중에는 Alt+S가 도구를 켜지 않는다', () => {
+    const a = setup();
+    a.ui.set({ fpPick: true, mode: '2d' });
+    expect(a.pathArray([a.id])).toBe(false);
+    expect(a.tools).toEqual([]);
+    expect(a.toasts).toEqual(['2D에서 사용']);
+  });
+
+  // I-1: 200 m 경로 + 최소 간격이 20001개를 만들려다 arrayCopy의 push 스프레드에서 RangeError를 냈다.
+  test('200 m 경로에 최소 간격을 넣으면 예외 없이 거절하고 아무것도 만들지 않는다', () => {
+    const a = setup();
+    a.pathArray([a.id]);
+    const tool = a.createPathTool();
+    tool.onPointerDown([2000.5, 1000.25], {});
+    tool.onPointerDown([2000.5, 201000.25], {});          // 200 m
+    tool.onKey({ key: 'Enter', preventDefault() {} });
+    modal().querySelector('[name="spacing"]').value = '1'; // 대화상자 min이 10으로 자르고도 20001개다
+    modal().querySelector('[name="apply"]').click();
+    expect(a.floor().items).toHaveLength(1);               // 사본 0개
+    expect(a.toasts).toEqual(['배치 수가 너무 많습니다(최대 500)']);
+    expect(modal()).toBeNull();                            // 예외가 없으니 모달도 닫힌다
+    a.store.undo();
+    expect(a.floor().items).toHaveLength(0);               // 되돌리면 원본 추가로 곧장 간다(경로 단계가 없다)
+  });
+
+  // 총 배치 수는 개수 × 선택 수다(아이템마다 같은 경로를 따른다). 개수 모드도 같은 상한을 지난다.
+  test('선택 수를 곱한 총 배치 수도 상한을 넘으면 거절하고, 다중 선택은 겹침을 알린다', () => {
+    const a = setup();
+    const b = addItem(a.store, createItem(productById('chair-dining'), { pos: [2500.5, 1500.25] }));
+    a.pathArray([a.id, b]);
+    const tool = a.createPathTool();
+    tool.onPointerDown([2000, 1000], {});
+    tool.onPointerDown([2000, 4000], {});
+    tool.onKey({ key: 'Enter', preventDefault() {} });
+    expect(a.toasts).toEqual(['여러 개를 고르면 사본이 경로점마다 같은 자리에 겹칩니다']);
+    modal().querySelector('[name="count"]').value = '300';   // 300 × 2 = 600 > 500
+    modal().querySelector('[name="apply"]').click();
+    expect(a.floor().items).toHaveLength(2);
+    expect(a.toasts[1]).toBe('배치 수가 너무 많습니다(최대 500)');
+  });
+
+  // 대화상자의 min은 브라우저 검증일 뿐이다. 배선 층이 같은 하한을 한 번 더 건다.
+  test('대화상자 min을 지나친 간격도 배선 층이 10 mm로 올린다', () => {
+    const a = setup();
+    a.pathArray([a.id]);
+    const tool = a.createPathTool();
+    tool.onPointerDown([2000, 1000], {});
+    tool.onPointerDown([2000, 1300], {});                  // 300 mm 경로
+    tool.onKey({ key: 'Enter', preventDefault() {} });
+    const el = modal().querySelector('[name="spacing"]');
+    el.min = '0.001'; el.value = '1';                      // 검증을 건너뛴 값
+    modal().querySelector('[name="apply"]').click();
+    expect(a.floor().items.slice(1)).toHaveLength(31);      // 10 mm 간격 31개(1 mm면 301개였다)
+    expect(a.toasts).toEqual(['31개 복사했습니다']);
+  });
 });

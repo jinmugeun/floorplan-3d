@@ -294,6 +294,7 @@ describe('사본의 벽 부착 불변식', () => {
       ({ s, id }) => duplicateItems(s, [id], { delta: [200, 200] }),
       ({ s, id }) => pasteItems(s, itemsOf(s.get(), [id]).map(i => structuredClone(i)), { delta: [200, 200] }),
       ({ s, id }) => arrayCopy(s, [id], 'linear', { dx: 200.5, dy: 0, count: 2 }),
+      ({ s, id }) => arrayCopy(s, [id], 'path', { points: [[0.5, 0.25], [2000.5, 0.25]], spacing: 900 }),
     ]) {
       const a = withDoor();
       const made = copy(a);

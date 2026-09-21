@@ -66,6 +66,28 @@ test('Enter는 적용, Esc는 취소다', () => {
   expect(got).toHaveLength(1);
 });
 
+// I-1: 간격 하한 10 mm · 개수 상한 500. 대화상자가 스스로 허용하는 최소값이 1 mm였다.
+test('경로 배열 간격은 10 mm 아래로 못 내려가고 개수는 500에서 잘린다', () => {
+  const got = [];
+  openArrayDialog('path', { length: 450.5, onApply: v => got.push(v) });
+  const root = document.querySelector('.modal');
+  expect(root.querySelector('[name="spacing"]').min).toBe('10');
+  expect(root.querySelector('[name="spacing"]').step).toBe('10');
+  expect(root.querySelector('[name="count"]').max).toBe('500');
+  expect(root.querySelector('[name="spacing"]').value).toBe('451');  // 긴 변을 mm 정수로 반올림
+  root.querySelector('[name="spacing"]').value = '1';
+  root.querySelector('[name="count"]').value = '9999';
+  root.querySelector('[name="apply"]').click();
+  expect(got).toEqual([{ spacing: 10, count: 500, follow: true }]);
+
+  openArrayDialog('path', { length: 450.5, onApply: v => got.push(v) });
+  const r2 = document.querySelector('.modal');
+  r2.querySelector('[name="spacing"]').value = '';                   // 빈 값은 기본값으로 돌아간다
+  r2.querySelector('[name="count"]').value = '-5';                   // 음수 개수는 "간격으로 채우기"다
+  r2.querySelector('[name="apply"]').click();
+  expect(got[1]).toEqual({ spacing: 451, count: null, follow: true });
+});
+
 // §13.1: 경로 배열 복사 대화상자. 간격 기본값은 호출자가 넘기는 아이템의 긴 변이다.
 test('경로 배열 대화상자는 간격·개수·회전 체크를 모으고 개수 0은 null이 된다', () => {
   const got = [];

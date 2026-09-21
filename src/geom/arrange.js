@@ -46,10 +46,17 @@ export function alignPatches(items, axis, mode) {
 // follow면 그 구간의 방향각으로 돈다(rot = atan2를 도로, 90° 스냅 없음), 아니면 원본 회전 유지.
 // 원본 자리(s = 0)는 건너뛰지 않는다 — 사용자가 경로를 원본에서 시작하지 않아도 되게 한 결정이다.
 // 꺾이는 점(s가 구간 경계와 딱 같은 자리)은 앞 구간에 속하므로 앞 구간의 각도를 쓴다.
-export function pathPlacements(item, points, { spacing = 600, count = null, follow = true } = {}) {
-  const pts = (points ?? []).filter(p => Array.isArray(p) && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
-  if (pts.length < 2) return [];
-  // 길이 0 구간(같은 점을 두 번 찍은 경우)은 버린다. at = 경로 시작부터 이 구간 시작까지의 거리.
+// 배치 수에는 안전 상한이 있다(Task 6 M-1 · Task 7 I-1): 간격을 아주 작게 넣어도 계산이 여기서 끊긴다.
+// UI는 상한을 넘는 입력을 아예 거절하지만(arrangeActions), 상한 자체는 호출자와 무관하게 여기서 지킨다.
+export const MAX_PLACEMENTS = 500;
+
+// 경로를 구간 목록으로 만든다. at = 경로 시작부터 이 구간 시작까지의 거리(코너를 넘어 누적).
+// 길이 0 구간(같은 점을 두 번 찍은 경우)은 버린다. 좌표는 Number로 정규화한다 —
+// 숫자 문자열이 들어와도 '0' + 500 = '0500' 같은 문자열 연결이 생기지 않게(Task 6 L-2).
+function pathSegs(points) {
+  const pts = (points ?? [])
+    .filter(p => Array.isArray(p) && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])))
+    .map(p => [Number(p[0]), Number(p[1])]);
   const segs = [];
   let total = 0;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -58,11 +65,26 @@ export function pathPlacements(item, points, { spacing = 600, count = null, foll
     segs.push({ a: pts[i], b: pts[i + 1], len: d, at: total });
     total += d;
   }
-  if (!segs.length) return [];
+  return { segs, total };
+}
+
+// 간격·개수를 배치 계획으로 바꾼다. count는 상한을 걸기 전의 수다(상한 판정은 호출자가 한다).
+// total / step에 작은 톨러런스를 더한다: 끝점이 간격의 정수배인데 구간 길이 누적 오차로 빠지는 일을 막는다(Task 6 L-1).
+function pathPlan(points, { spacing = 600, count = null } = {}) {
+  const { segs, total } = pathSegs(points);
   const n = Number(count) >= 1 ? Math.round(Number(count)) : null;
   const step = n ? total / n : Math.abs(Number(spacing) || 0);
-  if (!(step > 0)) return [];
-  const limit = n ?? Math.floor(total / step) + 1;
+  if (!segs.length || !(step > 0)) return { segs, total, step: 0, count: 0 };
+  return { segs, total, step, count: n ?? Math.floor(total / step + 1e-9) + 1 };
+}
+
+// 상한을 걸기 전의 배치 수. UI가 "배치 수가 너무 많습니다"를 미리 판정하는 데 쓴다.
+export const pathPlacementCount = (points, opts = {}) => pathPlan(points, opts).count;
+
+export function pathPlacements(item, points, opts = {}) {
+  const { follow = true } = opts;
+  const { segs, step, total, count } = pathPlan(points, opts);
+  const limit = Math.min(count, MAX_PLACEMENTS);
   const out = [];
   for (let i = 0; i < limit; i++) {
     const s = Math.min(i * step, total);

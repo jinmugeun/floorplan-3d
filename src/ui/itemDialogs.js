@@ -1,10 +1,14 @@
 // 상대이동·배열 복사 대화상자. 값만 모아 onApply로 넘기고 스토어는 건드리지 않는다.
+// 경로 배열의 간격 하한·개수 상한(§13.1 I-1): 1 mm 간격으로 수만 개를 만드는 길을 입구에서 막는다.
+// 총 배치 수(= 개수 × 선택 수) 상한은 경로를 아는 배선 층(app/arrangeActions.js)이 한 번 더 본다.
+export const MIN_SPACING = 10;
+export const MAX_COUNT = 500;
 const TITLES = { relative: '상대이동', linear: '직선 배열 복사', circular: '원형 배열 복사', rotate: '회전 복사', path: '경로 배열 복사' };
 const num = (name, label, value, min, max, step = 1) =>
   `<label class="field"><span>${label}</span><input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="${step}"></label>`;
 const clamp = (el, def) => {
   const v = Number(el?.value);
-  if (!Number.isFinite(v)) return def;
+  if (el?.value === '' || !Number.isFinite(v)) return def; // 빈 칸은 0이 아니라 기본값이다(Number('') = 0)
   return Math.min(Number(el.max), Math.max(Number(el.min), v));
 };
 
@@ -39,8 +43,8 @@ export function openArrayDialog(kind, opts = {}) {
   // 경로 배열(§13.1): 경로는 캔버스에서 이미 그렸고 여기서는 간격·개수·회전만 묻는다.
   // 간격 기본값은 호출자가 넘기는 length(선택 아이템의 긴 변)이고, 개수 0은 "간격으로 채우기"다.
   if (kind === 'path') {
-    const step = Math.max(1, Math.round(Number(opts.length) || 600));
-    const body = `${num('spacing', '간격 (mm)', step, 1, 100000, 'any')}${num('count', '개수 (0 = 간격으로 채우기)', 0, 0, 200)}
+    const step = Math.max(MIN_SPACING, Math.round(Number(opts.length) || 600));
+    const body = `${num('spacing', '간격 (mm)', step, MIN_SPACING, 100000, MIN_SPACING)}${num('count', `개수 (0 = 간격으로 채우기, 최대 ${MAX_COUNT})`, 0, 0, MAX_COUNT)}
       <label class="check"><input type="checkbox" name="follow" checked> 경로 방향으로 회전</label>`;
     return openDialog('path', body, root => ({
       spacing: clamp(root.querySelector('[name="spacing"]'), step),
