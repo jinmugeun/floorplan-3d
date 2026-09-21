@@ -31,6 +31,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
       <button data-panel="products"><span>제품</span></button>
       <button data-panel="materials"><span>마감재</span></button>
       <button data-panel="background"><span>배경 도면</span></button>
+      <button data-panel="airflow"><span>풍량</span></button>
       <button data-panel="layers"><span>레이어</span></button>
     </nav>
     <aside id="panel">
@@ -56,6 +57,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
         <button data-action="background">도면 이미지 업로드 <kbd>B</kbd></button>
         <p class="hint">사진이나 스캔을 올리고 모서리를 찍어 펴고, 두 점으로 축척을 잡습니다.</p>
       </section>
+      <section data-panel="airflow" hidden><h3>풍량 집계</h3><div id="airflow"></div></section>
       <section data-panel="layers" hidden><h3>리소스 관리</h3><div id="layers"></div></section>
     </aside>
     <main id="canvasWrap">
@@ -82,7 +84,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     </footer>
   </div>`;
   const q = s => root.querySelector(s);
-  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials') };
+  const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials'), airflow: q('#airflow') };
   const strip = q('#imageStrip');
   strip.addEventListener('change', ev => {
     const el = ev.target;

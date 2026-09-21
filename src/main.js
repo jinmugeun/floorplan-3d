@@ -23,6 +23,7 @@ import { openMaterialEditor } from './ui/materialEditor.js';
 import { panelsToCancel } from './ui/panelModes.js';
 import { applyMaterial } from './state/materialOps.js';
 import { createLayersPanel } from './ui/layersPanel.js';
+import { createAirflowPanel } from './ui/airflowPanel.js';
 import { createKeyHandler, setTable } from './ui/keymap.js';
 import { buildTable, effectiveKeymap, loadOverrides } from './ui/keyBindings.js';
 import { createPropsPanel } from './ui/propsPanel.js';
@@ -108,6 +109,7 @@ const cancelReplace = (clickedPanel = null) => {
 };
 ui.subscribe(() => { if (library.state.mode === 'replace' && !selectedItemIds().length) library.setMode('place'); }); // 교체 대상이 사라지면 교체 모드도 끝난다(옛 아이템을 조용히 교체하지 않게). 면 대상은 아이템 선택과 무관하므로 마감재는 그대로 둔다
 document.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => cancelReplace(b.dataset.panel)));
+createAirflowPanel(shell.els.airflow, { store, ui });
 createLayersPanel(shell.els.layers, { store, ui });
 createPropsPanel(shell.els.props, store, ui, { deleteSelection, itemActions, surfaceActions });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)

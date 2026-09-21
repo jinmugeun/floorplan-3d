@@ -10,6 +10,7 @@ import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from '
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField } from './equipRows.js';
 import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
+import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 export { lenField, readLen, withUnit } from './fieldUtils.js';
 
@@ -191,7 +192,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${r.floorMat ? '' : colorField('바닥 색', 'floorColor', r.floorColor)}
         ${r.ceilingMat ? '' : colorField('천장 색', 'ceilingColor', r.ceilingColor)}
         <label class="check"><input type="checkbox" name="hideCeiling" ${r.hideCeiling ? 'checked' : ''}> 천장 감추기</label>
-        ${roomDesignRowsHtml(r)}
+        ${roomDesignRowsHtml(r, roomAirflow(f).find(x => x.roomId === r.id) ?? null)}
         <button type="button" name="delete" class="danger">방 삭제</button>`;
       return;
     }
