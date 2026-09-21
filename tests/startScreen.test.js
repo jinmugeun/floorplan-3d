@@ -89,3 +89,20 @@ test('어느 길로 닫혀도 onClose가 한 번 불린다', () => {
     .close();
   expect(closed).toEqual([1, 2]);
 });
+
+// §15.10(감사 §3): 마지막 카드에서 Tab을 누르면 뒤쪽 앱으로 나가 모달 뒤를 조작할 수 있었다.
+test('시작 화면은 Tab을 안에 가두고 닫으면 포커스를 되돌린다', () => {
+  const back = document.createElement('input'); document.body.appendChild(back);
+  back.focus();
+  const s = openStartScreen({ store: createStore(createEmptyProject()) });
+  const root = document.getElementById('startScreen');
+  const cards = [...root.querySelectorAll('button')];
+  expect(document.activeElement).toBe(cards[0]);
+  cards.at(-1).focus();
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  cards.at(-1).dispatchEvent(tab);
+  expect(tab.defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(cards[0]);      // 뒤쪽 앱으로 나가지 않는다
+  s.close();
+  expect(document.activeElement).toBe(back);
+});

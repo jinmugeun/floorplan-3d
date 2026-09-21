@@ -5,6 +5,7 @@ import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 import { TEMPLATE_RESULT } from './messages.js';
+import { focusTrap } from './dialogBase.js';
 
 const USES = ['주거', '상업'];
 const TYPE_LABEL = Object.fromEntries(ROOM_TYPES);
@@ -53,7 +54,7 @@ export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
       <div class="row"><button type="button" name="apply" class="primary">적용</button><button type="button" name="add">기존 제품 유지하고 추가</button></div>
     </div>`).join('') : '<p class="hint">조건에 맞는 템플릿이 없습니다.</p>';
   }
-  const close = () => { root.remove(); onClose(); };
+  const close = () => { root.remove(); trap.destroy(); onClose(); };
   root.addEventListener('click', ev => {
     if (ev.target.name === 'close') { close(); return; }
     const card = ev.target.closest('[data-template]');
@@ -72,6 +73,6 @@ export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
   root.addEventListener('input', onEdit);   // 숫자 필드는 타이핑 중에도 좁혀진다(M2)
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   render();
-  root.querySelector('[name="close"]').focus();
+  const trap = focusTrap(root, { focus: '[name="close"]' });   // §15.10
   return { close };
 }

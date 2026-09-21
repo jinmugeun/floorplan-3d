@@ -1,6 +1,7 @@
 import { loadImageFile, rotateCanvas, flipCanvas, cropCanvas } from '../io/image.js';
 import { rectifyImage } from '../geom/homography.js';
 import { dist } from '../geom/vec.js';
+import { focusTrap } from './dialogBase.js';
 
 export function openBackgroundDialog({ store, onClose = () => {} }) {
   const root = document.createElement('div'); root.className = 'modal';
@@ -90,10 +91,10 @@ export function openBackgroundDialog({ store, onClose = () => {} }) {
     store.dispatch(d => { d.background = { src: rect.toDataURL('image/jpeg', 0.85), width: rect.width, height: rect.height, scale, offset: [0, 0], opacity: 0.5, visible: true, locked: true }; });
     close();
   };
-  const close = () => { root.remove(); onClose(); };
+  const close = () => { root.remove(); trap.destroy(); onClose(); };
   q('close').onclick = close;
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   show('1'); // 단계 표시를 show()가 한 곳에서 정한다(회전/반전 툴바 포함)
-  q('file').focus(); // 대화상자가 포커스를 가져와야 Escape 처리가 걸린다
+  const trap = focusTrap(root, { focus: '[name="file"]' }); // 포커스를 가져와야 Escape 처리가 걸린다(§15.10)
   return { close };
 }

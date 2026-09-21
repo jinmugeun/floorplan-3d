@@ -5,6 +5,7 @@ import { setTable } from './keymap.js';
 import { loadOverrides, saveOverrides, effectiveKeymap, buildTable, exportJson, importJson, reset, keyLabel, conflictAction, labelOf } from './keyBindings.js';
 import { openOnboarding } from './onboarding.js';
 import { stickyTools, setStickyTools } from './prefs.js';
+import { focusTrap } from './dialogBase.js';
 
 // 키 칸: action이 있는 행만 다시 지정할 수 있다(마우스 조작·1인칭 이동은 표시 전용).
 function keymapRows(keymap) {
@@ -64,11 +65,11 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
     setTable(buildTable(effectiveKeymap()));
     stopWaiting();
   }
-  const close = () => { if (waiting) stopWaiting(); root.remove(); onClose(); };
+  const close = () => { if (waiting) stopWaiting(); root.remove(); trap.destroy(); onClose(); };
   q('[name="close"]').onclick = close;
   // Esc는 대화상자만 닫고 전역 단축키(도구 전환 등)까지 내려가지 않는다.
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !waiting) { ev.stopPropagation(); close(); } });
-  q('[name="close"]').focus();
+  const trap = focusTrap(root, { focus: '[name="close"]' });   // §15.10
   const selectTab = name => {
     root.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
     q('#tabGeneral').hidden = name !== 'general';

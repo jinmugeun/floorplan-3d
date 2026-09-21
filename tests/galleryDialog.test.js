@@ -44,3 +44,15 @@ describe('갤러리 대화상자 오류 처리', () => {
     expect(root.querySelectorAll('[data-shot]')).toHaveLength(1);
   });
 });
+
+// §15.10: 갤러리도 같은 규칙이다(닫으면 [갤러리] 버튼으로 돌아온다).
+test('갤러리를 닫으면 열기 전 포커스로 돌아온다', () => {
+  listShots.mockResolvedValue([]);
+  const opener = document.createElement('button'); document.body.appendChild(opener);
+  opener.focus();
+  const dlg = openGalleryDialog({});
+  const root = document.querySelector('.modal.gallery');
+  expect(root.contains(document.activeElement)).toBe(true);
+  dlg.close();
+  expect(document.activeElement).toBe(opener);
+});

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, beforeEach } from 'vitest';
 import { confirmDialog, CONFIRM_ROOM_DELETE } from '../src/ui/confirmDialog.js';
+import { focusTrap } from '../src/ui/dialogBase.js';
 
 const card = () => document.querySelector('.modal.confirm');
 const key = (k, opts = {}) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...opts }));
@@ -96,4 +97,28 @@ describe('인앱 확인 대화상자', () => {
     card().querySelector('[name="cancel"]').click();
     await expect(r).resolves.toBe(false);
   });
+});
+
+// §15.10: 자기 DOM을 직접 만드는 대화상자들도 openModal과 같은 포커스 규칙을 쓴다.
+test('focusTrap은 포커스를 안으로 넣고 Tab을 가두고 닫을 때 되돌린다', () => {
+  const opener = document.createElement('button'); document.body.appendChild(opener);
+  opener.focus();
+  const root = document.createElement('div');
+  root.innerHTML = '<button name="close">✕</button><input type="text" name="a"><button name="ok">적용</button><button hidden name="gone">숨김</button>';
+  document.body.appendChild(root);
+  const trap = focusTrap(root, { focus: '[name="ok"]' });
+  expect(document.activeElement).toBe(root.querySelector('[name="ok"]'));
+  // 마지막 항목에서 Tab → 첫 항목(숨긴 버튼은 순환에 들지 않는다).
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  root.querySelector('[name="ok"]').dispatchEvent(tab);
+  expect(tab.defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(root.querySelector('[name="close"]'));
+  root.querySelector('[name="close"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(root.querySelector('[name="ok"]'));
+  trap.destroy();
+  expect(document.activeElement).toBe(opener);
+  // focus 선택자를 주지 않으면 첫 항목이다.
+  const t2 = focusTrap(root);
+  expect(document.activeElement).toBe(root.querySelector('[name="close"]'));
+  t2.destroy();
 });

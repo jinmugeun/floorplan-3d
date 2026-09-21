@@ -3,6 +3,7 @@
 import { addShot } from '../io/gallery.js';
 import { downloadDataUrl, filenameFor } from '../io/file.js';
 import { openGalleryDialog } from './galleryDialog.js';
+import { focusTrap } from './dialogBase.js';
 
 export const RENDER_SIZES = [[1280, 720], [1920, 1080], [3840, 2160]];
 export const RENDER_VIEWS = [['', '현재 카메라'], ['front', '정면'], ['back', '배면'], ['left', '좌측'], ['right', '우측'], ['top', '평면']];
@@ -25,7 +26,7 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   </div>`;
   document.body.appendChild(root);
   const part = n => root.querySelector(`[data-part="${n}"]`);
-  const close = () => { root.remove(); onClose(); };
+  const close = () => { root.remove(); trap.destroy(); onClose(); };
   // 방금 렌더한 이미지와 **그때의 파일명**(내려받기 버튼이 쓴다 — §14.10). 자동 저장 경로는 `-WxH`가
   // 붙은 이름을 쓰는데 버튼만 안 붙은 이름을 써서, 같은 그림이 두 이름으로 내려왔다(m-10).
   let last = null;   // { url, filename }
@@ -55,6 +56,6 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   });
   root.addEventListener('change', ev => { if (ev.target.name in st) st[ev.target.name] = ev.target.value; });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  root.querySelector('[name="render"]').focus();
+  const trap = focusTrap(root, { focus: '[name="render"]' });   // §15.10
   return { close };
 }

@@ -4,6 +4,7 @@ import { capture2D, downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
 import { esc } from '../util/html.js';
+import { focusTrap } from './dialogBase.js';
 
 const ELEV = ['front', 'back', 'left', 'right', 'top'];   // 3D 직교 렌더 프리셋(입면도 5장)
 
@@ -29,7 +30,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
 
   const part = n => root.querySelector(`[data-part="${n}"]`);
   const buttons = [...root.querySelectorAll('[name="download"], [name="print"]')];
-  const close = () => { root.remove(); if (current === self) current = null; onClose(); };
+  const close = () => { root.remove(); trap.destroy(); if (current === self) current = null; onClose(); };
   const self = { close };
 
   // 옵션은 DOM에서 그때그때 읽는다(따로 상태를 들고 있지 않으니 어긋날 일이 없다).
@@ -88,7 +89,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
     }
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  root.querySelector('[name="close"]').focus();
+  const trap = focusTrap(root, { focus: '[name="close"]' });   // §15.10
   current = self;
   return self;
 }

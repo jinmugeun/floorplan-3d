@@ -1,5 +1,6 @@
 import { addFloor, renameFloor } from '../state/floorOps.js';
 import { esc } from '../util/html.js';
+import { focusTrap } from './dialogBase.js';
 
 const COPY_OPTIONS = [['none', '없음'], ['plan', '도면만'], ['all', '전체']];
 
@@ -17,7 +18,7 @@ export function openFloorDialog({ store, mode = 'add', index = null, onClose = (
   </div>`;
   document.body.appendChild(root);
   const q = s => root.querySelector(`[name="${s}"]`);
-  const close = () => { root.remove(); onClose(); };
+  const close = () => { root.remove(); trap.destroy(); onClose(); };
   q('close').onclick = close;
   q('submit').onclick = () => {
     const name = q('floorName').value.trim();
@@ -29,6 +30,6 @@ export function openFloorDialog({ store, mode = 'add', index = null, onClose = (
   // Enter로 확정, Esc로 닫기(폼 없이 만든 대화상자라 직접 처리한다).
   // 한글 조합 중의 Enter는 "글자 확정"이라 여기서 거른다(M-1).
   root.addEventListener('keydown', ev => { if (ev.isComposing || ev.keyCode === 229) return; if (ev.key === 'Enter') { ev.preventDefault(); q('submit').click(); } else if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  q('floorName').focus();
+  const trap = focusTrap(root, { focus: '[name="floorName"]' });   // §15.10(입력란은 값을 통째로 고른다)
   return { close };
 }

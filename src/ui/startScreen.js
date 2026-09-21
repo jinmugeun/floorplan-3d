@@ -1,5 +1,6 @@
 import { allTemplateCards } from '../templates/projectTemplates.js';
 import { esc } from '../util/html.js';
+import { focusTrap } from './dialogBase.js';
 
 const CARDS = [
   { key: 'empty', title: '빈 프로젝트', desc: '빈 화면에서 방과 벽을 직접 그립니다.' },
@@ -29,7 +30,7 @@ export function openStartScreen({ store, restored = null, onEmpty = () => {}, on
   </div>`;
   document.body.appendChild(root);
   // 어느 길로 닫혀도(카드·템플릿·Esc·close()) 한 번만 알린다 — 온보딩이 시작 화면 위에 겹쳐 뜨지 않게.
-  const close = () => { if (!root.parentNode) return; root.remove(); onClose(); };
+  const close = () => { if (!root.parentNode) return; root.remove(); trap.destroy(); onClose(); };
   const handlers = { empty: onEmpty, upload: onUpload, sample: onSample, restore: onRestore };
   root.addEventListener('click', ev => {
     const tpl = ev.target.closest('[data-template]');
@@ -41,6 +42,7 @@ export function openStartScreen({ store, restored = null, onEmpty = () => {}, on
   });
   // Esc = 빈 프로젝트로 시작(다른 대화상자와 같은 규칙). 첫 카드에 포커스를 두어 키보드만으로도 고를 수 있게 한다.
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); onEmpty(); } });
-  root.querySelector('.start-card')?.focus();
+  // §15.10: 첫 카드로 포커스를 넣고 [Tab]을 안에 가둔다(모달 뒤의 앱을 조작할 수 없게).
+  const trap = focusTrap(root, { focus: '.start-card' });
   return { close };
 }

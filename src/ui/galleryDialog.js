@@ -3,6 +3,7 @@ import { listShots, deleteShot } from '../io/gallery.js';
 import { downloadDataUrl } from '../io/file.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
+import { focusTrap } from './dialogBase.js';
 
 export function openGalleryDialog({ onClose = () => {} } = {}) {
   const existing = document.querySelector('.modal.gallery');
@@ -30,7 +31,7 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
       <div class="row"><button type="button" name="down">내려받기</button><button type="button" name="del" class="danger">삭제</button></div>
     </figure>`).join('') : '<p class="hint">저장된 렌더샷이 없습니다. 상단 바의 [렌더샷]으로 만들 수 있습니다.</p>';
   }
-  const close = () => { root.remove(); onClose(); };
+  const close = () => { root.remove(); trap.destroy(); onClose(); };
   root.addEventListener('click', async ev => {
     if (ev.target.name === 'close') { close(); return; }
     const fig = ev.target.closest('[data-shot]');
@@ -44,7 +45,7 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
     }
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  root.querySelector('[name="close"]').focus();          // 대화상자가 포커스를 가져와야 Escape 처리가 걸린다
+  const trap = focusTrap(root, { focus: '[name="close"]' });   // 포커스를 가져와야 Escape 처리가 걸린다(§15.10)
   render();
   return { close };
 }

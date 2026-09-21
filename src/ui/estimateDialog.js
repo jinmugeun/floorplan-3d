@@ -5,6 +5,7 @@ import { downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
 import { esc } from '../util/html.js';
+import { focusTrap } from './dialogBase.js';
 
 const won = n => `${Number(n || 0).toLocaleString('ko-KR')}원`;
 
@@ -39,7 +40,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
     part('total').textContent = `합계 ${won(rows.total)}`;
   }
   const unsub = store.subscribe(render);
-  const close = () => { unsub(); root.remove(); if (current === self) current = null; onClose(); };
+  const close = () => { unsub(); root.remove(); trap.destroy(); if (current === self) current = null; onClose(); };
   const self = { close };
   root.addEventListener('click', ev => {
     const name = ev.target.name;
@@ -53,7 +54,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   render();
-  root.querySelector('[name="close"]').focus();
+  const trap = focusTrap(root, { focus: '[name="close"]' });   // §15.10
   current = self;
   return self;
 }

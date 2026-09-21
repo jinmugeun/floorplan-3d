@@ -49,11 +49,12 @@ export function openModal(key, { className = 'modal', html = '', focus = 'button
       opener?.focus?.();                   // 대화상자가 사라진 뒤 부른 버튼이 다시 포커스를 갖는다
       resolve(value);
     };
-    const focusables = () => [...root.querySelectorAll('input, button')];
-    const ctx = { root, close, focusables };
+    // 포커스 목록의 정의는 FOCUSABLE 하나다(§15.10 — 팝오버·모달·시작 화면이 같은 규칙을 쓴다).
+    const inside = () => focusables(root);
+    const ctx = { root, close, focusables: inside };
     handler = ev => {
       ev.stopPropagation();
-      if (trapTab(ev, focusables())) return;
+      if (trapTab(ev, inside())) return;
       onKey(ev, ctx);
     };
     document.addEventListener('keydown', handler, true);
@@ -62,4 +63,22 @@ export function openModal(key, { className = 'modal', html = '', focus = 'button
   focusFirst();
   current = { key, promise, focus: focusFirst };
   return promise;
+}
+
+// 자기 DOM을 직접 만드는 대화상자(설정·시방서·견적서·렌더샷·갤러리·배경·템플릿·층·아이템)와
+// 시작 화면의 포커스 규칙(§15.10 · 감사 §3·§6). openModal이 confirm·prompt에 하던 일과 같다:
+// ① 열 때 포커스를 안으로, ② [Tab]은 안에서만, ③ 닫을 때 이전 포커스로 복원.
+// 키는 캡처하지 않는다(대화상자들이 이미 root에서 keydown을 듣고 stopPropagation한다).
+export function focusTrap(root, { focus = null, opener = document.activeElement } = {}) {
+  const onKey = ev => { if (ev.key === 'Tab') trapTab(ev, focusables(root)); };
+  root.addEventListener('keydown', onKey);
+  const first = (typeof focus === 'string' ? root.querySelector(focus) : focus) ?? focusables(root)[0];
+  first?.focus();
+  try { first?.select?.(); } catch { /* 선택할 수 없는 입력(파일 등) */ }
+  return {
+    destroy() {
+      root.removeEventListener('keydown', onKey);
+      opener?.focus?.();   // 대화상자가 사라진 뒤 부른 버튼이 다시 포커스를 갖는다
+    },
+  };
 }

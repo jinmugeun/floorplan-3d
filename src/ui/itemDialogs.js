@@ -1,6 +1,7 @@
 // 상대이동·배열 복사 대화상자. 값만 모아 onApply로 넘기고 스토어는 건드리지 않는다.
 // 경로 배열의 간격 하한·개수 상한(§13.1 I-1): 1 mm 간격으로 수만 개를 만드는 길을 입구에서 막는다.
 // 총 배치 수(= 개수 × 선택 수) 상한은 경로를 아는 배선 층(app/arrangeActions.js)이 한 번 더 본다.
+import { focusTrap } from './dialogBase.js';
 export const MIN_SPACING = 10;
 export const MAX_COUNT = 500;
 const TITLES = { relative: '상대이동', linear: '직선 배열 복사', circular: '원형 배열 복사', rotate: '회전 복사', path: '경로 배열 복사' };
@@ -21,12 +22,12 @@ function openDialog(kind, body, collect, { onApply = () => {}, onClose = () => {
     <div class="toolbar"><button type="button" name="apply" class="primary">적용</button></div>
   </div>`;
   document.body.appendChild(root);
-  const close = () => { root.remove(); onClose(); };
+  const close = () => { root.remove(); trap.destroy(); onClose(); };
   root.querySelector('[name="close"]').onclick = close;
   root.querySelector('[name="apply"]').onclick = () => { onApply(collect(root)); close(); };
   // Enter로 확정, Esc로 닫기. 한글 조합 중의 Enter는 "글자 확정"이라 확정으로 보지 않는다(M-1).
   root.addEventListener('keydown', ev => { if (ev.isComposing || ev.keyCode === 229) return; if (ev.key === 'Escape') { ev.stopPropagation(); close(); } else if (ev.key === 'Enter') { ev.preventDefault(); root.querySelector('[name="apply"]').click(); } });
-  root.querySelector('input')?.focus();
+  const trap = focusTrap(root, { focus: 'input' });   // §15.10
   return { close };
 }
 

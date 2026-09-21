@@ -200,3 +200,16 @@ test('일반 탭의 "그린 뒤 도구 유지"가 kvp.stickyTools를 쓴다', ()
   dlg.close();
   localStorage.clear();
 });
+
+// §15.10(감사 §6): 닫으면 포커스가 BODY로 떨어졌다.
+test('설정을 닫으면 열기 전 포커스로 돌아온다', () => {
+  const opener = document.createElement('button'); document.body.appendChild(opener);
+  opener.focus();
+  const store = createStore(createEmptyProject());
+  openSettingsDialog({ store });
+  const root = document.querySelector('.modal.settings');
+  expect(root.contains(document.activeElement)).toBe(true);
+  root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(document.querySelector('.modal.settings')).toBeNull();
+  expect(document.activeElement).toBe(opener);
+});
