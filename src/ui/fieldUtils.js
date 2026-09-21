@@ -14,7 +14,14 @@ export const stepMm = (units = 'mm') => (units === 'ftin' ? STEP.ftin * INCH_MM 
 // 한 번 더 다듬어 "0.7을 넣으면 0.7이 저장된다"를 지킨다(감사 §21). 도면 값은 mm 1e6 안이라
 // 15자리에서 잃을 자리가 없다.
 export const roundToStep = (v, step) => (Number.isFinite(step) && step > 0 ? Number((Math.round(v / step) * step).toPrecision(15)) : v);
-export const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${Number(value) || 0}" min="${min}" max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
+// HTML의 step 격자는 min을 기준점(step base)으로 삼는다 → min이 step의 배수가 아닌 칸(두께
+// min 2 · step 10)에서는 유효 격자가 2·12·…·202가 되어 200에서 화살표 한 번이 202를 만들고
+// 값이 :invalid가 됐다. 그런 칸만 min을 data-min으로 옮긴다: 기준점이 value로 내려가 화살표가
+// 정확히 한 step씩 움직이고(200 → 210, 3000 → 3010, min 2에 있을 때는 2 → 12 → 22),
+// 범위 클램프는 numValue가 data-min을 읽어 그대로 해 준다.
+const onStepGrid = (min, step) => !Number.isFinite(min) || !Number.isFinite(step) || step <= 0 || Math.abs(min / step - Math.round(min / step)) < 1e-9;
+export const minAttr = (min, step) => (onStepGrid(Number(min), Number(step)) ? `min="${min}"` : `data-min="${min}"`);
+export const num = (name, value, min, max, step = 1, ro = false) => `<input type="number" name="${name}" value="${Number(value) || 0}" ${minAttr(min, step)} max="${max}" step="${step}" ${ro ? 'readonly' : ''}>`;
 // 숫자 입력: 비어 있거나 숫자가 아니면 null, 범위를 벗어나면 min/max로 잘라 준다.
 // 잘랐을 때 onClamp(잘린 값, { min, max, raw })를 부른다 — 조용히 바뀌던 값을 부르는 쪽이 알린다(§14.10).
 export function numValue(el, { onClamp = null } = {}) {
@@ -25,7 +32,9 @@ export function numValue(el, { onClamp = null } = {}) {
   // 화살표 간격일 뿐이므로 타이핑한 값을 건드리지 않는다 — 위치 1234.5를 1235로 옮기면 안 된다.
   const step = Number(el.step);
   const v = Number.isFinite(step) && step > 0 && step < 1 ? roundToStep(typed, step) : typed;
-  const min = el.min === '' ? -Infinity : Number(el.min), max = el.max === '' ? Infinity : Number(el.max);
+  // min은 HTML 속성이 먼저고, 격자 때문에 data-min으로 옮긴 칸은 그쪽을 읽는다(minAttr 참고).
+  const minRaw = el.min !== '' ? el.min : el.dataset.min ?? '';
+  const min = minRaw === '' ? -Infinity : Number(minRaw), max = el.max === '' ? Infinity : Number(el.max);
   const out = Math.min(max, Math.max(min, v));
   if (out !== v && onClamp) onClamp(out, { min, max, raw: v });
   return out;
@@ -41,11 +50,10 @@ export function readLen(el, units, { onClamp = null } = {}) {
   const v = parseLen(el.value, units);
   if (v === null) return null;
   const min = Number(el.dataset.min ?? -Infinity), max = Number(el.dataset.max ?? Infinity);
-  // ft·in 칸은 1/8 인치(3.175 mm) 배수로 맞춘 뒤 mm 정수로 반올림한다(§15.9): 화면 표기는
-  // 0.1" 단위라 차이가 보이지 않고, 같은 값을 넣었다 뺐을 때 1 mm씩 흐르지 않는다.
-  const snapIn = Number(el.dataset.step);
-  const snapped = Number.isFinite(snapIn) && snapIn > 0 ? roundToStep(v, snapIn * INCH_MM) : v;
-  const rounded = Math.round(snapped);
+  // mm 정수로만 반올림한다. 1/8"(3.175 mm) 격자로 스냅해 봤지만 표기가 0.1" 해상도라
+  // 격자와 어긋나 왕복 오차가 오히려 커졌다(1 mm → 최대 2 mm): 103 mm가 105로, 109 mm가
+  // 108로 움직였다. 1/8"는 화살표 간격의 뜻으로만 data-step에 남는다(§15.9).
+  const rounded = Math.round(v);
   const out = Math.min(max, Math.max(min, rounded));
   if (out !== rounded && onClamp) onClamp(out, { min, max, raw: v });
   return out;
@@ -61,9 +69,15 @@ export const isTextField = el => el?.tagName === 'INPUT' && ['number', 'text', '
 export const rememberFieldValue = el => { if (isTextField(el)) initial.set(el, el.value); };
 // [Esc]: 포커스 시점 값으로 되돌리고 blur한다. change는 내지 않는다 — 되돌리기는 "없던 일"이고,
 // change를 내면 계획 6의 클램프 토스트가 되돌린 값에 대해 한 번 더 뜬다.
+// 검색 칸(type="search")은 타이핑마다 목록을 걸러 낸다 → 글자만 되돌리면 빈 검색창 + 걸러진
+// 목록으로 어긋난다. 되돌린 값으로 input을 한 번 쏘아 필터도 같이 맞춘다(기준값이 없으면
+// 관례대로 검색을 지운다). input은 필터만 갱신하고 스토어·undo에는 닿지 않는다.
 export function revertField(el) {
   if (!isTextField(el)) return false;
+  const live = el.type === 'search';
   if (initial.has(el)) el.value = initial.get(el);
+  else if (live) el.value = '';
+  if (live) el.dispatchEvent(new Event('input', { bubbles: true }));
   el.blur?.();
   return true;
 }
