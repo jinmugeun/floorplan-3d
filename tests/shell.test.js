@@ -446,7 +446,9 @@ test('패널 폭은 CSS 변수로 들어가고 스플리터 두 개가 그리드
     expect(layout.style.getPropertyValue('--panel-w')).toBe('400px');
     expect(layout.style.getPropertyValue('--right-w')).toBe('300px');
     const ids = [...layout.children].map(c => c.id);
-    expect(ids).toEqual(['topbar', 'rail', 'panel', 'panelSplitter', 'canvasWrap', 'rightSplitter', 'right', 'bottombar']);
+    // #bottomMore는 #layout의 아홉 번째 자식이다: #bottombar가 overflow-x: auto라 팝오버를 그 안에
+    // 둘 수 없고(잘린다 — 결정 8), position: fixed라 그리드 흐름을 차지하지 않는다.
+    expect(ids).toEqual(['topbar', 'rail', 'panel', 'panelSplitter', 'canvasWrap', 'rightSplitter', 'right', 'bottombar', 'bottomMore']);
     expect(root.querySelector('#panelSplitter').getAttribute('aria-label')).toBe('작업 패널 폭 조절');
   } finally { localStorage.clear(); window.innerWidth = vw; }
 });

@@ -69,13 +69,16 @@ export function shellHtml({ name = '' } = {}) {
     <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
     <footer id="bottombar">
       <div class="seg"><button data-mode="2d" class="on">2D</button><button data-mode="plan">평면 <kbd>2</kbd></button><button data-mode="iso">3D <kbd>3</kbd></button><button data-mode="fp">1인칭 <kbd>4</kbd></button></div>
-      <div class="seg"><button id="btnView" data-popover="view">보기</button><button id="btnCam" data-popover="cam" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" hidden>햇빛</button></div>
-      <div class="seg"><button id="btnLock">도면 잠금</button><button data-action="capture">스크린 캡쳐</button></div>
+      <div class="seg"><button id="btnView" data-popover="view">보기</button></div>
+      <div class="seg" id="seg3d" data-overflow="1"><button id="btnCam" data-popover="cam" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" hidden>햇빛</button></div>
+      <div class="seg" id="segCapture" data-overflow="1"><button id="btnLock">도면 잠금</button><button data-action="capture">스크린 캡쳐</button></div>
       <div class="seg"><button id="btnZoomIn" aria-label="도면 확대">＋</button><button id="btnZoomOut" aria-label="도면 축소">－</button><button id="btnFit">화면 맞추기</button></div>
-      <div class="seg"><label class="muted">2D 투영 <select id="viewPreset" aria-label="2D 투영 뷰"><option value="">—</option><option value="front">정면</option><option value="back">배면</option><option value="left">좌측</option><option value="right">우측</option><option value="top">평면</option><option value="bottom">저면</option></select></label></div>
-      <div class="seg"><button id="btnGizmoMode" aria-label="3D 기즈모 모드" hidden>이동</button></div>
+      <div class="seg" id="segPreset" data-overflow="1"><label class="muted">2D 투영 <select id="viewPreset" aria-label="2D 투영 뷰"><option value="">—</option><option value="front">정면</option><option value="back">배면</option><option value="left">좌측</option><option value="right">우측</option><option value="top">평면</option><option value="bottom">저면</option></select></label></div>
+      <div class="seg" id="segGizmo" data-overflow="1"><button id="btnGizmoMode" aria-label="3D 기즈모 모드" hidden>이동</button></div>
       <div class="seg" id="unitSeg"><button data-units="mm" class="on">mm</button><button data-units="ftin">ft·in</button></div>
+      <div class="seg"><button id="btnBottomMore" aria-expanded="false" aria-controls="bottomMore" hidden>더보기 ▾</button></div>
       <div class="seg" id="rightToggleSeg"><button id="btnRightPanel" hidden>속성 ▸</button></div>
     </footer>
+    <div id="bottomMore" class="bottom-more" hidden></div>
   </div>`;
 }

@@ -6,6 +6,7 @@ import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOption
 import { optionBarHtml, applyOptionInput } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
 import { shellHtml } from './shellHtml.js';
+import { createBottomBar } from './bottomBar.js';
 import { helpHtml } from './helpPopover.js';
 
 
@@ -25,7 +26,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   const widths = loadPanelWidths();
   // 사용자가 접은 것과 자동 접힘을 구분한다: 창이 넓어질 때 다시 펴지는 것은 자동 접힘뿐이다.
   const autoOff = { panel: false, right: false };
-  let bottom = null;                      // Task 3이 createBottomBar()로 채운다 — 그때까지는 null이다
+  // 하단 바 접기(§14.3). relayout()이 첫 배치에서 먼저 돌므로 선언은 그 위에 두고, 실제 생성은
+  // 마크업이 붙은 뒤(relayout() 다음) 한다 — 그 사이의 sync()는 ?.로 조용히 건너뛴다.
+  let bottom = null;
   let firstLayout = true;
   function relayout() {
     const vw = globalThis.innerWidth ?? 1280;
@@ -46,6 +49,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     firstLayout = false;
   }
   relayout();
+  bottom = createBottomBar(root);
   const resizeWatch = createResizeWatch(layout, relayout);
   q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; onMinimapResize(); });
   const splitters = [
@@ -206,6 +210,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     q('#btnCam').hidden = !isIso; q('#btnSun').hidden = !isIso;
     syncGizmoVisible(s);
     if (!isIso && (popKind === 'cam' || popKind === 'sun')) pop.close();
+    bottom?.sync();                        // 3D 전용 버튼이 늘거나 줄면 접기 판정을 다시 한다
     renderBanner(s);
     if (pop.isOpen() && popKind === 'view') refreshPopover();
     strip.hidden = !store.get().background || s.mode !== '2d'; // 모드가 바뀌면 이미지 세팅 스트립도 따라간다
@@ -228,5 +233,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { resizeWatch.destroy(); splitters.forEach(s => s.destroy()); } };
+  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { bottom?.destroy(); resizeWatch.destroy(); splitters.forEach(s => s.destroy()); } };
 }
