@@ -2,7 +2,9 @@
 // 실별: 설비 중심이 든 방에 더한다(경계 위에 놓인 벽 부착 설비는 허용치로 받는다). 어느 방도 아니면 '미배치' 묶음에 남는다.
 // 계통별: 덕트 연결로 이어진 설비 + props.system이 같은 후드 + 팬 번호. 설비 하나는 계통 하나에만 든다.
 // 숨긴 설비 규칙: item.hidden인 설비는 실별·계통별·합계 어디에도 세지 않는다(레이어에서 감춘 설비는
-// 도면에서 뺀 것으로 본다). 잠금(locked)은 편집 제한일 뿐이라 풍량에는 영향이 없다.
+// 도면에서 뺀 것으로 본다). 숨긴 덕트(duct.hidden)도 같다 — 계통의 뼈대가 되지 못하므로 그 덕트의
+// 연결도 세지 않고 계통 줄도 만들지 않는다(견적의 숨김 규칙 "풍량과 같은 규칙"이 이것을 가리킨다).
+// 잠금(locked)은 편집 제한일 뿐이라 풍량에는 영향이 없다.
 import { pointInPolygon } from '../geom/rooms.js';
 import { distToSegment } from '../geom/walls.js';
 import { eq } from '../geom/vec.js';
@@ -46,6 +48,17 @@ function onBoundary(pos, room, walls) {
   return false;
 }
 
+// 점 하나가 어느 방에 드는지 — 실별 풍량의 판정을 그대로 쓴다(폴리곤 내부 우선, 안에 들지 않으면
+// 경계 허용치로 2차 판정). 후드 라벨의 방 이름(equipRows.js)처럼 "이 설비가 선 방"을 말하는 자리는
+// 모두 이 함수를 쓴다: 두 곳이 다르게 판정하면 경계에 놓인 후드가 라벨에는 방 이름이 없으면서
+// 풍량 표에는 그 방에 세어지는 어긋남이 생긴다. 없으면 null이다.
+export function roomAt(pos, rooms, walls = []) {
+  const list = rooms ?? [];
+  return list.find(r => pointInPolygon(pos, r?.points ?? []))
+    ?? list.find(r => onBoundary(pos, r, walls))
+    ?? null;
+}
+
 export function roomAirflow(floor) {
   const walls = floor.walls ?? [];
   const list = (floor.rooms ?? []).map(r => ({
@@ -58,9 +71,8 @@ export function roomAirflow(floor) {
   for (const it of visibleItems(floor)) {
     const a = equipAirflow(it);
     if (!a.EA && !a.SA) continue;
-    const hit = list.find(x => pointInPolygon(it.pos, x.room.points ?? []))
-      ?? list.find(x => onBoundary(it.pos, x.room, walls))
-      ?? unplaced;
+    const room = roomAt(it.pos, floor.rooms ?? [], walls);
+    const hit = (room && list.find(x => x.roomId === room.id)) || unplaced;
     hit.EA += a.EA; hit.SA += a.SA;
   }
   const rows = unplaced.EA || unplaced.SA ? [...list, unplaced] : list;   // '미배치'는 있을 때만, 늘 맨 끝에
@@ -92,7 +104,11 @@ export function systemAirflow(floor) {
   //  합산되어 계통 합계의 총합이 전체 배기량을 넘는다. ductIds는 양쪽에 그대로 남긴다.)
   const owner = new Map();
   // 1) 덕트가 계통의 뼈대다: 그 덕트에 연결된 설비가 그 계통에 든다.
+  // 숨긴 덕트는 건너뛴다(숨긴 설비와 같은 규칙): 계통 줄도 만들지 않고 그 연결도 세지 않는다.
+  // 그래서 숨긴 덕트에만 붙어 있던 설비는 2)·3)의 props.system·팬 번호로 다시 갈 곳을 찾는다
+  // (설비 자신이 보이는 한 그 풍량은 어딘가에는 남아야 한다 — 계통 합계 ≤ 전체 합계 불변식).
   for (const d of floor.ducts ?? []) {
+    if (d?.hidden) continue;
     const g = bucket(String(d.system ?? '').trim() || UNNAMED_SYSTEM);
     g.ductIds.add(d.id);
     g.kinds.add(d.kind === 'supply' ? 'supply' : 'exhaust');

@@ -4,7 +4,7 @@ import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
 import { addWalls, addItem, updateItem, updateRoom, deleteItems } from '../src/state/floorOps.js';
 import { setItemFlag } from '../src/state/itemOps.js';
-import { addDuct } from '../src/state/ductOps.js';
+import { addDuct, setDuctFlag } from '../src/state/ductOps.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { normalizeWalls } from '../src/geom/normalize.js';
@@ -189,6 +189,26 @@ describe('계통별 풍량', () => {
     expect(rows.some(r => r.system === 'F-9')).toBe(false);
     expect(rows.reduce((a, r) => a + r.EA, 0)).toBe(s.totalEA);   // 계통 합계의 총합 = 전체 배기량
     expect(rows.reduce((a, r) => a + r.SA, 0)).toBe(s.totalSA);
+  });
+
+  // 숨긴 덕트는 계통의 뼈대가 되지 못한다(숨긴 설비와 같은 규칙 — 견적의 "풍량과 같은 규칙"이 이것이다).
+  test('숨긴 덕트는 계통 줄을 만들지 않고 그 연결도 세지 않는다', () => {
+    const { store, floor, hood, fan, duct } = setup();
+    // 후드·팬은 F-4 덕트에만 붙어 있다. 그 덕트를 숨기면 F-4 줄이 사라지고,
+    // 후드는 자기 props.system(F-4)으로, 팬은 팬 번호(F-4)로 다시 제 계통을 찾는다.
+    setDuctFlag(store, [duct], 'hidden');
+    const rows = systemAirflow(floor());
+    const f4 = rows.find(r => r.system === 'F-4');
+    expect(f4.ductIds).toEqual([]);                  // 숨긴 덕트는 계통에 들지 않는다
+    expect(new Set(f4.itemIds)).toEqual(new Set([hood, fan]));
+    expect(f4.EA).toBe(4990);                        // 보이는 설비의 풍량은 그대로 남는다
+    const s = airflowSummary(floor());
+    expect(rows.reduce((a, r) => a + r.EA, 0)).toBeLessThanOrEqual(s.totalEA);
+    // 계통 이름도 설비도 없는 덕트를 숨기면 '미지정' 줄 자체가 생기지 않는다.
+    const bare = addDuct(store, { points: [[0, 0], [1000, 0]], segments: [{ w: 300, h: 200, z: 2700 }] });
+    expect(systemAirflow(floor()).some(r => r.system === '미지정')).toBe(true);
+    setDuctFlag(store, [bare], 'hidden');
+    expect(systemAirflow(floor()).some(r => r.system === '미지정')).toBe(false);
   });
 
   test('급기 덕트만 있는 계통은 kind가 supply다', () => {

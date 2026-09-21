@@ -9,6 +9,8 @@ import { rectWalls } from '../src/geom/walls.js';
 import { createPropsPanel } from '../src/ui/propsPanel.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField, EQUIP_SECTION_TITLE } from '../src/ui/equipRows.js';
 import { addDuct } from '../src/state/ductOps.js';
+import { pointInPolygon } from '../src/geom/rooms.js';
+import { roomAt, roomAirflow, equipAirflow } from '../src/vent/airflow.js';
 
 function setup(productId, patch = {}) {
   const store = createStore(createEmptyProject());
@@ -110,6 +112,37 @@ describe('설비 속성 섹션', () => {
     const s = el.querySelector('select[name="eqHoodId"]');
     s.value = hood; s.dispatchEvent(new Event('change', { bubbles: true }));
     expect(activeFloor(store.get()).items.find(i => i.id === range).props.hoodId).toBe(hood);
+  });
+
+  // 방 폴리곤은 벽 중심선이라 벽에 붙은 후드의 중심이 경계선 위에 놓인다. pointInPolygon의 ray
+  // 판정은 그 경계에서 비대칭이어서(동/남 변은 밖으로 본다) 후드 라벨이 방 이름을 잃는 반면
+  // 풍량 표는 경계 허용치로 그 방에 세었다 → 두 자리가 같은 함수(roomAt)를 쓴다.
+  test('방 경계(벽 중심선) 위의 후드도 라벨에 방 이름이 붙는다 — 풍량과 같은 판정', () => {
+    const store = createStore(createEmptyProject());
+    const ui = createUiState();
+    addWalls(store, rectWalls([0, 0], [8000.5, 6000.25], 200));
+    const room = activeFloor(store.get()).rooms[0];
+    updateRoom(store, room.id, { name: '식기구세척실' });
+    const edge = [8001, 3000.5];                  // 동쪽 벽 중심선 위(소수 좌표)
+    const hood = addItem(store, createItem(productById('hood-box'), { pos: edge, props: { type: 'hood', no: 4 } }));
+    const range = addItem(store, createItem(productById('range-gas-high'), { pos: [2000.5, 1500.25] }));
+    const f = activeFloor(store.get());
+    expect(pointInPolygon(edge, f.rooms[0].points)).toBe(false);          // 내부 판정만으로는 잡히지 않는다
+    expect(roomAt(edge, f.rooms, f.walls)?.id).toBe(room.id);             // 경계 허용치가 잡는다
+    expect(equipRowsHtml(f.items.find(i => i.id === range), { floor: f })).toContain('후드 ④ · 식기구세척실');
+    // 같은 후드를 풍량 표도 그 방에 센다(두 화면이 어긋나지 않는다).
+    expect(roomAirflow(f).find(r => r.roomId === room.id).EA).toBe(equipAirflow(f.items.find(i => i.id === hood)).EA);
+    // 방 밖(2 m 밖)에 선 후드는 여전히 방 이름이 없다.
+    const store2 = createStore(createEmptyProject());
+    addWalls(store2, rectWalls([0, 0], [8000.5, 6000.25], 200));
+    updateRoom(store2, activeFloor(store2.get()).rooms[0].id, { name: '식기구세척실' });
+    addItem(store2, createItem(productById('hood-box'), { pos: [10000.5, 3000.5], props: { type: 'hood', no: 4 } }));
+    const range2 = addItem(store2, createItem(productById('range-gas-high'), { pos: [2000.5, 1500.25] }));
+    const f2 = activeFloor(store2.get());
+    const html2 = equipRowsHtml(f2.items.find(i => i.id === range2), { floor: f2 });
+    expect(html2).toContain('후드 ④');
+    expect(html2).not.toContain('식기구세척실');
+    expect(ui.get().selection).toBeNull();        // 이 테스트는 선택을 건드리지 않는다
   });
 
   test('잠긴 설비는 편집되지 않고, 설비가 아닌 제품에는 섹션이 없다', () => {

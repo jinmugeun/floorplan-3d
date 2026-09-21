@@ -7,7 +7,7 @@ import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 import { EQUIP_TYPE_LABELS, APPLIANCE_KINDS, HEAT_KINDS, FLOW_KINDS, DIFFUSER_SYMBOLS, VENTCAP_DIAS, EQUIP_RANGE, equipType, isEquip, equipLabel } from '../vent/equipment.js';
 import { ductLinksOf } from '../state/ductOps.js';
-import { pointInPolygon } from '../geom/rooms.js';
+import { roomAt } from '../vent/airflow.js';
 
 export const EQUIP_SECTION_TITLE = '설비 속성';
 
@@ -17,9 +17,12 @@ const check = (name, label, on) => `<label class="check"><input type="checkbox" 
 const cmh = n => Number(n || 0).toLocaleString('ko-KR');
 // 같은 층의 후드 목록(조리기구의 "상단 후드"). 규격표가 같은 번호를 두 후드에 쓰므로(⑤·⑦),
 // 번호만 찍으면 두 줄이 똑같아 보인다 → 원문자 + 그 후드가 선 방 이름을 병기한다(§12.5).
+// 방 판정은 풍량(roomAirflow)과 같은 함수를 쓴다: 방 폴리곤은 벽 중심선이라 벽에 붙은 후드의
+// 중심이 경계 위에 놓이는데, pointInPolygon만 쓰면 그 후드가 라벨에서는 방 없이 보이면서
+// 풍량 표에는 그 방에 세어진다. 판정을 한 곳(roomAt)에 두어 두 화면이 어긋나지 않게 한다.
 const hoodOptions = floor => [['', '없음'], ...(floor?.items ?? []).filter(i => equipType(i) === 'hood').map(h => {
   const label = `후드 ${equipLabel(h) ?? h.props.no}`;
-  const room = (floor?.rooms ?? []).find(r => pointInPolygon(h.pos, r.points));
+  const room = roomAt(h.pos, floor?.rooms ?? [], floor?.walls ?? []);
   return [h.id, room?.name ? `${label} · ${room.name}` : label];
 })];
 
