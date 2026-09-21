@@ -17,13 +17,16 @@ function keymapRows(keymap) {
   }).join('')).join('');
 }
 
+let current = null;   // 열려 있는 인스턴스 { root, close }
+
 export function openSettingsDialog({ store, tab = 'general', onClose = () => {} }) {
-  const existing = document.querySelector('.modal.settings');
-  if (existing) {   // 두 번 열지 않는다
-    existing.querySelector(`[data-tab="${tab === 'keys' ? 'keys' : 'general'}"]`)?.click();   // 열려 있으면 탭만 바꾼다
-    existing.querySelector('[name="close"]')?.focus();
-    return { close: () => existing.remove() };
+  const open = current?.root.isConnected ? current : null;
+  if (open) {   // 두 번 열지 않는다
+    open.root.querySelector(`[data-tab="${tab === 'keys' ? 'keys' : 'general'}"]`)?.click();   // 열려 있으면 탭만 바꾼다
+    open.root.querySelector('[name="close"]')?.focus();
+    return open;   // 살아 있는 핸들을 그대로 돌려준다 — 이 길로 닫아도 트랩 해제·onClose가 빠지지 않는다(리뷰 Minor 2)
   }
+  document.querySelector('.modal.settings')?.remove();   // 핸들이 없는 잔재는 떼어낸다
   const s = store.get().settings;
   const root = document.createElement('div');
   root.className = 'modal settings';
@@ -65,7 +68,15 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
     setTable(buildTable(effectiveKeymap()));
     stopWaiting();
   }
-  const close = () => { if (waiting) stopWaiting(); root.remove(); trap.destroy(); onClose(); };
+  let closed = false;
+  const close = () => {
+    if (closed) return;                                  // 두 번 불러도 한 번만 닫는다
+    closed = true;
+    if (current === self) current = null;
+    if (waiting) stopWaiting();
+    root.remove(); trap.destroy(); onClose();
+  };
+  const self = { root, close };
   q('[name="close"]').onclick = close;
   // Esc는 대화상자만 닫고 전역 단축키(도구 전환 등)까지 내려가지 않는다.
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !waiting) { ev.stopPropagation(); close(); } });
@@ -111,5 +122,6 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
   });
   renderKeys();
   selectTab(tab === 'keys' ? 'keys' : 'general');
-  return { close };
+  current = self;
+  return self;
 }

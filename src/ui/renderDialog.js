@@ -3,14 +3,17 @@
 import { addShot } from '../io/gallery.js';
 import { downloadDataUrl, filenameFor } from '../io/file.js';
 import { openGalleryDialog } from './galleryDialog.js';
-import { focusTrap } from './dialogBase.js';
+import { focusTrap, reopenOpener } from './dialogBase.js';
 
 export const RENDER_SIZES = [[1280, 720], [1920, 1080], [3840, 2160]];
 export const RENDER_VIEWS = [['', '현재 카메라'], ['front', '정면'], ['back', '배면'], ['left', '좌측'], ['right', '우측'], ['top', '평면']];
 
+let current = null;   // 열려 있는 인스턴스: 다시 열 때 DOM만 떼지 않고 트랩까지 해제한다(리뷰 Minor 1)
+
 export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = () => {} }) {
-  const existing = document.querySelector('.modal.render');
-  if (existing) existing.remove();                       // 두 개를 띄우지 않는다
+  const prev = document.activeElement;   // 이번 opener는 앞 인스턴스를 닫은 뒤 reopenOpener가 정한다
+  current?.close();                                      // 두 개를 띄우지 않는다
+  document.querySelector('.modal.render')?.remove();     // 핸들이 없는 잔재도 떼어낸다
   const st = { size: '1920×1080', view: '' };
   const root = document.createElement('div');
   root.className = 'modal render';
@@ -26,7 +29,14 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   </div>`;
   document.body.appendChild(root);
   const part = n => root.querySelector(`[data-part="${n}"]`);
-  const close = () => { root.remove(); trap.destroy(); onClose(); };
+  let closed = false;
+  const close = () => {
+    if (closed) return;                                  // 두 번 불러도 한 번만 닫는다
+    closed = true;
+    if (current === self) current = null;
+    root.remove(); trap.destroy(); onClose();
+  };
+  const self = { close };
   // 방금 렌더한 이미지와 **그때의 파일명**(내려받기 버튼이 쓴다 — §14.10). 자동 저장 경로는 `-WxH`가
   // 붙은 이름을 쓰는데 버튼만 안 붙은 이름을 써서, 같은 그림이 두 이름으로 내려왔다(m-10).
   let last = null;   // { url, filename }
@@ -56,6 +66,7 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   });
   root.addEventListener('change', ev => { if (ev.target.name in st) st[ev.target.name] = ev.target.value; });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  const trap = focusTrap(root, { focus: '[name="render"]' });   // §15.10
-  return { close };
+  const trap = focusTrap(root, { focus: '[name="render"]', opener: reopenOpener(prev) });   // §15.10
+  current = self;
+  return self;
 }

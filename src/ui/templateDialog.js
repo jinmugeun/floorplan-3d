@@ -5,7 +5,7 @@ import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 import { TEMPLATE_RESULT } from './messages.js';
-import { focusTrap } from './dialogBase.js';
+import { focusTrap, reopenOpener } from './dialogBase.js';
 
 const USES = ['주거', '상업'];
 const TYPE_LABEL = Object.fromEntries(ROOM_TYPES);
@@ -17,9 +17,12 @@ export const placementMessage = (placed, skipped, moved = 0) => (placed
   : '배치할 공간이 없습니다');
 const numField = (name, label, value) => `<label class="field"><span>${label}</span><input type="number" name="${name}" value="${value}" min="0" max="100000000" step="any"></label>`;
 
+let current = null;   // 열려 있는 인스턴스: 다시 열 때 DOM만 떼지 않고 트랩까지 해제한다(리뷰 Minor 1)
+
 export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
-  const existing = document.querySelector('.modal.templates');
-  if (existing) existing.remove();
+  const prev = document.activeElement;   // 이번 opener는 앞 인스턴스를 닫은 뒤 reopenOpener가 정한다
+  current?.close();
+  document.querySelector('.modal.templates')?.remove();   // 핸들이 없는 잔재도 떼어낸다
   const room = activeFloor(store.get()).rooms.find(r => r.id === roomId);
   if (!room) return { close: () => {} };
   const st = { roomType: room.type && room.type !== 'none' ? room.type : '', use: '', minArea: '', maxArea: '', budget: '' };
@@ -54,7 +57,14 @@ export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
       <div class="row"><button type="button" name="apply" class="primary">적용</button><button type="button" name="add">기존 제품 유지하고 추가</button></div>
     </div>`).join('') : '<p class="hint">조건에 맞는 템플릿이 없습니다.</p>';
   }
-  const close = () => { root.remove(); trap.destroy(); onClose(); };
+  let closed = false;
+  const close = () => {
+    if (closed) return;                                  // 두 번 불러도 한 번만 닫는다
+    closed = true;
+    if (current === self) current = null;
+    root.remove(); trap.destroy(); onClose();
+  };
+  const self = { close };
   root.addEventListener('click', ev => {
     if (ev.target.name === 'close') { close(); return; }
     const card = ev.target.closest('[data-template]');
@@ -73,6 +83,7 @@ export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
   root.addEventListener('input', onEdit);   // 숫자 필드는 타이핑 중에도 좁혀진다(M2)
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   render();
-  const trap = focusTrap(root, { focus: '[name="close"]' });   // §15.10
-  return { close };
+  const trap = focusTrap(root, { focus: '[name="close"]', opener: reopenOpener(prev) });   // §15.10
+  current = self;
+  return self;
 }

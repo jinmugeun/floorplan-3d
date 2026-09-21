@@ -4,13 +4,14 @@ import { capture2D, downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
 import { esc } from '../util/html.js';
-import { focusTrap } from './dialogBase.js';
+import { focusTrap, reopenOpener } from './dialogBase.js';
 
 const ELEV = ['front', 'back', 'left', 'right', 'top'];   // 3D 직교 렌더 프리셋(입면도 5장)
 
 let current = null;                                        // 한 번에 하나만 띄운다
 
 export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
+  const prev = document.activeElement;   // 이번 opener는 앞 인스턴스를 닫은 뒤 reopenOpener가 정한다
   current?.close();
 
   const root = document.createElement('div');
@@ -89,7 +90,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
     }
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  const trap = focusTrap(root, { focus: '[name="close"]' });   // §15.10
+  const trap = focusTrap(root, { focus: '[name="close"]', opener: reopenOpener(prev) });   // §15.10
   current = self;
   return self;
 }

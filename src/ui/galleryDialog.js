@@ -3,11 +3,14 @@ import { listShots, deleteShot } from '../io/gallery.js';
 import { downloadDataUrl } from '../io/file.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
-import { focusTrap } from './dialogBase.js';
+import { focusTrap, reopenOpener } from './dialogBase.js';
+
+let current = null;   // 열려 있는 인스턴스: 다시 열 때 DOM만 떼지 않고 트랩까지 해제한다(리뷰 Minor 1)
 
 export function openGalleryDialog({ onClose = () => {} } = {}) {
-  const existing = document.querySelector('.modal.gallery');
-  if (existing) existing.remove();                       // 두 개를 띄우지 않는다
+  const prev = document.activeElement;   // 이번 opener는 앞 인스턴스를 닫은 뒤 reopenOpener가 정한다
+  current?.close();                                      // 두 개를 띄우지 않는다
+  document.querySelector('.modal.gallery')?.remove();    // 핸들이 없는 잔재도 떼어낸다
   const root = document.createElement('div');
   root.className = 'modal gallery';
   root.innerHTML = `<div class="modal-card">
@@ -31,7 +34,14 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
       <div class="row"><button type="button" name="down">내려받기</button><button type="button" name="del" class="danger">삭제</button></div>
     </figure>`).join('') : '<p class="hint">저장된 렌더샷이 없습니다. 상단 바의 [렌더샷]으로 만들 수 있습니다.</p>';
   }
-  const close = () => { root.remove(); trap.destroy(); onClose(); };
+  let closed = false;
+  const close = () => {
+    if (closed) return;                                  // 두 번 불러도 한 번만 닫는다
+    closed = true;
+    if (current === self) current = null;
+    root.remove(); trap.destroy(); onClose();
+  };
+  const self = { close };
   root.addEventListener('click', async ev => {
     if (ev.target.name === 'close') { close(); return; }
     const fig = ev.target.closest('[data-shot]');
@@ -45,7 +55,8 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
     }
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  const trap = focusTrap(root, { focus: '[name="close"]' });   // 포커스를 가져와야 Escape 처리가 걸린다(§15.10)
+  const trap = focusTrap(root, { focus: '[name="close"]', opener: reopenOpener(prev) });   // 포커스를 가져와야 Escape 처리가 걸린다(§15.10)
   render();
-  return { close };
+  current = self;
+  return self;
 }

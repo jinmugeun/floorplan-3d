@@ -5,7 +5,7 @@ import { downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
 import { esc } from '../util/html.js';
-import { focusTrap } from './dialogBase.js';
+import { focusTrap, reopenOpener } from './dialogBase.js';
 
 const won = n => `${Number(n || 0).toLocaleString('ko-KR')}원`;
 
@@ -22,7 +22,8 @@ function tableHtml(rows) {
 let current = null;                                        // 마지막으로 연 인스턴스: 다시 열 때 구독을 정리한다(누수 방지)
 
 export function openEstimateDialog({ store, onClose = () => {} }) {
-  current?.close();                                        // 두 개를 띄우지 않는다 — DOM뿐 아니라 구독도 정리한다
+  const prev = document.activeElement;   // 이번 opener는 앞 인스턴스를 닫은 뒤 reopenOpener가 정한다
+  current?.close();                                      // 두 개를 띄우지 않는다 — DOM뿐 아니라 구독도 정리한다
   const root = document.createElement('div');
   root.className = 'modal estimate';
   root.innerHTML = `<div class="modal-card">
@@ -54,7 +55,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
   render();
-  const trap = focusTrap(root, { focus: '[name="close"]' });   // §15.10
+  const trap = focusTrap(root, { focus: '[name="close"]', opener: reopenOpener(prev) });   // §15.10
   current = self;
   return self;
 }
