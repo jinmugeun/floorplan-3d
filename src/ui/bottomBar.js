@@ -40,15 +40,21 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
     // 팝오버 안에 있던 포커스는 더보기 버튼으로 돌려준다([Esc]로 닫고 포커스가 body로 떨어지지 않게).
     if (wasOpen && !btn.hidden && more.contains(document.activeElement)) btn.focus();
   }
-  // "더보기 ▾"는 접혀 있고 **그 안에 실제로 누를 것이 있을 때만** 보인다: 모드에 따라 3D 전용
-  // 버튼이 모두 숨으면 빈 묶음이 gap만 남기고, 전부 숨으면 빈 팝오버가 열린다.
-  function syncMore() {
+  // 묶음 자체의 hidden은 **폭 측정 전에** 고쳐야 한다: [hidden] { display: none !important }라
+  // 묶음이 아직 숨어 있으면 안의 버튼이 막 드러나도 size()가 재는 scrollWidth에 안 잡힌다
+  // (2D→3D 전환·기즈모 버튼 등장·ortho 이탈에서 접기가 한 박자 늦어졌던 원인).
+  function syncSegs() {
     let visible = 0;
     for (const { el } of segs) {
       const n = ctl(el).filter(c => !c.hidden).length;
       el.hidden = n === 0;
       visible += n;
     }
+    return visible;
+  }
+  // "더보기 ▾"는 접혀 있고 **그 안에 실제로 누를 것이 있을 때만** 보인다: 모드에 따라 3D 전용
+  // 버튼이 모두 숨으면 빈 묶음이 gap만 남기고, 전부 숨으면 빈 팝오버가 열린다.
+  function syncMoreBtn(visible) {
     btn.hidden = !compact || visible === 0;
     if (btn.hidden) closeMore();
   }
@@ -72,11 +78,12 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
     // 3D에서 접힌 채 2D로 가면 필요한 폭이 줄어드는데도 3D 시절 fullWidth 탓에 계속 접혀 있었다.
     // #bottomMore는 position: fixed라 되돌려도 #layout 기하가 바뀌지 않아 리사이즈 재진입이 없다.
     if (now !== sig) { sig = now; if (compact) { setCompact(false); fullWidth = 0; } }
+    const visible = syncSegs();                                    // 측정 전에 묶음을 드러낸다/감춘다
     const { scrollWidth, clientWidth } = size();
     if (!compact) fullWidth = Math.max(scrollWidth, clientWidth);   // 펼친 상태에서만 "필요한 폭"을 잰다
     const next = compactNext({ compact, scrollWidth, clientWidth, fullWidth, hysteresis });
     if (next !== compact) setCompact(next);
-    syncMore();
+    syncMoreBtn(visible);
   }
   const onBtn = () => {
     const open = !more.classList.contains('open');

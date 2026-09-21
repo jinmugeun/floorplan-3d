@@ -136,6 +136,27 @@ test('도면 잠금은 3D 전용이 아니므로 접히지 않는다', () => {
   bar.destroy();
 });
 
+test('컨트롤이 드러나는 전환에서 묶음 hidden을 측정 전에 풀어 같은 sync()에서 접는다 (fix wave 2)', () => {
+  // 리뷰 재현: measure를 스텁 상수가 아니라 "#seg3d가 아직 hidden인가"에서 파생시킨다 — 실제
+  // CSS([hidden]{display:none!important})처럼, 안의 버튼만 드러나고 묶음이 여전히 hidden이면
+  // scrollWidth에 안 잡힌다. shell.js:220-223처럼 버튼을 먼저 드러내고 sync()를 한 번만 부른다.
+  document.body.innerHTML = shellHtml({ name: '테스트' });
+  const seg3d = document.querySelector('#seg3d');
+  const CLIENT = 906;
+  const bar = createBottomBar(document.body, {
+    measure: () => ({ scrollWidth: 858 + (seg3d.hidden ? 0 : 132), clientWidth: CLIENT }),
+  });
+  expect(bar.isCompact()).toBe(false);
+  expect(seg3d.hidden).toBe(true);   // 2D: 카메라·햇빛 묶음이 비어 있다
+  document.querySelector('#btnCam').hidden = false;
+  document.querySelector('#btnSun').hidden = false;
+  bar.sync();
+  expect(seg3d.hidden).toBe(false);                                  // 묶음도 같은 sync()에서 드러난다
+  expect(bar.isCompact()).toBe(true);                                // 990 > 906 → 한 박자 늦지 않고 곧바로 접힌다
+  expect(document.querySelector('#btnBottomMore').hidden).toBe(false);
+  bar.destroy();
+});
+
 test('#bottombar가 없어도 던지지 않는다', () => {
   document.body.innerHTML = '<div></div>';
   const bar = createBottomBar(document.body);
