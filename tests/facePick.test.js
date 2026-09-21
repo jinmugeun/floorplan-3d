@@ -55,7 +55,7 @@ function setup({ mesh = 'floor', side = null, mode = 'iso' } = {}) {
     domElement.dispatchEvent(ev);
     return ev;
   };
-  return { store, ui, picker, click, rightClick, menu, items, domElement, floor: () => activeFloor(store.get()), wallId: f.walls[0].id, roomId: f.rooms[0].id };
+  return { store, ui, picker, click, rightClick, menu, items, domElement, g, floor: () => activeFloor(store.get()), wallId: f.walls[0].id, roomId: f.rooms[0].id };
 }
 const mat = id => ({ id, offset: [0, 0], angle: 0 });
 const labels = items => items.filter(x => x !== 'sep').map(x => x.label);
@@ -278,5 +278,19 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     expect(a.ui.get().selection).toEqual({ type: 'item', id: 'i1' }); // 아이템 피커도 면 피커도 물러난다
     a.click();                                                        // 빗장은 한 번만 쓰인다
     expect(a.ui.get().selection).toEqual({ type: 'wall', id: a.wallId });
+  });
+  test('덕트 메시를 맞히면 hitAt이 덕트를 돌려주고 좌클릭이 덕트를 고른다', () => {
+    const { ui, picker, domElement, g } = setup();              // 기존 setup()이 돌려주는 것들
+    const box = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4, 0.75), new THREE.MeshBasicMaterial());
+    box.position.set(0, 3, 0);                                  // 바닥 평면보다 카메라에 가깝다
+    box.name = 'duct';
+    box.userData.ductId = 'd1';
+    box.userData.segment = 1;
+    const ducts = new THREE.Group(); ducts.name = 'ducts'; ducts.add(box); g.add(ducts);
+    const ev = { button: 0, clientX: 100, clientY: 100, preventDefault() {} };
+    expect(picker.hitAt(ev)).toEqual({ kind: 'duct', id: 'd1', segment: 1 });
+    domElement.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
+    domElement.dispatchEvent(new MouseEvent('pointerup', { button: 0, clientX: 100, clientY: 100 }));
+    expect(ui.get().selection).toEqual({ type: 'duct', id: 'd1', segment: 1, vertex: null });
   });
 });

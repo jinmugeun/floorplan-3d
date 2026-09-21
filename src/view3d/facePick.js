@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { applyMaterial } from '../state/materialOps.js';
 import { wallMenuItems, roomMenuItems } from '../ui/surfaceMenu.js';
+import { ductMenuItems } from '../ui/ductMenu.js';
 
 // 레이캐스트로 고를 수 있는 면 메시 이름(build.js가 붙인다).
 export const FACE_NAMES = new Set(['wall', 'wallFace', 'wallRegion', 'floor', 'ceiling', 'wallTop']);
@@ -25,9 +26,12 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     const roots = root.children;
     const itemGroup = roots.find(c => c.name === 'items');
     const itemHit = itemGroup ? ray.intersectObjects(itemGroup.children, false)[0] : null;
+    const ductGroup = roots.find(c => c.name === 'ducts');
+    const ductHit = ductGroup ? ray.intersectObjects(ductGroup.children, false)[0] : null;
     const faceHit = ray.intersectObjects(roots.filter(c => FACE_NAMES.has(c.name) && c.visible), false)[0] ?? null;
-    // 아이템이 면보다 가까우면 아이템 피커의 일이다.
-    if (itemHit && (!faceHit || itemHit.distance <= faceHit.distance)) return { kind: 'item', id: itemHit.object.userData.itemId };
+    // 아이템 → 덕트 → 면 순서(2D 선택 도구와 같다, 아키텍처 §11.3).
+    if (itemHit && (!faceHit || itemHit.distance <= faceHit.distance) && (!ductHit || itemHit.distance <= ductHit.distance)) return { kind: 'item', id: itemHit.object.userData.itemId };
+    if (ductHit && (!faceHit || ductHit.distance <= faceHit.distance)) return { kind: 'duct', id: ductHit.object.userData.ductId, segment: ductHit.object.userData.segment ?? null };
     if (!faceHit) return null;
     const o = faceHit.object;
     if (o.userData.wallId) {
@@ -49,10 +53,11 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     const pick = ui.get().matPick;
     const hit = hitAt(ev);
     if (pick) {
-      if (hit && hit.kind !== 'item') { applyMaterial(store, targetOf(hit), pick.assignment); requestRender(); }
-      return;                                    // 적용 모드는 Esc까지 계속된다
+      if (hit && hit.kind !== 'item' && hit.kind !== 'duct') { applyMaterial(store, targetOf(hit), pick.assignment); requestRender(); }
+      return;                                    // 적용 모드는 Esc까지 계속된다(덕트에는 재질을 바르지 않는다)
     }
     if (!hit || hit.kind === 'item') return;      // 아이템은 아이템 피커가 이미 골랐다
+    if (hit.kind === 'duct') { ui.set({ selection: { type: 'duct', id: hit.id, segment: hit.segment, vertex: null } }); onSelect?.(hit); return; }
     ui.set({ selection: hit.kind === 'wall' ? { type: 'wall', id: hit.id } : { type: 'room', id: hit.id } });
     onSelect?.(hit);
   };
@@ -63,6 +68,12 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     const hit = hitAt(ev);
     if (!hit || hit.kind === 'item') return;
     ev.preventDefault();
+    if (hit.kind === 'duct') {
+      const sel = { type: 'duct', id: hit.id, segment: hit.segment, vertex: null };
+      ui.set({ selection: sel });
+      openMenu(ev.clientX, ev.clientY, ductMenuItems({ store, ui, sel }) ?? []);
+      return;
+    }
     if (hit.kind === 'wall') {
       ui.set({ selection: { type: 'wall', id: hit.id } });
       openMenu(ev.clientX, ev.clientY, wallMenuItems({ store, ui, wallId: hit.id, roomId: hit.roomId, side: hit.side, in3d: true, actions: surfaceActions }) ?? []);
