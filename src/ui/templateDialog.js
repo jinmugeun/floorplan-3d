@@ -7,9 +7,11 @@ import { toast } from './toast.js';
 
 const USES = ['주거', '상업'];
 const TYPE_LABEL = Object.fromEntries(ROOM_TYPES);
-// 부분 배치·0개 배치를 사용자가 알 수 있게 하는 문구(자리가 없어 빠진 제품이 조용히 사라지지 않게).
-export const placementMessage = (placed, skipped) => (placed
-  ? `${placed}개 배치${skipped ? `, ${skipped}개 생략(공간 부족)` : ''}`
+// 부분 배치·위치 조정·0개 배치를 사용자가 알 수 있게 하는 문구(§14.9). 자리가 없어 빠진 제품도,
+// 벽에서 안쪽으로 당겨 온 제품도 조용히 지나가지 않는다.
+// 문구 자체는 §14.8이 ui/messages.js의 TEMPLATE_RESULT로 모을 몫이다(그 파일이 아직 없어 여기 둔다).
+export const placementMessage = (placed, skipped, moved = 0) => (placed
+  ? `${placed}개 배치 · ${moved}개 위치 조정 · ${skipped}개 건너뜀`
   : '배치할 공간이 없습니다');
 const numField = (name, label, value) => `<label class="field"><span>${label}</span><input type="number" name="${name}" value="${value}" min="0" max="100000000" step="any"></label>`;
 
@@ -55,8 +57,8 @@ export function openRoomTemplateDialog({ store, roomId, onClose = () => {} }) {
     if (ev.target.name === 'close') { close(); return; }
     const card = ev.target.closest('[data-template]');
     if (!card || !['apply', 'add'].includes(ev.target.name)) return;
-    const { placed, skipped } = applyRoomTemplate(store, roomId, card.dataset.template, { replace: ev.target.name === 'apply' });
-    toast(placementMessage(placed.length, skipped));
+    const { placed, skipped, moved } = applyRoomTemplate(store, roomId, card.dataset.template, { replace: ev.target.name === 'apply' });
+    toast(placementMessage(placed.length, skipped, moved));
     close();
   });
   const onEdit = ev => {

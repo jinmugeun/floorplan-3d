@@ -146,27 +146,54 @@ const FLOORISH = it => it.attach === 'floor' || it.attach === 'floorLay';
 // 축 ax 위로 잰 회전 사각형의 반지름(지지함수).
 const halfExtent = (it, ax) => Math.max(...itemCorners(it).map(c => Math.abs(dot(sub(c, it.pos), ax))));
 
+// 몸통(회전 사각형의 네 꼭짓점)이 방 안쪽 bbox 안에 들어오도록 민다(§14.9 — 감사 #13).
+// 지금까지는 "중심이 안쪽 폴리곤 안"만 봤기 때문에, 중심이 아슬아슬하게 들어온 제품은 몸통 절반이
+// 벽을 넘어 3D에서 벽에 묻혔다. 판정을 폴리곤이 아니라 bbox로 하는 이유: 오목한 방에서 회전
+// 사각형을 최적으로 밀어 넣는 문제는 이 계획의 범위 밖이고, 직사각형 방에서는 bbox = 안쪽 폴리곤이다.
+// 방보다 큰 제품은 null(호출자가 건너뛴다).
+function clampToRoom(item, box) {
+  const c = itemCorners(item);
+  const xs = c.map(q => q[0]), ys = c.map(q => q[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  if (maxX - minX > box.x1 - box.x0 || maxY - minY > box.y1 - box.y0) return null;
+  const dx = Math.max(0, box.x0 - minX) - Math.max(0, maxX - box.x1);
+  const dy = Math.max(0, box.y0 - minY) - Math.max(0, maxY - box.y1);
+  return dx || dy ? { ...item, pos: [item.pos[0] + dx, item.pos[1] + dy] } : item;
+}
+
 // 이미 놓인 바닥 아이템과 겹치면 두 중심을 잇는 축(분리축 하나)으로 딱 떨어질 만큼 민다.
 // 몇 번을 밀어도 못 풀거나 방 밖으로 나가면 null — 호출자가 그 항목을 생략한다(벽 제품의 freeT와 같은 사고).
-function separate(item, others, inner) {
+// box를 주면(§14.9) 그 방향으로 밀면 몸통이 벽을 넘는 경우에만 축을 바꿔 본다: 좁고 긴 방에서
+// 나란히 둔 묶음(세탁기+건조기)은 짧은 변으로 밀면 반드시 벽에 묻히고 긴 변으로 밀면 그대로 들어간다.
+// 넘지 않는 경우에는 예전과 똑같이 두 중심 축으로만 민다 — 되던 배치의 자리를 흔들지 않는다.
+function separate(item, others, inner, box = null) {
   let cur = item;
   for (let k = 0; k < 24; k++) {
     const hit = others.find(o => obbOverlap(o, cur, 1));
     if (!hit) return pointInPolygon(cur.pos, inner) ? cur : null;
     const d = sub(cur.pos, hit.pos);
-    const ax = len(d) < 1 ? [1, 0] : norm(d);
-    const gap = halfExtent(cur, ax) + halfExtent(hit, ax) + 2 - len(d);
-    cur = { ...cur, pos: add(cur.pos, mul(ax, Math.max(gap, 1))) };
+    const base = len(d) < 1 ? [1, 0] : norm(d);
+    const push = ax => {
+      const s = Math.max(halfExtent(cur, ax) + halfExtent(hit, ax) + 2 - dot(d, ax), 1);
+      return { s, p: { ...cur, pos: add(cur.pos, mul(ax, s)) } };
+    };
+    const inBox = c => !box || clampToRoom(c.p, box) === c.p;
+    let next = push(base);
+    if (!inBox(next)) next = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(push).filter(inBox).sort((a, b) => a.s - b.s)[0] ?? next;
+    cur = next.p;
   }
   return null;
 }
 
 // avoid: 이 방에 그대로 남을 아이템(잠긴 가구, replace:false의 기존 가구). 그 위에 겹쳐 놓지 않는다.
-export function placeTemplate(floor, room, template, { avoid = [] } = {}) {
+// stats: 주면 { moved, skipped }를 채운다(§14.9의 결과 토스트가 읽는다).
+export function placeTemplate(floor, room, template, { avoid = [], stats = null } = {}) {
   if (!room || !template) return [];
   const inner = roomInnerPolygon(room, floor.walls);
   const xs = inner.map(p => p[0]), ys = inner.map(p => p[1]);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const box = { x0, x1, y0, y1 };
+  const bump = k => { if (stats) stats[k] = (stats[k] ?? 0) + 1; };
   // 벽을 찾는 거리에 상한을 둔다: 방 bbox 전체를 주면 몇 미터 떨어진 엉뚱한 벽에 조용히 붙는다.
   const reach = Math.min(Math.max(x1 - x0, y1 - y0), 5 * WALL_ATTACH_DIST);
   const roomWalls = floor.walls.filter(w => room.wallIds.includes(w.id));
@@ -186,11 +213,20 @@ export function placeTemplate(floor, room, template, { avoid = [] } = {}) {
     if (p.attach === 'ceiling') patch.z = Math.max(0, (room.height ?? 2300) - p.size[2]);
     const item = createItem(p, patch);
     if (!FLOORISH(item)) { out.push(item); continue; }
-    const free = separate(item, taken, inner);
-    if (!free) continue;                                     // 밀어도 자리가 안 나면 생략
-    free.pos = [Math.round(free.pos[0]), Math.round(free.pos[1])];
-    taken.push(free);
-    out.push(free);
+    // 중심은 방 안이지만 몸통이 벽에 걸친 제품을 안쪽으로 당긴다(§14.9). 벽 부착 제품은 벽 위에
+    // 있어야 하므로(불변식 I-2) 여기 오지 않고, 천장 제품은 위에서 이미 out으로 빠진다.
+    const fitted = clampToRoom(item, box);
+    if (!fitted) { bump('skipped'); continue; }               // 방보다 큰 제품은 놓지 않는다
+    const free = separate(fitted, taken, inner, box);
+    if (!free) { bump('skipped'); continue; }                 // 밀어도 자리가 안 나면 생략
+    const seated = clampToRoom(free, box) ?? free;            // 밀어낸 뒤에 벽으로 나갔으면 다시 당긴다
+    // 당겨 온 자리가 이미 놓인 제품과 겹치면 놓지 않는다: 밀기(separate) ↔ 당기기(clamp)를
+    // 왕복하지 않고 한 번에 끝낸다(겹친 채 놓는 것보다 빠지는 편이 낫다 — 충돌 0이 규칙이다).
+    if (seated !== free && taken.some(o => obbOverlap(o, seated, 1))) { bump('skipped'); continue; }
+    seated.pos = [Math.round(seated.pos[0]), Math.round(seated.pos[1])];
+    if (seated.pos[0] !== patch.pos[0] || seated.pos[1] !== patch.pos[1]) bump('moved');
+    taken.push(seated);
+    out.push(seated);
   }
   return out;
 }
@@ -198,16 +234,17 @@ export function placeTemplate(floor, room, template, { avoid = [] } = {}) {
 const HOLES = ['door', 'window', 'opening'];
 
 // replace = true면 그 방 안 가구를 지우고 새로 놓는다(문·창·개구부는 건축 요소라 남긴다). 트랜잭션 1단계.
-// 반환 { placed: 놓인 아이템 id[], skipped: 자리가 없어 생략한 개수 }.
+// 반환 { placed: 놓인 아이템 id[], skipped: 빠진 개수, moved: 벽에서 당겨 온 개수 }.
 export function applyRoomTemplate(store, roomId, templateId, { replace = true } = {}) {
   const f = activeFloor(store.get());
   const room = f.rooms.find(r => r.id === roomId);
   const t = templateById(templateId);
-  if (!room || !t) return { placed: [], skipped: 0 };
+  if (!room || !t) return { placed: [], skipped: 0, moved: 0 };
   const mine = itemsInRoom(f, room);
   // 문·창·개구부는 건축 요소라서, 잠긴 아이템은 사용자가 지키라고 한 것이라서 남긴다(2B의 잠금 규칙).
   const kill = replace ? new Set(mine.filter(it => !HOLES.includes(it.kind) && !it.locked).map(it => it.id)) : new Set();
-  const made = placeTemplate(f, room, t, { avoid: mine.filter(it => !kill.has(it.id)) });
+  const stats = { moved: 0, skipped: 0 };
+  const made = placeTemplate(f, room, t, { avoid: mine.filter(it => !kill.has(it.id)), stats });
   const placed = [];
   store.dispatch(d => {
     const g = activeFloor(d);
@@ -220,8 +257,11 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
     const keep = seated.filter((s, i) => !(made[i].attach === 'wall' && made[i].wallId && !s.wallId));
     g.items.push(...keep);
     placed.push(...keep.map(i => i.id));
+    // 템플릿이 공간 타입의 기준이다(§14.9): 방에 타입이 없으면 템플릿의 roomType을 넣는다.
+    const mineRoom = g.rooms.find(r => r.id === roomId);
+    if (mineRoom && (!mineRoom.type || mineRoom.type === 'none') && t.roomType && t.roomType !== 'none') mineRoom.type = t.roomType;
     pruneDuctConnections(g);   // 템플릿이 지운 설비를 가리키는 덕트 연결도 함께 사라진다(아이템이 줄어드는 두 번째 경로다)
     reattach(g);   // 벽 부착 제품(후드·거울)의 pos·rot을 (wallId, t)에서 다시 만든다(floorInternal.js의 불변식)
   });
-  return { placed, skipped: Math.max(0, (t.items ?? []).length - placed.length) };
+  return { placed, skipped: Math.max(0, (t.items ?? []).length - placed.length), moved: stats.moved };
 }

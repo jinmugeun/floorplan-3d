@@ -54,8 +54,9 @@ describe('템플릿 대화상자', () => {
   });
 
   test('자리가 모자라면 생략 개수를, 하나도 못 놓으면 그 사실을 문구로 알린다', () => {
-    expect(placementMessage(5, 0)).toBe('5개 배치');
-    expect(placementMessage(3, 2)).toBe('3개 배치, 2개 생략(공간 부족)');
+    expect(placementMessage(5, 0)).toBe('5개 배치 · 0개 위치 조정 · 0개 건너뜀');
+    expect(placementMessage(3, 2)).toBe('3개 배치 · 0개 위치 조정 · 2개 건너뜀');
+    expect(placementMessage(3, 2, 1)).toBe('3개 배치 · 1개 위치 조정 · 2개 건너뜀');
     expect(placementMessage(0, 4)).toBe('배치할 공간이 없습니다');
   });
 
@@ -65,7 +66,7 @@ describe('템플릿 대화상자', () => {
     const roomId = activeFloor(store.get()).rooms[0].id;
     openRoomTemplateDialog({ store, roomId });
     click(document.querySelector('.modal.templates'), `[data-template="cook-basic"] [name="apply"]`);
-    expect(document.querySelector('.toast').textContent).toContain('생략(공간 부족)');
+    expect(document.querySelector('.toast').textContent).toContain('개 건너뜀');
   });
 
   test('[기존 제품 유지하고 추가]는 지우지 않는다', () => {
@@ -81,4 +82,19 @@ describe('템플릿 대화상자', () => {
     expect(document.querySelector('.modal.templates')).toBeNull();
     expect(a.floor().items).toHaveLength(0);
   });
+});
+
+// §14.9: 템플릿이 공간 타입의 기준이다 — 적용하면 "미지정"이 채워진다.
+// setup()은 방 타입을 미리 'cook'으로 정해 두므로(11~19행) 여기서는 타입 없는 방을 직접 만든다.
+test('적용 뒤 공간 타입이 템플릿의 roomType으로 채워진다', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [6000.5, 4000.25], 200));
+  const roomId = activeFloor(store.get()).rooms[0].id;
+  const before = activeFloor(store.get()).rooms[0].type;
+  expect(before === 'none' || !before).toBe(true);        // 적용 전에는 미지정이다
+  const dlg = openRoomTemplateDialog({ store, roomId });
+  const card = document.querySelector('[data-template="cook-basic"]');
+  card.querySelector('[name="apply"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(activeFloor(store.get()).rooms[0].type).toBe('cook');
+  dlg.close();
 });
