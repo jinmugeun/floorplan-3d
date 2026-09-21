@@ -4,6 +4,7 @@ import { wallLength } from '../geom/walls.js';
 import { fmtArea } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
 import { esc } from '../util/html.js';
+import { confirmDialog } from './confirmDialog.js';
 import { toast } from './toast.js';
 import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
@@ -269,7 +270,11 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (ev.target.name === 'floorDelete') {
       const p = store.get();
       if (p.floors.length <= 1) { toast('마지막 층은 삭제할 수 없습니다'); return; }
-      if (window.confirm(`"${p.floors[p.activeFloor].name}" 층을 삭제할까요?`)) deleteFloor(store, p.activeFloor);
+      const idx = p.activeFloor ?? 0;
+      const name = p.floors[idx].name;
+      // 대화상자가 열려 있는 동안 층이 바뀔 수 있다: 확인 뒤에 마지막 층 규칙을 다시 본다.
+      confirmDialog({ title: '층 삭제', message: `"${name}" 층을 삭제할까요?`, ok: '삭제', danger: true })
+        .then(okay => { if (okay && store.get().floors.length > 1) deleteFloor(store, idx); });
       return;
     }
     if (ev.target.name === 'delete' && ui.get().selection) { deleteSelection(); return; }

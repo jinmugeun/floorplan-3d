@@ -1,9 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { deleteWall, deleteWalls, deleteRoom, deleteItems, transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
-import { hitWall } from './geom/walls.js';
-import { pointInPolygon } from './geom/rooms.js';
+import { transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
 import { createView2D } from './view2d/view2d.js';
 import { createMinimap } from './view2d/minimap.js';
 import { createRoomTool, ROOM_TOOL_DEFAULTS } from './view2d/tools/roomTool.js';
@@ -12,7 +10,6 @@ import { createSelectTool } from './view2d/tools/selectTool.js';
 import { createGuideTool, GUIDE_TOOL_DEFAULTS } from './view2d/tools/guideTool.js';
 import { createMeasureTool, MEASURE_TOOL_DEFAULTS } from './view2d/tools/measureTool.js';
 import { createDuctTool, DUCT_TOOL_DEFAULTS } from './view2d/tools/ductTool.js';
-import { deleteSelectedDuct } from './view2d/tools/ductSelect.js';
 import { createPlaceTool } from './view2d/tools/placeTool.js';
 import { createView3D } from './view3d/view3d.js';
 import { viewForMode } from './view3d/fit.js';
@@ -32,6 +29,8 @@ import { openBackgroundDialog } from './ui/backgroundDialog.js';
 import { openRoomTemplateDialog } from './ui/templateDialog.js';
 import { openSettingsDialog } from './ui/settingsDialog.js';
 import { createContextMenu } from './ui/contextMenu.js';
+import { createDeleteActions } from './app/deleteActions.js';
+import { confirmDialog } from './ui/confirmDialog.js';
 import { openStartScreen } from './ui/startScreen.js';
 import { createTopbar, projectIsEmpty, confirmLeave } from './app/topbar.js';
 import { templateProject, saveTemplate } from './templates/projectTemplates.js';
@@ -45,6 +44,7 @@ const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D �
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 const menu = createContextMenu(document.body);
 const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender() }); // 태스크 5의 onCameraChange를 유지한다
+const { createDeleteTool, deleteSelection, deleteOrTool } = createDeleteActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
 const selectItems = ids => ui.set({ selection: !ids.length ? null : ids.length === 1 ? { type: 'item', id: ids[0] } : { type: 'multi', kind: 'item', ids } });
 // 컨텍스트 메뉴(itemMenu.js)·속성 패널·단축키·3D 피커가 부르는 아이템 동작 묶음. view3d보다 먼저 선언한다(view3d 생성에 넘긴다).
@@ -121,22 +121,6 @@ store.subscribe(s => {
   if (solo !== u.soloRoom) ui.set({ soloRoom: solo });
 });
 
-function createDeleteTool() {
-  return {
-    name: 'delete', opts: {}, hint: '삭제할 벽을 클릭하세요. 방을 지우려면 방 안쪽 바닥을 클릭하세요.',
-    onPointerDown(p) {
-      const f = activeFloor(store.get());
-      const w = hitWall(f.walls, p, 6 / view.camera.scale);
-      if (w) { deleteWall(store, w.id); return; }
-      const r = f.rooms.find(x => pointInPolygon(p, x.points));
-      if (r && window.confirm('방과 그 벽을 모두 삭제할까요?')) {
-        deleteRoom(store, r.id);
-        if (ui.get().selection?.type === 'room' && ui.get().selection.id === r.id) ui.set({ selection: null });
-      }
-    },
-    onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {},
-  };
-}
 // 도구 옵션은 세션 동안 유지된다: 도구를 다시 켜도 옵션 바에서 바꾼 값이 남는다.
 const toolOpts = { room: { ...ROOM_TOOL_DEFAULTS }, wall: { ...WALL_TOOL_DEFAULTS }, guide: { ...GUIDE_TOOL_DEFAULTS }, measure: { ...MEASURE_TOOL_DEFAULTS }, duct: { ...DUCT_TOOL_DEFAULTS } };
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
@@ -189,20 +173,9 @@ const selectAll = () => { const ids = activeFloor(store.get()).walls.map(w => w.
 const openSettings = () => openSettingsDialog({ store });
 document.getElementById('btnSettings').addEventListener('click', openSettings);
 
-function deleteSelection() {
-  const s = ui.get().selection;
-  if (deleteSelectedDuct({ store, ui, toast: shell.toast })) return;
-  if (s?.type === 'item') { deleteItems(store, [s.id]); ui.set({ selection: null }); return; }
-  if (s?.type === 'multi' && s.kind === 'item') { deleteItems(store, s.ids); ui.set({ selection: null }); return; }
-  if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); }
-  if (s?.type === 'multi' && s.kind === 'wall') { deleteWalls(store, s.ids); ui.set({ selection: null }); }
-  if (s?.type === 'room' && window.confirm('방과 그 벽을 모두 삭제할까요?')) { deleteRoom(store, s.id); ui.set({ selection: null }); }
-}
-function deleteOrTool() { if (ui.get().selection) deleteSelection(); else setTool('delete'); }
+// 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
 const restored = loadAutosave();
-const restoredOk = !!(restored && window.confirm('자동 저장된 프로젝트가 있습니다. 불러올까요?'));
-if (restoredOk) store.replace(restored, { record: false }); // 복원은 되돌릴 단계가 아니다
-if (!restoredOk && projectIsEmpty(store.get())) showStart();
+if (projectIsEmpty(store.get())) showStart({ restored });
 const auto = startAutosave(store, { onSaved: t => { document.getElementById('savedAt').textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 자동 저장됨`; } });
 document.getElementById('btnSave').addEventListener('click', () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); auto.saveNow(); shell.toast('저장했습니다'); });
 // 더보기 메뉴의 "템플릿으로 저장"(태스크 14의 topbar.js가 부른다). 이름은 프로젝트 이름을 기본값으로 묻는다.
@@ -214,9 +187,11 @@ function saveAsTemplate() {
   else shell.toast('템플릿을 저장하지 못했습니다(저장 공간 부족)');
 }
 // 새로 만들기·나가기·JSON 내보내기. 상단 바 버튼 배선은 topbar.js가 한다.
-function showStart() {
+function showStart({ restored = null } = {}) {
   openStartScreen({
     store,
+    restored,
+    onRestore: () => { if (restored) { store.replace(restored, { record: false }); view.fit(); shell.toast('이어서 작업합니다'); } }, // 복원은 되돌릴 단계가 아니다
     onEmpty: () => {},
     onUpload: () => openBackgroundDialog({ store }),
     onSample: () => { loadSample(store); view.fit(); },
@@ -224,8 +199,8 @@ function showStart() {
   });
 }
 const actions = {
-  newProject: () => {
-    if (!window.confirm('현재 도면이 초기화됩니다. 새로 만들까요?')) return;
+  newProject: async () => {
+    if (!(await confirmDialog({ title: '새로 만들기', message: '현재 도면이 초기화됩니다. 새로 만들까요?', ok: '새로 만들기' }))) return;
     store.replace(createEmptyProject());
     ui.set({ selection: null, soloRoom: null, matPick: null });
     view.fit();
@@ -234,7 +209,7 @@ const actions = {
   saveAsTemplate,
   exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); shell.toast('JSON을 내보냈습니다'); },
   // 시작 화면은 샘플·템플릿으로 프로젝트를 갈아 끼운다: 작업 중이면 먼저 묻는다(새로만들기와 같은 규칙).
-  exit: () => { if (confirmLeave(store.get(), { saveNow: () => auto.saveNow() })) showStart(); },
+  exit: async () => { if (await confirmLeave(store.get(), { saveNow: () => auto.saveNow() })) showStart(); },
 };
 createTopbar({ store, ui, shell, menu, view3d, actions });
 

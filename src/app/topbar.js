@@ -3,15 +3,17 @@ import { openRenderDialog } from '../ui/renderDialog.js';
 import { openGalleryDialog } from '../ui/galleryDialog.js';
 import { openEstimateDialog } from '../ui/estimateDialog.js';
 import { openSpecDialog } from '../ui/specDialog.js';
+import { confirmDialog } from '../ui/confirmDialog.js';
 
 // 벽도 배경 도면도 없으면 잃을 것이 없는 프로젝트다(시작 화면을 바로 띄워도 된다).
 export const projectIsEmpty = p => ((p?.floors ?? []).every(f => !f.walls.length) && !p?.background);
 
 // 나가기·시작 화면 전환 앞의 확인. 묻기 전에 자동 저장본을 최신으로 만들어 "남습니다"를 사실로 만든다.
-export function confirmLeave(project, { saveNow = () => {}, confirm = (...a) => window.confirm(...a) } = {}) {
+// confirm은 confirmDialog와 같은 모양(옵션 객체 → Promise<boolean>)을 받는다(테스트가 갈아 끼운다).
+export async function confirmLeave(project, { saveNow = () => {}, confirm = confirmDialog } = {}) {
   if (projectIsEmpty(project)) return true;
   saveNow();
-  return !!confirm('현재 작업을 저장하지 않고 나갈까요? 자동 저장본은 남습니다.');
+  return !!(await confirm({ title: '나가기', message: '현재 작업을 저장하지 않고 나갈까요? 자동 저장본은 남습니다.', ok: '나가기' }));
 }
 
 export function createTopbar({ store, ui, shell, menu, view3d, actions = {} }) {

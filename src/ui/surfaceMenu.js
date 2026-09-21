@@ -4,6 +4,7 @@
 import { activeFloor } from '../state/schema.js';
 import { deleteWall, deleteRoom, duplicateRoom } from '../state/floorOps.js';
 import { applyRoomWalls, assignmentOf } from '../state/materialOps.js';
+import { confirmDialog, CONFIRM_ROOM_DELETE } from './confirmDialog.js';
 
 const copyItem = (ui, mat) => ({
   label: '마감재 복사', disabled: !mat,
@@ -44,6 +45,6 @@ export function roomMenuItems({ store, ui, roomId, in3d = false, actions = {} })
     { label: '재질 교체', disabled: !actions.replaceMaterial, onSelect: () => actions.replaceMaterial?.(target) },
     { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: roomId }, soloRoom: roomId }) },
     'sep',
-    { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => { if (window.confirm('방과 그 벽을 모두 삭제할까요?')) deleteRoom(store, roomId); } },
+    { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => { confirmDialog(CONFIRM_ROOM_DELETE).then(okay => { if (okay) deleteRoom(store, roomId); }); } },
   ];
 }

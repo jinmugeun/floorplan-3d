@@ -564,3 +564,18 @@ test('선택이 바뀌면 크기 비율 유지가 꺼지고, 잠긴 제품은 �
   expect(activeFloor(store.get()).items.find(i => i.id === b).size[0]).toBe(1500); // 잠긴 제품은 그대로
   expect(document.querySelector('#toasts').textContent).toContain('잠긴');
 });
+
+test('층 삭제는 인앱 확인을 받고 취소하면 남는다', async () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addFloor(store, { name: '2층', copy: 'none' });   // 마지막 층은 지울 수 없으므로 두 층으로 만든다
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  el.querySelector('button[name="floorDelete"]').click();
+  expect(document.querySelector('.modal.confirm').textContent).toContain('층을 삭제할까요?');
+  document.querySelector('.modal.confirm [name="cancel"]').click();
+  await new Promise(r => setTimeout(r, 0));
+  expect(store.get().floors).toHaveLength(2);
+  el.querySelector('button[name="floorDelete"]').click();
+  document.querySelector('.modal.confirm [name="ok"]').click();
+  await new Promise(r => setTimeout(r, 0));
+  expect(store.get().floors).toHaveLength(1);
+});

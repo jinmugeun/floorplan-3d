@@ -73,7 +73,7 @@ describe('벽·방 공용 메뉴', () => {
     expect(a.floor().walls.some(w => w.id === a.wallId)).toBe(false);
   });
 
-  test('방 메뉴 항목과 단일 공간 모드·방 복사·삭제 확인', () => {
+  test('방 메뉴 항목과 단일 공간 모드·방 복사·삭제 확인', async () => {
     const a = setup({ applyTemplate: vi.fn() });
     const items = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId });
     expect(labels(items)).toEqual(['템플릿 적용하기', '방 복사', '마감재 복사', '재질 교체', '단일 공간 모드', '삭제']);
@@ -82,10 +82,15 @@ describe('벽·방 공용 메뉴', () => {
     expect(a.ui.get().soloRoom).toBe(a.roomId);
     pick(items, '방 복사').onSelect();
     expect(a.floor().rooms.length).toBe(2);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     pick(items, '삭제').onSelect();
+    document.querySelector('.modal.confirm [name="cancel"]').click();
+    await new Promise(r => setTimeout(r, 0));
     expect(a.floor().rooms.some(r => r.id === a.roomId)).toBe(true); // 취소하면 남는다
-    window.confirm.mockRestore();
+    pick(items, '삭제').onSelect();
+    document.querySelector('.modal.confirm [name="ok"]').click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(a.floor().rooms.some(r => r.id === a.roomId)).toBe(false); // 확인하면 지워진다
+    // 방을 지운 뒤라 a.roomId로 물어도 null이 된다 — 없는 id로 묻는 뜻은 그대로다.
     expect(roomMenuItems({ store: a.store, ui: a.ui, roomId: '없음' })).toBeNull();
   });
 

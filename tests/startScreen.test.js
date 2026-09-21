@@ -57,3 +57,21 @@ test('템플릿 카드 목록을 보여주고 고르면 onTemplate이 불린다'
   expect(picked).toEqual(['builtin-studio']);
   expect(document.getElementById('startScreen')).toBeNull();     // 고르면 닫힌다
 });
+
+test('자동 저장본이 있으면 "이어서 작업" 카드가 맨 앞에 뜨고 포커스를 받는다', () => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+  const store = createStore(createEmptyProject());
+  const calls = [];
+  openStartScreen({ store, restored: createEmptyProject('강당중 조리실'), onRestore: () => calls.push('restore'), onEmpty: () => calls.push('empty') });
+  const root = document.getElementById('startScreen');
+  const cards = [...root.querySelectorAll('.start-card:not(.tpl)')];
+  expect(cards).toHaveLength(4);
+  expect(cards[0].dataset.start).toBe('restore');
+  expect(cards[0].classList.contains('restore')).toBe(true);
+  expect(cards[0].textContent).toContain('강당중 조리실');
+  expect(document.activeElement).toBe(cards[0]);
+  cards[0].click();
+  expect(calls).toEqual(['restore']);
+  expect(document.getElementById('startScreen')).toBeNull();
+});
