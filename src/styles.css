@@ -2,7 +2,16 @@
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif; font-size: 13px; }
 [hidden] { display: none !important; } /* display:flex 등이 hidden 속성을 덮어쓰지 않게 */
-#layout { display: grid; grid-template-columns: 64px 240px 1fr 300px; grid-template-rows: 48px 1fr 44px; grid-template-areas: "top top top top" "rail panel canvas right" "rail panel bottom right"; height: 100vh; }
+/* 폭은 CSS 변수다(layout.js가 쓴다). 패널을 접으면 그 열과 스플리터 열이 0이 되어 캔버스가 넓어진다. */
+#layout { --panel-w: 320px; --right-w: 300px; display: grid; grid-template-columns: 64px var(--panel-w) 5px 1fr 5px var(--right-w); grid-template-rows: 48px 1fr 44px; grid-template-areas: "top top top top top top" "rail panel psplit canvas rsplit right" "rail panel psplit bottom rsplit right"; height: 100vh; }
+#layout.panel-off { grid-template-columns: 64px 0 0 1fr 5px var(--right-w); }
+#layout.right-off { grid-template-columns: 64px var(--panel-w) 5px 1fr 0 0; }
+#layout.panel-off.right-off { grid-template-columns: 64px 0 0 1fr 0 0; }
+.splitter { background: var(--line); cursor: col-resize; touch-action: none; }
+.splitter:hover, .splitter:focus-visible { background: var(--accent); }
+#panelSplitter { grid-area: psplit; } #rightSplitter { grid-area: rsplit; }
+#panel.collapsed, #right.collapsed { display: none; }
+#layout.panel-off #panelSplitter, #layout.right-off #rightSplitter { display: none; }
 #topbar { grid-area: top; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
 #topbar .group { display: flex; gap: 8px; align-items: center; }
 #topbar button { padding: 5px 9px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; } #topbar .primary { border-color: var(--accent); }
@@ -72,7 +81,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 #library .tabs { display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 0; } #library .tabs button { flex: 1; padding: 6px 4px; font-size: 11px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; box-shadow: none; } #library .tabs button.on { border-color: var(--accent); color: var(--accent); background: #e6eefb; }
 .lib-tools { display: grid; grid-template-columns: 1fr 88px; gap: 4px; margin-bottom: 8px; } .lib-tools input, .lib-tools select { font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; width: 100%; }
 .cat-list { list-style: none; margin: 0; padding: 0; } .crumb { margin-bottom: 6px; } .subs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; } .subs button { padding: 4px 8px; font-size: 11px; border: 1px solid var(--line); background: #fff; border-radius: 10px; cursor: pointer; }
-.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .tile { position: relative; display: flex !important; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px !important; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; font: inherit; text-align: center; }
+/* 320 px 패널에서 3열(타일 ~94 px), 스플리터로 넓히면 4열 이상으로 늘어난다(§12.2). */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; } .tile { position: relative; display: flex !important; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px !important; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; font: inherit; text-align: center; }
+/* 심벌 썸네일은 타일 폭을 채우고 96 px에서 멈춘다(§12.2): 56 px viewBox 그림이라 확대해도 번지지 않는다. */
+.tile-svg { width: 100%; height: auto; max-width: 96px; }
 .tile-name { font-size: 11px; line-height: 1.2; } .tile-code, .tile-size { font-size: 10px; } .tile .fav { position: absolute; top: 2px; right: 4px; color: #d0d5db; } .tile .fav.on { color: #e8b100; }
 .layer-tree, .layer-tree ul { list-style: none; margin: 0; padding: 0; } .layer-tree > li { margin-bottom: 8px; } .layer-room-name { font-size: 11px; color: var(--muted); }
 .layer-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px; padding: 3px 0; border-bottom: 1px solid var(--line); } .layer-item.off { opacity: 0.45; }
@@ -102,7 +114,8 @@ canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid
 .duct-list { list-style: none; margin: 4px 0; padding: 0; } .duct-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 12px; } .duct-list li > span:first-child { flex: 1; }
 .duct-segs li.on { font-weight: 600; } .duct-segs button, .duct-dampers button, .duct-conns button { padding: 2px 6px; font-size: 11px; }
 .duct-dampers input[type="number"] { width: 52px; padding: 1px 3px; font-size: 11px; }
-/* 풍량 표는 240 px 레일에 들어간다: 열 폭을 고정하고 한글 이름이 한 글자씩 끊기지 않게 keep-all로 둔다. */
+/* 풍량 표는 320 px 패널에 들어간다(좁은 창·접힌 패널에서도 안전하게 4열을 유지한다 — §12.2):
+   열 폭을 고정하고 한글 이름이 한 글자씩 끊기지 않게 keep-all로 둔다. */
 .air-wrap { overflow-x: auto; }
 .air-table { table-layout: fixed; } .air-table td.warn { color: #e5484d; font-weight: 600; } .air-table th, .air-table td { padding: 3px 4px; font-size: 11px; } .air-table tr[data-room] { cursor: pointer; }
 .air-table th:first-child, .air-table td:first-child { width: 38%; word-break: keep-all; overflow-wrap: anywhere; }

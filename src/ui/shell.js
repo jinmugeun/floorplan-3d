@@ -4,6 +4,7 @@ import { toast } from './toast.js';
 import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 import { optionBarHtml, applyOptionInput } from './optionBar.js';
+import { loadPanelWidths, savePanelWidth, fitPanelWidths, applyPanelWidths, createSplitter, togglePanel } from './layout.js';
 
 
 // 기즈모 모드 토글은 3D 궤도 뷰에서 기즈모가 실제로 붙는 아이템 하나를 골랐을 때만 쓸 일이 있다.
@@ -55,6 +56,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
       <section data-panel="airflow" hidden><h3>풍량 집계</h3><div id="airflow"></div></section>
       <section data-panel="layers" hidden><h3>리소스 관리</h3><div id="layers"></div></section>
     </aside>
+    <div id="panelSplitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="작업 패널 폭 조절"></div>
     <main id="canvasWrap">
       <div id="optionBar" hidden></div>
       <div id="banner" hidden></div>
@@ -69,6 +71,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
         </div>
       </div>
     </main>
+    <div id="rightSplitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="속성 패널 폭 조절"></div>
     <aside id="right"><div id="minimap"><div class="mm-label">미니맵</div><canvas></canvas></div><div id="props"></div></aside>
     <footer id="bottombar">
       <div class="seg"><button data-mode="2d" class="on">2D</button><button data-mode="plan">평면 <kbd>2</kbd></button><button data-mode="iso">3D <kbd>3</kbd></button><button data-mode="fp">1인칭 <kbd>4</kbd></button></div>
@@ -82,6 +85,24 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   </div>`;
   const q = s => root.querySelector(s);
   const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials'), airflow: q('#airflow') };
+  const layout = q('#layout');
+  // 좁은 창(≤ 1100 px)에서는 저장된 폭을 최소 폭으로 자른다(fitPanelWidths). CSS 미디어 쿼리는
+  // 여기서 쓰는 인라인 폭을 이기지 못하므로 폭 결정은 전부 layout.js에 있다.
+  const widths = fitPanelWidths(loadPanelWidths());
+  applyPanelWidths(layout, widths);
+  const splitters = [
+    createSplitter(q('#panelSplitter'), {
+      get: () => widths.panel,
+      set: w => { widths.panel = w; applyPanelWidths(layout, widths); onMinimapResize(); },
+      onEnd: w => savePanelWidth('panel', w),
+    }),
+    createSplitter(q('#rightSplitter'), {
+      invert: true,   // 오른쪽 패널은 왼쪽으로 끌 때 넓어진다
+      get: () => widths.right,
+      set: w => { widths.right = w; applyPanelWidths(layout, widths); onMinimapResize(); },
+      onEnd: w => savePanelWidth('right', w),
+    }),
+  ];
   const strip = q('#imageStrip');
   strip.addEventListener('change', ev => {
     const el = ev.target;
@@ -99,10 +120,17 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { saveMiniHeight(); onMinimapResize(); }).observe(mini);
 
   function showPanel(name) {
+    togglePanel(layout, 'panel', false);   // 코드에서 패널을 열 때는 접힘을 함께 푼다(교체 모드 등)
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== name);
   }
-  root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => showPanel(b.dataset.panel)));
+  // 레일 버튼: 지금 열려 있는 탭을 다시 누르면 패널을 접는다(캔버스가 넓어진다 — §12.2).
+  root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => {
+    const current = b.classList.contains('on');
+    const collapsed = q('#panel').classList.contains('collapsed');
+    if (current && !collapsed) { togglePanel(layout, 'panel', true); return; }
+    showPanel(b.dataset.panel);
+  }));
   root.querySelectorAll('[data-units]').forEach(b => b.addEventListener('click', () => store.dispatch(d => { d.units = b.dataset.units; }, { record: false })));
   q('#btnLock').addEventListener('click', () => store.dispatch(d => { d.view.lockPlan = !d.view.lockPlan; }, { record: false }));
   // 3D 기즈모 모드 토글(이동 ↔ 회전). R은 1인칭이 쓰므로 단축키 없이 버튼으로만 바꾼다.
@@ -218,5 +246,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     }
   };
   store.subscribe(syncTop); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover };
+  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, destroy() { splitters.forEach(s => s.destroy()); } };
 }

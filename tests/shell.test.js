@@ -373,3 +373,56 @@ test('배너는 ui 상태가 도구 안내보다 앞선다(한 번에 하나만)
   ui.set({ matPick: null });
   expect(banner.textContent).toContain('배치할 위치를 클릭'); // 상태가 풀리면 도구 안내가 돌아온다
 });
+
+test('패널 폭은 CSS 변수로 들어가고 스플리터 두 개가 그리드에 있다', () => {
+  localStorage.clear();                       // 먼저 지운다: 중간에 실패해도 kvp.panelW가 뒤 테스트로 번지지 않게
+  const vw = window.innerWidth;
+  window.innerWidth = 1280;                   // jsdom 기본값은 1024라 fitPanelWidths가 260으로 줄인다
+  try {
+    localStorage.setItem('kvp.panelW', '400');
+    const root = document.createElement('div'); document.body.appendChild(root);
+    createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+    const layout = root.querySelector('#layout');
+    expect(layout.style.getPropertyValue('--panel-w')).toBe('400px');
+    expect(layout.style.getPropertyValue('--right-w')).toBe('300px');
+    const ids = [...layout.children].map(c => c.id);
+    expect(ids).toEqual(['topbar', 'rail', 'panel', 'panelSplitter', 'canvasWrap', 'rightSplitter', 'right', 'bottombar']);
+    expect(root.querySelector('#panelSplitter').getAttribute('aria-label')).toBe('작업 패널 폭 조절');
+  } finally { localStorage.clear(); window.innerWidth = vw; }
+});
+
+test('좁은 창에서는 저장된 폭이라도 최소 폭으로 들어간다(인라인 폭이 미디어 쿼리를 이긴다)', () => {
+  localStorage.clear();
+  const vw = window.innerWidth;
+  window.innerWidth = 1000;
+  try {
+    localStorage.setItem('kvp.panelW', '400');
+    const root = document.createElement('div'); document.body.appendChild(root);
+    createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+    const layout = root.querySelector('#layout');
+    expect(layout.style.getPropertyValue('--panel-w')).toBe('260px');
+    expect(layout.style.getPropertyValue('--right-w')).toBe('260px');
+  } finally { localStorage.clear(); window.innerWidth = vw; }
+});
+
+test('레일 버튼을 같은 탭에서 다시 누르면 패널이 접히고 다른 탭을 누르면 펼쳐진다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });
+  const panel = root.querySelector('#panel');
+  const layout = root.querySelector('#layout');
+  const rail = name => root.querySelector(`#rail [data-panel="${name}"]`);
+  expect(panel.classList.contains('collapsed')).toBe(false);
+  rail('draw').click();                                     // 지금 열려 있는 탭 = 접는다
+  expect(panel.classList.contains('collapsed')).toBe(true);
+  expect(layout.classList.contains('panel-off')).toBe(true);
+  rail('draw').click();                                     // 다시 누르면 펼친다
+  expect(panel.classList.contains('collapsed')).toBe(false);
+  rail('products').click();
+  expect(root.querySelector('#panel section[data-panel="products"]').hidden).toBe(false);
+  expect(panel.classList.contains('collapsed')).toBe(false);
+  rail('products').click();
+  expect(panel.classList.contains('collapsed')).toBe(true);
+  shell.showPanel('materials');                             // 코드에서 패널을 열면 접힘도 풀린다
+  expect(panel.classList.contains('collapsed')).toBe(false);
+  expect(root.querySelector('#panel section[data-panel="materials"]').hidden).toBe(false);
+});
