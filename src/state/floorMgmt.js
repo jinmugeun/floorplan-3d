@@ -33,7 +33,14 @@ export function addFloor(store, { name = null, copy = 'none' } = {}, opts) {
     }
     if (copy === 'all' && base) {
       f.items = seatCopies(base.items, { idMap });
-      f.ducts = structuredClone(base.ducts);
+      // 아이템 사본은 새 id를 받는다: 덕트 연결도 새 id로 옮긴다(seatCopies는 순서를 지킨다).
+      const itemMap = new Map(base.items.map((it, i) => [it.id, f.items[i]?.id ?? null]));
+      // 조리기구가 가리키는 후드도 새 층의 사본을 가리킨다(옛 층의 설비를 가리키면 유령 참조다).
+      f.items = f.items.map(it => (it.props?.hoodId ? { ...it, props: { ...it.props, hoodId: itemMap.get(it.props.hoodId) ?? null } } : it));
+      f.ducts = structuredClone(base.ducts ?? []).map(d => ({
+        ...d, id: uid('d'),
+        connections: (d.connections ?? []).map(c => ({ ...c, itemId: itemMap.get(c.itemId) ?? null })).filter(c => c.itemId),
+      }));
       f.measures = structuredClone(base.measures);
     }
     f.walls = normalizeWalls(f.walls);

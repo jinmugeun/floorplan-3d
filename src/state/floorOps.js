@@ -3,7 +3,7 @@ import { pointInPolygon, centroid } from '../geom/rooms.js';
 import { transformWalls, wallDir } from '../geom/walls.js';
 import { eq, dot } from '../geom/vec.js';
 import { wallAxis, placeOnWall, isEmbed } from '../geom/items.js';
-import { reroom, reattach, seatCopies, movable, ROOM_PROPS, cloneProp } from './floorInternal.js';
+import { reroom, reattach, seatCopies, movable, ROOM_PROPS, cloneProp, pruneDuctConnections } from './floorInternal.js';
 
 // mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds는 300줄을 넘어 itemOps.js로 나눴다.
 export * from './itemOps.js';
@@ -11,6 +11,9 @@ export * from './itemOps.js';
 export * from './arrangeOps.js';
 // addFloor, setActiveFloor, renameFloor, updateFloor, deleteFloor, totalArea는 300줄을 넘어 floorMgmt.js로 나눴다.
 export * from './floorMgmt.js';
+// 덕트 액션(addDuct·updateSegment·connectDuct …)은 ductOps.js에 있다. 이름이 겹치는 export가 없으므로
+// 여기서 다시 내보낸다(호출자는 계속 floorOps.js만 import한다).
+export * from './ductOps.js';
 
 export function setWalls(store, walls, opts = {}) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = walls; reroom(f); reattach(f); }, opts);
@@ -137,6 +140,7 @@ export function selectionStillValid(state, selection) {
   if (selection.type === 'wall') return f.walls.some(w => w.id === selection.id);
   if (selection.type === 'room') return f.rooms.some(r => r.id === selection.id);
   if (selection.type === 'item') return (f.items ?? []).some(i => i.id === selection.id); // 2B의 배치 아이템
+  if (selection.type === 'duct') return (f.ducts ?? []).some(d => d.id === selection.id);
   if (selection.type === 'multi') {
     const pool = selection.kind === 'wall' ? f.walls : f.items;
     return selection.ids.some(id => pool.some(x => x.id === id));
@@ -153,6 +157,15 @@ export function pruneSelection(state, selection) {
     const ids = selection.ids.filter(id => pool.some(x => x.id === id));
     if (ids.length === selection.ids.length) return selection; // 그대로면 같은 객체
     return ids.length ? { ...selection, ids } : null;
+  }
+  // 점을 지우면 고른 꼭짓점·구간 번호가 범위를 벗어난다: 덕트는 남기고 번호만 비운다.
+  if (selection.type === 'duct') {
+    const d = (f.ducts ?? []).find(x => x.id === selection.id);
+    if (!d) return null;
+    const vertex = Number.isInteger(selection.vertex) && selection.vertex < d.points.length ? selection.vertex : null;
+    const segment = Number.isInteger(selection.segment) && selection.segment < d.segments.length ? selection.segment : null;
+    return vertex === (selection.vertex ?? null) && segment === (selection.segment ?? null)
+      ? selection : { type: 'duct', id: selection.id, segment, vertex };
   }
   return selectionStillValid(state, selection) ? selection : null;
 }
@@ -205,6 +218,7 @@ export function deleteItems(store, ids, opts = {}) {
     const f = activeFloor(d);
     f.items = f.items.filter(i => !set.has(i.id));
     f.groups = (f.groups ?? []).map(g => ({ ...g, itemIds: g.itemIds.filter(x => !set.has(x)) })).filter(g => g.itemIds.length > 1);
+    pruneDuctConnections(f);   // 지운 설비를 가리키는 덕트 연결도 함께 사라진다
   }, opts);
 }
 // 제자리 회전. 벽 부착 아이템은 벽 방향에 고정이라 돌리지 않고(명세 8.5), 잠긴 아이템도 건드리지 않는다.

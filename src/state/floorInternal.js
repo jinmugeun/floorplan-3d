@@ -62,6 +62,22 @@ export function seatCopies(drafts, ctx = {}) {
   return drafts.map(d => { const c = seatCopy(d, { ...ctx, items: acc }); acc.push(c); return c; });
 }
 
+// 설비가 사라지면 그 설비를 가리키던 덕트 연결도 사라진다(아키텍처 §11.2). 조리기구가 가리키던
+// 후드(props.hoodId)도 같이 비운다 — 둘 다 "아이템 id를 들고 있는 참조"라 같은 자리에서 정리한다.
+// reattach가 도는 자리가 아니라 "아이템이 줄어드는" 모든 자리에서 부른다
+// (floorOps.deleteItems, templates/roomTemplates.applyRoomTemplate — 활성 층의 items가 줄어드는 곳은 이 둘뿐이다).
+export function pruneDuctConnections(f) {
+  const live = new Set((f.items ?? []).map(i => i.id));
+  f.ducts = (f.ducts ?? []).map(d => {
+    const keep = (d.connections ?? []).filter(c => live.has(c.itemId));
+    return keep.length === (d.connections ?? []).length ? d : { ...d, connections: keep };
+  });
+  for (let i = 0; i < (f.items ?? []).length; i++) {
+    const it = f.items[i];
+    if (it?.props?.hoodId && !live.has(it.props.hoodId)) f.items[i] = { ...it, props: { ...it.props, hoodId: null } };
+  }
+}
+
 // 잠긴 아이템은 이동·정렬·상대이동·반전으로 움직이지 않는다(계획 I16). 패치를 만드는 자리마다
 // 흩어지지 않게 한 곳에서 걸러 낸다. updateItems 자체에는 넣지 않는다(setItemFlag의 잠금 해제가 막힌다).
 export const movable = items => (items ?? []).filter(i => !i.locked);

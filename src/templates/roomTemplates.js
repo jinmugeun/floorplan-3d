@@ -9,7 +9,7 @@ import { roomInnerPolygon, pointInPolygon } from '../geom/rooms.js';
 import { nearestWallPlacement, itemCorners, isEmbed, WALL_ATTACH_DIST } from '../geom/items.js';
 import { obbOverlap } from '../geom/collide.js';
 import { add, sub, mul, dot, norm, len } from '../geom/vec.js';
-import { reattach, seatCopies } from '../state/floorInternal.js';
+import { reattach, seatCopies, pruneDuctConnections } from '../state/floorInternal.js';
 
 const T = (id, name, roomType, use, minArea, maxArea, budget, items) => ({ id, name, roomType, use, minArea, maxArea, budget, items });
 const I = (productId, at, rot = 0, offset = [0, 0]) => ({ productId, at, rot, offset });
@@ -180,6 +180,7 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
     const keep = seated.filter((s, i) => !(made[i].attach === 'wall' && made[i].wallId && !s.wallId));
     g.items.push(...keep);
     placed.push(...keep.map(i => i.id));
+    pruneDuctConnections(g);   // 템플릿이 지운 설비를 가리키는 덕트 연결도 함께 사라진다(아이템이 줄어드는 두 번째 경로다)
     reattach(g);   // 벽 부착 제품(후드·거울)의 pos·rot을 (wallId, t)에서 다시 만든다(floorInternal.js의 불변식)
   });
   return { placed, skipped: Math.max(0, (t.items ?? []).length - placed.length) };
