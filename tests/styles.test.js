@@ -70,6 +70,9 @@ test('활성 버튼의 kbd는 currentColor를 쓰고 하위 카테고리는 칩�
   expect(CSS).toMatch(/#panel \.subs button[^{]*\{[^}]*width:\s*auto/);
   // §14.8: 맨 .error 규칙이 있어야 속성 패널의 충돌 한 줄이 경고 색으로 보인다(.modal .error만으로는 안 된다).
   expect(CSS).toMatch(/^\.error\s*\{[^}]*color:\s*var\(--exhaust\)/m);
+  // §15.8: 카테고리 칩도 #panel button의 width:100%에 눌리지 않아야 한다(하위 카테고리와 같은 규칙).
+  expect(CSS).toContain('#panel .chips button');
+  expect(CSS).toMatch(/#panel \.chips button[^{]*\{[^}]*width:\s*auto/);
 });
 
 // Task 8 리뷰 Important 1: 드래그 중 캔버스 높이가 바뀌는 문제를 "배너를 캔버스 위로 띄워서" 고치지

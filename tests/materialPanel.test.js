@@ -179,3 +179,15 @@ test('placeTile은 타일 크기 칸에 포커스를 준다', () => {
   expect(m).toBeTruthy();
   expect(document.activeElement).toBe(a.el.querySelector('[name="scaleW"]'));
 });
+
+// §15.8: 마감재 패널도 같은 구조다(타일 배치로 들어오면 타일 칩이 켜진 채다).
+test('처음 열면 전체 스와치 그리드가 보이고 타일 배치는 타일 칩을 켠다', () => {
+  const { el, panel } = setup();
+  expect(el.querySelectorAll('.chips button[data-cat]')).toHaveLength(11);
+  expect(el.querySelectorAll('.tile').length).toBeGreaterThan(10);
+  expect(el.querySelector('.cat-list')).toBeNull();
+  panel.placeTile();
+  expect(el.querySelector('[data-cat="타일"]').classList.contains('on')).toBe(true);
+  expect(el.querySelector('[data-cat-all]').classList.contains('on')).toBe(false);
+  expect(el.querySelector('[name="scaleW"]')).not.toBeNull();   // 타일 크기 칸도 함께 보인다
+});

@@ -2,6 +2,7 @@ import { CATEGORIES, PRODUCTS, productsIn, searchProducts, sortProducts, fmtSize
 import { symbolSvg } from '../products/symbols.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
+import { chipsHtml } from './libraryChips.js';
 
 const key = id => `fav:${id}`;
 // 즐겨찾기는 프로젝트 파일이 아니라 브라우저에 남긴다(계정이 없으므로). 저장이 막힌 브라우저에서도 죽지 않는다.
@@ -16,6 +17,7 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
   container.innerHTML = `
     <div class="tabs" data-part="tabs"></div>
     <p class="hint" data-part="note" hidden></p>
+    <div data-part="chips"></div>
     <div class="lib-tools">
       <input type="search" name="q" placeholder="전체 검색 (이름·코드·태그)" aria-label="제품 검색">
       <select name="sort" aria-label="정렬"><option value="name">이름순</option><option value="size">크기순</option></select>
@@ -29,12 +31,12 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     for (const i of activeFloor(store.get()).items) m.set(i.productId, (m.get(i.productId) ?? 0) + 1);
     return m;
   };
-  // null이면 타일 대신 카테고리 목록을 보여준다는 뜻이다.
   function visible() {
     if (st.q.trim()) return sortProducts(searchProducts(st.q), st.sort);       // 검색은 항상 전체 검색(명세 LB-03)
     if (st.tab === 'fav') return sortProducts(favProducts(), st.sort);
     if (st.tab === 'placed') { const m = placedCounts(); return sortProducts(PRODUCTS.filter(p => m.has(p.id)), st.sort); }
-    if (!st.category) return null;
+    // §15.8: 필터가 없으면 "전체" 그리드다(타일은 카테고리 순, 그 안에서 현재 정렬 기준).
+    if (!st.category) return CATEGORIES.flatMap(c => sortProducts(productsIn(c.name), st.sort));
     return sortProducts(productsIn(st.category, st.sub), st.sort);
   }
   function tileHtml(p, count) {
@@ -58,12 +60,12 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     if (st.tab !== 'ohouse' || st.q.trim() || !st.category) { c.innerHTML = ''; return; }
     c.innerHTML = `<button type="button" data-up="1" class="crumb">‹ ${esc(st.category)}${st.sub ? ` / ${esc(st.sub)}` : ''}</button>`;
   }
+  // 칩 행은 "오늘의집 제품" 탭에서만 뜻이 있다(즐겨찾기·배치된 제품은 카테고리 필터가 없다).
+  function renderChips() {
+    part('chips').innerHTML = st.tab === 'ohouse' && !st.q.trim() ? chipsHtml(CATEGORIES.map(c => c.name), { active: st.category }) : '';
+  }
   function renderList() {
     const list = visible(), el = part('list');
-    if (list === null) {
-      el.innerHTML = `<ul class="cat-list">${CATEGORIES.map(c => `<li><button type="button" data-cat="${esc(c.name)}">${esc(c.name)}</button></li>`).join('')}</ul>`;
-      return;
-    }
     const counts = st.tab === 'placed' ? placedCounts() : null;
     const subs = st.tab === 'ohouse' && !st.q.trim() && st.category && !st.sub
       ? `<div class="subs">${[['', '전체'], ...(CATEGORIES.find(c => c.name === st.category)?.subs ?? []).map(s => [s, s])]
@@ -73,7 +75,7 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
       ? `<div class="tiles">${list.map(p => tileHtml(p, counts?.get(p.id))).join('')}</div>`
       : `<p class="hint">해당하는 제품이 없습니다.</p>`);
   }
-  function render() { renderTabs(); renderCrumbs(); renderList(); }
+  function render() { renderTabs(); renderChips(); renderCrumbs(); renderList(); }
 
   const onClick = ev => {
     const fav = ev.target.closest('[data-fav]');
@@ -81,8 +83,10 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     const tab = ev.target.closest('[data-tab]');
     if (tab) { st.tab = tab.dataset.tab; st.category = null; st.sub = null; render(); return; }
     if (ev.target.closest('[data-up]')) { if (st.sub) st.sub = null; else st.category = null; render(); return; }
+    if (ev.target.closest('[data-cat-all]')) { st.category = null; st.sub = null; render(); return; }
     const cat = ev.target.closest('[data-cat]');
-    if (cat) { st.category = cat.dataset.cat; st.sub = null; render(); return; }
+    // 같은 칩을 다시 누르면 필터가 풀린다(§15.8) — 칩이 토글이라는 것을 누르면 바로 알 수 있다.
+    if (cat) { st.category = st.category === cat.dataset.cat ? null : cat.dataset.cat; st.sub = null; render(); return; }
     const sub = ev.target.closest('[data-sub]');
     if (sub) { st.sub = sub.dataset.sub || null; render(); return; }
     const tile = ev.target.closest('.tile');
@@ -95,7 +99,7 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     }
   };
   const onInput = ev => {
-    if (ev.target.name === 'q') { st.q = ev.target.value; renderCrumbs(); renderList(); return; } // 입력란은 다시 그리지 않아 포커스가 유지된다
+    if (ev.target.name === 'q') { st.q = ev.target.value; renderChips(); renderCrumbs(); renderList(); return; } // 입력란은 다시 그리지 않아 포커스가 유지된다
     if (ev.target.name === 'sort') { st.sort = ev.target.value; renderList(); }
   };
   // §14.11: 끌어 놓기도 배치다. 드래그 중에는 무엇을 끌고 있는지 dataTransfer에서 읽을 수 없으므로

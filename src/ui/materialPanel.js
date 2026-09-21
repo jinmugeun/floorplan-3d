@@ -2,6 +2,7 @@ import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialB
 import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, MAT_RANGE } from '../state/schema.js';
 import { esc } from '../util/html.js';
+import { chipsHtml } from './libraryChips.js';
 
 const key = id => `favmat:${id}`;
 // 즐겨찾기는 프로젝트 파일이 아니라 브라우저에 남긴다(계정이 없으므로). 저장이 막힌 브라우저에서도 죽지 않는다.
@@ -48,18 +49,18 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
   container.innerHTML = `
     <div class="tabs" data-part="tabs"></div>
     <p class="hint" data-part="note" hidden></p>
+    <div data-part="chips"></div>
     <div data-part="tile"></div>
     <div class="lib-tools"><input type="search" name="q" placeholder="전체 검색 (이름·코드)" aria-label="마감재 검색"></div>
     <div data-part="crumbs"></div>
     <div class="lib-list" data-part="list"></div>`;
   const part = n => container.querySelector(`[data-part="${n}"]`);
 
-  // null이면 타일 대신 카테고리 목록을 보여준다는 뜻이다.
   function visible() {
     if (st.q.trim()) return searchMaterials(st.q);
     if (st.tab === 'fav') return favMaterials();
     if (st.tab === 'placed') { const c = placedMaterials(activeFloor(store.get())); return MATERIALS.filter(m => c.has(m.id)); }
-    if (!st.category) return null;
+    if (!st.category) return MATERIALS;      // §15.8: 필터가 없으면 전체 그리드(카탈로그 순서)
     return materialsIn(st.category);
   }
   const tileHtml = (m, count) => `<button type="button" class="tile" data-id="${m.id}" title="${esc(`${m.name} · ${m.category}`)}">
@@ -83,12 +84,11 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     const c = part('crumbs');
     c.innerHTML = st.tab !== 'ohouse' || st.q.trim() || !st.category ? '' : `<button type="button" data-up="1" class="crumb">‹ ${esc(st.category)}</button>`;
   }
+  function renderChips() {
+    part('chips').innerHTML = st.tab === 'ohouse' && !st.q.trim() ? chipsHtml(MATERIAL_CATEGORIES, { active: st.category }) : '';
+  }
   function renderList() {
     const list = visible(), el = part('list');
-    if (list === null) {
-      el.innerHTML = `<ul class="cat-list">${MATERIAL_CATEGORIES.map(c => `<li><button type="button" data-cat="${esc(c)}">${esc(c)}</button></li>`).join('')}</ul>`;
-      return;
-    }
     const counts = st.tab === 'placed' ? placedMaterials(activeFloor(store.get())) : null;
     el.innerHTML = list.length
       ? `<div class="tiles">${list.map(m => tileHtml(m, counts?.get(m.id))).join('')}</div>`
@@ -96,7 +96,7 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     // 스와치는 innerHTML 다음에 그린다(캔버스는 문자열로 그릴 수 없다).
     for (const c of el.querySelectorAll('canvas.swatch')) drawSwatch(c, materialById(c.closest('.tile').dataset.id));
   }
-  const render = () => { renderTabs(); renderTile(); renderCrumbs(); renderList(); };
+  const render = () => { renderTabs(); renderChips(); renderTile(); renderCrumbs(); renderList(); };
 
   const onClick = ev => {
     const fav = ev.target.closest('[data-fav]');
@@ -104,8 +104,9 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     const tab = ev.target.closest('[data-tab]');
     if (tab) { st.tab = tab.dataset.tab; st.category = null; render(); return; }
     if (ev.target.closest('[data-up]')) { st.category = null; render(); return; }
+    if (ev.target.closest('[data-cat-all]')) { st.category = null; render(); return; }
     const cat = ev.target.closest('[data-cat]');
-    if (cat) { st.category = cat.dataset.cat; render(); return; }
+    if (cat) { st.category = st.category === cat.dataset.cat ? null : cat.dataset.cat; render(); return; }   // 같은 칩 = 토글(§15.8)
     const tile = ev.target.closest('.tile');
     if (!tile) return;
     const m = materialById(tile.dataset.id);
@@ -127,7 +128,7 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
   // 입력란은 다시 그리지 않아 포커스가 유지된다.
   const onInput = ev => {
     const name = ev.target.name;
-    if (name === 'q') { st.q = ev.target.value; renderCrumbs(); renderList(); return; }
+    if (name === 'q') { st.q = ev.target.value; renderChips(); renderCrumbs(); renderList(); return; }
     if (name !== 'scaleW' && name !== 'scaleH') return;
     if (st.category !== TILE_CATEGORY) return;              // 타일 칸이 남아 있는 다른 카테고리에서는 읽지 않는다
     st.scale = [clampScale(container.querySelector('[name="scaleW"]').value), clampScale(container.querySelector('[name="scaleH"]').value)];

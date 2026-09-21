@@ -4,7 +4,7 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, createItem } from '../src/state/schema.js';
 import { addItem } from '../src/state/floorOps.js';
-import { productById } from '../src/products/catalog.js';
+import { productById, CATEGORIES, PRODUCTS } from '../src/products/catalog.js';
 import { createLibraryPanel, isFav, toggleFav } from '../src/ui/libraryPanel.js';
 
 function setup() {
@@ -151,4 +151,31 @@ describe('라이브러리 패널', () => {
     const bare = new Event('dragstart', { bubbles: true }); bare.dataTransfer = { setData: () => { throw new Error('부르면 안 된다'); } };
     expect(() => el.querySelector('[data-part="tabs"]').dispatchEvent(bare)).not.toThrow();
   });
+});
+
+// §15.8(감사 §26): 처음 열면 제품이 하나도 없었다(카테고리 목록 13줄만).
+test('처음 열면 전체 그리드와 칩 행이 함께 보인다', () => {
+  const { el } = setup();
+  expect(el.querySelectorAll('.chips button[data-cat]')).toHaveLength(13);
+  expect(el.querySelector('[data-cat-all]').classList.contains('on')).toBe(true);
+  const tiles = [...el.querySelectorAll('.tile')];
+  expect(tiles.length).toBeGreaterThan(20);                 // 카탈로그 전체가 보인다
+  // 타일은 카테고리 순이다: 첫 타일의 카테고리가 CATEGORIES의 첫 카테고리와 같다.
+  expect(PRODUCTS.find(p => p.id === tiles[0].dataset.id).category).toBe(CATEGORIES[0].name);
+  expect(el.querySelector('.cat-list')).toBeNull();          // 전폭 1열 목록은 사라졌다
+});
+
+test('칩을 누르면 필터, "전체"를 누르면 다시 전체다', () => {
+  const { el, panel } = setup();
+  click(el, '[data-cat="소파"]');
+  expect(panel.state.category).toBe('소파');
+  expect(el.querySelector('[data-cat="소파"]').classList.contains('on')).toBe(true);
+  const filtered = el.querySelectorAll('.tile').length;
+  click(el, '[data-cat="소파"]');                            // 같은 칩을 다시 누르면 필터가 풀린다
+  expect(panel.state.category).toBeNull();
+  expect(el.querySelectorAll('.tile').length).toBeGreaterThan(filtered);
+  click(el, '[data-cat="소파"]');
+  click(el, '[data-cat-all]');
+  expect(panel.state.category).toBeNull();
+  expect(el.querySelector('[data-cat-all]').classList.contains('on')).toBe(true);
 });
