@@ -2,9 +2,9 @@
 // 실제 동작 중 UI가 필요한 것(재질 교체 패널·마감재 편집기·템플릿 대화상자·뷰 전환)은
 // main.js가 넘기는 actions가 한다. actions에 없는 항목은 꺼 둔다(빈 메뉴 항목을 만들지 않는다).
 import { activeFloor } from '../state/schema.js';
-import { deleteWall, deleteRoom, duplicateRoom } from '../state/floorOps.js';
+import { deleteWall, duplicateRoom } from '../state/floorOps.js';
 import { applyRoomWalls, assignmentOf } from '../state/materialOps.js';
-import { confirmDialog, CONFIRM_ROOM_DELETE } from './confirmDialog.js';
+import { removeRoom } from '../app/deleteActions.js';
 
 const copyItem = (ui, mat) => ({
   label: '마감재 복사', disabled: !mat,
@@ -45,6 +45,7 @@ export function roomMenuItems({ store, ui, roomId, in3d = false, actions = {} })
     { label: '재질 교체', disabled: !actions.replaceMaterial, onSelect: () => actions.replaceMaterial?.(target) },
     { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: roomId }, soloRoom: roomId }) },
     'sep',
-    { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => { confirmDialog(CONFIRM_ROOM_DELETE).then(okay => { if (okay) deleteRoom(store, roomId); }); } },
+    // 확인 뒤 재확인(방이 그 사이 사라졌는지)까지 removeRoom이 한다 — 삭제 도구·선택 삭제와 같은 자리다.
+    { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => removeRoom(store, ui, roomId) },
   ];
 }

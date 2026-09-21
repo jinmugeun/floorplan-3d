@@ -64,4 +64,36 @@ describe('인앱 확인 대화상자', () => {
   test('방 삭제 문구는 상수 한 곳에서 온다', () => {
     expect(CONFIRM_ROOM_DELETE).toEqual({ title: '방 삭제', message: '방과 그 벽을 모두 삭제할까요?', ok: '삭제', danger: true });
   });
+
+  test('열려 있는 동안은 Esc·Enter·Tab이 아닌 키도 전역 단축키로 새지 않는다', async () => {
+    const leaked = [];
+    window.addEventListener('keydown', ev => leaked.push(ev.key));
+    const p = confirmDialog({ message: '지울까요?' });
+    key('z', { ctrlKey: true });   // Ctrl+Z(undo)
+    key('s', { ctrlKey: true });   // Ctrl+S(저장)
+    key('d');                      // 도구 전환 글자
+    key('Delete');                 // 선택 삭제 단축키
+    expect(leaked).toEqual([]);    // 창까지 내려간 키가 하나도 없다
+    key('Enter');
+    await expect(p).resolves.toBe(true);
+    expect(leaked).toEqual([]);
+  });
+
+  test('열려 있는 동안 두 번째 호출은 새 모달을 만들지 않고 같은 Promise를 돌려준다', async () => {
+    const p = confirmDialog({ message: '지울까요?' });
+    const q = confirmDialog({ message: '다른 문구' }); // 열려 있으므로 이 인자는 무시된다
+    expect(q).toBe(p);
+    expect(document.querySelectorAll('.modal.confirm').length).toBe(1);
+    expect(card().textContent).toContain('지울까요?'); // 첫 번째 문구가 그대로 유지된다
+    expect(document.activeElement).toBe(card().querySelector('[name="ok"]')); // 다시 ok에 포커스
+    key('Enter');
+    await expect(Promise.all([p, q])).resolves.toEqual([true, true]);
+    expect(card()).toBeNull();
+
+    // 닫힌 뒤에는 다시 새 대화상자를 열 수 있다.
+    const r = confirmDialog({ message: '지울까요?' });
+    expect(card()).not.toBeNull();
+    card().querySelector('[name="cancel"]').click();
+    await expect(r).resolves.toBe(false);
+  });
 });

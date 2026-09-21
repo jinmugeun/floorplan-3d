@@ -77,4 +77,19 @@ describe('삭제 배선', () => {
     a.deleteOrTool();
     expect(a.tools).toEqual(['delete']);
   });
+
+  test('확인을 기다리는 동안 방이 사라지면 아무것도 지우지 않는다(undo 단계도 늘지 않는다)', async () => {
+    const a = setup();
+    const roomId = a.f().rooms[0].id;
+    a.ui.set({ selection: { type: 'room', id: roomId } });
+    a.deleteSelection();                        // 대화상자 열림(아직 아무것도 지우지 않았다)
+    expect(document.querySelector('.modal.confirm')).not.toBeNull();
+    a.store.undo();                             // 대화상자 뒤에서 방이 사라진다(벽 추가를 취소)
+    expect(a.f().rooms).toHaveLength(0);
+    const before = a.store.get();
+    const canUndoBefore = a.store.canUndo();
+    ok(); await flush();                         // 이제서야 확인 — removeRoom이 방을 다시 찾아본다
+    expect(a.store.get()).toBe(before);          // 두 번째 dispatch가 없다(상태 참조가 그대로다)
+    expect(a.store.canUndo()).toBe(canUndoBefore); // undo 단계도 늘지 않는다
+  });
 });

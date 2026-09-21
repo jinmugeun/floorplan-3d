@@ -8,17 +8,19 @@ import { hitWall } from '../geom/walls.js';
 import { pointInPolygon } from '../geom/rooms.js';
 import { confirmDialog, CONFIRM_ROOM_DELETE } from '../ui/confirmDialog.js';
 
+// 방 삭제는 벽까지 함께 사라지므로 늘 확인을 받는다. 대화상자가 열려 있는 동안 방이 사라질 수
+// 있어(undo·다른 경로) 확인 뒤에 다시 찾는다 — 이 재확인은 방을 지우는 모든 자리(삭제 도구·선택
+// 삭제·방 우클릭 메뉴)가 공유해야 하므로 여기 한 곳에 둔다(surfaceMenu.js도 이 함수를 쓴다).
+export async function removeRoom(store, ui, roomId) {
+  if (!(await confirmDialog(CONFIRM_ROOM_DELETE))) return false;
+  if (!activeFloor(store.get()).rooms.some(r => r.id === roomId)) return false;
+  deleteRoom(store, roomId);
+  const s = ui.get().selection;
+  if (s?.type === 'room' && s.id === roomId) ui.set({ selection: null });
+  return true;
+}
+
 export function createDeleteActions({ store, ui, view, toast = () => {}, setTool = () => {} }) {
-  // 방 삭제는 벽까지 함께 사라지므로 늘 확인을 받는다. 대화상자가 열려 있는 동안 방이 사라질 수
-  // 있어(undo·다른 경로) 확인 뒤에 다시 찾는다.
-  async function removeRoom(roomId) {
-    if (!(await confirmDialog(CONFIRM_ROOM_DELETE))) return false;
-    if (!activeFloor(store.get()).rooms.some(r => r.id === roomId)) return false;
-    deleteRoom(store, roomId);
-    const s = ui.get().selection;
-    if (s?.type === 'room' && s.id === roomId) ui.set({ selection: null });
-    return true;
-  }
   function deleteSelection() {
     const s = ui.get().selection;
     if (deleteSelectedDuct({ store, ui, toast })) return;           // 덕트 규칙은 계획 3의 한 함수가 정본이다
@@ -26,7 +28,7 @@ export function createDeleteActions({ store, ui, view, toast = () => {}, setTool
     if (s?.type === 'multi' && s.kind === 'item') { deleteItems(store, s.ids); ui.set({ selection: null }); return; }
     if (s?.type === 'wall') { deleteWall(store, s.id); ui.set({ selection: null }); return; }
     if (s?.type === 'multi' && s.kind === 'wall') { deleteWalls(store, s.ids); ui.set({ selection: null }); return; }
-    if (s?.type === 'room') removeRoom(s.id);                       // 확인은 비동기다(호출자는 기다리지 않는다)
+    if (s?.type === 'room') removeRoom(store, ui, s.id);            // 확인은 비동기다(호출자는 기다리지 않는다)
   }
   function createDeleteTool() {
     return {
@@ -36,11 +38,11 @@ export function createDeleteActions({ store, ui, view, toast = () => {}, setTool
         const w = hitWall(f.walls, p, 6 / view.camera.scale);
         if (w) { deleteWall(store, w.id); return; }
         const r = f.rooms.find(x => pointInPolygon(p, x.points));
-        if (r) removeRoom(r.id);
+        if (r) removeRoom(store, ui, r.id);
       },
       onPointerMove() {}, onPointerUp() {}, onKey: () => false, draw() {}, cancel() {},
     };
   }
   const deleteOrTool = () => { if (ui.get().selection) deleteSelection(); else setTool('delete'); };
-  return { createDeleteTool, deleteSelection, deleteOrTool, removeRoom };
+  return { createDeleteTool, deleteSelection, deleteOrTool, removeRoom: roomId => removeRoom(store, ui, roomId) };
 }
