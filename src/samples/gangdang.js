@@ -9,14 +9,15 @@ import { nearestWallPlacement, WALL_ATTACH_DIST } from '../geom/items.js';
 
 const inside = (p, [x0, y0, x1, y1]) => p[0] > x0 && p[0] < x1 && p[1] > y0 && p[1] < y1;
 
-// 설비 하나를 앱과 같은 경로로 앉힌다: 천장 부착은 층 높이에서 높이를 빼 z를 잡고(배치 도구와 같은 규칙),
+// 설비 하나를 앱과 같은 경로로 앉힌다: 천장 부착은 기본으로 층 높이에서 높이를 빼 z를 잡되(배치 도구와 같은 규칙),
+// JSON이 z를 명시하면 그 값을 따른다(후드처럼 천장에서 내려 다는 설비를 위한 예외 — 리뷰 I-3).
 // 벽 부착(환기캡)은 nearestWallPlacement로 벽을 찾아 (wallId, t)에서 pos·rot을 만든다
 // ("pos는 (wallId, t)의 결과"라는 2B 불변식을 샘플도 지킨다).
 function seatEquip(floor, height, e) {
   const product = productById(e.product);
   const size = [...(e.size ?? product.size)];
   const patch = { id: e.id, pos: [...e.pos], rot: e.rot ?? 0, size, props: { ...product.equip, ...(e.props ?? {}) } };
-  if (product.attach === 'ceiling') patch.z = Math.max(0, Math.round(height - size[2]));
+  if (product.attach === 'ceiling') patch.z = e.z != null ? Math.round(e.z) : Math.max(0, Math.round(height - size[2]));
   else patch.z = e.z ?? product.zDefault ?? 0;
   if (product.attach === 'wall') {
     const hit = nearestWallPlacement(floor.walls, patch.pos, size, WALL_ATTACH_DIST);

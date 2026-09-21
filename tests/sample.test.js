@@ -6,7 +6,7 @@ import { createEmptyProject, activeFloor, SCHEMA_VERSION } from '../src/state/sc
 import { totalArea } from '../src/state/floorOps.js';
 import { roomAirflow, systemAirflow, airflowSummary } from '../src/vent/airflow.js';
 import { equipType } from '../src/vent/equipment.js';
-import { ductLength } from '../src/geom/ducts.js';
+import { ductLength, riser } from '../src/geom/ducts.js';
 import { collidingIds } from '../src/geom/collide.js';
 
 test('the descriptor covers the M-106 envelope with 11 named rooms', () => {
@@ -64,7 +64,7 @@ test('후드 10개의 풍량이 M-106 규격표와 같다', () => {
   const f = activeFloor(buildSampleProject());
   const hoods = f.items.filter(i => equipType(i) === 'hood');
   expect(hoods.map(h => h.props.cmh).sort((a, b) => a - b)).toEqual([396, 3326, 3326, 3456, 3600, 4590, 4590, 4990, 4990, 6426]);
-  expect(hoods.every(h => h.attach === 'ceiling' && h.z === 2300)).toBe(true);   // 층 높이 2900 − 후드 높이 600
+  expect(hoods.every(h => h.attach === 'ceiling' && h.z === 1900)).toBe(true);   // 천장 3500에 밀착하지 않고 z 1900(상단 2500)에 건다
   const h3 = hoods.find(h => h.props.no === 3);
   expect(h3.pos).toEqual([14350, 12700]);
   expect(h3.rot).toBe(90);
@@ -74,7 +74,7 @@ test('후드 10개의 풍량이 M-106 규격표와 같다', () => {
 test('디퓨저·팬·환기캡이 제자리에 앉는다', () => {
   const f = activeFloor(buildSampleProject());
   const diffs = f.items.filter(i => equipType(i) === 'diffuser');
-  expect(diffs.every(d => d.z === 2800)).toBe(true);                            // 2900 − 100
+  expect(diffs.every(d => d.z === 3400)).toBe(true);                            // 3500 − 100
   expect(diffs.filter(d => d.props.symbol === '가')).toHaveLength(6);
   expect(diffs.filter(d => d.props.flow === 'exhaust')).toHaveLength(5);        // 라 2개 + 바 3개
   expect(f.items.filter(i => equipType(i) === 'fan').map(i => i.props.fanId).sort()).toEqual(['F-2', 'F-3', 'F-4', 'FB']);
@@ -100,6 +100,46 @@ test('덕트 10개가 추정 표시와 함께 들어가고 연결이 모두 살�
   const east = f.ducts.find(d => d.id === 'duct_f3_east');
   expect(east.segments.map(s => s.w)).toEqual([1000, 1000, 1000, 800, 800]);    // 한 폴리라인 안에서 축소된다(DT-04)
   expect(Math.round(ductLength(east))).toBe(21650);                             // 13650 + 2300 + 1700 + 2000 + 2000
+});
+
+// 리뷰 I-3: 후드가 천장(3500)에 밀착하지 않고 z 1900(상단 2500)에 걸려 덕트(중심 z 2900) 아래에
+// 여유를 두므로, riser()가 모든 연결에서 실제로 쓸모 있는 라이저(≥10mm)를 만들고 설비 박스와
+// 덕트 구간 박스가 z 방향으로 겹치지 않는다(둘 중 하나가 온전히 위/아래에 있다 — fractional-safe로 1mm 여유를 둔다).
+test('덕트-설비 연결 35곳 전부에서 라이저가 서고 박스가 겹치지 않는다', () => {
+  const f = activeFloor(buildSampleProject());
+  const byId = new Map(f.items.map(i => [i.id, i]));
+  let checked = 0;
+  for (const d of f.ducts) {
+    for (const c of d.connections) {
+      const item = byId.get(c.itemId);
+      expect(item, `${d.id}/${c.point} -> ${c.itemId}`).toBeTruthy();
+      const seg = d.segments[Math.min(c.point, d.segments.length - 1)];
+      const r = riser(item, d, c);
+      expect(r, `${d.id}/${c.point} riser`).toBeTruthy();
+      expect(r.z1 - r.z0).toBeGreaterThanOrEqual(10);
+      const itemBottom = Number(item.z) || 0;
+      const itemTop = itemBottom + (Number(item.size?.[2]) || 0);
+      const segBottom = seg.z - seg.h / 2;
+      const segTop = seg.z + seg.h / 2;
+      // 설비와 덕트 구간이 z로 겹치지 않는다: 설비가 온전히 아래(장바닥 팬)거나 온전히 위(천장 디퓨저)거나,
+      // 후드처럼 아래 걸려도 상단이 덕트 하단보다 낮다.
+      const noOverlap = itemTop <= segBottom + 1e-6 || itemBottom >= segTop - 1e-6;
+      expect(noOverlap, `${d.id}/${c.point} item[${itemBottom},${itemTop}] vs seg[${segBottom},${segTop}]`).toBe(true);
+      checked++;
+    }
+  }
+  expect(checked).toBe(35);
+  // 후드 10개는 모두 상단 2500, 연결된 구간 하단이 그보다 최소 150mm 위(가장 좁은 F-4 구간 기준)다.
+  const hoods = f.items.filter(i => equipType(i) === 'hood');
+  expect(hoods.every(h => h.z + h.size[2] === 2500)).toBe(true);
+  for (const d of f.ducts) {
+    for (const c of d.connections) {
+      const item = byId.get(c.itemId);
+      if (equipType(item) !== 'hood') continue;
+      const seg = d.segments[Math.min(c.point, d.segments.length - 1)];
+      expect(seg.z - seg.h / 2 - 2500).toBeGreaterThanOrEqual(10);
+    }
+  }
 });
 
 test('샘플 풍량이 M-106 실별·계통별 표와 맞는다', () => {
