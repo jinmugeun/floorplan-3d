@@ -1,14 +1,20 @@
 // 2D 심벌을 아이템 로컬 mm 좌표(원점 = 중심, +x = 너비, +y = 깊이)의 부품 목록으로 한 번만 정의한다.
 // 라이브러리 썸네일(SVG)과 2D 캔버스(Canvas 2D)가 같은 목록을 각자의 방식으로 그린다.
 // 부품: { t:'rect', x, y, w, h, fill? } | { t:'line', x1, y1, x2, y2 } | { t:'circle', x, y, r, fill? } | { t:'arc', x, y, r, a0, a1 }
+//     | { t:'text', x, y, text, size }  ← 설비 라벨(후드 번호·디퓨저 심벌·팬 번호). 2D는 화면 좌표에서 똑바로, SVG는 <text>로 그린다.
 // fill: 'body' = 연한 채움, 'solid' = 아이템 색으로 채움, 없으면 선만.
+
+import { esc } from '../util/html.js';
 
 const rect = (x, y, w, h, fill) => ({ t: 'rect', x, y, w, h, ...(fill ? { fill } : {}) });
 const line = (x1, y1, x2, y2) => ({ t: 'line', x1, y1, x2, y2 });
 const circle = (x, y, r, fill) => ({ t: 'circle', x, y, r, ...(fill ? { fill } : {}) });
 const arc = (x, y, r, a0, a1) => ({ t: 'arc', x, y, r, a0, a1 });
+const txt = (x, y, t, size) => ({ t: 'text', x, y, text: String(t), size });
+// 라이브러리 썸네일·미리보기처럼 실제 아이템이 없을 때 쓰는 기본 글자.
+export const SYMBOL_GLYPH = { hood: '①', diffuser: '가', fan: 'F', ventcap: 'Ø' };
 
-export function symbolParts(symbol, w, d) {
+export function symbolParts(symbol, w, d, { text: label = null } = {}) {
   const hw = w / 2, hd = d / 2;
   const body = rect(-hw, -hd, w, d, 'body');
   const inset = Math.min(60, w * 0.12, d * 0.12);
@@ -57,13 +63,36 @@ export function symbolParts(symbol, w, d) {
       const r = Math.min(w, d) / 2, k = r * 0.35;
       return [circle(0, 0, r, 'body'), line(-r - k, 0, -r, 0), line(r, 0, r + k, 0), line(0, -r - k, 0, -r), line(0, r, 0, r + k)];
     }
+    // ── 환기 설비(명세 §11.1) ──
+    case 'hood': {                                   // 사각 + 대각선 + 번호 원
+      const r = Math.min(w, d) * 0.18;
+      return [body, line(-hw, -hd, hw, hd), line(-hw, hd, hw, -hd), circle(0, 0, r, 'body'),
+        txt(0, 0, label ?? SYMBOL_GLYPH.hood, r * 1.5)];
+    }
+    case 'appliance': {                              // 사각 + 안쪽 사각 + 열원 두 개
+      const r = Math.min(w, d) * 0.12, dx = w * 0.22, dy = d * 0.18;
+      return [body, rect(-hw + inset, -hd + inset, w - inset * 2, d - inset * 2), circle(-dx, dy, r), circle(dx, dy, r)];
+    }
+    case 'diffuser': {                               // 사각 + 안쪽 사각 + 심벌 글자
+      const m = Math.min(w, d) * 0.18;
+      return [body, rect(-hw + m, -hd + m, w - m * 2, d - m * 2), txt(0, 0, label ?? SYMBOL_GLYPH.diffuser, Math.min(w, d) * 0.4)];
+    }
+    case 'fan': {                                    // 원 + 날개 3개 + 팬 번호
+      const r = Math.min(w, d) / 2;
+      const blades = [0, 1, 2].map(i => { const a = (i * 2 * Math.PI) / 3 - Math.PI / 2; return line(0, 0, r * 0.85 * Math.cos(a), r * 0.85 * Math.sin(a)); });
+      return [circle(0, 0, r, 'body'), ...blades, txt(0, r * 0.55, label ?? SYMBOL_GLYPH.fan, r * 0.6)];
+    }
+    case 'ventcap': {                                // 작은 원 두 겹 + 지름 글자
+      const r = Math.min(w, d) / 2;
+      return [circle(0, 0, r, 'solid'), circle(0, 0, r * 0.5), txt(0, r * 1.8, label ?? SYMBOL_GLYPH.ventcap, r * 1.2)];
+    }
     default:
       return [body];
   }
 }
 
-export function symbolSvg(symbol, w, d, { box = 56, stroke = '#3a4351', body = '#eef1f4', solid = '#cfd4da' } = {}) {
-  const parts = symbolParts(symbol, w, d);
+export function symbolSvg(symbol, w, d, { box = 56, stroke = '#3a4351', body = '#eef1f4', solid = '#cfd4da', text = null } = {}) {
+  const parts = symbolParts(symbol, w, d, { text });
   // 축척은 부품 목록의 실제 범위로 잡는다. 문 심벌은 열림 궤적(반지름 w)이 아이템 깊이 밖으로
   // 크게 나가므로 w·d만 보면 호가 잘린다.
   const span = (lo, hi) => Math.max(Math.abs(lo), Math.abs(hi)) * 2;
@@ -72,6 +101,7 @@ export function symbolSvg(symbol, w, d, { box = 56, stroke = '#3a4351', body = '
   for (const p of parts) {
     if (p.t === 'rect') { grow(p.x, p.y); grow(p.x + p.w, p.y + p.h); }
     else if (p.t === 'line') { grow(p.x1, p.y1); grow(p.x2, p.y2); }
+    else if (p.t === 'text') { grow(p.x - p.size / 2, p.y - p.size / 2); grow(p.x + p.size / 2, p.y + p.size / 2); }
     else { grow(p.x - p.r, p.y - p.r); grow(p.x + p.r, p.y + p.r); }
   }
   const k = (box * 0.86) / Math.max(span(x0, x1), span(y0, y1), 1);
@@ -81,6 +111,7 @@ export function symbolSvg(symbol, w, d, { box = 56, stroke = '#3a4351', body = '
     if (p.t === 'rect') return `<rect x="${f(p.x)}" y="${f(p.y)}" width="${f(p.w)}" height="${f(p.h)}" fill="${paint(p.fill)}"/>`;
     if (p.t === 'line') return `<line x1="${f(p.x1)}" y1="${f(p.y1)}" x2="${f(p.x2)}" y2="${f(p.y2)}"/>`;
     if (p.t === 'circle') return `<circle cx="${f(p.x)}" cy="${f(p.y)}" r="${f(p.r)}" fill="${paint(p.fill)}"/>`;
+    if (p.t === 'text') return `<text x="${f(p.x)}" y="${f(p.y)}" font-size="${f(p.size)}" text-anchor="middle" dominant-baseline="central" fill="${stroke}" stroke="none">${esc(p.text)}</text>`;
     const p0 = [p.x + p.r * Math.cos(p.a0), p.y + p.r * Math.sin(p.a0)];
     const p1 = [p.x + p.r * Math.cos(p.a1), p.y + p.r * Math.sin(p.a1)];
     return `<path d="M ${f(p0[0])} ${f(p0[1])} A ${f(p.r)} ${f(p.r)} 0 0 1 ${f(p1[0])} ${f(p1[1])}"/>`;

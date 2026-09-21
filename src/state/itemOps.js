@@ -36,6 +36,8 @@ export function replaceProduct(store, ids, product, opts = {}) {
     const kind = product.kind ?? 'product';
     const size = [...product.size];
     const patch = { productId: product.id, name: product.name, code: product.code, kind, size, attach: product.attach, color: product.color ?? it.color, z: product.zDefault ?? 0 };
+    if (product.equip) patch.props = { ...product.equip };   // 설비를 다른 종류로 바꾸면 옛 종류의 props가 남지 않는다
+    else if (kind !== 'equipment') patch.props = undefined;
     if (product.attach !== 'wall') patch.wallId = null;
     else {
       const w = it.wallId ? f.walls.find(x => x.id === it.wallId) : null;

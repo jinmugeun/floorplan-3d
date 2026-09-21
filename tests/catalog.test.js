@@ -2,9 +2,10 @@ import { describe, test, expect } from 'vitest';
 import { CATEGORIES, PRODUCTS, SYMBOL_NAMES, productById, productsIn, searchProducts, sortProducts, fmtSize } from '../src/products/catalog.js';
 
 describe('제품 카탈로그', () => {
-  test('카테고리 12개가 정확한 이름과 순서로 있다', () => {
-    expect(CATEGORIES.map(c => c.name)).toEqual(['문/창문', '가전', '침대/매트리스', '드레스룸/행거', '수납가구', '소파', '책상/테이블', '의자/스툴', '화장대/거울', '주방싱크/욕실', '조명', '구조물']);
+  test('카테고리 13개가 정확한 이름과 순서로 있다', () => {
+    expect(CATEGORIES.map(c => c.name)).toEqual(['문/창문', '가전', '침대/매트리스', '드레스룸/행거', '수납가구', '소파', '책상/테이블', '의자/스툴', '화장대/거울', '주방싱크/욕실', '조명', '구조물', '환기 설비']);
     expect(CATEGORIES.find(c => c.name === '구조물').subs).toEqual(['기둥', '개구부']);
+    expect(CATEGORIES.find(c => c.name === '환기 설비').subs).toEqual(['후드', '조리기구', '디퓨저', '팬', '환기캡']);
   });
 
   test('제품이 40개 이상이고 id·코드가 겹치지 않는다', () => {

@@ -1,6 +1,7 @@
 import { makeWall } from '../geom/walls.js';
 import { detectRooms, ROOM_FLOOR_COLOR, ROOM_CEILING_COLOR } from '../geom/rooms.js';
 import { materialById } from '../materials/catalog.js';
+import { normalizeEquipProps, hoodCmh } from '../vent/equipment.js';
 
 let counter = 0;
 export const SCHEMA_VERSION = 1;
@@ -78,7 +79,7 @@ const ATTACH = ['floor', 'floorLay', 'wall', 'ceiling'];
 export function normalizeItem(it) {
   const src = obj(it);
   const size = Array.isArray(src.size) ? src.size : [];
-  return {
+  const out = {
     ...src,
     id: str(src.id, uid('i')),
     kind: str(src.kind, 'product'),
@@ -96,6 +97,13 @@ export function normalizeItem(it) {
     side: src.side === -1 ? -1 : 1,
     flipH: !!src.flipH, flipV: !!src.flipV, locked: !!src.locked, hidden: !!src.hidden,
   };
+  // 설비(kind: 'equipment')만 props를 갖는다(아키텍처 §11.1). 후드 풍량은 표시 전용 파생값이라
+  // 크기·면풍속이 바뀔 때마다 여기서 다시 계산한다 — updateItems도 이 함수를 지나므로 어긋날 수 없다.
+  if (out.kind === 'equipment') {
+    out.props = normalizeEquipProps(src.props);
+    if (out.props.type === 'hood') out.props.cmh = hoodCmh(out);
+  }
+  return out;
 }
 
 export const MAT_RANGE = { offset: [0, 1000], angle: [0, 360] };
@@ -134,6 +142,7 @@ export function createItem(product, patch = {}) {
     pos: [0, 0], z: product.zDefault ?? 0, rot: 0, size: [...product.size], attach: product.attach,
     wallId: null, t: 0, side: 1, flipH: false, flipV: false, locked: false, hidden: false,
     color: product.color ?? '#cfd4da',
+    ...(product.equip ? { props: { ...product.equip } } : {}),
     ...patch,
   });
 }

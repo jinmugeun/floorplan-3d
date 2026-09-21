@@ -16,9 +16,10 @@ export const CATEGORIES = [
   { name: '주방싱크/욕실', subs: ['싱크', '위생도구'] },
   { name: '조명', subs: ['천장등', '벽등'] },
   { name: '구조물', subs: ['기둥', '개구부'] },
+  { name: '환기 설비', subs: ['후드', '조리기구', '디퓨저', '팬', '환기캡'] },
 ];
 
-export const SYMBOL_NAMES = ['box', 'bed', 'sofa', 'table', 'chair', 'door', 'window', 'column', 'columnRound', 'circle', 'sink', 'range', 'fridge', 'lamp'];
+export const SYMBOL_NAMES = ['box', 'bed', 'sofa', 'table', 'chair', 'door', 'window', 'column', 'columnRound', 'circle', 'sink', 'range', 'fridge', 'lamp', 'hood', 'appliance', 'diffuser', 'fan', 'ventcap'];
 
 export const ATTACH_LABELS = { floor: '바닥에 서있는 제품', floorLay: '바닥에 깔리는 제품', wall: '벽에 붙는 제품', ceiling: '천장에 붙는 제품' };
 
@@ -40,6 +41,13 @@ export const PRICES = {
   'sink-double': 1150000, 'sink-single': 820000, washbasin: 180000, toilet: 290000, bathtub: 650000, 'shower-booth': 780000,
   'light-ceiling': 85000, 'light-pendant': 120000, 'light-downlight': 18000, 'light-fluorescent': 42000, 'light-wall': 56000,
   'column-square': 0, 'column-round': 0, 'opening-pass': 0,
+  // 환기 설비(정적 단가. 실판매 DB는 범위 밖이다 — 명세 §17)
+  'hood-box': 1850000, 'hood-box-filter': 2350000,
+  'range-gas-high': 2400000, 'ricecooker-gas': 3800000, 'soup-kettle': 3200000, 'wok-kettle': 3600000,
+  'griddle-electric': 1900000, 'steamer-combi': 12500000, 'dishwasher-conveyor': 18000000,
+  'diffuser-650': 120000, 'diffuser-650-350': 95000, 'diffuser-500-350': 85000,
+  'fan-exhaust-700': 2600000, 'fan-supply-filter': 3100000, 'fan-wall-500': 380000,
+  'ventcap-100': 35000, 'ventcap-150': 45000,
 };
 
 const P = (id, name, code, category, sub, size, attach, symbol, extra = {}) =>
@@ -121,6 +129,24 @@ export const PRODUCTS = [
   P('column-square', '사각 기둥', 'SR-CS', '구조물', '기둥', [400, 400, 2300], 'floor', 'column', { kind: 'column', color: '#b6bdc4', tags: '기둥 사각 구조물' }),
   P('column-round', '원형 기둥', 'SR-CR', '구조물', '기둥', [400, 400, 2300], 'floor', 'columnRound', { kind: 'column', color: '#b6bdc4', tags: '기둥 원형 구조물' }),
   P('opening-pass', '개구부', 'SR-OP', '구조물', '개구부', [900, 40, 2100], 'wall', 'window', { ...hole('opening', 900, 2100, 0, '#e9e6e0'), tags: '개구부 통로 구멍' }),
+  // 환기 설비(명세 §11.1). kind: 'equipment' + equip 씨앗 → createItem이 item.props로 옮긴다.
+  P('hood-box', '천장형 배기 후드(박스형)', 'VH-BX', '환기 설비', '후드', [1600, 1200, 600], 'ceiling', 'hood', { kind: 'equipment', equip: { type: 'hood' }, color: '#c6ccd2', tags: '후드 배기 환기 천장 조리' }),
+  P('hood-box-filter', '천장형 배기 후드(박스·필터)', 'VH-BF', '환기 설비', '후드', [1800, 1100, 600], 'ceiling', 'hood', { kind: 'equipment', equip: { type: 'hood', filter: true, faceVelocity: 0.7 }, color: '#c6ccd2', tags: '후드 배기 환기 필터' }),
+  P('range-gas-high', '가스높은렌지 3구형', 'VC-RG3', '환기 설비', '조리기구', [1200, 750, 850], 'floor', 'appliance', { kind: 'equipment', equip: { type: 'appliance', kind: 'range', heat: 'gas' }, color: '#b9c0c7', tags: '렌지 가스 조리기구' }),
+  P('ricecooker-gas', '가스자동취반기 150인용', 'VC-RC150', '환기 설비', '조리기구', [1000, 800, 900], 'floor', 'appliance', { kind: 'equipment', equip: { type: 'appliance', kind: 'ricecooker', heat: 'gas' }, color: '#b9c0c7', tags: '취반기 밥솥 가스 조리기구' }),
+  P('soup-kettle', '국솥', 'VC-SK', '환기 설비', '조리기구', [900, 900, 900], 'floor', 'appliance', { kind: 'equipment', equip: { type: 'appliance', kind: 'soupkettle', heat: 'gas' }, color: '#b9c0c7', tags: '국솥 조리기구' }),
+  P('wok-kettle', '볶음솥', 'VC-WK', '환기 설비', '조리기구', [1000, 1000, 900], 'floor', 'appliance', { kind: 'equipment', equip: { type: 'appliance', kind: 'wok', heat: 'gas' }, color: '#b9c0c7', tags: '볶음솥 조리기구' }),
+  P('griddle-electric', '전기부침기', 'VC-GR', '환기 설비', '조리기구', [1200, 750, 850], 'floor', 'appliance', { kind: 'equipment', equip: { type: 'appliance', kind: 'griddle', heat: 'electric' }, color: '#b9c0c7', tags: '부침기 전기 조리기구' }),
+  P('steamer-combi', '콤비스티머 20단', 'VC-ST20', '환기 설비', '조리기구', [1000, 900, 1800], 'floor', 'appliance', { kind: 'equipment', equip: { type: 'appliance', kind: 'steamer', heat: 'electric' }, color: '#b9c0c7', tags: '스티머 콤비 조리기구' }),
+  P('dishwasher-conveyor', '컨베이어 식기세척기', 'VC-DW', '환기 설비', '조리기구', [2400, 800, 1500], 'floor', 'appliance', { kind: 'equipment', equip: { type: 'appliance', kind: 'dishwasher', heat: 'electric' }, color: '#c6ccd2', tags: '세척기 식기세척기 조리기구' }),
+  P('diffuser-650', '디퓨저 650×650', 'VD-6565', '환기 설비', '디퓨저', [650, 650, 100], 'ceiling', 'diffuser', { kind: 'equipment', equip: { type: 'diffuser', a: 650, b: 650, cmh: 3200 }, color: '#e6eaef', tags: '디퓨저 급기 배기 천장' }),
+  P('diffuser-650-350', '디퓨저 650×350', 'VD-6535', '환기 설비', '디퓨저', [650, 350, 100], 'ceiling', 'diffuser', { kind: 'equipment', equip: { type: 'diffuser', a: 650, b: 350, cmh: 1500 }, color: '#e6eaef', tags: '디퓨저 급기 배기 천장' }),
+  P('diffuser-500-350', '디퓨저 500×350', 'VD-5035', '환기 설비', '디퓨저', [500, 350, 100], 'ceiling', 'diffuser', { kind: 'equipment', equip: { type: 'diffuser', a: 500, b: 350, cmh: 1000 }, color: '#e6eaef', tags: '디퓨저 급기 배기 천장' }),
+  P('fan-exhaust-700', '배기팬(소음챔버 700)', 'VF-E700', '환기 설비', '팬', [700, 700, 700], 'floor', 'fan', { kind: 'equipment', equip: { type: 'fan', flow: 'exhaust', chamber: [700, 700, 700] }, color: '#9aa3ab', tags: '팬 배기 송풍기 챔버' }),
+  P('fan-supply-filter', '급기 필터팬', 'VF-SF', '환기 설비', '팬', [700, 700, 700], 'floor', 'fan', { kind: 'equipment', equip: { type: 'fan', fanId: 'FB', flow: 'supply', chamber: [700, 700, 700] }, color: '#9aa3ab', tags: '팬 급기 필터 송풍기' }),
+  P('fan-wall-500', '벽부형 환기팬', 'VF-W500', '환기 설비', '팬', [500, 500, 300], 'wall', 'fan', { kind: 'equipment', equip: { type: 'fan', fanId: 'F-1', flow: 'exhaust', chamber: [500, 500, 300] }, zDefault: 2000, color: '#9aa3ab', tags: '팬 벽부 환기 배기' }),
+  P('ventcap-100', 'STS 환기캡 Ø100', 'VP-100', '환기 설비', '환기캡', [100, 100, 100], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 100 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
+  P('ventcap-150', 'STS 환기캡 Ø150', 'VP-150', '환기 설비', '환기캡', [150, 150, 150], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 150 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
 ];
 
 const byId = new Map(PRODUCTS.map(p => [p.id, p]));
@@ -137,4 +163,6 @@ export function sortProducts(list, by = 'name') {
   const vol = p => p.size[0] * p.size[1] * p.size[2];
   return [...list].sort((a, b) => (by === 'size' ? vol(a) - vol(b) : a.name.localeCompare(b.name, 'ko')));
 }
+// 설비 제품 id 목록(샘플·테스트·풍량 집계가 "이것이 설비다"를 카탈로그에서 한 번에 읽는다).
+export const EQUIP_PRODUCT_IDS = PRODUCTS.filter(p => p.kind === 'equipment').map(p => p.id);
 export const fmtSize = size => `${Math.round(size[0])}×${Math.round(size[1])}×${Math.round(size[2])}`;

@@ -19,10 +19,10 @@ const click = (el, sel) => el.querySelector(sel).dispatchEvent(new MouseEvent('c
 beforeEach(() => localStorage.clear());
 
 describe('라이브러리 패널', () => {
-  test('탭 3개와 카테고리 12개를 보여주고 카테고리 → 하위 → 타일로 들어간다', () => {
+  test('탭 3개와 카테고리 13개를 보여주고 카테고리 → 하위 → 타일로 들어간다', () => {
     const { el } = setup();
     expect([...el.querySelectorAll('[data-tab]')].map(b => b.textContent)).toEqual(['오늘의집 제품', '즐겨찾기', '배치된 제품']);
-    expect(el.querySelectorAll('[data-cat]')).toHaveLength(12);
+    expect(el.querySelectorAll('[data-cat]')).toHaveLength(13);   // '환기 설비' 카테고리가 늘었다
     click(el, '[data-cat="소파"]');
     expect([...el.querySelectorAll('[data-sub]')].map(b => b.dataset.sub)).toEqual(['', '소파', '리클라이너']);
     click(el, '[data-sub="소파"]');

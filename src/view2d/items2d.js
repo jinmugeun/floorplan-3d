@@ -2,6 +2,7 @@ import { itemCorners, itemAABB, RAD } from '../geom/items.js';
 import { symbolParts } from '../products/symbols.js';
 import { productById } from '../products/catalog.js';
 import { norm, sub, add, mul } from '../geom/vec.js';
+import { equipLabel } from '../vent/equipment.js';
 
 export const ITEM_COLORS = { line: '#3a4351', body: '#eef1f4', sel: '#8b5cf6', locked: '#e5484d', label: '#5b6775', rot: '#1f5fd0' };
 export const HANDLE_PX = 7;      // 크기 핸들 한 변(화면 px)
@@ -29,6 +30,16 @@ function drawPart(ctx, p, color) {
   ctx.stroke();
 }
 
+// 글자 부품은 아이템 로컬 좌표계 안에서 그리면 반전·회전에 따라 뒤집히고 읽을 수 없다.
+// 부품 위치만 월드로 옮긴 뒤 화면 좌표계에서 똑바로 그린다(v.label과 같은 방식).
+function drawTextPart(ctx, v, item, part) {
+  const c = Math.cos(RAD(item.rot)), s = Math.sin(RAD(item.rot));
+  const lx = (item.flipH ? -1 : 1) * part.x, ly = (item.flipV ? -1 : 1) * part.y;
+  const at = [item.pos[0] + lx * c - ly * s, item.pos[1] + lx * s + ly * c];
+  const px = Math.max(9, Math.min(28, part.size * v.camera.scale));
+  v.label(part.text, at, { size: px, color: ITEM_COLORS.label });
+}
+
 function strokePoly(ctx, v, pts, color, lw = 2, dash = null) {
   ctx.save();
   if (dash) ctx.setLineDash(dash);
@@ -40,8 +51,10 @@ function strokePoly(ctx, v, pts, color, lw = 2, dash = null) {
 
 // 캔버스는 (translate → rotate → scale)로 아이템 로컬 mm 좌표계를 세운 뒤 심벌 부품을 그린다.
 // 월드→화면 변환이 회전 없는 균일 축척이라 이렇게 겹쳐도 어긋나지 않는다.
-export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = false, labels = true } = {}) {
+export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = false, labels = true, equipLabels = true } = {}) {
   const k = v.camera.scale, s = v.toScreen(item.pos);
+  const showLabel = labels && equipLabels;
+  const parts = symbolParts(symbolOf(item), item.size[0], item.size[1], { text: showLabel ? equipLabel(item) : null });
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(s[0], s[1]);
@@ -49,9 +62,10 @@ export function drawItem(ctx, v, item, { alpha = 1, outline = null, showCode = f
   ctx.scale((item.flipH ? -1 : 1) * k, (item.flipV ? -1 : 1) * k);
   ctx.lineWidth = 1.4 / k;
   ctx.strokeStyle = ITEM_COLORS.line;
-  for (const part of symbolParts(symbolOf(item), item.size[0], item.size[1])) drawPart(ctx, part, item.color);
+  for (const part of parts) if (part.t !== 'text') drawPart(ctx, part, item.color);
   ctx.restore();
   ctx.globalAlpha = 1;
+  if (showLabel) for (const part of parts) if (part.t === 'text') drawTextPart(ctx, v, item, part);
   if (outline) strokePoly(ctx, v, itemCorners(item), outline, 2);
   if (labels && showCode) {
     const box = itemAABB(item);
@@ -66,7 +80,7 @@ export function drawItems(ctx, v, floor, { sel = null, flags = {}, collisions = 
     const bad = collisions?.has(item.id);
     const on = selected.has(item.id);
     const outline = bad ? ITEM_COLORS.locked : on ? (item.locked ? ITEM_COLORS.locked : ITEM_COLORS.sel) : null;
-    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, alpha: dim ? dim(item) : 1 });
+    drawItem(ctx, v, item, { outline, showCode: !!flags.productCode, labels, equipLabels: flags.equipLabels !== false, alpha: dim ? dim(item) : 1 });
   }
 }
 
