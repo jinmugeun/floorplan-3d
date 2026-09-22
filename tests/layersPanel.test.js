@@ -150,14 +150,33 @@ describe('레이어 패널', () => {
   });
 
   test('"모두 보이기"가 제품과 덕트를 한 단계로 함께 켠다', () => {
-    const { store, el } = setup();
+    const { store, el, inRoom } = setup();
+    // 제품과 덕트를 **둘 다** 숨겨 두어야 둘 다 같은 트랜잭션에 든다(바뀌지 않는 것은 단계에 넣지 않는다).
     addDuct(store, { id: 'd1', points: [[2000, 1500], [3000, 1500]], hidden: true });
+    setItemFlag(store, [inRoom], 'hidden', true);
     click(el, '[name="showAll"]');
     const f = activeFloor(store.get());
     expect(f.items.every(i => !i.hidden)).toBe(true);
     expect(f.ducts.every(d => !d.hidden)).toBe(true);
-    store.undo();
-    expect(activeFloor(store.get()).ducts[0].hidden).toBe(true);          // 되돌림 한 단계
+    expect(document.body.textContent).toContain(LAYERS_SHOWN(1, 1));      // 제품 1 · 덕트 1
+    store.undo();                                                        // 한 번의 undo가 둘 다 되돌린다
+    const f2 = activeFloor(store.get());
+    expect(f2.ducts[0].hidden).toBe(true);
+    expect(f2.items.find(i => i.id === inRoom).hidden).toBe(true);
+  });
+
+  // 접힘은 스토어가 아니라 패널이 들고 있다(openState). 캡처 단계 toggle 리스너 하나가 유일한 배선이라
+  // 재렌더(innerHTML 통째 교체) 뒤에도 살아남는지 여기서 못 박는다.
+  test('방 노드의 접힘·펼침은 다시 그려도 유지된다', () => {
+    const { store, el, inRoom, outside } = setup();
+    const room = () => el.querySelector('details[data-room]');
+    const setOpen = open => { const d = room(); d.open = open; d.dispatchEvent(new Event('toggle')); };
+    setOpen(false);
+    setItemFlag(store, [inRoom], 'locked', true);        // 스토어 변경 → 재렌더
+    expect(room().open).toBe(false);
+    setOpen(true);
+    setItemFlag(store, [outside], 'locked', true);
+    expect(room().open).toBe(true);
   });
 
   test('[모두 숨기기]는 한 단계로 숨기고 결과를 알린다(§16.3 · 감사 §20)', () => {
@@ -186,15 +205,23 @@ describe('레이어 패널', () => {
     expect(canUndo).toBe(true);
   });
 
-  test('선택된 대상의 행이 강조되고 화면 안으로 스크롤된다(감사 §21)', () => {
-    const { ui, el, inRoom } = setup();
+  test('선택된 대상의 행이 강조되고 선택이 바뀔 때만 화면 안으로 스크롤된다(감사 §21)', () => {
+    const { store, ui, el, inRoom, outside } = setup();
     const seen = [];
+    const orig = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = function stub(opts) { seen.push([this.dataset.id, opts]); };
-    ui.set({ selection: { type: 'item', id: inRoom } });
-    const row = el.querySelector(`.layer-item[data-id="${inRoom}"]`);
-    expect(row.classList.contains('on')).toBe(true);
-    expect(seen.at(-1)).toEqual([inRoom, { block: 'nearest' }]);
-    delete Element.prototype.scrollIntoView;
+    try {
+      ui.set({ selection: { type: 'item', id: inRoom } });
+      const row = el.querySelector(`.layer-item[data-id="${inRoom}"]`);
+      expect(row.classList.contains('on')).toBe(true);
+      expect(seen).toEqual([[inRoom, { block: 'nearest' }]]);            // 선택 한 번 → 스크롤 한 번
+      // 선택과 무관한 변경(다른 행의 👁·잠금, 캔버스 드래그)은 사용자가 보던 자리를 빼앗지 않는다.
+      setItemFlag(store, [outside], 'hidden', true);
+      setItemFlag(store, [outside], 'locked', true);
+      expect(seen).toHaveLength(1);
+    } finally {
+      if (orig) Element.prototype.scrollIntoView = orig; else delete Element.prototype.scrollIntoView;
+    }
   });
 
   test('"숨긴 항목 보기"가 꺼져 있어도 되살릴 줄이 남는다(감사 §26)', () => {

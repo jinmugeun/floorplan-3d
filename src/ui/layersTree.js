@@ -29,7 +29,7 @@ export function itemTag(item, { seq = 1, total = 1 } = {}) {
 
 const nameOf = it => it.name || productById(it.productId)?.name || '제품';
 
-function itemRow(it, { tag, selected, renaming, showBtns = true }) {
+function itemRow(it, { tag, selected, renaming }) {
   const p = productById(it.productId);
   const body = renaming
     ? `<input type="text" data-name="${esc(it.id)}" value="${esc(nameOf(it))}" aria-label="${BTN_TITLES.rename}">`
@@ -39,7 +39,7 @@ function itemRow(it, { tag, selected, renaming, showBtns = true }) {
   return `<li class="layer-item${selected ? ' on' : ''}${it.hidden ? ' off' : ''}"${selected ? ' data-sel="1"' : ''} data-id="${esc(it.id)}">
       ${body}
       <span class="muted">${esc(it.code || p?.code || '')} ${p ? esc(fmtSize(it.size)) : ''}</span>
-      <span class="layer-btns">${showBtns ? btn('data-hide', !!it.hidden) : ''}${lock}<button type="button" data-rename="${esc(it.id)}" title="${BTN_TITLES.rename}" aria-label="${BTN_TITLES.rename}">✎</button></span></li>`;
+      <span class="layer-btns">${btn('data-hide', !!it.hidden)}${lock}<button type="button" data-rename="${esc(it.id)}" title="${BTN_TITLES.rename}" aria-label="${BTN_TITLES.rename}">✎</button></span></li>`;
 }
 
 // 덕트 행: 급배기 · 계통 · 총 길이. 이름 바꾸기는 없다(덕트 이름은 계통이 대신한다).

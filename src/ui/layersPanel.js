@@ -39,6 +39,8 @@ export function createLayersPanel(container, { store, ui }) {
     if (s.type === 'multi' && s.kind === 'item') return new Set(s.ids);
     return new Set();
   };
+  // 마지막으로 스크롤해 보여 준 선택. 렌더마다가 아니라 **선택이 바뀔 때만** 스크롤하기 위한 기억이다.
+  let lastSel = '';
   function render() {
     const pyeong = !!store.get().settings?.pyeong;
     // "모두 보기" 체크박스(상태 거울 + 파괴적 스위치)를 두 동작으로 가른다(§16.3 · 감사 §20).
@@ -48,9 +50,15 @@ export function createLayersPanel(container, { store, ui }) {
       ${layerTreeHtml(buckets(), { units: store.get().units ?? 'mm', pyeong, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState })}`;
     if (renaming) container.querySelector(`input[data-name="${renaming}"]`)?.focus();
     // 캔버스에서 고른 것이 트리 밖에 있으면 스크롤해 보여 준다(49행이 4화면이므로 꼭 필요하다).
+    // **선택이 바뀔 때만** 한다: render()는 스토어·ui 양쪽에 걸려 있어 조건 없이 스크롤하면 다른 행의
+    // 👁 클릭이나 캔버스 드래그가 사용자가 보고 있던 자리를 선택 행으로 되끌어당긴다.
     // jsdom에는 scrollIntoView가 없을 수 있다 — 없으면 조용히 지나간다.
-    const sel = container.querySelector('.layer-item.on');
-    try { sel?.scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }
+    const ids = [...selectedIds()].sort().join(',');
+    if (ids && ids !== lastSel) {
+      const sel = container.querySelector('.layer-item.on');
+      try { sel?.scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }
+    }
+    lastSel = ids;
   }
 
   const onClick = ev => {
