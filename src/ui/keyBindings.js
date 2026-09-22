@@ -43,12 +43,17 @@ export function keyLabel(ev) {
   const ctrl = !!(ev.ctrlKey || ev.metaKey);
   // Alt 조합은 표(tokenOf)에 없지만 제품 단축키(itemCombo)가 쓰므로, 캡처에서는 'Alt+H'로 적어 예약 키 충돌로 걸리게 한다.
   const alt = !!ev.altKey && !ctrl;
+  // [Shift+F10]도 같은 이유로 조합을 적는다: keymap.js가 선택 메뉴로 먼저 가져가는 키인데 tokenOf가
+  // Ctrl 없는 Shift를 토큰에 담지 않아 그냥 'F10'으로 적으면 예약 키 충돌을 지나쳐 버린다.
+  // (Shift+문자는 그대로 문자만 적는다 — 'A'로 저장해야 실제 키 이벤트의 토큰과 맞는다.)
+  if (raw === 'F10' && ev.shiftKey && !ctrl && !alt) return 'Shift+F10';
   return `${alt ? 'Alt+' : ''}${ctrl ? 'Ctrl+' : ''}${ctrl && ev.shiftKey ? 'Shift+' : ''}${k}`;
 }
 
 // KEYMAP 표(action이 있는 행)에는 없지만 다른 곳에서 이미 그 키를 소비하는 키들.
 // - keymap.js의 itemCombo가 선택이 있을 때 먼저 가져가는 조합키(Ctrl+C/V/H/L/G, Ctrl+Shift+G, Alt+H/V/R/A/C/X/S)
 // - 도구 단계에서 먼저 소비하는 키(방향키로 제품 이동, Q로 제품 90° 회전 — selectTool.js)
+// - 선택 메뉴를 먼저 여는 키(keymap.js:128의 Shift+F10·ContextMenu — 표를 보기 전에 가로챈다)
 // 이 키들로 재지정하면 표에는 저장되지만 선택이 있는 동안은 절대 눌리지 않으므로 conflictAction에서 충돌로 본다.
 // (1인칭에서 걷는 동안의 W/A/S/D/Q/E는 여기 포함하지 않는다 — 1인칭 모드에서는 도구/아이템 키를 아예 주지 않는다.)
 export const RESERVED_KEYS = [
@@ -70,6 +75,8 @@ export const RESERVED_KEYS = [
   { key: 'arrowup', label: '제품 이동' },
   { key: 'arrowdown', label: '제품 이동' },
   { key: 'q', label: '제품 90° 회전' },
+  { key: 'shift+f10', label: '선택 메뉴 열기' },
+  { key: 'contextmenu', label: '선택 메뉴 열기' },
 ];
 const RESERVED_MAP = new Map(RESERVED_KEYS.map(r => [r.key, r.label]));
 

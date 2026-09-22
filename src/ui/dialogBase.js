@@ -109,10 +109,24 @@ export function focusTrap(root, { focus = null, opener = document.activeElement 
     // 재렌더로 포커스가 사라진 뒤라 이 키는 root를 지나가지 않는다. 포커스를 안으로 되돌리고
     // 같은 키를 root에 한 번 전달한다 — 첫 Esc도 대화상자를 닫는다.
     ev.stopPropagation();
-    focusables(root)[0]?.focus();
+    // 재발송한 이벤트는 bubbles:true라 이 캡처 리스너를 **다시** 지나간다. 평소에는 그 사이에 포커스가
+    // root 안으로 들어가 위 108행에서 멈추지만, 되돌릴 자리가 없으면(focusables가 비었거나 focus()가
+    // 먹지 않는 요소) 포커스가 body에 남아 다시 재발송 → 무한 재귀(스택 오버플로)다. 그래서 되돌릴
+    // 자리를 확인한 뒤에만 재발송한다 — 못 되돌리면 키는 위에서 이미 삼켰으므로 모달 뒤로 새지 않는다.
+    const first = focusables(root)[0];
+    if (!first) return;
+    first.focus();
+    if (!root.contains(document.activeElement)) return;
     root.dispatchEvent(new KeyboardEvent(ev.type, { key: ev.key, code: ev.code, shiftKey: ev.shiftKey, ctrlKey: ev.ctrlKey, altKey: ev.altKey, metaKey: ev.metaKey, bubbles: true, cancelable: true }));
   };
+  // 모달이 떠 있는 동안 전역 단축키(main.js의 window 버블 핸들러)는 돌지 않는다(§15.10 · 정한 것 32).
+  // 대화상자들은 자기 root에서 Escape만 stopPropagation하므로 l·d·Delete·Shift+F10이 window까지
+  // 새어 모달 뒤의 도면을 바꿨다(도구 전환·선택 삭제·모달 위 컨텍스트 메뉴). **캡처가 아니라 버블**로
+  // 듣는 것이 핵심이다: 대화상자 자신의 root 핸들러(Esc·Enter)가 그대로 먼저 돌고, 그다음 여기서
+  // window로 가는 길만 끊는다. 포커스가 트랩 안에 있을 때만 관여한다(팝오버·메뉴와 다투지 않게).
+  const stopBubble = ev => { if (root.isConnected && root.contains(document.activeElement) && topTrap() === entry) ev.stopPropagation(); };
   document.addEventListener('keydown', onKey, true);
+  document.addEventListener('keydown', stopBubble);
   focusFirst();
   let done = false;
   return {
@@ -120,6 +134,7 @@ export function focusTrap(root, { focus = null, opener = document.activeElement 
       if (done) return;   // close를 두 번 불러도 이미 딴 데로 간 포커스를 다시 빼앗지 않는다
       done = true;
       document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('keydown', stopBubble);
       dropTrap(entry);
       opener?.focus?.();   // 대화상자가 사라진 뒤 부른 버튼이 다시 포커스를 갖는다
     },

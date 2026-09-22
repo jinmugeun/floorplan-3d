@@ -128,3 +128,20 @@ test('alt+s는 예약 키이고 이름이 "제품 경로 배열 복사"다', asy
   expect(RESERVED_KEYS.find(r => r.key === 'alt+s')?.label).toBe('제품 경로 배열 복사');
   expect(conflictAction(effectiveKeymap({}), 'Alt+S', 'tool:wall')).toBe('제품 경로 배열 복사');
 });
+
+// 최종 리뷰 I-3: keymap.js는 표를 보기 **전에** ContextMenu·Shift+F10을 선택 메뉴로 가져간다.
+// 그 키로 재지정하면 저장은 되지만 절대 눌리지 않으므로(게다가 tokenOf가 Ctrl 없는 Shift를 토큰에
+// 담지 않아 'shift+f10' 토큰은 어떤 키 이벤트와도 맞지 않는다) 예약 키로 막는다.
+test('Shift+F10·ContextMenu는 예약 키라 재지정을 충돌로 막는다', () => {
+  const km = effectiveKeymap({});
+  expect(RESERVED_KEYS.find(r => r.key === 'shift+f10')?.label).toBe('선택 메뉴 열기');
+  expect(RESERVED_KEYS.find(r => r.key === 'contextmenu')?.label).toBe('선택 메뉴 열기');
+  // 설정 > 단축키가 캡처한 라벨이 그대로 충돌 검사에 들어간다(Alt 조합과 같은 방식).
+  expect(keyLabel({ key: 'F10', shiftKey: true })).toBe('Shift+F10');
+  expect(keyLabel({ key: 'ContextMenu' })).toBe('ContextMenu');
+  expect(conflictAction(km, keyLabel({ key: 'F10', shiftKey: true }), 'tool:wall')).toBe('선택 메뉴 열기');
+  expect(conflictAction(km, keyLabel({ key: 'ContextMenu' }), 'tool:wall')).toBe('선택 메뉴 열기');
+  expect(labelOf(conflictAction(km, 'ContextMenu', 'tool:wall'))).toBe('선택 메뉴 열기');
+  expect(conflictAction(km, 'F10', 'tool:wall')).toBeNull();   // Shift 없는 F10은 아무도 쓰지 않는다
+  expect(norm('Shift+F10')).toBe('shift+f10');
+});
