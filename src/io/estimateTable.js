@@ -37,7 +37,9 @@ export function estimateLines(rows) {
   return out;
 }
 
-// 엑셀이 한글을 깨뜨리지 않게 BOM으로 시작한다. 쉼표·따옴표가 든 이름은 감싸 준다.
+// 엑셀이 한글을 깨뜨리지 않게 BOM(U+FEFF)으로 시작한다. 쉼표·따옴표가 든 이름은 감싸 준다.
+// BOM은 **이스케이프(`\ufeff`)로 쓴다** — 리터럴로 두면 편집기에서 보이지 않아 실수로 지워도
+// 아무도 모르고, 파일을 여는 도구에 따라 소스 자체의 BOM으로 오인된다(리뷰 M-1).
 const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 export function estimateCsvText(rows) {
   const lines = ['견적서', EST_COLUMNS.join(',')];
@@ -46,5 +48,5 @@ export function estimateCsvText(rows) {
   }
   lines.push(`합계,,,,,,,${rows?.total ?? 0}`);   // 금액 열(8번째)에 합계를 적는다
   lines.push(PRICE_NOTE);                        // 단가의 출처·기준일(감사 §4)
-  return `﻿${lines.join('\n')}`;
+  return `\ufeff${lines.join('\n')}`;
 }

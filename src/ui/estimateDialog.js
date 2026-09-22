@@ -10,6 +10,7 @@ import { esc } from '../util/html.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
 
 const won = n => `${Number(n || 0).toLocaleString('ko-KR')}원`;
+// 화면만 로캘 쉼표를 쓴다(1,234.57). CSV는 `1234.57`이어야 한다 — 쉼표가 들어가면 열이 깨진다(리뷰 M-7).
 const qtyText = l => (l.unit === '개' ? String(l.qty) : l.qty.toLocaleString('ko-KR'));
 
 // 열 정의는 io/estimateTable.js 한 곳이다(§16.2). 화면은 거기에 "길이" 칸을 더해 아홉 열이다.
@@ -30,6 +31,9 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
   root.className = 'modal estimate';
   // 머리글 / 스크롤 본문 / 고정 푸터(§16.2): 1366×768에서 25행짜리 견적을 열어도 합계와 버튼이
   // 늘 화면에 남는다(감사 §1 — 예전에는 카드 전체가 스크롤이라 총액을 보려면 스크롤해야 했다).
+  // 푸터 닫기의 이름은 closeFoot다(리뷰 I-2): 앱의 다른 여섯 대화상자에서 [name="close"]는 "머리글 ✕"
+  // 하나를 가리키는 고유 손잡이이고 focusTrap의 초기 포커스 선택자도 그것이다. 같은 이름이 둘이면
+  // querySelector가 마크업 순서에 따라 조용히 다른 버튼을 집는다. 닫는 동작은 아래 클릭 핸들러가 둘 다 준다.
   root.innerHTML = `<div class="modal-card">
     <header><h2>실시간 견적서</h2><button type="button" name="close" aria-label="닫기">✕</button></header>
     <div data-part="table"></div>
@@ -38,7 +42,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
       <p class="est-note hint">${PRICE_NOTE}</p>
       <button type="button" name="csv">CSV 내려받기</button>
       <button type="button" name="print" class="primary">인쇄</button>
-      <button type="button" name="close">닫기</button>
+      <button type="button" name="closeFoot">닫기</button>
     </div>
   </div>`;
   document.body.appendChild(root);
@@ -61,7 +65,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
   const self = { close };
   root.addEventListener('click', ev => {
     const name = ev.target.name;
-    if (name === 'close') { close(); return; }
+    if (name === 'close' || name === 'closeFoot') { close(); return; }   // 머리글 ✕ · 푸터 [닫기]
     if (name === 'csv') { downloadText(filenameFor(store.get()).replace(/\.json$/, '-견적서.csv'), estimateCsv(rows)); return; }
     if (name === 'print') {
       const ok = printHtml(`<h1>${esc(store.get().name)} 견적서</h1>${tableHtml(rows)}<p>합계 ${won(rows.total)}</p><p>${PRICE_NOTE}</p>

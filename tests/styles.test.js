@@ -121,3 +121,46 @@ test('레일 라벨은 한 줄이고 미니맵 이름은 그림 위에서 읽힌
   expect(CSS).toMatch(/#rail button span\s*\{[^}]*white-space:\s*nowrap/);
   expect(CSS).toMatch(/#minimap \.mm-label\s*\{[^}]*background:/);
 });
+
+// §16.2 리뷰 I-3: 견적 대화상자의 레이아웃 수정(머리글 / 스크롤 본문 / 고정 푸터)은 **전부 CSS에만**
+// 있고 jsdom은 스타일시트를 계산하지 않는다 — 규칙을 지우거나 한정을 잃어도 다른 테스트는 전부 green이다.
+// 그래서 세 층의 골격을 여기서 글자로 고정한다(위 테스트들과 같은 방식).
+// 한 선택자의 블록을 통째로 꺼낸다(`.modal.estimate .modal-card {` 처럼 정확히 그 선택자인 줄).
+const rule = sel => { const at = CSS.indexOf(sel + ' {'); return at < 0 ? '' : CSS.slice(at, CSS.indexOf('}', at) + 1); };
+
+test('견적 카드는 머리글 / 스크롤 본문 / 고정 푸터 세 층이다(감사 §1)', () => {
+  const card = rule('.modal.estimate .modal-card');
+  expect(card).toMatch(/display:\s*flex/);
+  expect(card).toMatch(/flex-direction:\s*column/);
+  expect(card).toMatch(/max-height:\s*86vh/);
+  expect(card).toMatch(/overflow:\s*hidden/);     // 카드 전체가 스크롤하면 합계·버튼이 화면 밖으로 나간다
+  expect(card).toMatch(/padding:\s*0/);           // 여백은 세 층이 각자 갖는다(본문만 스크롤해야 하므로)
+  // 머리글과 푸터는 줄어들지 않고, 본문만 남은 높이를 먹으며 스크롤한다.
+  expect(CSS).toMatch(/\.modal\.estimate \.modal-card > header,\s*\.modal\.estimate \.est-foot\s*\{[^}]*flex:\s*none/);
+  const body = rule('.modal.estimate [data-part="table"]');
+  expect(body).toMatch(/flex:\s*1 1 auto/);
+  expect(body).toMatch(/overflow:\s*auto/);
+  expect(body).toMatch(/min-height:\s*0/);        // flex 자식은 이것이 없으면 줄지 않아 카드를 밀어낸다
+});
+
+// 리뷰 I-1: `.est-table`은 견적 전용이 아니다 — ui/airflowPanel.js가 `class="est-table air-table"`로
+// 같은 클래스를 쓴다. 한정 없는 `.est-table thead th`(0,1,2)는 `.air-table th`(0,1,1)를 이겨
+// 240 px 레일 패널의 열 제목까지 바꾼다. 그 규칙은 하나뿐이고 `.modal.estimate` 아래여야 한다.
+test('견적 표의 열 제목 규칙은 견적 대화상자 안에만 있다(풍량 패널로 새지 않는다)', () => {
+  const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, '');   // 주석 안의 예시 선택자는 세지 않는다
+  const heads = [...bare.matchAll(/([^{}]*)\{([^{}]*)\}/g)]
+    .map(([, sel, body]) => [sel.trim(), body])
+    .filter(([sel]) => sel.split(',').some(one => /\.est-table\s+thead\s+th$/.test(one.trim())));
+  expect(heads).toHaveLength(1);
+  const [sel, body] = heads[0];
+  expect(sel).toBe('.modal.estimate .est-table thead th');
+  expect(body).toMatch(/color:\s*var\(--ink\)/);
+  expect(body).toMatch(/font-size:\s*12px/);
+  expect(body).toMatch(/font-weight:\s*600/);
+  expect(body).toMatch(/position:\s*sticky/);          // 스크롤해도 열 제목이 남는다
+  expect(body).toMatch(/top:\s*0/);
+  expect(body).toMatch(/background:\s*#fff/);          // 불투명해야 스크롤한 본문이 비치지 않는다
+  // 레일 풍량 표의 열 제목은 예전 그대로 11 px muted다.
+  expect(CSS).toMatch(/\.air-table th,\s*\.air-table td\s*\{[^}]*font-size:\s*11px/);
+  expect(CSS).toMatch(/\.air-table thead th\s*\{[^}]*color:\s*var\(--muted\)/);
+});

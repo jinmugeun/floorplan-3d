@@ -100,7 +100,7 @@ describe('견적서 계산', () => {
     addItem(a.store, createItem(productById('sofa-3'), { pos: [2000, 1500] }));
     applyMaterial(a.store, { kind: 'floor', id: a.floor().rooms[0].id }, mat('wood-oak'));
     const csv = estimateCsv(estimateRows(a.floor()));
-    expect(csv.startsWith('﻿')).toBe(true);
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
     const lines = csv.split('\n');
     expect(lines[1]).toBe('구분,이름,코드,규격,수량,단위,단가,금액');   // §16.2: 단위 칸이 늘었다
     expect(csv).toContain('제품,3인 소파,SF-3P,2100×900×800,1,개,890000,890000');
@@ -191,7 +191,7 @@ test('CSV는 §16.2가 정한 여덟 열과 단가 주석을 갖는다', () => {
   const rows = estimateRows({ walls: [], rooms: [], items: [createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] })] });
   const csv = estimateCsvText(rows);
   const lines = csv.split('\n');
-  expect(csv.startsWith('﻿')).toBe(true);                 // 엑셀 한글
+  expect(csv.charCodeAt(0)).toBe(0xfeff);                 // 엑셀 한글(소스는 `\ufeff` 이스케이프다 — 리뷰 M-1)
   expect(lines[1]).toBe('구분,이름,코드,규격,수량,단위,단가,금액');
   expect(lines[2]).toBe('제품,3인 소파,SF-3P,2100×900×800,1,개,890000,890000');
   // 합계는 **금액 칸**에 들어간다(§16.2: 받은 사람이 검산할 수 있는 CSV). 쉼표 개수를 눈으로

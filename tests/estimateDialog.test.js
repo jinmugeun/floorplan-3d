@@ -88,7 +88,12 @@ describe('견적서 대화상자', () => {
     const foot = a.root.querySelector('.est-foot');
     expect(foot).not.toBeNull();
     expect(foot.querySelector('[data-part="total"]')).not.toBeNull();
-    for (const name of ['csv', 'print', 'close']) expect(foot.querySelector(`[name="${name}"]`)).not.toBeNull();
+    for (const name of ['csv', 'print', 'closeFoot']) expect(foot.querySelector(`[name="${name}"]`)).not.toBeNull();
+    // `[name="close"]`는 앱 전체에서 "머리글 ✕" 하나를 가리키는 손잡이다(리뷰 I-2 · §15.10):
+    // 이 대화상자에서도 하나뿐이어야 focusTrap의 초기 포커스가 마크업 순서에 흔들리지 않는다.
+    expect(a.root.querySelectorAll('[name="close"]')).toHaveLength(1);
+    expect(a.root.querySelector('[name="close"]').closest('header')).not.toBeNull();
+    expect(document.activeElement).toBe(a.root.querySelector('header [name="close"]'));
     // 표는 자기 영역에서만 스크롤한다(푸터가 그 밖에 있다).
     expect(a.root.querySelector('[data-part="table"]').parentElement).toBe(a.root.querySelector('.modal-card'));
     expect(a.root.querySelector('.est-note').textContent).toBe('단가는 예시 값(2026-09 기준)');
@@ -112,6 +117,11 @@ describe('견적서 대화상자', () => {
       expect(b.disabled).toBe(true);
       expect(b.title).toBe('배치된 제품·마감재·덕트가 없습니다');
     }
-    expect(root.querySelector('[name="close"]').disabled).toBe(false);
+    // 빈 상태에서도 **푸터 닫기**는 살아 있고 실제로 닫는다(리뷰 I-2: 예전 단정은 머리글 ✕를 집어
+    // 푸터 닫기가 잘못 비활성화되어도 통과했다).
+    const foot = root.querySelector('.est-foot [name="closeFoot"]');
+    expect(foot.disabled).toBe(false);
+    foot.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(document.querySelector('.modal.estimate')).toBeNull();
   });
 });
