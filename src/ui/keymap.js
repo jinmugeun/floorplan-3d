@@ -88,7 +88,9 @@ export function tokenOf(ev) {
   return `${ctrl ? 'ctrl+' : ''}${ctrl && ev.shiftKey ? 'shift+' : ''}${k}`;
 }
 
-export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null, selectAll = () => {}, openSettings = () => {}, zoomIn = () => {}, zoomOut = () => {}, fit = () => {}, cancelReplace = () => {}, itemActions = {}, contextMenu = () => false }) {
+// undo·redo를 주입받는 이유(§16.4): 층을 가로지르는 되돌리기는 결과를 알려야 하고(감사 §30),
+// 그 판정은 배선(main.js)이 store 전후를 비교해서만 할 수 있다. 기본값은 예전 동작 그대로다.
+export function createKeyHandler({ store, ui, view, setTool, setMode, openBackground, deleteSelection, deleteOrTool = () => setTool('delete'), save = null, selectAll = () => {}, openSettings = () => {}, zoomIn = () => {}, zoomOut = () => {}, fit = () => {}, cancelReplace = () => {}, itemActions = {}, contextMenu = () => false, undo = () => store.undo(), redo = () => store.redo() }) {
   const run = action => {
     if (action === 'escape') {
       const u = ui.get();
@@ -98,8 +100,8 @@ export function createKeyHandler({ store, ui, view, setTool, setMode, openBackgr
       if (u.fpPick || u.soloRoom || u.selection || u.splitWall || u.matPick) ui.set({ fpPick: false, soloRoom: null, selection: null, splitWall: false, matPick: null });
       setTool('select'); return;
     }
-    if (action === 'undo') { store.undo(); return; }
-    if (action === 'redo') { store.redo(); return; }
+    if (action === 'undo') { undo(); return; }
+    if (action === 'redo') { redo(); return; }
     if (action === 'save') { if (save) save(); return; }
     if (action === 'delete') { deleteSelection(); return; }
     if (action === 'deleteOrTool') { deleteOrTool(); return; }

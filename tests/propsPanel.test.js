@@ -12,6 +12,16 @@ import { getKeepRatio, setKeepRatio } from '../src/ui/propsApply.js';
 import { applyMaterial, assignmentOf } from '../src/state/materialOps.js';
 import { fmtLen } from '../src/util/units.js';
 
+// 소수 좌표 도면 하나에 패널을 붙인다(기존 테스트들이 인라인으로 되풀이하던 모양 그대로).
+function setupPanel() {
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  createPropsPanel(el, store, ui);
+  return { store, ui, el };
+}
+
 test('wall panel edits thickness; room panel edits name', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
@@ -693,4 +703,33 @@ test('벽·바닥 투명도에 % 수치가 붙는다', () => {
   expect(store.get().view.wallOpacity).toBeCloseTo(0.4, 6);
   expect(el.querySelector('output[name="wallOpacityOut"]').textContent).toBe('40%');
   expect(el.querySelector('output[name="floorOpacityOut"]').textContent).toBe('100%');
+});
+
+// §16.4(감사 §29): 무엇을 고르든 층 전환 수단은 화면에 남는다.
+test('#floorBar는 선택이 있어도 속성 패널 맨 위에 남는다', () => {
+  const { store, ui, el } = setupPanel();
+  // copy: 'plan' — 새 층에도 벽이 있어야 "고른 채로" 층 바를 볼 수 있다(copy: 'none'이면 새 층이 비어
+  // 고를 벽이 없다). 다른 층의 대상을 가리키는 선택은 아래 테스트가 따로 본다.
+  addFloor(store, { name: 'Floor 2', copy: 'plan' });
+  const wall = activeFloor(store.get()).walls[0];
+  if (wall) ui.set({ selection: { type: 'wall', id: wall.id } });
+  const bar = el.querySelector('#floorBar');
+  expect(bar).not.toBeNull();
+  expect(el.firstElementChild.id).toBe('floorBar');     // 맨 위다
+  expect(bar.querySelector('[name="floorSelect"]').options).toHaveLength(2);
+  expect(bar.querySelector('[name="floorAdd"]')).not.toBeNull();
+  // 상세(투명도·삭제)는 선택이 있는 동안에는 없다.
+  expect(el.querySelector('[name="wallOpacity"]')).toBeNull();
+});
+
+// §16.4(감사 §32): 다른 층의 대상을 가리키는 선택은 풀고 층 정보를 보인다(빈 패널 방어).
+test('다른 층의 대상이 선택된 채 층을 바꾸면 선택이 풀리고 층 정보가 보인다', () => {
+  const { store, ui, el } = setupPanel();
+  const wall = activeFloor(store.get()).walls[0];
+  ui.set({ selection: { type: 'wall', id: wall.id } });
+  addFloor(store, { name: 'Floor 2', copy: 'none' });    // 새 층에는 그 벽이 없다
+  expect(ui.get().selection).toBeNull();
+  expect(el.querySelector('#floorBar')).not.toBeNull();
+  expect(el.textContent).toContain('층 관리');
+  expect(el.innerHTML.length).toBeGreaterThan(0);        // 예전에는 innerHTML 길이가 0이었다
 });

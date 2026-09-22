@@ -2,7 +2,7 @@
 import { test, expect } from 'vitest';
 import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE, DAMPER_ADDED, DAMPER_DELETED, PASTE_RESULT, CURVED_WALL_TITLE, CANVAS_LABEL, MINIMAP_LABEL } from '../src/ui/messages.js';
 import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE, COPIED, COPIED_N, ARRAY_TOO_MANY, ARRAY_MULTI_WARN, LOADED, RESTORED, JSON_EXPORTED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, SPLIT_REGIONS_RESET, OPENING_NEEDS_WALL, KEYS_RESET, KEYS_LOADED, KEY_TAKEN, POPUP_BLOCKED, SHOT_SAVED, GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, SPEC_IMAGES_FAIL, SPEC_FAIL } from '../src/ui/messages.js';
-import { LAYERS_HIDDEN, LAYERS_SHOWN } from '../src/ui/messages.js';
+import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,4 +109,10 @@ test('src/의 toast( 인자에 한국어 리터럴이 없다(§16.8)', () => {
     });
   }
   expect(bad).toEqual([]);
+});
+
+test('층 문구는 §16.4가 적은 글자 그대로다', () => {
+  expect(FLOOR_ADDED('Floor 2', 39)).toBe('Floor 2 추가 · 제품 39개 복사');
+  expect(FLOOR_ADDED('Floor 2', 0)).toBe('Floor 2 추가');
+  expect(CROSS_FLOOR_UNDO('Floor 1')).toBe('다른 층(Floor 1)의 변경을 되돌렸습니다');
 });

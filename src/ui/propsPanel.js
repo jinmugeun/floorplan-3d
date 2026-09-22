@@ -1,5 +1,6 @@
 import { activeFloor } from '../state/schema.js';
-import { updateRoom, setActiveFloor, deleteFloor, totalArea, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
+import { updateRoom, setActiveFloor, deleteFloor, setRoomWallHeight, updateWallProps, updateItem, resizeItem, pruneSelection } from '../state/floorOps.js';
+import { floorBarHtml, floorDetailsHtml } from './floorBar.js';
 import { wallLength } from '../geom/walls.js';
 import { fmtArea, fmtLen } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
@@ -15,7 +16,7 @@ import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
 import { memoCollisions } from '../geom/collide.js';
-import { COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE } from './messages.js';
+import { COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR } from './messages.js';
 export { lenField, readLen, withUnit } from './fieldUtils.js';
 export { applyNumber };
 
@@ -32,6 +33,14 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   function render() {
     const active = document.activeElement;
     if (colorTx && active?.type === 'color' && container.contains(active)) return; // 색을 끌고 있는 동안만 다시 그리지 않는다(입력이 끊긴다)
+    // 다른 층의 대상을 가리키는 선택은 여기서 풀고 층 정보를 보인다(§16.4 · 감사 §32).
+    // 판정은 main.js의 구독과 같은 함수(pruneSelection)를 쓴다 — 두 곳이 갈라지지 않게.
+    // 배선(main.js:130-133)에도 같은 구독이 있으므로 실제 앱에서는 판정이 **두 번** 돈다(같은
+    // ui.set({ selection: null })이 두 번 나가지만 멱등이라 결과는 같다). 여기 있는 것은
+    // 패널 단독 테스트를 위한 방어다 — 패널만 띄운 테스트에는 그 구독이 없다.
+    // 이 set이 render를 한 번 더 부르고, 그때는 선택이 null이라 재귀가 끝난다.
+    const pruned = pruneSelection(store.get(), ui.get().selection);
+    if (pruned !== ui.get().selection) { ui.set({ selection: pruned }); return; }
     renderBody();
     mountSwatches(container, activeFloor(store.get()), ui.get().selection);
     // 마감재 행에도 <details>가 생겼다: 층 관리 패널의 "상세 설정"만 골라 잡는다(I-14).
@@ -42,36 +51,27 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     ui.set({ focusField: null });                          // 한 번만. 이 set이 renderBody를 다시 돌린다
     container.querySelector(`[name="${wanted}"]`)?.focus(); // 그래서 새 DOM에서 다시 찾는다
   }
+  // 층 바는 선택과 무관하게 맨 위에 상주한다(§16.4). 본문만 선택에 따라 달라진다.
   function renderBody() {
+    container.innerHTML = floorBarHtml(store.get()) + bodyHtml();
+  }
+  function bodyHtml() {
     const sel = ui.get().selection, f = activeFloor(store.get());
     const st = store.get(), units = st.units ?? 'mm', pyeong = !!st.settings?.pyeong, showUnit = !!st.settings?.showUnit;
     if (!sel) {
-      const p = store.get(), idx = p.activeFloor ?? 0;
-      container.innerHTML = `<h2>층 관리</h2>
-        ${field('현재 층', `<select name="floorSelect">${p.floors.map((fl, i) => `<option value="${i}" ${i === idx ? 'selected' : ''}>${esc(fl.name)}</option>`).join('')}</select>`)}
-        <div class="row"><button type="button" name="floorAdd">층 추가하기</button><button type="button" name="floorRename">이름 변경</button></div>
-        <button type="button" name="floorDelete" class="danger" ${p.floors.length <= 1 ? `disabled title="${LAST_FLOOR_TITLE}"` : ''}>층 삭제</button>
-        ${lenField(withUnit('층 높이', units, showUnit), 'floorHeight', f.height, 2000, 8000, false, units, 10)}
-        <details ${detailsOpen ? 'open' : ''}><summary>상세 설정</summary>
-          ${field('실면적 기준', `<select name="areaMode"><option value="net" ${p.areaMode !== 'gross' ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option></select>`)}
-          ${field('총면적', `<output name="totalArea">${fmtArea(totalArea(f, p.areaMode), { pyeong })}</output>`)}
-          ${lenField(withUnit('슬래브 두께', units, showUnit), 'slab', f.slab ?? 0, 0, 1000, false, units)}
-          ${field('벽 투명도', `<input type="range" name="wallOpacity" min="0" max="1" step="0.05" value="${p.view.wallOpacity}"><output name="wallOpacityOut">${Math.round((p.view.wallOpacity ?? 1) * 100)}%</output>`)}
-          ${field('바닥 투명도', `<input type="range" name="floorOpacity" min="0" max="1" step="0.05" value="${p.view.floorOpacity}"><output name="floorOpacityOut">${Math.round((p.view.floorOpacity ?? 1) * 100)}%</output>`)}
-        </details>
-        <p class="hint">객체를 클릭하면 상세 정보가 표시됩니다.</p>`;
-      const bg = store.get().background;
-      if (bg) container.insertAdjacentHTML('beforeend', `<h2>배경 이미지</h2>${field('투명도', `<input type="range" name="bgOpacity" min="0" max="1" step="0.05" value="${bg.opacity}">`)}<label class="check"><input type="checkbox" name="bgVisible" ${bg.visible ? 'checked' : ''}> 표시</label><label class="check"><input type="checkbox" name="bgLocked" ${bg.locked ? 'checked' : ''}> 잠금</label><button type="button" name="bgRemove">배경 제거</button>`);
-      return;
+      const bg = st.background;
+      return floorDetailsHtml(st, f, { units, showUnit, pyeong, detailsOpen })
+        + (bg ? `<h2>배경 이미지</h2>${field('투명도', `<input type="range" name="bgOpacity" min="0" max="1" step="0.05" value="${bg.opacity}">`)}<label class="check"><input type="checkbox" name="bgVisible" ${bg.visible ? 'checked' : ''}> 표시</label><label class="check"><input type="checkbox" name="bgLocked" ${bg.locked ? 'checked' : ''}> 잠금</label><button type="button" name="bgRemove">배경 제거</button>` : '');
     }
     if (sel.type === 'item') {
-      const it = f.items.find(x => x.id === sel.id); if (!it) { container.innerHTML = ''; return; }
+      const it = f.items.find(x => x.id === sel.id);
+      if (!it) return floorDetailsHtml(st, f, { units, showUnit, pyeong, detailsOpen });   // 빈 패널 방어(§16.4)
       if (keepRatioFor !== it.id) { setKeepRatio(false); keepRatioFor = it.id; }
       const p = productById(it.productId);
       const onWall = !!(it.attach === 'wall' && it.wallId); // 벽 부착 제품의 위치는 벽 위 t로 정해지므로 읽기 전용
       // 겹침은 빨간 테두리만으로는 눈치채기 어렵다(§14.8): 고른 제품이 충돌 중이면 한 줄로 말한다.
       const clash = store.get().view?.v2?.collision !== false && memoCollisions(f.items).has(it.id);
-      container.innerHTML = `<h2>제품 상세 정보</h2>
+      return `<h2>제품 상세 정보</h2>
         ${clash ? `<p class="error">${COLLISION_ITEM}</p>` : ''}
         <p class="muted">${esc(it.name || p?.name || '제품')} · ${esc(it.code || p?.code || '')}</p>
         ${field('크기 (W×D×H)', `<output>${fmtSize(it.size)}</output>`)}
@@ -89,13 +89,13 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${lenField(withUnit('위치 Y', units, showUnit), 'posY', it.pos[1], -1e6, 1e6, onWall, units)}
         ${equipRowsHtml(it, { units, showUnit, floor: f })}
         <button type="button" name="delete" class="danger">제품 삭제</button>`;
-      return;
     }
-    if (sel.type === 'duct') { container.innerHTML = ductPanelHtml(f, sel, { units, showUnit }); return; }
+    if (sel.type === 'duct') { const h = ductPanelHtml(f, sel, { units, showUnit }); return h || floorDetailsHtml(st, f, { units, showUnit, pyeong, detailsOpen }); }
     if (sel.type === 'wall') {
-      const w = f.walls.find(x => x.id === sel.id); if (!w) { container.innerHTML = ''; return; }
+      const w = f.walls.find(x => x.id === sel.id);
+      if (!w) return floorDetailsHtml(st, f, { units, showUnit, pyeong, detailsOpen });   // 빈 패널 방어(§16.4)
       const len = wallLength(w);
-      container.innerHTML = `<h2>벽 상세 정보</h2>
+      return `<h2>벽 상세 정보</h2>
         ${lenField(withUnit('벽 중심선 길이', units, showUnit), 'length', Math.round(len), 0, 999999, true, units)}
         ${lenField(withUnit('벽 길이', units, showUnit), 'wallLength', Math.round(len), 1, 999999, false, units)}
         ${lenField(withUnit('두께', units, showUnit), 'thickness', w.thickness, 2, 1000, false, units)}
@@ -106,10 +106,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${w.matOut ? '' : colorField('외벽 색', 'colorOut', w.colorOut)}
         <button type="button" name="split">벽 나누기 (나눌 지점 클릭)</button>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
-      return;
     }
     if (sel.type === 'multi' && sel.kind === 'item') {
-      container.innerHTML = `<h2>제품 ${sel.ids.length}개 선택</h2>
+      return `<h2>제품 ${sel.ids.length}개 선택</h2>
         <h3>정렬</h3>
         <div class="row"><button type="button" name="alignVStart">위</button><button type="button" name="alignVCenter">중간</button><button type="button" name="alignVEnd">아래</button></div>
         <div class="row"><button type="button" name="alignHStart">왼</button><button type="button" name="alignHCenter">가운데</button><button type="button" name="alignHEnd">오른</button></div>
@@ -117,23 +116,22 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <button type="button" name="group">그룹화 <kbd>Ctrl+G</kbd></button>
         <button type="button" name="ungroup">그룹 해제 <kbd>Ctrl+Shift+G</kbd></button>
         <button type="button" name="delete" class="danger">선택 삭제</button>`;
-      return;
     }
     if (sel.type === 'multi' && sel.kind === 'wall') {
       const picked = f.walls.filter(w => sel.ids.includes(w.id));
       const h = picked[0]?.height ?? 2300, t = picked[0]?.thickness ?? 200;
-      container.innerHTML = `<h2>여러 벽 선택</h2>
+      return `<h2>여러 벽 선택</h2>
         <p class="hint">선택된 벽 ${picked.length}개</p>
         ${lenField(withUnit('벽 높이', units, showUnit), 'height', h, 2, 8000, false, units)}
         ${lenField(withUnit('두께', units, showUnit), 'thickness', t, 2, 1000, false, units)}
         ${field('선택된 벽 면적 합', `<output name="wallArea">${fmtArea(picked.reduce((s, w) => s + (wallLength(w) * w.height) / 1e6, 0), { pyeong })}</output>`)}
         <button type="button" name="delete" class="danger">선택 삭제</button>`;
-      return;
     }
     if (sel.type === 'room') {
-      const r = f.rooms.find(x => x.id === sel.id); if (!r) { container.innerHTML = ''; return; }
+      const r = f.rooms.find(x => x.id === sel.id);
+      if (!r) return floorDetailsHtml(st, f, { units, showUnit, pyeong, detailsOpen });
       const t = f.walls.find(x => r.wallIds.includes(x.id))?.thickness ?? 200;
-      container.innerHTML = `<h2>공간 상세 정보</h2>
+      return `<h2>공간 상세 정보</h2>
         ${field('공간 타입', `<select name="type">${ROOM_TYPES.map(([v, l]) => `<option value="${v}" ${r.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`)}
         ${field('공간 이름', `<input type="text" name="name" value="${esc(r.name)}" placeholder="공간 이름을 입력해 주세요">`)}
         ${field('면적', `<output>${fmtArea(r.area, { pyeong })}</output>`)}
@@ -148,8 +146,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         <label class="check"><input type="checkbox" name="hideCeiling" ${r.hideCeiling ? 'checked' : ''}> 천장 감추기</label>
         ${roomDesignRowsHtml(r, roomAirflow(f).find(x => x.roomId === r.id) ?? null)}
         <button type="button" name="delete" class="danger">방 삭제</button>`;
-      return;
     }
+    return '';
   }
   // 색: 기하 불변 → reroom 없음. opts는 트랜잭션 안에서 { record: false }로 넘어온다.
   const applyColor = (sel, name, value, opts) => {
@@ -239,7 +237,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       return;
     }
     if (ev.target.name === 'bgRemove') { store.dispatch(d => { d.background = null; }); return; }
-    if (ev.target.name === 'floorAdd') { openFloorDialog({ store, mode: 'add' }); return; }
+    if (ev.target.name === 'floorAdd') { openFloorDialog({ store, mode: 'add' }); return; }   // 결과 토스트는 floorDialog가 낸다(§16.4)
     if (ev.target.name === 'floorRename') { openFloorDialog({ store, mode: 'rename', index: store.get().activeFloor ?? 0 }); return; }
     if (ev.target.name === 'floorDelete') {
       const p = store.get();

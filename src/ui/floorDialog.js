@@ -1,6 +1,9 @@
 import { addFloor, renameFloor } from '../state/floorOps.js';
+import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
 import { focusTrap } from './dialogBase.js';
+import { toast } from './toast.js';
+import { FLOOR_ADDED } from './messages.js';
 
 const COPY_OPTIONS = [['none', '없음'], ['plan', '도면만'], ['all', '전체']];
 
@@ -24,7 +27,13 @@ export function openFloorDialog({ store, mode = 'add', index = null, onClose = (
     const name = q('floorName').value.trim();
     if (!name) { q('error').hidden = false; return; }
     if (mode === 'rename') renameFloor(store, index, name);
-    else addFloor(store, { name, copy: root.querySelector('[name="copy"]:checked').value });
+    else {
+      addFloor(store, { name, copy: root.querySelector('[name="copy"]:checked').value });
+      // 결과를 알린다(§16.4 · 감사 §28). 복사한 개수는 **새 층이 활성이 된 뒤** 그 층에서 센다:
+      // addFloor의 copy 옵션과 실제 결과가 갈라질 자리를 없앤다(도면만 복사는 제품 0개다).
+      const f = activeFloor(store.get());
+      toast(FLOOR_ADDED(f?.name ?? name, (f?.items ?? []).length));
+    }
     close();
   };
   // Enter로 확정, Esc로 닫기(폼 없이 만든 대화상자라 직접 처리한다).

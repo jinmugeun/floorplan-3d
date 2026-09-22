@@ -5,7 +5,7 @@ import { placeOnWall } from '../src/geom/items.js';
 import { openingsOnWall } from '../src/geom/openings.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, addItem, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo, updateWallProps, deleteMeasure } from '../src/state/floorOps.js';
+import { addWalls, addItem, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo, updateWallProps, deleteMeasure, crossFloorName } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -445,4 +445,16 @@ test('없는 방을 지우면 아무 단계도 만들지 않는다', () => {
   expect(deleteRoom(s, '없는id')).toEqual({ walls: 0, items: 0, rooms: 0 });
   expect(steps).toEqual([]);
   off();
+});
+
+// §16.4(감사 §30): 층을 가로지르는 undo는 활성 층을 갈아탄다 — 그 사실을 배선이 알 수 있어야 한다.
+test('crossFloorName은 활성 층이 갈아탄 경우에만 그 층 이름을 돌려준다', () => {
+  const store = createStore(createEmptyProject());
+  addFloor(store, { name: 'Floor 2', copy: 'none' });
+  const onTwo = store.get();
+  setActiveFloor(store, 0);
+  const onOne = store.get();
+  expect(crossFloorName(onOne, onTwo)).toBe('Floor 2');   // 되돌린 변경은 Floor 2의 것이다
+  expect(crossFloorName(onTwo, onTwo)).toBeNull();
+  expect(crossFloorName(undefined, onOne)).toBeNull();     // 0 → 0
 });

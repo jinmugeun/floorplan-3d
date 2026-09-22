@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
+import { transformFloor, pruneSelection, pruneSolo, crossFloorName, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
 import { createView2D } from './view2d/view2d.js';
 import { createMinimap } from './view2d/minimap.js';
 import { createRoomTool, ROOM_TOOL_DEFAULTS } from './view2d/tools/roomTool.js';
@@ -41,7 +41,7 @@ import { createProjectActions } from './app/projectActions.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
 import { stickyTools } from './ui/prefs.js';
-import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED } from './ui/messages.js';
+import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, CROSS_FLOOR_UNDO } from './ui/messages.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -188,8 +188,13 @@ document.querySelector('[data-action="flipH"]').addEventListener('click', () => 
 document.querySelector('[data-action="flipV"]').addEventListener('click', () => transformFloor(store, p => [p[0], -p[1]]));
 document.querySelector('[data-action="rotL"]').addEventListener('click', () => transformFloor(store, p => [p[1], -p[0]]));
 document.querySelector('[data-action="rotR"]').addEventListener('click', () => transformFloor(store, p => [-p[1], p[0]]));
-document.getElementById('btnUndo').addEventListener('click', () => store.undo());
-document.getElementById('btnRedo').addEventListener('click', () => store.redo());
+// 층을 가로지르는 되돌리기는 어느 층의 무엇이 되돌려졌는지 알린다(§16.4 · 감사 §30):
+// 화면이 말없이 다른 층으로 넘어가면 "내가 누른 것과 다른 일이 일어났다"로 읽힌다.
+const withFloorNote = fn => () => { const prev = store.get(); if (!fn()) return; const name = crossFloorName(prev, store.get()); if (name) shell.toast(CROSS_FLOOR_UNDO(name)); };
+const undoAction = withFloorNote(() => store.undo());
+const redoAction = withFloorNote(() => store.redo());
+document.getElementById('btnUndo').addEventListener('click', undoAction);
+document.getElementById('btnRedo').addEventListener('click', redoAction);
 // 줌·화면 맞추기는 현재 모드의 뷰가 받는다(2D 도면 / 3D 카메라).
 const activeView = () => viewForMode(ui.get().mode, view, view3d);
 const fitView = () => activeView().fit();
@@ -236,6 +241,8 @@ files.wireDrop(document.getElementById('canvasWrap'));
 
 setTable(buildTable(effectiveKeymap(loadOverrides()))); // 저장된 단축키 재지정을 적용한다
 const menuActions = createMenuActions({ store, ui, view, menu, canvas: canvas2d });
-window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions, contextMenu: () => menuActions.openSelectionMenu() }));
+window.addEventListener('keydown', createKeyHandler({ store, ui, view, setTool, setMode, openBackground: () => openBackgroundDialog({ store }), deleteSelection, deleteOrTool, save: () => document.getElementById('btnSave').click(), selectAll, openSettings, zoomIn: () => zoom(1.25), zoomOut: () => zoom(1 / 1.25), fit: fitView, cancelReplace, itemActions, contextMenu: () => menuActions.openSelectionMenu(),
+  undo: undoAction, redo: redoAction,
+}));
 setTool('select'); view.fit(); minimap.fit(500);
 if (import.meta.env.DEV) window.__app = { store, ui, view, view3d, actions: project.actions, dirty }; // 브라우저 검증용, 개발 빌드에서만

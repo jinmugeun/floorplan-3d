@@ -126,3 +126,9 @@ export const EST_EMPTY_TITLE = '배치된 제품·마감재·덕트가 없습니
 const countPhrase = (items, ducts) => [items ? `제품 ${items}개` : '', ducts ? `덕트 ${ducts}개` : ''].filter(Boolean).join(' · ');
 export const LAYERS_HIDDEN = (items, ducts) => `${countPhrase(items, ducts)}를 숨겼습니다`;
 export const LAYERS_SHOWN = (items, ducts) => `${countPhrase(items, ducts)}를 보이게 했습니다`;
+
+// 층 관리(§16.4 · 감사 §28·§30): 91개를 복제하고 활성 층까지 바뀌는데 아무 말이 없었다.
+// 복사하지 않았으면 뒷절을 빼고 "Floor 2 추가"만 말한다.
+export const FLOOR_ADDED = (name, copied = 0) => `${name} 추가${copied > 0 ? ` · 제품 ${copied}개 복사` : ''}`;
+// 되돌리기가 층을 갈아탄 경우. 이름은 **되돌려진 변경이 있던 층**(= 지금 활성 층)이다.
+export const CROSS_FLOOR_UNDO = name => `다른 층(${name})의 변경을 되돌렸습니다`;

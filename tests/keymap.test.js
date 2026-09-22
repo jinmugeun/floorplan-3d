@@ -427,3 +427,17 @@ test('이미 처리된 [Enter](옵션 바)는 두 번 확정하지 않는다', (
   a.key('Enter', { target: el, defaultPrevented: true });
   expect(changes).toEqual([]);
 });
+
+// §16.4: undo·redo는 주입할 수 있다(층 간 되돌리기 토스트가 그 자리를 쓴다).
+test('createKeyHandler는 주입한 undo·redo를 부른다', () => {
+  const calls = [];
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const handler = createKeyHandler({
+    store, ui, view: { tool: null, requestRender() {} }, setTool() {}, setMode() {},
+    openBackground() {}, deleteSelection() {}, undo: () => calls.push('undo'), redo: () => calls.push('redo'),
+  });
+  handler(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+  handler(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }));
+  expect(calls).toEqual(['undo', 'redo']);
+});

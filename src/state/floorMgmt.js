@@ -79,3 +79,11 @@ export function totalArea(floor, areaMode = 'net') {
 // 방 속성 목록(ROOM_PROPS)과 층 복사용 속성 이전(copyRoomProps)은 floorInternal.js가 정본이다.
 // 여기서 다시 내보내기만 한다: 정의를 두 벌 두면 Task 2가 더한 floorMat·ceilingMat가 한쪽에만 남는다.
 export { ROOM_PROPS, copyRoomProps } from './floorInternal.js';
+
+// 되돌리기·다시 실행이 활성 층을 갈아탔는지. 갈아탔으면 **되돌려진 변경이 있던 층**(= 새 활성 층)의
+// 이름을, 아니면 null을 돌려준다(§16.4 · 감사 §30: 화면이 말없이 다른 층으로 넘어갔다).
+export function crossFloorName(prev, next) {
+  const a = prev?.activeFloor ?? 0, b = next?.activeFloor ?? 0;
+  if (a === b) return null;
+  return next?.floors?.[b]?.name ?? null;
+}

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
-import { createEmptyProject, activeFloor } from '../src/state/schema.js';
-import { addWalls } from '../src/state/floorOps.js';
+import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
+import { addWalls, addItem } from '../src/state/floorOps.js';
+import { productById } from '../src/products/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { openFloorDialog } from '../src/ui/floorDialog.js';
 
@@ -72,4 +73,16 @@ test('a composing Enter does not submit the floor dialog', () => {
   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   expect(document.querySelector('.modal')).toBeNull();
   expect(store.get().floors.map(f => f.name)).toEqual(['Floor 1', '지하']);
+});
+
+test('층 추가는 결과를 토스트로 알린다(§16.4)', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200));
+  addItem(store, createItem(productById('sofa-3'), { pos: [2000.5, 1500.25] }));
+  openFloorDialog({ store, mode: 'add' });
+  const root = document.querySelector('.modal');
+  root.querySelector('[name="copy"][value="all"]').checked = true;
+  root.querySelector('[name="floorName"]').value = 'Floor 2';
+  root.querySelector('[name="submit"]').click();
+  expect(document.body.textContent).toContain('Floor 2 추가 · 제품 1개 복사');
 });

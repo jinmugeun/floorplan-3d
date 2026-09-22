@@ -59,6 +59,11 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 /* 이름이 미니맵 그림 위에 그대로 겹쳐 읽히지 않았다(감사 시각 거침): 반투명 바탕을 깐다. */
 #minimap .mm-label { position: absolute; top: 4px; left: 6px; font-size: 11px; color: var(--muted); background: rgba(255,255,255,.75); padding: 0 4px; border-radius: 3px; pointer-events: none; }
 #props { padding: 12px; } #props h2 { font-size: 14px; margin: 0 0 10px; } .field { display: block; margin-bottom: 8px; } .field span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; } .field input, .field select { width: 100%; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; }
+/* 층 바는 선택과 무관하게 속성 패널 맨 위에 상주한다(§16.4 · 감사 §29). 한 줄이고, select가 남는
+   폭을 다 쓴다 — 층 이름이 길어도 [층 추가]가 밀려나지 않는다. */
+#floorBar { display: flex; gap: 6px; align-items: center; padding: 10px 12px 0; }
+#floorBar select { flex: 1 1 auto; min-width: 0; font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; }
+#floorBar button:not(.primary) { flex: none; padding: 4px 8px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
 .check { display: flex; gap: 6px; align-items: center; margin: 8px 0; } .danger { color: var(--exhaust); border-color: var(--exhaust); background: #fff; border: 1px solid; padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
 /* 행 높이는 48 px다(§14.3): 44 px에서는 가로 스크롤바(15 px)가 생긴 순간 남는 높이가 28 px뿐이라
    버튼 아래 2 px와 :focus-visible 외곽선이 overflow-y: hidden에 잘렸다. */
