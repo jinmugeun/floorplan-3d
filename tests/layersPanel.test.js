@@ -3,10 +3,11 @@ import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
-import { addWalls, addItem, updateRoom } from '../src/state/floorOps.js';
+import { addWalls, addItem, updateRoom, setItemFlag } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { createLayersPanel, ductRoomId } from '../src/ui/layersPanel.js';
+import { createLayersPanel, ductRoomId, hideAll } from '../src/ui/layersPanel.js';
+import { LAYERS_HIDDEN, LAYERS_SHOWN } from '../src/ui/messages.js';
 import { addDuct } from '../src/state/ductOps.js';
 import { pointInPolygon } from '../src/geom/rooms.js';
 import { roomAt, roomAirflow } from '../src/vent/airflow.js';
@@ -76,15 +77,12 @@ describe('레이어 패널', () => {
     expect(item(store, inRoom).name).toBe(before);
   });
 
-  test('모두 보기 체크박스가 전체 숨김·보이기를 한다', () => {
+  // 예전에는 "모두 보기" 체크박스 하나였다(상태 거울 + 파괴적 스위치 — 감사 §20). 두 버튼으로 갈렸다.
+  test('[모두 숨기기]·[모두 보이기] 버튼이 전체 숨김·보이기를 한다', () => {
     const { store, el } = setup();
-    const all = () => el.querySelector('input[name="showAll"]');
-    expect(all().checked).toBe(true);
-    all().checked = false; all().dispatchEvent(new Event('change', { bubbles: true }));
+    click(el, '[name="hideAll"]');
     expect(activeFloor(store.get()).items.every(i => i.hidden)).toBe(true);
-    const again = el.querySelector('input[name="showAll"]');
-    expect(again.checked).toBe(false);
-    again.checked = true; again.dispatchEvent(new Event('change', { bubbles: true }));
+    click(el, '[name="showAll"]');
     expect(activeFloor(store.get()).items.every(i => !i.hidden)).toBe(true);
   });
 
@@ -151,16 +149,71 @@ describe('레이어 패널', () => {
     expect(air.some(r => r.roomId === null)).toBe(false);
   });
 
-  test('"모두 보기"가 제품과 덕트를 한 단계로 함께 켜고 끈다', () => {
+  test('"모두 보이기"가 제품과 덕트를 한 단계로 함께 켠다', () => {
     const { store, el } = setup();
     addDuct(store, { id: 'd1', points: [[2000, 1500], [3000, 1500]], hidden: true });
-    const box = el.querySelector('input[name="showAll"]');
-    box.checked = true;
-    box.dispatchEvent(new Event('change', { bubbles: true }));
+    click(el, '[name="showAll"]');
     const f = activeFloor(store.get());
     expect(f.items.every(i => !i.hidden)).toBe(true);
     expect(f.ducts.every(d => !d.hidden)).toBe(true);
     store.undo();
     expect(activeFloor(store.get()).ducts[0].hidden).toBe(true);          // 되돌림 한 단계
+  });
+
+  test('[모두 숨기기]는 한 단계로 숨기고 결과를 알린다(§16.3 · 감사 §20)', () => {
+    const { store, el, inRoom, outside } = setup();
+    const before = store.get();
+    el.querySelector('[name="hideAll"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(item(store, inRoom).hidden).toBe(true);
+    expect(item(store, outside).hidden).toBe(true);
+    expect(document.body.textContent).toContain(LAYERS_HIDDEN(2, 0));
+    store.undo();                                              // 한 번에 되돌아온다
+    expect(item(store, inRoom).hidden).toBeFalsy();
+    expect(store.get()).toEqual(before);
+  });
+
+  test('[모두 보이기]는 숨긴 것만 되살린다(바뀐 것이 없으면 단계도 없다)', () => {
+    const { store, el, inRoom } = setup();
+    el.querySelector('[name="hideAll"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const canUndo = store.canUndo();
+    el.querySelector('[name="showAll"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(item(store, inRoom).hidden).toBeFalsy();
+    expect(document.body.textContent).toContain(LAYERS_SHOWN(2, 0));
+    // 이미 다 보이는 상태에서 다시 누르면 아무 일도 없다(빈 undo 단계 금지 — Global Constraints).
+    const at = store.get();
+    el.querySelector('[name="showAll"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(store.get()).toBe(at);
+    expect(canUndo).toBe(true);
+  });
+
+  test('선택된 대상의 행이 강조되고 화면 안으로 스크롤된다(감사 §21)', () => {
+    const { ui, el, inRoom } = setup();
+    const seen = [];
+    Element.prototype.scrollIntoView = function stub(opts) { seen.push([this.dataset.id, opts]); };
+    ui.set({ selection: { type: 'item', id: inRoom } });
+    const row = el.querySelector(`.layer-item[data-id="${inRoom}"]`);
+    expect(row.classList.contains('on')).toBe(true);
+    expect(seen.at(-1)).toEqual([inRoom, { block: 'nearest' }]);
+    delete Element.prototype.scrollIntoView;
+  });
+
+  test('"숨긴 항목 보기"가 꺼져 있어도 되살릴 줄이 남는다(감사 §26)', () => {
+    const { store, ui, el, inRoom } = setup();
+    setItemFlag(store, [inRoom], 'hidden', true);
+    ui.set({ showHidden: false });
+    expect(el.querySelector(`.layer-item[data-id="${inRoom}"]`)).toBeNull();
+    const line = el.querySelector('.layer-hidden button');
+    expect(line.textContent).toBe('숨긴 항목 1개 — 숨긴 항목 보기');
+    line.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(ui.get().showHidden).toBe(true);
+    expect(el.querySelector(`.layer-item[data-id="${inRoom}"]`)).not.toBeNull();
+  });
+
+  test('hideAll은 바뀐 개수만 돌려준다', () => {
+    const { store } = setup();
+    const f = () => activeFloor(store.get());
+    expect(hideAll(store, f(), true)).toEqual({ items: 2, ducts: 0 });
+    expect(hideAll(store, f(), true)).toEqual({ items: 0, ducts: 0 });   // 이미 숨겨져 있다
+    expect(hideAll(store, f(), false)).toEqual({ items: 2, ducts: 0 });
   });
 });

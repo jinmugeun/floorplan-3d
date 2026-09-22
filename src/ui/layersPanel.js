@@ -1,10 +1,9 @@
 import { activeFloor } from '../state/schema.js';
 import { roomAt } from '../vent/airflow.js';
-import { productById, fmtSize } from '../products/catalog.js';
 import { setItemFlag, updateItem, setDuctFlag } from '../state/floorOps.js';
-import { ductLength } from '../geom/ducts.js';
-import { fmtArea, fmtLen } from '../util/units.js';
-import { esc } from '../util/html.js';
+import { layerTreeHtml, ALL_SHOW, ALL_HIDE } from './layersTree.js';
+import { toast } from './toast.js';
+import { LAYERS_HIDDEN, LAYERS_SHOWN } from './messages.js';
 
 // 덕트는 첫 점이 든 방에 묶는다. 폴리라인은 여러 방을 지날 수 있어 기준이 하나 필요하다.
 // 방 판정은 맨손 pointInPolygon이 아니라 roomAt(vent/airflow.js)을 쓴다: 방 폴리곤은 벽 **중심선**이라
@@ -14,6 +13,8 @@ export const ductRoomId = (floor, duct) => roomAt(duct.points[0], floor.rooms, f
 
 export function createLayersPanel(container, { store, ui }) {
   let renaming = null;
+  // 방 노드의 접힘 기억. 기본값은 "내용이 있으면 펼침"이고(layersTree), 사용자가 토글하면 그 값이 이긴다.
+  const openState = new Map();
 
   // 아이템 위치가 어느 방 안인지로 묶는다(판정은 roomAt 한 자리 — 위 ductRoomId 주석과 같은 이유).
   // 어느 방에도 없으면 "미지정". 덕트는 첫 점으로 묶는다.
@@ -30,52 +31,37 @@ export function createLayersPanel(container, { store, ui }) {
   }
   const showHidden = () => ui.get().showHidden !== false;
 
-  function itemRow(it) {
-    const p = productById(it.productId);
-    const name = it.name || p?.name || '제품';
-    const body = renaming === it.id
-      ? `<input type="text" data-name="${it.id}" value="${esc(name)}" aria-label="이름 변경">`
-      : `<button type="button" class="layer-name" data-select="${it.id}">${esc(name)}</button>`;
-    return `<li class="layer-item ${it.hidden ? 'off' : ''}" data-id="${it.id}">
-      ${body}
-      <span class="muted">${esc(it.code || p?.code || '')} ${p ? fmtSize(it.size) : ''}</span>
-      <span class="layer-btns">
-        <button type="button" data-hide="${it.id}" aria-label="${it.hidden ? '보이기' : '숨김'}">${it.hidden ? '🚫' : '👁'}</button>
-        <button type="button" data-lock="${it.id}" aria-label="${it.locked ? '잠금 해제' : '잠금'}">${it.locked ? '🔒' : '🔓'}</button>
-        <button type="button" data-rename="${it.id}" aria-label="이름 변경">✎</button>
-      </span></li>`;
-  }
-  // 덕트 행: 급배기 · 계통 · 총 길이. 이름 바꾸기는 없다(덕트 이름은 계통이 대신한다).
-  function ductRow(d) {
-    const kind = d.kind === 'supply' ? '급기' : '배기';
-    const system = d.system ? ` · ${esc(d.system)}` : '';
-    return `<li class="layer-item ${d.hidden ? 'off' : ''}" data-duct="${d.id}">
-      <button type="button" class="layer-name" data-duct-select="${d.id}">덕트 ${kind}${system}</button>
-      <span class="muted">${esc(fmtLen(Math.round(ductLength(d)), store.get().units ?? 'mm'))}</span>
-      <span class="layer-btns">
-        <button type="button" data-duct-hide="${d.id}" aria-label="${d.hidden ? '보이기' : '숨김'}">${d.hidden ? '🚫' : '👁'}</button>
-        <button type="button" data-duct-lock="${d.id}" aria-label="${d.locked ? '잠금 해제' : '잠금'}">${d.locked ? '🔒' : '🔓'}</button>
-      </span></li>`;
-  }
+  // 선택 표시는 ui.selection에서 온다(§16.3 · 감사 §21): 캔버스에서 고른 것도 트리에서 보인다.
+  const selectedIds = () => {
+    const s = ui.get().selection;
+    if (!s) return new Set();
+    if (s.type === 'item' || s.type === 'duct') return new Set([s.id]);
+    if (s.type === 'multi' && s.kind === 'item') return new Set(s.ids);
+    return new Set();
+  };
   function render() {
-    const f = activeFloor(store.get());
-    const all = [...f.items, ...(f.ducts ?? [])];
-    const allShown = all.length > 0 && all.every(x => !x.hidden);
     const pyeong = !!store.get().settings?.pyeong;
+    // "모두 보기" 체크박스(상태 거울 + 파괴적 스위치)를 두 동작으로 가른다(§16.3 · 감사 §20).
     container.innerHTML = `
-      <label class="check"><input type="checkbox" name="showAll" ${allShown ? 'checked' : ''}> 모두 보기</label>
+      <div class="row layer-actions"><button type="button" name="showAll">${ALL_SHOW}</button><button type="button" name="hideAll">${ALL_HIDE}</button></div>
       <label class="check"><input type="checkbox" name="showHidden" ${showHidden() ? 'checked' : ''}> 숨긴 항목 보기</label>
-      <ul class="layer-tree">${buckets().map(b => {
-        const rows = b.items.filter(it => showHidden() || !it.hidden).map(itemRow).join('')
-          + b.ducts.filter(d => showHidden() || !d.hidden).map(ductRow).join('');
-        const title = b.room ? `${esc(b.room.name || '이름 없는 공간')} (${fmtArea(b.room.area, { pyeong })})` : '미지정';
-        return `<li class="layer-room"><span class="layer-room-name">${title}</span><ul>${rows}</ul></li>`;
-      }).join('')}</ul>`;
+      ${layerTreeHtml(buckets(), { units: store.get().units ?? 'mm', pyeong, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState })}`;
     if (renaming) container.querySelector(`input[data-name="${renaming}"]`)?.focus();
+    // 캔버스에서 고른 것이 트리 밖에 있으면 스크롤해 보여 준다(49행이 4화면이므로 꼭 필요하다).
+    // jsdom에는 scrollIntoView가 없을 수 있다 — 없으면 조용히 지나간다.
+    const sel = container.querySelector('.layer-item.on');
+    try { sel?.scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }
   }
 
   const onClick = ev => {
     const b = ev.target.closest('button'); if (!b) return;
+    if (b.name === 'showAll' || b.name === 'hideAll') {
+      const hidden = b.name === 'hideAll';
+      const n = hideAll(store, activeFloor(store.get()), hidden);
+      if (n.items || n.ducts) toast((hidden ? LAYERS_HIDDEN : LAYERS_SHOWN)(n.items, n.ducts));
+      return;
+    }
+    if (b.name === 'showHidden') { ui.set({ showHidden: true }); return; }   // 숨긴 항목을 되살릴 길(감사 §26)
     if (b.dataset.select) { ui.set({ selection: { type: 'item', id: b.dataset.select } }); return; }
     if (b.dataset.hide) { setItemFlag(store, [b.dataset.hide], 'hidden'); return; }
     if (b.dataset.lock) { setItemFlag(store, [b.dataset.lock], 'locked'); return; }
@@ -106,20 +92,27 @@ export function createLayersPanel(container, { store, ui }) {
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('focusout', onBlur);
   const onChange = ev => {
-    // 제품과 덕트를 한 단계로 함께 켜고 끈다(각각 기록하면 undo가 두 번 필요해진다).
-    if (ev.target.name === 'showAll') {
-      const hidden = !ev.target.checked;
-      const f = activeFloor(store.get());
-      store.beginTransaction();
-      setItemFlag(store, f.items.map(i => i.id), 'hidden', hidden, { record: false });
-      setDuctFlag(store, (f.ducts ?? []).map(d => d.id), 'hidden', hidden, { record: false });
-      store.endTransaction();
-      return;
-    }
     if (ev.target.name === 'showHidden') { ui.set({ showHidden: ev.target.checked }); }
   };
   container.addEventListener('change', onChange);
+  // <details>의 접힘은 사용자 기억이다: 다시 그려도 유지된다(스토어가 아니라 패널이 들고 있다 —
+  // 접힘은 프로젝트 파일에 저장하지 않는다).
+  const onToggle = ev => { const d = ev.target.closest?.('details[data-room]'); if (d) openState.set(d.dataset.room, d.open); };
+  container.addEventListener('toggle', onToggle, true);   // toggle은 버블하지 않는다 → 캡처로 받는다
   const unsubs = [store.subscribe(render), ui.subscribe(render)];
   render();
-  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('click', onClick); container.removeEventListener('keydown', onKeyDown); container.removeEventListener('focusout', onBlur); container.removeEventListener('change', onChange); container.innerHTML = ''; } };
+  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('click', onClick); container.removeEventListener('keydown', onKeyDown); container.removeEventListener('focusout', onBlur); container.removeEventListener('change', onChange); container.removeEventListener('toggle', onToggle, true); container.innerHTML = ''; } };
+}
+
+// 제품과 덕트를 한 단계로 함께 켜고 끈다(각각 기록하면 undo가 두 번 필요해진다).
+// 바뀐 개수를 돌려준다: 결과 토스트가 그 수를 말하고, 0이면 트랜잭션도 열지 않는다(빈 단계 금지).
+export function hideAll(store, floor, hidden) {
+  const items = (floor.items ?? []).filter(i => !!i.hidden !== !!hidden).map(i => i.id);
+  const ducts = (floor.ducts ?? []).filter(d => !!d.hidden !== !!hidden).map(d => d.id);
+  if (!items.length && !ducts.length) return { items: 0, ducts: 0 };
+  store.beginTransaction();
+  if (items.length) setItemFlag(store, items, 'hidden', hidden, { record: false });
+  if (ducts.length) setDuctFlag(store, ducts, 'hidden', hidden, { record: false });
+  store.endTransaction();
+  return { items: items.length, ducts: ducts.length };
 }

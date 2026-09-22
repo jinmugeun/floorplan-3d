@@ -127,10 +127,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tile-thumb svg { display: block; width: 100%; height: auto; }
 .tile canvas.swatch { width: 100%; height: auto; border-radius: 4px; }
 .tile-name { font-size: 11px; line-height: 1.2; } .tile-code, .tile-size { font-size: 10px; } .tile .fav { position: absolute; top: 2px; right: 4px; color: #d0d5db; } .tile .fav.on { color: #e8b100; }
-.layer-tree, .layer-tree ul { list-style: none; margin: 0; padding: 0; } .layer-tree > li { margin-bottom: 8px; } .layer-room-name { font-size: 11px; color: var(--muted); }
-.layer-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px; padding: 3px 0; border-bottom: 1px solid var(--line); } .layer-item.off { opacity: 0.45; }
-.layer-item .layer-name { border: 0 !important; background: none !important; padding: 0 !important; margin: 0 !important; font: inherit; text-align: left; cursor: pointer; }
+.layer-tree, .layer-tree ul { list-style: none; margin: 0; padding: 0; } .layer-tree > li { margin-bottom: 4px; } .layer-room-name { font-size: 11px; color: var(--muted); }
+/* 방 노드는 접힌다(§16.3 · 감사 §22): 제품 0개인 방이 헤더 줄만 차지하지 않게 기본이 접힘이다. */
+.layer-tree details > summary { display: flex; justify-content: space-between; gap: 6px; cursor: pointer; padding: 2px 0; }
+.layer-tree details > summary .muted { font-size: 10px; white-space: nowrap; }
+/* 행은 한 줄이다: 이름(+꼬리표) · 코드·크기 · 버튼(오른쪽 정렬). 예전에는 버튼이 둘째 줄이었다. */
+.layer-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; padding: 2px 0; border-bottom: 1px solid var(--line); }
+.layer-item.off { opacity: 0.45; }
+/* 선택된 행(감사 §21): 캔버스에서 고른 것이 트리에서도 보인다. */
+.layer-item.on { background: #e6eefb; box-shadow: inset 2px 0 0 var(--accent); }
+.layer-item .layer-name { border: 0 !important; background: none !important; padding: 0 !important; margin: 0 !important; font: inherit; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-item .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.layer-tag { color: var(--accent); font-weight: 600; }
 .layer-btns { display: flex; gap: 2px; } .layer-btns button:not(.primary) { border: 0 !important; background: none !important; padding: 0 2px !important; margin: 0 !important; cursor: pointer; }
+/* 잠기지 않은 상태(🔓)가 주황 경고처럼 보였다(감사 §24): 회색으로 내려 "지금 상태"로 읽히게 한다. */
+.layer-btns button[data-lock].off, .layer-btns button[data-duct-lock].off { filter: grayscale(1); opacity: .6; }
+.layer-hidden { padding: 2px 0; } .layer-hidden button:not(.primary) { border: 0 !important; background: none !important; padding: 0 !important; margin: 0 !important; font-size: 11px; color: var(--muted); text-decoration: underline dotted; cursor: pointer; }
+.layer-actions { margin-bottom: 6px; }
 #materials .tabs { display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 0; } #materials .tabs button:not(.primary) { flex: 1; padding: 6px 4px; font-size: 11px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; box-shadow: none; } #materials .tabs button.on { border-color: var(--accent); color: var(--accent); background: #e6eefb; }
 canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid var(--line); display: block; }
 .mat-row { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; } .mat-label { font-size: 11px; color: var(--muted); }

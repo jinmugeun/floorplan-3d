@@ -119,3 +119,10 @@ export const SPEC_FAIL = msg => `시방서를 만들지 못했습니다: ${msg}`
 // 견적서 빈 상태(§16.2 · 감사 §5): 빈 CSV·빈 인쇄가 나가지 않게 버튼을 끄고 사유를 말한다.
 // 본문 문구(EST_EMPTY)는 io/estimateTable.js에 있다(표 안의 글이라 io 계층에서 만든다).
 export const EST_EMPTY_TITLE = '배치된 제품·마감재·덕트가 없습니다';
+
+// 레이어 일괄 표시(§16.3 · 감사 §20·§25): 39 + 10개가 조용히 사라지던 자리다.
+// 0인 쪽은 문구에서 뺀다("덕트 0개를 숨겼습니다"는 없는 일을 말한다). 둘 다 있으면
+// §16.3이 적어 둔 글자 그대로가 된다: "제품 39개 · 덕트 10개를 숨겼습니다".
+const countPhrase = (items, ducts) => [items ? `제품 ${items}개` : '', ducts ? `덕트 ${ducts}개` : ''].filter(Boolean).join(' · ');
+export const LAYERS_HIDDEN = (items, ducts) => `${countPhrase(items, ducts)}를 숨겼습니다`;
+export const LAYERS_SHOWN = (items, ducts) => `${countPhrase(items, ducts)}를 보이게 했습니다`;

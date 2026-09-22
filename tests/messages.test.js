@@ -2,6 +2,7 @@
 import { test, expect } from 'vitest';
 import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE, DAMPER_ADDED, DAMPER_DELETED, PASTE_RESULT, CURVED_WALL_TITLE, CANVAS_LABEL, MINIMAP_LABEL } from '../src/ui/messages.js';
 import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE, COPIED, COPIED_N, ARRAY_TOO_MANY, ARRAY_MULTI_WARN, LOADED, RESTORED, JSON_EXPORTED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, SPLIT_REGIONS_RESET, OPENING_NEEDS_WALL, KEYS_RESET, KEYS_LOADED, KEY_TAKEN, POPUP_BLOCKED, SHOT_SAVED, GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, SPEC_IMAGES_FAIL, SPEC_FAIL } from '../src/ui/messages.js';
+import { LAYERS_HIDDEN, LAYERS_SHOWN } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,6 +77,12 @@ test('§16.8이 모은 나머지 문구도 한 곳에서 온다', () => {
   expect(SPEC_IMAGES_FAIL(2)).toBe('도면 이미지 2장을 만들지 못했습니다');
   expect(SPEC_FAIL('메모리 부족')).toBe('시방서를 만들지 못했습니다: 메모리 부족');
   expect(POPUP_BLOCKED).toBe('팝업이 차단되어 인쇄 창을 열 수 없습니다');
+});
+
+test('레이어 일괄 표시 문구는 §16.3이 적은 글자 그대로다', () => {
+  expect(LAYERS_HIDDEN(39, 10)).toBe('제품 39개 · 덕트 10개를 숨겼습니다');
+  expect(LAYERS_SHOWN(39, 10)).toBe('제품 39개 · 덕트 10개를 보이게 했습니다');
+  expect(LAYERS_HIDDEN(2, 0)).toBe('제품 2개를 숨겼습니다');      // 없는 쪽은 말하지 않는다
 });
 
 // §16.8: 사용자에게 보이는 문구는 messages.js 한 곳에서 온다. 사람 눈으로는 30개가 지나갔으므로
