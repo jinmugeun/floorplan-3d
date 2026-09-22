@@ -54,9 +54,9 @@ export function createLayersPanel(container, { store, ui }) {
     // 👁 클릭이나 캔버스 드래그가 사용자가 보고 있던 자리를 선택 행으로 되끌어당긴다.
     // jsdom에는 scrollIntoView가 없을 수 있다 — 없으면 조용히 지나간다.
     const ids = [...selectedIds()].sort().join(',');
-    // 패널이 레일에서 숨겨져 있으면(section[hidden]) 스크롤이 무효이므로 기억하지 않는다 — 다음에
-    // 패널이 열려 다시 그릴 때 그 선택으로 스크롤한다(재리뷰 N-1).
-    const shown = !container.closest('[hidden]');
+    // 패널이 레일에서 숨겨져 있거나(section[hidden]) 접혀 있으면(#panel.collapsed = display:none) 스크롤이
+    // 무효이므로 기억하지 않는다 — 다음에 패널이 열려 다시 그릴 때 그 선택으로 스크롤한다(재리뷰 N-1·N-1b).
+    const shown = !container.closest('[hidden], .collapsed');
     if (ids && ids !== lastSel && shown) {
       const sel = container.querySelector('.layer-item.on');
       try { sel?.scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }

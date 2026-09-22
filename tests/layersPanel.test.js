@@ -245,6 +245,25 @@ describe('레이어 패널', () => {
     }
   });
 
+  test('접힌 패널(.collapsed) 동안의 선택도 펼칠 때 스크롤된다(재리뷰 N-1b)', () => {
+    const { store, ui, el, inRoom } = setup();
+    const panel = document.createElement('div'); panel.id = 'panel'; panel.className = 'collapsed';
+    el.parentElement ? el.parentElement.insertBefore(panel, el) : document.body.appendChild(panel);
+    panel.appendChild(el);
+    const seen = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function stub(opts) { seen.push([this.dataset.id, opts]); };
+    try {
+      ui.set({ selection: { type: 'item', id: inRoom } });
+      expect(seen).toHaveLength(0);
+      panel.classList.remove('collapsed');
+      setItemFlag(store, [inRoom], 'locked', true);
+      expect(seen).toEqual([[inRoom, { block: 'nearest' }]]);
+    } finally {
+      if (orig) Element.prototype.scrollIntoView = orig; else delete Element.prototype.scrollIntoView;
+    }
+  });
+
   test('"숨긴 항목 보기"가 꺼져 있어도 되살릴 줄이 남는다(감사 §26)', () => {
     const { store, ui, el, inRoom } = setup();
     setItemFlag(store, [inRoom], 'hidden', true);
