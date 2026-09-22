@@ -8,6 +8,7 @@
 // "같으면 dispatch 없음"이 둘 다 있어야 단계가 하나로 남는다.
 import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
+import { fmtLen } from '../src/util/units.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
 import { addWalls, addItem } from '../src/state/floorOps.js';
@@ -143,5 +144,66 @@ describe('필드 확정 1회 = undo 1단계 (§16.1)', () => {
     expect(counter.get()).toBe(2);
     store.undo();
     expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(250);
+  });
+});
+
+// 리뷰 I-1·I-2·I-3: 위의 일곱 테스트가 못 박은 규칙("확정 1회 = 1단계 · 빈 단계 금지")이
+// 아직 성립하지 않던 세 자리다 — 비교가 "쓰일 값"이 아니라 "타이핑한 값"을 보던 크기·각도 칸,
+// 적용되지 않은 칸의 글자가 모델과 어긋난 채 남던 회귀, 표시↔파싱이 왕복하지 않는 ft·in 모드.
+describe('값이 바뀌지 않는 확정 (리뷰 I-1·I-2·I-3)', () => {
+  test('소수 크기 확정은 반올림 결과가 같으면 단계를 만들지 않는다(I-1)', () => {
+    const { store, ui, el, hood, counter } = setup();
+    ui.set({ selection: { type: 'item', id: hood } });
+    counter.reset();
+    const before = [...activeFloor(store.get()).items.find(i => i.id === hood).size];
+    expect(before[0]).toBe(1600);
+    typeAndCommit(q(el, 'w'), 1600.4);                // 저장은 Math.round를 지난다 → 1600 그대로
+    expect(counter.get()).toBe(0);
+    expect(activeFloor(store.get()).items.find(i => i.id === hood).size).toEqual(before);
+    expect(q(el, 'w').value).toBe('1600');            // I-2: 적용되지 않은 칸은 모델 값으로 다시 그린다
+  });
+
+  test('각도 0 칸에 360을 확정해도 단계가 생기지 않는다(I-1)', () => {
+    const { store, ui, el, hood, counter } = setup();
+    ui.set({ selection: { type: 'item', id: hood } });
+    counter.reset();
+    expect(activeFloor(store.get()).items.find(i => i.id === hood).rot).toBe(0);
+    typeAndCommit(q(el, 'rot'), 360);                 // normalizeItem의 deg360 → 0 그대로
+    expect(counter.get()).toBe(0);
+    expect(activeFloor(store.get()).items.find(i => i.id === hood).rot).toBe(0);
+    expect(q(el, 'rot').value).toBe('0');
+  });
+
+  test('클램프로 지금 값과 같아진 확정은 칸의 글자를 모델 값으로 되돌린다(I-2)', () => {
+    const { store, ui, el, counter } = setup();
+    const id = activeFloor(store.get()).walls[0].id;
+    ui.set({ selection: { type: 'wall', id } });
+    typeAndCommit(q(el, 'thickness'), 1000);          // 칸의 최대값까지 올린다(한 단계)
+    counter.reset();
+    typeAndCommit(q(el, 'thickness'), 5000);          // 최대 1000으로 잘려 지금 값과 같다
+    expect(counter.get()).toBe(0);
+    expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(1000);
+    expect(q(el, 'thickness').value).toBe('1000');    // 예전에는 5000이 그대로 남았다
+  });
+
+  test('ft·in 모드: 고치지 않은 확정은 단계도 값 변화도 만들지 않는다(I-3)', () => {
+    const { store, ui, el, counter } = setup();
+    store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+    const id = activeFloor(store.get()).walls[0].id;
+    ui.set({ selection: { type: 'wall', id } });
+    counter.reset();
+    const th = q(el, 'thickness');
+    expect(th.value).toBe(fmtLen(200, 'ftin'));       // 7.9"
+    typeAndCommit(th, th.value);                      // 아무것도 고치지 않고 [Enter]
+    expect(counter.get()).toBe(0);
+    expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(200);  // 예전에는 201
+    const wl = q(el, 'wallLength');
+    typeAndCommit(wl, wl.value);
+    expect(counter.get()).toBe(0);
+    expect(Math.round(wallLength(activeFloor(store.get()).walls.find(w => w.id === id)))).toBe(4000); // 예전에는 4001
+    // 실제로 고친 ft·in 확정은 그대로 한 단계다.
+    typeAndCommit(q(el, 'thickness'), '10"');
+    expect(counter.get()).toBe(1);
+    expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(254);
   });
 });

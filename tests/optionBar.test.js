@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { optionBarHtml, applyOptionInput, OPTION_LABELS, OPTION_TITLES, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
+import { fmtLen } from '../src/util/units.js';
 
 describe('옵션 바 HTML', () => {
   test('옵션이 없으면 빈 문자열이다(행이 접힌다)', () => {
@@ -89,5 +90,19 @@ describe('옵션 바 입력 읽기', () => {
   test('도구도 이름도 없으면 아무 일도 하지 않는다', () => {
     expect(applyOptionInput(null, el(), 'mm')).toBe(false);
     expect(applyOptionInput({ opts: {} }, el({ name: '' }), 'mm')).toBe(false);
+  });
+
+  // 리뷰 I-3: ft·in 표기는 파싱과 왕복하지 않는다(7.9" → 200.66 → 201) → 옵션 바 길이 칸도
+  // 무편집 [Enter]만으로 값이 밀렸다. 속성 패널과 같은 readLen이 data-mm으로 판정한다.
+  test('ft·in 칸을 고치지 않고 확정하면 값이 밀리지 않는다(리뷰 I-3)', () => {
+    const tool = { opts: { thickness: 200 } };
+    const kept = el({ type: 'text', value: fmtLen(200, 'ftin'), dataset: { len: '1', mm: '200' } });
+    expect(applyOptionInput(tool, kept, 'ftin')).toBe(false);
+    expect(tool.opts.thickness).toBe(200);            // 예전에는 201로 밀렸다
+    // 실제로 고친 값은 그대로 반영된다.
+    expect(applyOptionInput(tool, el({ type: 'text', value: '10"', dataset: { len: '1', mm: '200' } }), 'ftin')).toBe(true);
+    expect(tool.opts.thickness).toBe(254);
+    // 그리기 쪽이 그 기준값을 싣는다.
+    expect(optionBarHtml({ name: 'wall', opts: { thickness: 200 } }, { units: 'ftin' })).toContain('data-mm="200"');
   });
 });

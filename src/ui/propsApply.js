@@ -1,7 +1,7 @@
 // 숫자·길이 입력 한 칸을 상태에 반영한다(propsPanel.js에서 그대로 옮겼다 — 300줄 규칙).
 // 규칙은 옮기기 전과 같다: 잠긴 제품은 건드리지 않고, 벽 부착 제품의 pos는 (wallId, t)의 결과이며,
 // 여러 dispatch는 트랜잭션으로 묶어 undo 한 단계로 만든다.
-import { activeFloor } from '../state/schema.js';
+import { activeFloor, deg360 } from '../state/schema.js';
 import { updateWall, updateRoom, setRoomWallThickness, updateFloor, setWallLength, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
 import { toast } from './toast.js';
 import { wallLength } from '../geom/walls.js';
@@ -39,7 +39,9 @@ export function applyNumber(store, sel, name, v) {
     if ((name === 'posX' || name === 'posY') && it.attach === 'wall' && it.wallId) return false; // 벽 부착 제품의 pos는 (wallId, t)의 결과다
     if (name === 'w' || name === 'd' || name === 'h') {
       const i = { w: 0, d: 1, h: 2 }[name];
-      if (same(it.size[i], v)) return false;
+      // 비교는 "쓰일 값"으로 한다: 아래 resizeItem이 Math.round를 거치므로 1600 칸에 1600.4를
+      // 확정하면 저장값은 1600 그대로다 — 반올림 전 v로 비교하면 빈 단계가 남았다(리뷰 I-1).
+      if (same(it.size[i], Math.round(v))) return false;
       const size = [...it.size];
       if (keepRatio) { const k = v / size[i]; size[0] = Math.min(5000, Math.max(10, size[0] * k)); size[1] = Math.min(5000, Math.max(10, size[1] * k)); size[2] = Math.min(5000, Math.max(10, size[2] * k)); }
       size[i] = v;
@@ -49,8 +51,11 @@ export function applyNumber(store, sel, name, v) {
     if (name === 'posX') { if (same(it.pos[0], v)) return false; updateItem(store, sel.id, { pos: [v, it.pos[1]] }); return true; }
     if (name === 'posY') { if (same(it.pos[1], v)) return false; updateItem(store, sel.id, { pos: [it.pos[0], v] }); return true; }
     if (name === 'rot' && it.attach === 'wall' && it.wallId) return false; // 벽 부착 제품은 벽 방향에 고정(명세 8.5)
-    if (same(it[name], v)) return false;
-    updateItem(store, sel.id, { [name]: v });   // z, rot
+    // 각도도 "쓰일 값"으로 비교한다: updateItem → normalizeItem이 deg360으로 정규화하므로
+    // 0° 칸에 360을 확정하면(칸의 max가 360이라 화살표로도 닿는다) 저장값은 0 그대로다(리뷰 I-1).
+    const next = name === 'rot' ? deg360(v) : v;
+    if (same(it[name], next)) return false;
+    updateItem(store, sel.id, { [name]: next });   // z, rot
     return true;
   }
   if (sel.type === 'wall') {

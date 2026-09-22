@@ -73,7 +73,8 @@ function normalizeWall(w) {
   };
 }
 export const ITEM_RANGE = { size: [10, 5000], rot: [0, 360], z: [-1000, 8000], t: [0, 1] };
-const deg360 = v => { const n = Number(v); return Number.isFinite(n) ? ((n % 360) + 360) % 360 : 0; };
+// 각도 정규화(0 이상 360 미만). ui/propsApply가 "쓰일 값"으로 비교하려고 같은 함수를 쓴다(§16.1).
+export const deg360 = v => { const n = Number(v); return Number.isFinite(n) ? ((n % 360) + 360) % 360 : 0; };
 const ATTACH = ['floor', 'floorLay', 'wall', 'ceiling'];
 
 // 아이템 하나를 앱이 기대하는 모양으로 맞춘다(아키텍처 §8). 모르는 필드는 그대로 남긴다.

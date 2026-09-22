@@ -44,9 +44,17 @@ export function numValue(el, { onClamp = null } = {}) {
 export function lenField(label, name, mm, min, max, ro = false, units = 'mm', step = STEP.mm) {
   if (units !== 'ftin') return field(label, num(name, mm, min, max, step, ro));
   // ft·in 칸의 간격은 data-step(인치)에 싣는다: 텍스트 입력이라 step 속성이 뜻이 없다.
-  return field(label, `<input type="text" name="${name}" data-len="1" data-step="${STEP.ftin}" data-min="${min}" data-max="${max}" value="${esc(fmtLen(mm, 'ftin'))}" ${ro ? 'readonly' : ''}>`);
+  // data-mm은 이 칸을 그릴 때의 모델 값이다: ft·in 표기는 파싱과 왕복하지 않으므로(아래 readLen)
+  // "글자를 고쳤는가"를 표시값으로 판정할 기준이 필요하다(§16.1).
+  return field(label, `<input type="text" name="${name}" data-len="1" data-step="${STEP.ftin}" data-min="${min}" data-max="${max}" data-mm="${mm}" value="${esc(fmtLen(mm, 'ftin'))}" ${ro ? 'readonly' : ''}>`);
 }
 export function readLen(el, units, { onClamp = null } = {}) {
+  // 글자가 그려질 때의 표시값과 같으면 "고치지 않았다"로 보고 저장된 mm를 그대로 돌려준다(§16.1).
+  // ft·in 표기는 파싱과 왕복하지 않는다: fmtLen(200,'ftin') = 7.9" → parseLen → 200.66 → 201.
+  // 그래서 아무것도 고치지 않고 [Enter]만 눌러도 값이 1 mm씩 밀리고 빈 undo 단계가 쌓였다
+  // (리뷰 I-3). 현재 값을 돌려주면 부르는 쪽의 "같은 값" 가드가 그대로 걸러 낸다.
+  const stored = el?.dataset?.mm;
+  if (stored !== undefined && stored !== '' && el.value === fmtLen(Number(stored), units)) return Number(stored);
   const v = parseLen(el.value, units);
   if (v === null) return null;
   const min = Number(el.dataset.min ?? -Infinity), max = Number(el.dataset.max ?? Infinity);

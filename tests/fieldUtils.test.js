@@ -184,3 +184,17 @@ test('commitField의 표시는 뒤따르는 같은 값의 change 한 번만 삼�
   expect(seen).toEqual(['apply', 'dup', 'apply']);
   expect(el.dataset.committed).toBeUndefined();
 });
+
+// 리뷰 I-3: ft·in 표기는 파싱과 왕복하지 않는다(7.9" → 200.66 → 201) → 아무것도 고치지 않고
+// [Enter]만 눌러도 값이 1 mm씩 밀리고 빈 undo 단계가 쌓였다. 글자가 렌더 시점 표시값과 같으면
+// data-mm의 값을 그대로 돌려준다(부르는 쪽의 "같은 값" 가드가 걸러 낸다).
+test('ft·in 칸의 글자가 그려진 그대로면 저장된 mm를 돌려준다(리뷰 I-3)', () => {
+  const el = inputOf(lenField('두께', 'thickness', 200, 2, 1000, false, 'ftin'));
+  expect(el.dataset.mm).toBe('200');
+  expect(el.value).toBe(fmtLen(200, 'ftin'));
+  expect(readLen(el, 'ftin')).toBe(200);               // 예전에는 201이었다
+  el.value = '8"';                                     // 실제로 고치면 그 값을 읽는다
+  expect(readLen(el, 'ftin')).toBe(203);
+  // mm 모드의 숫자 칸은 data-mm이 없다(표기가 이미 왕복한다).
+  expect(inputOf(lenField('두께', 'thickness', 200, 2, 1000)).dataset.mm).toBeUndefined();
+});

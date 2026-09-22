@@ -190,12 +190,16 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       const onClampLen = (v, { max }) => toast((v === max ? CLAMP_MAX : CLAMP_MIN)(fmtLen(v, units), ''));
       const v = readLen(el, units, { onClamp: onClampLen });
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
-      applyNumber(store, sel, name, v); return;
+      // 적용된 것이 없으면(같은 값·클램프·잠금) dispatch가 없어 패널이 다시 그려지지 않는다 →
+      // 칸의 글자가 모델과 어긋난 채 남는다(리뷰 I-2). 그때만 직접 다시 그려 모델 값을 보여 준다.
+      if (!applyNumber(store, sel, name, v)) render();
+      return;
     }
     if (el.type === 'number') {
       const v = numValue(el, { onClamp });
       if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
-      applyNumber(store, sel, name, v); return;
+      if (!applyNumber(store, sel, name, v)) render();   // 리뷰 I-2: 적용되지 않았으면 글자를 모델 값으로
+      return;
     }
     if (el.type === 'color') {
       // 선택기 드래그(input) 중에는 { record: false }로 미리 보여 주고, change에서 트랜잭션을 한 단계로 닫는다.

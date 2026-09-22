@@ -2,7 +2,8 @@
 // 라벨을 짧게(두께 → W, 단면 → W·H·Z) 줄였고, 긴 이름은 title 속성으로 남긴다.
 // shell.js가 300줄을 넘지 않게 그리기·읽기 규칙을 여기로 나눴다(아키텍처 §9).
 import { esc } from '../util/html.js';
-import { fmtLen, parseLen } from '../util/units.js';
+import { fmtLen } from '../util/units.js';
+import { readLen } from './fieldUtils.js';
 
 // 옵션 바에 찍는 짧은 라벨. 한 줄에 다 들어가야 한다(도구가 옵션 여섯 개를 낼 수 있다).
 export const OPTION_LABELS = {
@@ -32,7 +33,9 @@ export function optionBarHtml(tool, { units = 'mm' } = {}) {
     const title = OPTION_TITLES[k] ? ` title="${esc(OPTION_TITLES[k])}"` : '';
     if (typeof v === 'boolean') return `<label${title}><input type="checkbox" name="${k}"${v ? ' checked' : ''}> ${label}</label>`;
     if (typeof v === 'number') {
-      if (LEN_OPTS.has(k) && units === 'ftin') return `<label${title}>${label} <input type="text" name="${k}" data-len="1" value="${esc(fmtLen(v, 'ftin'))}"></label>`;
+      // data-mm은 이 칸을 그릴 때의 값이다(§16.1): ft·in 표기는 파싱과 왕복하지 않으므로
+      // readLen이 "고치지 않았다"를 이 값으로 판정한다(무편집 [Enter]가 값을 밀던 자리 — 리뷰 I-3).
+      if (LEN_OPTS.has(k) && units === 'ftin') return `<label${title}>${label} <input type="text" name="${k}" data-len="1" data-mm="${v}" value="${esc(fmtLen(v, 'ftin'))}"></label>`;
       return `<label${title}>${label} <input type="number" name="${k}" value="${v}" step="1"></label>`;
     }
     if (k === 'reference') return `<label${title}>${label} ${select(k, REF, v)}</label>`;
@@ -52,11 +55,12 @@ export function applyOptionInput(tool, el, units = 'mm') {
   const k = el?.name;
   if (!tool?.opts || !k || !(k in tool.opts)) return false;
   if (el.dataset?.len) {
-    const mm = parseLen(el.value, units);
+    // 속성 패널의 길이 칸과 같은 함수로 읽는다: "글자를 고치지 않았다"(data-mm의 표시값과 같다)를
+    // 한 곳에서만 판정하려고 readLen을 쓴다(리뷰 I-3 — ft·in 무편집 [Enter]가 값을 밀던 자리).
+    const mm = readLen(el, units);
     if (mm === null) { el.value = fmtLen(tool.opts[k], 'ftin'); return false; }
-    const next = Math.round(mm);
-    if (next === tool.opts[k]) return false;
-    tool.opts[k] = next;
+    if (mm === tool.opts[k]) return false;
+    tool.opts[k] = mm;
     return true;
   }
   const next = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
