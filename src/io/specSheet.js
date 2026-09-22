@@ -7,7 +7,7 @@ import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
 import { wallLength } from '../geom/walls.js';
 import { fmtLen, fmtArea } from '../util/units.js';
-import { roomAirflow, systemAirflow } from '../vent/airflow.js';
+import { roomAirflow, systemAirflow, UNPLACED_ROOM } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // src/io/ → src/ui/ import는 계층 역전이다(아키텍처 §9)
 import { esc } from '../util/html.js';
 
@@ -15,11 +15,16 @@ export const SPEC_SECTIONS = [['plan', '평면도'], ['elevations', '입면도']
 export const PAPER = { A4: [210, 297], A3: [297, 420] };
 const ELEVATIONS = [['front', '정면도'], ['back', '배면도'], ['left', '좌측면도'], ['right', '우측면도'], ['top', '천장 평면도']];
 const FLOW_LABELS = { supply: '급기', exhaust: '배기', mixed: '급·배기' };
+// 풍량 두 표는 제목과 단위를 갖는다(§16.2 · 감사 §6): 앱의 풍량 패널이 쓰는 말과 같아야
+// 한 도면에서 뽑은 두 화면이 서로 다른 이름으로 불리지 않는다(airflowPanel.js의 h3와 같다).
+export const AIRFLOW_TITLES = { room: '실별 풍량', system: '계통별 풍량' };
+export const CMH = '(CMH)';
 
 const typeLabel = t => ROOM_TYPES.find(([v]) => v === t)?.[1] ?? '미지정';
 const matName = a => (a?.id ? materialById(a.id)?.name ?? a.id : '-');
-const table = (head, rows) => `<table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
-    <tbody>${rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${head.length}">항목이 없습니다.</td></tr>`}</tbody></table>`;
+// rowAttr(i)는 그 행의 <tr> 속성이다(미배치 행의 경고색에만 쓴다).
+const table = (head, rows, rowAttr = () => '') => `<table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.length ? rows.map((r, i) => `<tr${rowAttr(i)}>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${head.length}">항목이 없습니다.</td></tr>`}</tbody></table>`;
 
 export function specHtml({ project, floorIndex = 0, images = {}, options = {} }) {
   const { paper = 'A4', landscape = false, sections = {}, notes = '' } = options;
@@ -53,8 +58,10 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   ]);
   // 풍량 집계(명세 §11.3). 설비도 덕트도 없는 층에서는 빈 표가 되고, table()이 "항목이 없습니다"를 찍는다.
   const cmh = n => Number(n || 0).toLocaleString('ko-KR');
-  const airRows = roomAirflow(f).filter(r => r.EA || r.SA || r.design.EA || r.design.SA)
-    .map(r => [esc(r.name), cmh(r.EA), cmh(r.SA), cmh(r.design.EA), cmh(r.design.SA), r.ratio === null ? '-' : `${r.ratio.toFixed(1)}%`]);
+  const air = roomAirflow(f).filter(r => r.EA || r.SA || r.design.EA || r.design.SA);
+  const airRows = air.map(r => [esc(r.name), cmh(r.EA), cmh(r.SA), cmh(r.design.EA), cmh(r.design.SA), r.ratio === null ? '-' : `${r.ratio.toFixed(1)}%`]);
+  // '미배치'는 어느 방에도 들지 않은 설비다(roomId === null): 인쇄물에서도 눈에 걸려야 한다(§16.2).
+  const airAttr = i => (air[i]?.roomId === null || air[i]?.name === UNPLACED_ROOM ? ' class="warn"' : '');
   const sysRows = systemAirflow(f).map(x => [esc(x.system), FLOW_LABELS[x.kind], cmh(x.EA), cmh(x.SA), x.itemIds.length]);
   const img = (src, label) => (src ? `<figure><img src="${esc(src)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>` : '');
   const elevFigs = ELEVATIONS.map(([k, l]) => img(images[k], l)).join('');
@@ -65,6 +72,8 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     body { font-family: "IBM Plex Sans KR", sans-serif; color: #1b2430; }
     h1 { font-size: 20px; margin: 0 0 4px; }
     h2 { font-size: 14px; margin: 18px 0 6px; border-bottom: 1px solid #1b2430; page-break-after: avoid; }
+    h3 { font-size: 12px; margin: 10px 0 4px; color: #5b6775; page-break-after: avoid; }
+    tr.warn td { color: #b4231a; font-weight: 600; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { border: 1px solid #c8ccd2; padding: 4px 6px; text-align: left; }
     .figs { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -78,9 +87,11 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   <p class="meta">${esc(f.name || 'Floor 1')} · 층 높이 ${len(f.height ?? 0)} ${esc(uLabel)} · 작성 ${esc(new Date().toLocaleDateString('ko-KR'))}</p>
   ${on('plan') ? `<h2>평면도</h2><div class="figs">${img(images.plan, '평면도') || noImage}</div>` : ''}
   ${on('elevations') ? `<h2>입면도</h2><div class="figs">${elevFigs || noImage}</div>` : ''}
-  ${on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H)', '수량'], productRows)}` : ''}
+  ${on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H, mm)', '수량'], productRows)}` : ''}
   ${on('rooms') ? `<h2>공간 목록</h2>${table(['공간', '타입', '면적', `높이(${uLabel})`, '바닥 마감', '천장 마감'], roomRows)}` : ''}
   ${on('walls') ? `<h2>벽 목록</h2>${table(['기호', `길이(${uLabel})`, `두께(${uLabel})`, `높이(${uLabel})`, '내벽 마감', '외벽 마감'], wallRows)}` : ''}
-  ${on('airflow') ? `<h2>풍량 집계</h2>${table(['공간', 'EA', 'SA', '설계 EA', '설계 SA', '급기율'], airRows)}${table(['계통', '구분', 'EA', 'SA', '설비 수'], sysRows)}` : ''}
+  ${on('airflow') ? `<h2>풍량 집계</h2>
+    <h3>${AIRFLOW_TITLES.room} ${CMH}</h3>${table(['공간', 'EA', 'SA', '설계 EA', '설계 SA', '급기율'], airRows, airAttr)}
+    <h3>${AIRFLOW_TITLES.system} ${CMH}</h3>${table(['계통', '구분', 'EA', 'SA', '설비 수'], sysRows)}` : ''}
   ${on('notes') ? `<h2>비고</h2><pre class="notes">${esc(notes)}</pre>` : ''}`;
 }

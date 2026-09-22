@@ -148,8 +148,17 @@ canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid
 .start-sub { font-size: 12px; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
 .start-card.tpl { border-left: 3px solid var(--accent); }
 .start-card.restore { border-left: 3px solid var(--supply); }
-.est-table { width: 100%; border-collapse: collapse; } .est-table th, .est-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); font-weight: 400; } .est-table thead th { color: var(--muted); font-size: 11px; }
-.modal.estimate .modal-card { max-height: 86vh; overflow: auto; } .est-total { text-align: right; font-weight: 600; margin: 8px 0 0; }
+.est-table { width: 100%; border-collapse: collapse; } .est-table th, .est-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); font-weight: 400; }
+/* 열 제목은 본문보다 작지도 흐리지도 않다(§16.2 · 감사 시각 거침): 11 px muted → 12 px ink. */
+.est-table thead th { color: var(--ink); font-size: 12px; font-weight: 600; }
+/* 스크롤해도 열 제목이 남는다(감사 §1의 두 번째 절반). 배경은 불투명이어야 본문이 비치지 않는다. */
+.modal.estimate .est-table thead th { position: sticky; top: 0; background: #fff; z-index: 1; box-shadow: 0 1px 0 var(--line); }
+/* 카드는 머리글 / 스크롤 본문 / 고정 푸터 세 층이다: 본문만 스크롤하므로 합계·버튼이 늘 보인다. */
+.modal.estimate .modal-card { display: flex; flex-direction: column; max-height: 86vh; overflow: hidden; padding: 0; }
+.modal.estimate .modal-card > header, .modal.estimate .est-foot { flex: none; padding: 12px 16px; }
+.modal.estimate [data-part="table"] { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 16px; }
+.est-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); }
+.est-total { font-weight: 600; margin: 0; } .est-foot .est-note { margin: 0; flex: 1 1 auto; }
 .modal.render img[data-part="preview"] { width: 100%; max-height: 40vh; object-fit: contain; background: #f4f6f8; border: 1px solid var(--line); margin: 8px 0; }
 .shot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; max-height: 64vh; overflow: auto; }
 .shot { margin: 0; border: 1px solid var(--line); border-radius: 6px; padding: 8px; } .shot img { width: 100%; display: block; border-radius: 4px; background: #f4f6f8; }

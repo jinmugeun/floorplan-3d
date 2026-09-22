@@ -88,13 +88,6 @@ export function estimateRows(floor) {
   return { products, materials, ducts, total };
 }
 
-// 엑셀이 한글을 깨뜨리지 않게 BOM으로 시작한다. 쉼표·따옴표가 든 이름은 감싸 준다.
-const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-export function estimateCsv(rows) {
-  const lines = ['견적서', '구분,이름,코드,규격,수량,단가,금액'];
-  for (const r of rows.products) lines.push(['제품', r.name, r.code, r.size, r.qty, r.unitPrice, r.total].map(cell).join(','));
-  for (const r of rows.materials) lines.push(['마감재', r.name, r.id, `${r.areaM2} m²`, 1, r.unitPrice, r.total].map(cell).join(','));
-  for (const r of rows.ducts ?? []) lines.push(['덕트', `${r.kind === 'supply' ? '급기' : '배기'} ${r.system}`, r.size, `${r.lengthM} m / ${r.areaM2} m²`, 1, r.unitPrice, r.total].map(cell).join(','));
-  lines.push(`합계,,,,,,${rows.total}`);
-  return `﻿${lines.join('\n')}`;
-}
+// CSV의 열 정의는 io/estimateTable.js 한 곳이다(§16.2): 화면 표와 같은 행에서 만들어지므로
+// "화면은 68,000원/m²인데 CSV는 수량 1 · 68000"이던 어긋남이 생길 자리가 없다(감사 §3).
+export { estimateCsvText as estimateCsv } from './estimateTable.js';

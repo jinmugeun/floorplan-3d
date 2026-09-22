@@ -8,6 +8,7 @@ import { productById } from '../src/products/catalog.js';
 import { materialById } from '../src/materials/catalog.js';
 import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2 } from '../src/io/estimate.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
+import { estimateLines, estimateCsvText, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE } from '../src/io/estimateTable.js';
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -101,10 +102,10 @@ describe('견적서 계산', () => {
     const csv = estimateCsv(estimateRows(a.floor()));
     expect(csv.startsWith('﻿')).toBe(true);
     const lines = csv.split('\n');
-    expect(lines[1]).toBe('구분,이름,코드,규격,수량,단가,금액');
-    expect(csv).toContain('제품,3인 소파,SF-3P,2100×900×800,1,890000,890000');
+    expect(lines[1]).toBe('구분,이름,코드,규격,수량,단위,단가,금액');   // §16.2: 단위 칸이 늘었다
+    expect(csv).toContain('제품,3인 소파,SF-3P,2100×900×800,1,개,890000,890000');
     expect(csv).toContain('마감재,오크 원목마루');
-    expect(lines.at(-1).startsWith('합계')).toBe(true);
+    expect(lines.at(-2).startsWith('합계')).toBe(true);   // 마지막 줄은 단가 주석이다(§16.2)
   });
 
   test('덕트 물량은 둘레 × 길이의 표면적이고 같은 계통·단면은 한 줄로 합친다', () => {
@@ -159,4 +160,47 @@ test('숨긴 제품과 숨긴 덕트는 견적에 들어가지 않는다(풍량 
   expect(rows.ducts).toHaveLength(1);                   // 숨긴 덕트 줄이 사라진다
   expect(rows.ducts[0].size).toBe('750×400');           // 남은 줄은 보이는 덕트다
   expect(rows.ducts[0].lengthM).toBe(3);
+});
+
+// §16.2: 받은 사람이 검산할 수 있어야 한다 — 수량 × 단가 = 금액이 모든 행에서 성립한다(감사 §3).
+test('견적 행은 수량 × 단가 = 금액이고 덕트 단면은 규격 칸에 있다(§16.2)', () => {
+  const hood = createItem(productById('hood-box'), { pos: [1000.5, 1000.25] });
+  const floor = {
+    walls: [], rooms: [], items: [hood],
+    ducts: [normalizeDuct({ kind: 'exhaust', system: 'F-3', points: [[0, 0], [11200.5, 0]], segments: [{ w: 750, h: 400, z: 2700 }] })],
+  };
+  const rows = estimateRows(floor);
+  const lines = estimateLines(rows);
+  expect(lines).toHaveLength(2);
+  const prod = lines.find(l => l.kind === '제품');
+  expect(prod.unit).toBe('개');
+  expect(prod.qty).toBe(1);
+  expect(prod.spec).toBe('1600×1200×600');                     // 규격은 제품 크기다
+  const duct = lines.find(l => l.kind === '덕트');
+  expect(duct.spec).toBe('750×400');                           // 단면은 규격 칸(예전에는 코드 칸이었다)
+  expect(duct.code).toBe('');
+  expect(duct.unit).toBe('m²');
+  expect(duct.lengthText).toBe('11.2 m');                      // 길이는 자기 칸
+  // 모든 행에서 검산이 성립한다(반올림은 금액 쪽 1원 안).
+  for (const l of lines) expect(Math.abs(l.qty * l.unitPrice - l.total)).toBeLessThanOrEqual(1);
+});
+
+test('CSV는 §16.2가 정한 여덟 열과 단가 주석을 갖는다', () => {
+  expect(EST_COLUMNS).toEqual(['구분', '이름', '코드', '규격', '수량', '단위', '단가', '금액']);
+  expect(EST_TABLE_COLUMNS).toEqual(['구분', '이름', '코드', '규격', '길이', '수량', '단위', '단가', '금액']);
+  const rows = estimateRows({ walls: [], rooms: [], items: [createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] })] });
+  const csv = estimateCsvText(rows);
+  const lines = csv.split('\n');
+  expect(csv.startsWith('﻿')).toBe(true);                 // 엑셀 한글
+  expect(lines[1]).toBe('구분,이름,코드,규격,수량,단위,단가,금액');
+  expect(lines[2]).toBe('제품,3인 소파,SF-3P,2100×900×800,1,개,890000,890000');
+  // 합계는 **금액 칸**에 들어간다(§16.2: 받은 사람이 검산할 수 있는 CSV). 쉼표 개수를 눈으로
+  // 세는 대신 열 개수로 확인한다 — 옛 7열 CSV에서는 쉼표 6개가 맞았고, 8열이 되면서 하나 늘었다.
+  const total = lines.at(-2).split(',');
+  expect(total).toHaveLength(EST_COLUMNS.length);
+  expect(total[0]).toBe('합계');
+  expect(total.at(-1)).toBe(String(rows.total));           // 마지막 = 금액 열
+  expect(total.slice(1, -1).every(c => c === '')).toBe(true);
+  expect(lines.at(-1)).toBe(PRICE_NOTE);                       // 마지막 줄이 단가 출처다
+  expect(PRICE_NOTE).toBe('단가는 예시 값(2026-09 기준)');
 });

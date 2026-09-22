@@ -5,7 +5,7 @@ import { addWalls, addItem, updateRoom } from '../src/state/floorOps.js';
 import { applyMaterial } from '../src/state/materialOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { specHtml, SPEC_SECTIONS, PAPER } from '../src/io/specSheet.js';
+import { specHtml, SPEC_SECTIONS, PAPER, AIRFLOW_TITLES, CMH } from '../src/io/specSheet.js';
 import { roomAirflow } from '../src/vent/airflow.js';
 import { estimateRows } from '../src/io/estimate.js';
 import { setItemFlag } from '../src/state/itemOps.js';
@@ -108,4 +108,24 @@ describe('시방서 HTML', () => {
     expect(specHtml({ project: p, floorIndex: 0, images: {}, options: { sections: { airflow: false } } })).not.toContain('풍량 집계');
     expect(roomAirflow(p.floors[0])[0].EA).toBe(4990);
   });
+});
+
+// §16.2(감사 §6): 실별 표와 계통별 표가 제목 없이 연달아 붙고 EA·SA 헤더에 CMH가 없었다.
+test('풍량 두 표에 제목과 (CMH)가 붙고 미배치 행은 경고색이다', () => {
+  const hood = createItem(productById('hood-box'), { pos: [9000.5, 9000.25] });   // 어느 방에도 들지 않는다
+  const p = {
+    name: '강당중', units: 'mm', settings: {},
+    floors: [{
+      name: '1층', height: 3500, walls: [], items: [hood], ducts: [],
+      rooms: [{ id: 'r1', name: '가열조리실', type: 'cook', points: [[0, 0], [4000.5, 0], [4000.5, 3000], [0, 3000]], area: 12, height: 2900, design: { EA: 5000, SA: 4000 } }],
+    }],
+  };
+  const html = specHtml({ project: p, floorIndex: 0, images: {}, options: {} });
+  expect(AIRFLOW_TITLES.room).toBe('실별 풍량');
+  expect(AIRFLOW_TITLES.system).toBe('계통별 풍량');
+  expect(CMH).toBe('(CMH)');
+  expect(html).toContain('<h3>실별 풍량 (CMH)</h3>');
+  expect(html).toContain('<h3>계통별 풍량 (CMH)</h3>');
+  expect(html).toContain('<tr class="warn"><td>미배치</td>');    // 어느 방에도 들지 않은 설비(감사 §6)
+  expect(html).toContain('규격(W×D×H, mm)');                     // 한 문서 안 단위 표기를 한 갈래로
 });

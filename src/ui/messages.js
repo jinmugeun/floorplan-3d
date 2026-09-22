@@ -115,3 +115,7 @@ export const GALLERY_LOAD_FAIL = '갤러리를 불러오지 못했습니다';
 export const GALLERY_DELETE_FAIL = '삭제하지 못했습니다';
 export const SPEC_IMAGES_FAIL = n => `도면 이미지 ${n}장을 만들지 못했습니다`;
 export const SPEC_FAIL = msg => `시방서를 만들지 못했습니다: ${msg}`;
+
+// 견적서 빈 상태(§16.2 · 감사 §5): 빈 CSV·빈 인쇄가 나가지 않게 버튼을 끄고 사유를 말한다.
+// 본문 문구(EST_EMPTY)는 io/estimateTable.js에 있다(표 안의 글이라 io 계층에서 만든다).
+export const EST_EMPTY_TITLE = '배치된 제품·마감재·덕트가 없습니다';

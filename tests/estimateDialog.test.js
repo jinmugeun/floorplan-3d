@@ -83,4 +83,35 @@ describe('견적서 대화상자', () => {
     expect(host.textContent).toContain('팝업이 차단되어 인쇄 창을 열 수 없습니다');
     openSpy.mockRestore();
   });
+  test('합계와 버튼은 스크롤 본문 밖의 고정 푸터에 있다(§16.2 · 감사 §1)', () => {
+    const a = setup();
+    const foot = a.root.querySelector('.est-foot');
+    expect(foot).not.toBeNull();
+    expect(foot.querySelector('[data-part="total"]')).not.toBeNull();
+    for (const name of ['csv', 'print', 'close']) expect(foot.querySelector(`[name="${name}"]`)).not.toBeNull();
+    // 표는 자기 영역에서만 스크롤한다(푸터가 그 밖에 있다).
+    expect(a.root.querySelector('[data-part="table"]').parentElement).toBe(a.root.querySelector('.modal-card'));
+    expect(a.root.querySelector('.est-note').textContent).toBe('단가는 예시 값(2026-09 기준)');
+  });
+
+  test('덕트·마감재 행은 수량·단위 칸을 쓰고 열 제목이 아홉 개다', () => {
+    const a = setup();
+    const head = [...a.root.querySelectorAll('.est-table thead th')].map(th => th.textContent);
+    expect(head).toEqual(['구분', '이름', '코드', '규격', '길이', '수량', '단위', '단가', '금액']);
+    const cells = [...a.root.querySelectorAll('.est-table tbody tr td')].map(td => td.textContent);
+    expect(cells).toEqual(['제품', '3인 소파', 'SF-3P', '2100×900×800', '', '1', '개', '890,000원', '890,000원']);
+  });
+
+  test('항목이 0이면 [CSV]·[인쇄]가 비활성 + 사유다(감사 §5)', () => {
+    document.body.innerHTML = '';
+    const store = createStore(createEmptyProject());
+    openEstimateDialog({ store });
+    const root = document.querySelector('.modal.estimate');
+    for (const name of ['csv', 'print']) {
+      const b = root.querySelector(`[name="${name}"]`);
+      expect(b.disabled).toBe(true);
+      expect(b.title).toBe('배치된 제품·마감재·덕트가 없습니다');
+    }
+    expect(root.querySelector('[name="close"]').disabled).toBe(false);
+  });
 });
