@@ -41,7 +41,7 @@ import { createProjectActions } from './app/projectActions.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
 import { stickyTools } from './ui/prefs.js';
-import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, CROSS_FLOOR_UNDO } from './ui/messages.js';
+import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from './ui/messages.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -190,9 +190,10 @@ document.querySelector('[data-action="rotL"]').addEventListener('click', () => t
 document.querySelector('[data-action="rotR"]').addEventListener('click', () => transformFloor(store, p => [-p[1], p[0]]));
 // 층을 가로지르는 되돌리기는 어느 층의 무엇이 되돌려졌는지 알린다(§16.4 · 감사 §30):
 // 화면이 말없이 다른 층으로 넘어가면 "내가 누른 것과 다른 일이 일어났다"로 읽힌다.
-const withFloorNote = fn => () => { const prev = store.get(); if (!fn()) return; const name = crossFloorName(prev, store.get()); if (name) shell.toast(CROSS_FLOOR_UNDO(name)); };
-const undoAction = withFloorNote(() => store.undo());
-const redoAction = withFloorNote(() => store.redo());
+// 문구는 방향마다 다르다(되돌렸습니다 / 다시 실행했습니다): 만드는 함수를 인자로 받는다.
+const withFloorNote = (fn, msg) => () => { const prev = store.get(); if (!fn()) return; const name = crossFloorName(prev, store.get()); if (name) shell.toast(msg(name)); };
+const undoAction = withFloorNote(() => store.undo(), CROSS_FLOOR_UNDO);
+const redoAction = withFloorNote(() => store.redo(), CROSS_FLOOR_REDO);
 document.getElementById('btnUndo').addEventListener('click', undoAction);
 document.getElementById('btnRedo').addEventListener('click', redoAction);
 // 줌·화면 맞추기는 현재 모드의 뷰가 받는다(2D 도면 / 3D 카메라).

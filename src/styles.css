@@ -60,8 +60,11 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #minimap .mm-label { position: absolute; top: 4px; left: 6px; font-size: 11px; color: var(--muted); background: rgba(255,255,255,.75); padding: 0 4px; border-radius: 3px; pointer-events: none; }
 #props { padding: 12px; } #props h2 { font-size: 14px; margin: 0 0 10px; } .field { display: block; margin-bottom: 8px; } .field span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; } .field input, .field select { width: 100%; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; box-sizing: border-box; }
 /* 층 바는 선택과 무관하게 속성 패널 맨 위에 상주한다(§16.4 · 감사 §29). 한 줄이고, select가 남는
-   폭을 다 쓴다 — 층 이름이 길어도 [층 추가]가 밀려나지 않는다. */
-#floorBar { display: flex; gap: 6px; align-items: center; padding: 10px 12px 0; }
+   폭을 다 쓴다 — 층 이름이 길어도 [층 추가]가 밀려나지 않는다.
+   좌우 여백은 #props{padding:12px}가 이미 댄다(리뷰 I-3: 겹쳐서 24 px이 됐다) — 아래 간격만 갖는다.
+   #right가 스크롤 컨테이너다: 본문이 길어 스크롤해도 층 전환 수단이 남아야 한다(리뷰 I-4).
+   패널 안에 position을 쓰는 뒷형제가 없어 z-index는 필요하지 않다. */
+#floorBar { display: flex; gap: 6px; align-items: center; padding: 0 0 10px; position: sticky; top: 0; background: var(--panel); }
 #floorBar select { flex: 1 1 auto; min-width: 0; font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; }
 #floorBar button:not(.primary) { flex: none; padding: 4px 8px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
 .check { display: flex; gap: 6px; align-items: center; margin: 8px 0; } .danger { color: var(--exhaust); border-color: var(--exhaust); background: #fff; border: 1px solid; padding: 6px 10px; border-radius: 4px; cursor: pointer; margin-top: 8px; }

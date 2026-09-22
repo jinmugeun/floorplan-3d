@@ -2,7 +2,7 @@
 import { test, expect } from 'vitest';
 import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE, DAMPER_ADDED, DAMPER_DELETED, PASTE_RESULT, CURVED_WALL_TITLE, CANVAS_LABEL, MINIMAP_LABEL } from '../src/ui/messages.js';
 import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE, COPIED, COPIED_N, ARRAY_TOO_MANY, ARRAY_MULTI_WARN, LOADED, RESTORED, JSON_EXPORTED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, SPLIT_REGIONS_RESET, OPENING_NEEDS_WALL, KEYS_RESET, KEYS_LOADED, KEY_TAKEN, POPUP_BLOCKED, SHOT_SAVED, GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, SPEC_IMAGES_FAIL, SPEC_FAIL } from '../src/ui/messages.js';
-import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO } from '../src/ui/messages.js';
+import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,4 +115,17 @@ test('층 문구는 §16.4가 적은 글자 그대로다', () => {
   expect(FLOOR_ADDED('Floor 2', 39)).toBe('Floor 2 추가 · 제품 39개 복사');
   expect(FLOOR_ADDED('Floor 2', 0)).toBe('Floor 2 추가');
   expect(CROSS_FLOOR_UNDO('Floor 1')).toBe('다른 층(Floor 1)의 변경을 되돌렸습니다');
+  // §16.4는 undo 문구만 적었다(명세 3차 항목): 다시 실행은 반대 방향이므로 짝이 되는 문구를 쓴다.
+  expect(CROSS_FLOOR_REDO('Floor 2')).toBe('다른 층(Floor 2)의 변경을 다시 실행했습니다');
+});
+
+// 리뷰 I-2: withFloorNote가 undo·redo 양쪽을 감싸는데 문구가 하나여서 [다시 실행]을 눌러도
+// "되돌렸습니다"가 떴다. 배선은 main.js 두 줄이고 거기에는 테스트가 붙을 진입점이 없으므로
+// (store·shell·DOM을 다 만들어야 한다) 방향과 문구의 짝을 글자로 고정한다 — styles.test.js와 같은 방식.
+test('층 간 undo/redo 토스트는 각자 방향에 맞는 문구를 쓴다', () => {
+  const main = readFileSync(join(SRC_DIR, 'main.js'), 'utf8');
+  expect(main).toContain('const undoAction = withFloorNote(() => store.undo(), CROSS_FLOOR_UNDO);');
+  expect(main).toContain('const redoAction = withFloorNote(() => store.redo(), CROSS_FLOOR_REDO);');
+  // 문구를 만드는 함수를 인자로 받는다: 한쪽만 고쳐 다시 갈라지는 일을 막는다.
+  expect(main).toContain('if (name) shell.toast(msg(name));');
 });

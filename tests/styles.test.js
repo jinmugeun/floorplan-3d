@@ -164,3 +164,16 @@ test('견적 표의 열 제목 규칙은 견적 대화상자 안에만 있다(�
   expect(CSS).toMatch(/\.air-table th,\s*\.air-table td\s*\{[^}]*font-size:\s*11px/);
   expect(CSS).toMatch(/\.air-table thead th\s*\{[^}]*color:\s*var\(--muted\)/);
 });
+
+// §16.4 리뷰 I-3·I-4: 층 바의 좌우 패딩이 #props{padding:12px}와 겹쳐 24 px이 됐고, 스크롤
+// 컨테이너(#right{overflow:auto}) 안의 보통 블록이라 본문을 내려 보는 동안 층 전환 수단이
+// 화면에서 사라졌다. 두 값은 CSS에만 있고 jsdom은 스타일시트를 계산하지 않는다 — 글자로 고정한다.
+test('층 바는 아래 간격만 갖고 패널 맨 위에 붙어 있다(sticky)', () => {
+  const bar = rule('#floorBar');
+  expect(bar).toMatch(/padding:\s*0 0 10px/);              // 좌우는 #props{padding:12px}가 댄다(겹치면 24 px)
+  expect(bar).not.toMatch(/padding:\s*10px 12px 0/);
+  expect(bar).toMatch(/position:\s*sticky/);
+  expect(bar).toMatch(/top:\s*0/);
+  expect(bar).toMatch(/background:\s*var\(--panel\)/);     // 불투명해야 지나가는 본문이 비치지 않는다
+  expect(CSS).toMatch(/#right\s*\{[^}]*overflow:\s*auto/); // sticky가 걸리는 스크롤 컨테이너
+});

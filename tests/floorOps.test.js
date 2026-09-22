@@ -458,3 +458,23 @@ test('crossFloorName은 활성 층이 갈아탄 경우에만 그 층 이름을 �
   expect(crossFloorName(onTwo, onTwo)).toBeNull();
   expect(crossFloorName(undefined, onOne)).toBeNull();     // 0 → 0
 });
+
+// 리뷰 I-1: addFloor·deleteFloor는 **자기 자신이** 활성 층을 옮기는 기록된 단계다. 그 단계의
+// undo/redo는 "다른 층에 살던 변경"이 아니라 "층을 더하거나 지운 일"이므로 토스트가 뜨면 오탐이다.
+test('층을 더하거나 지운 단계의 undo/redo는 층 간 변경으로 세지 않는다', () => {
+  const store = createStore(createEmptyProject());
+  addFloor(store, { name: 'Floor 2', copy: 'none' });
+  const added = store.get();                                  // 2개 층, activeFloor 1
+  store.undo();
+  const undone = store.get();                                 // 1개 층, activeFloor 0
+  expect(undone.activeFloor).toBe(0);                         // 인덱스는 실제로 갈아탔다
+  expect(crossFloorName(added, undone)).toBeNull();           // 그래도 층 간 undo는 아니다
+  store.redo();
+  expect(crossFloorName(undone, store.get())).toBeNull();     // 다시 실행도 마찬가지다
+
+  // 삭제 쪽도 같다: 앞 층을 지우면 활성 층 인덱스가 당겨진다.
+  deleteFloor(store, 0);
+  const deleted = store.get();
+  store.undo();
+  expect(crossFloorName(deleted, store.get())).toBeNull();
+});

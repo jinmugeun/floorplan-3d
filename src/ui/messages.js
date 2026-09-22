@@ -132,3 +132,5 @@ export const LAYERS_SHOWN = (items, ducts) => `${countPhrase(items, ducts)}를 �
 export const FLOOR_ADDED = (name, copied = 0) => `${name} 추가${copied > 0 ? ` · 제품 ${copied}개 복사` : ''}`;
 // 되돌리기가 층을 갈아탄 경우. 이름은 **되돌려진 변경이 있던 층**(= 지금 활성 층)이다.
 export const CROSS_FLOOR_UNDO = name => `다른 층(${name})의 변경을 되돌렸습니다`;
+// 다시 실행이 층을 갈아탄 경우. 방향이 반대이므로 문구도 반대다(리뷰 I-2: redo가 undo 문구를 썼다).
+export const CROSS_FLOOR_REDO = name => `다른 층(${name})의 변경을 다시 실행했습니다`;

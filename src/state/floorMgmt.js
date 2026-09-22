@@ -85,5 +85,8 @@ export { ROOM_PROPS, copyRoomProps } from './floorInternal.js';
 export function crossFloorName(prev, next) {
   const a = prev?.activeFloor ?? 0, b = next?.activeFloor ?? 0;
   if (a === b) return null;
+  // 층을 더하거나 지운 단계는 스스로 활성 층을 옮긴다(addFloor는 새 층을, deleteFloor는 당겨진
+  // 인덱스를 활성으로 만든다): 그 단계의 undo/redo는 "다른 층의 변경"이 아니다(리뷰 I-1).
+  if ((prev?.floors?.length ?? 0) !== (next?.floors?.length ?? 0)) return null;
   return next?.floors?.[b]?.name ?? null;
 }
