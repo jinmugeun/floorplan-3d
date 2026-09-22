@@ -4,7 +4,7 @@ import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 import { optionBarHtml, applyOptionInput } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
-import { trackFields } from './fieldUtils.js';
+import { trackFields, isDuplicateCommit } from './fieldUtils.js';
 import { shellHtml } from './shellHtml.js';
 import { createBottomBar } from './bottomBar.js';
 import { createBanner } from './banner.js';
@@ -205,7 +205,11 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   const banner = createBanner({ store, ui, el: els.banner, stack: q('#canvasStack'), tool: () => currentTool, onExitFp });
   const renderBanner = s => banner.render(s);
   function setOptionBar(tool) { currentTool = tool; renderOptions(); renderBanner(); }
-  els.optionBar.addEventListener('change', ev => { applyOptionInput(currentTool, ev.target, store.get().units ?? 'mm'); });
+  // [Enter] 확정의 합성 change 뒤 blur가 내는 네이티브 change는 삼킨다(§16.1).
+  els.optionBar.addEventListener('change', ev => {
+    if (isDuplicateCommit(ev.target)) return;
+    applyOptionInput(currentTool, ev.target, store.get().units ?? 'mm');
+  });
   // 길이 입력은 change뿐 아니라 [Enter]로도 반영한다(값을 고치고 Enter만 누르면 그대로였다 — §12.5).
   // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다).
   // 값이 바뀐 상태로 Enter를 누르면 실제 브라우저에서는 네이티브 change까지 더해 applyOptionInput이

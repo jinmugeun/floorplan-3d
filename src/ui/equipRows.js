@@ -105,7 +105,9 @@ export function applyVentField(store, ui, sel, el) {
     if (v === null) return true;
     const r = activeFloor(store.get()).rooms.find(x => x.id === sel.id);
     if (!r) return true;
-    updateRoom(store, sel.id, { design: { ...r.design, [name === 'designEA' ? 'EA' : 'SA']: Math.round(v) } });
+    const key = name === 'designEA' ? 'EA' : 'SA';
+    if (Math.round(v) === Math.round(r.design?.[key] ?? 0)) return true;   // §16.1: 빈 단계 금지
+    updateRoom(store, sel.id, { design: { ...r.design, [key]: Math.round(v) } });
     return true;
   }
   if (!EQ_FIELD.test(name)) return false;
@@ -152,6 +154,11 @@ export function applyVentField(store, ui, sel, el) {
     }
     default: return true;                   // 모르는 eq* 필드는 처리한 것으로 보고 조용히 버린다
   }
+  // §16.1: 값이 그대로면 dispatch하지 않는다 — 확정 한 번이 undo 두 단계를 쌓던 자리다(감사 §41).
+  // props는 위에서 { ...it.props }를 복사해 한 칸만 덮으므로 키 순서가 같다 → JSON 비교가 안전하다.
+  const sameProps = JSON.stringify(props) === JSON.stringify(it.props);
+  const sameSize = !patch.size || patch.size.every((x, i) => x === it.size[i]);
+  if (sameProps && sameSize) return true;                 // 처리한 것은 맞다(다음 처리기로 넘기지 않는다)
   // 크기가 함께 바뀌는 편집(디퓨저 A×B · 팬 챔버 · 환기캡 지름)은 반드시 resizeItem을 지난다:
   // updateItem → normalizeItem은 placeOnWall을 지나지 않으므로, 벽 부착 설비(fan-wall-500·환기캡)의
   // 깊이를 바꾸면 pos가 벽면에서 Δd/2만큼 떠 불변식 ①("pos는 (wallId, t)의 결과")이 깨진다.

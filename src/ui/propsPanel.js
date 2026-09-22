@@ -10,7 +10,7 @@ import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField, ventRowsClick } from './equipRows.js';
 import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
-import { field, num, numValue, lenField, readLen, withUnit, colorField } from './fieldUtils.js';
+import { field, num, numValue, lenField, readLen, withUnit, colorField, isDuplicateCommit } from './fieldUtils.js';
 import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
@@ -167,6 +167,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   };
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
+    // [Enter] 확정 뒤 blur가 내는 같은 값의 네이티브 change는 한 번 삼킨다(§16.1). 적용 함수가
+    // 이미 값을 거르지만, 클램프 토스트·잠금 토스트가 두 번 뜨는 것은 그쪽에서 막지 못한다.
+    if (isDuplicateCommit(el)) return;
     if (applyMaterialField(store, sel, el)) return;      // 마감재 오프셋·각도
     if (applyVentField(store, ui, sel, el)) return;       // 설비 속성 · 방 설계 풍량
     if (applyDuctField(store, sel, el)) return;           // 덕트 종류·계통·구간 단면

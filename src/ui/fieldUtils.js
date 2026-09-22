@@ -82,12 +82,25 @@ export function revertField(el) {
   return true;
 }
 // [Enter]: 지금 값을 확정(change)하고 blur한다. 다음 [Esc]의 기준값도 지금 값이 된다.
+// 표시(dataset.committed)는 합성 change를 **쏜 뒤에** 남긴다(§16.1): 먼저 남기면 합성 change
+// 자신이 "중복"으로 삼켜져 확정이 아예 일어나지 않는다. dispatchEvent는 동기이므로 이 순서가
+// 곧 "합성 change 1회 → 표시 → blur의 네이티브 change는 무시"가 된다(감사 §41).
 export function commitField(el) {
   if (!isTextField(el)) return false;
   initial.set(el, el.value);
   el.dispatchEvent(new Event('change', { bubbles: true }));
+  if (el.dataset) el.dataset.committed = el.value;
   el.blur?.();
   return true;
+}
+// 지금 처리하려는 change가 commitField 직후의 "같은 값" 네이티브 change인가(§16.1).
+// 한 번만 true다: 표시를 지우고 돌려주므로 그다음 같은 값의 change는 정상 처리된다(사용자가
+// 값을 되돌려 놓고 다시 확정하는 경우를 막지 않는다).
+export function isDuplicateCommit(el) {
+  if (el?.dataset?.committed === undefined) return false;
+  const dup = el.dataset.committed === el.value;
+  delete el.dataset.committed;
+  return dup;
 }
 // 포커스가 들어올 때의 값을 기억한다(셸이 앱 전체에 한 번 건다 — 패널을 다시 그려도 새 노드가
 // 포커스를 받는 순간 기준값이 생긴다).

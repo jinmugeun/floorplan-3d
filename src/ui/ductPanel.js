@@ -69,20 +69,26 @@ export function applyDuctField(store, sel, el) {
   const d = ductById(activeFloor(store.get()), sel.id);
   if (!d) return true;
   // 잠금·숨김은 잠긴 덕트에도 켤 수 있어야 한다(그러지 않으면 잠금을 풀 길이 없다).
-  if (name === 'ductLocked') { updateDuct(store, d.id, { locked: el.checked }); return true; }
-  if (name === 'ductHidden') { updateDuct(store, d.id, { hidden: el.checked }); return true; }
+  // §16.1: 어느 갈래든 값이 지금과 같으면 dispatch하지 않는다(빈 undo 단계 금지 — 감사 §41).
+  if (name === 'ductLocked') { if (!!d.locked !== el.checked) updateDuct(store, d.id, { locked: el.checked }); return true; }
+  if (name === 'ductHidden') { if (!!d.hidden !== el.checked) updateDuct(store, d.id, { hidden: el.checked }); return true; }
   if (d.locked) { toast('잠긴 덕트는 편집할 수 없습니다'); return true; }
-  if (name === 'ductKind') { updateDuct(store, d.id, { kind: el.value === 'supply' ? 'supply' : 'exhaust' }); return true; }
-  if (name === 'ductSystem') { updateDuct(store, d.id, { system: String(el.value).trim() }); return true; }
+  if (name === 'ductKind') { const kind = el.value === 'supply' ? 'supply' : 'exhaust'; if (d.kind !== kind) updateDuct(store, d.id, { kind }); return true; }
+  if (name === 'ductSystem') { const system = String(el.value).trim(); if (d.system !== system) updateDuct(store, d.id, { system }); return true; }
   // 댐퍼 크기(명세 DT-06). 길이 입력이 아니라 순수 mm 숫자 칸이다(목록 안에 들어가 좁다).
   if (name === 'damperW' || name === 'damperH') {
     const dv = numValue(el);
-    if (dv !== null) updateDamper(store, d.id, Number(el.dataset.i), { [name === 'damperW' ? 'w' : 'h']: Math.round(dv) });
+    if (dv === null) return true;
+    const i = Number(el.dataset.i), key = name === 'damperW' ? 'w' : 'h';
+    if (Math.round(dv) !== Math.round(d.dampers[i]?.[key] ?? NaN)) updateDamper(store, d.id, i, { [key]: Math.round(dv) });
     return true;
   }
   const v = el.dataset.len ? readLen(el, store.get().units ?? 'mm') : numValue(el);
   if (v === null) return true;
-  updateSegment(store, d.id, Math.min(segIndex(sel), d.segments.length - 1), { [{ segW: 'w', segH: 'h', segZ: 'z' }[name]]: Math.round(v) });
+  const si = Math.min(segIndex(sel), d.segments.length - 1);
+  const segKey = { segW: 'w', segH: 'h', segZ: 'z' }[name];
+  if (Math.round(v) === Math.round(d.segments[si]?.[segKey] ?? NaN)) return true;
+  updateSegment(store, d.id, si, { [segKey]: Math.round(v) });
   return true;
 }
 

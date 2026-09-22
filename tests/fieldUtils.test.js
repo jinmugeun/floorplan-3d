@@ -2,7 +2,7 @@
 // §15.9: 입력 중 [Esc]로 되돌리고 [Enter]로 확정한다. 숫자 칸은 단위별 step을 갖고,
 // 소수 step(면풍속 0.05)은 값에 부동소수 먼지를 남기지 않는다(감사 §5 · §21).
 import { test, expect } from 'vitest';
-import { STEP, INCH_MM, stepMm, roundToStep, isTextField, numValue, readLen, lenField, rememberFieldValue, revertField, commitField, trackFields } from '../src/ui/fieldUtils.js';
+import { STEP, INCH_MM, stepMm, roundToStep, isTextField, numValue, readLen, lenField, rememberFieldValue, revertField, commitField, isDuplicateCommit, trackFields } from '../src/ui/fieldUtils.js';
 import { fmtLen } from '../src/util/units.js';
 
 const inputOf = html => { const d = document.createElement('div'); document.body.appendChild(d); d.innerHTML = html; return d.querySelector('input'); };
@@ -170,4 +170,17 @@ test('검색 칸의 [Esc]는 글자를 되돌리고 input을 한 번 쏜다', ()
   n.focus(); rememberFieldValue(n); n.value = '900';
   revertField(n);
   expect(quiet).toEqual([]);
+});
+
+// §16.1: commitField는 합성 change를 쏜 **뒤에** 표시를 남긴다 — 순서가 뒤집히면 확정 자신이 삼켜진다.
+test('commitField의 표시는 뒤따르는 같은 값의 change 한 번만 삼킨다', () => {
+  const el = document.createElement('input');
+  el.type = 'number'; el.value = '250';
+  const seen = [];
+  el.addEventListener('change', () => seen.push(isDuplicateCommit(el) ? 'dup' : 'apply'));
+  commitField(el);                                        // 합성 change 1회 → 'apply'
+  el.dispatchEvent(new Event('change', { bubbles: true })); // blur의 네이티브 change → 'dup'
+  el.dispatchEvent(new Event('change', { bubbles: true })); // 표시가 지워졌으므로 다시 정상 처리
+  expect(seen).toEqual(['apply', 'dup', 'apply']);
+  expect(el.dataset.committed).toBeUndefined();
 });

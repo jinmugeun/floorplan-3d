@@ -44,15 +44,23 @@ export function optionBarHtml(tool, { units = 'mm' } = {}) {
 
 // 입력 한 칸을 tool.opts에 반영한다. 반영했으면 true.
 // ft·in 텍스트는 mm로 되돌려 저장하고, 읽을 수 없는 입력은 값을 바꾸지 않고 입력란을 현재 값으로 되돌린다.
+// §16.1: 값이 지금과 같으면 아무것도 하지 않고 false를 돌려준다. 옵션 바는 스토어를 건드리지
+// 않으므로 undo 단계는 애초에 없지만, [Enter] 확정의 합성 change + blur의 네이티브 change가
+// 같은 경로를 두 번 돌던 자리다(shell.js의 keydown 주석이 "멱등하므로 결과는 같다"고 적어 둔
+// 자리를 계약으로 바꾼다 — 치수 칸(Task 8)이 여기에 얹히면 멱등성만으로는 부족하다).
 export function applyOptionInput(tool, el, units = 'mm') {
   const k = el?.name;
-  if (!tool?.opts || !k) return false;
+  if (!tool?.opts || !k || !(k in tool.opts)) return false;
   if (el.dataset?.len) {
     const mm = parseLen(el.value, units);
     if (mm === null) { el.value = fmtLen(tool.opts[k], 'ftin'); return false; }
-    tool.opts[k] = Math.round(mm);
+    const next = Math.round(mm);
+    if (next === tool.opts[k]) return false;
+    tool.opts[k] = next;
     return true;
   }
-  tool.opts[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+  const next = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+  if (next === tool.opts[k]) return false;
+  tool.opts[k] = next;
   return true;
 }

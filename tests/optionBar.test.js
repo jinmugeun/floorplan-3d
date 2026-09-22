@@ -77,6 +77,15 @@ describe('옵션 바 입력 읽기', () => {
     expect(bad.value).toBe(`1' 0.5"`);                // 입력란을 현재 값으로 되돌린다(fmtLen의 ft·in 표기)
   });
 
+  test('같은 값이면 false를 돌려주고 opts를 건드리지 않는다(§16.1)', () => {
+    const tool = { opts: { thickness: 200, snap: true } };
+    expect(applyOptionInput(tool, el({ value: '200' }), 'mm')).toBe(false);
+    expect(applyOptionInput(tool, el({ name: 'snap', type: 'checkbox', checked: true }), 'mm')).toBe(false);
+    // opts에 없는 이름은 만들지 않는다(치수 칸 name="dim:len"이 옵션으로 새지 않게 — Task 8).
+    expect(applyOptionInput(tool, el({ name: 'dim:len', value: '3000' }), 'mm')).toBe(false);
+    expect(tool.opts['dim:len']).toBeUndefined();
+  });
+
   test('도구도 이름도 없으면 아무 일도 하지 않는다', () => {
     expect(applyOptionInput(null, el(), 'mm')).toBe(false);
     expect(applyOptionInput({ opts: {} }, el({ name: '' }), 'mm')).toBe(false);
