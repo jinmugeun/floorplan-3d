@@ -206,4 +206,28 @@ describe('값이 바뀌지 않는 확정 (리뷰 I-1·I-2·I-3)', () => {
     expect(counter.get()).toBe(1);
     expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(254);
   });
+
+  // 리뷰 I-2b: 설비·덕트 갈래는 "적용했다"를 반환값으로 말하지 못한다(boolean이 "내 필드다"의
+  // 뜻이다) → 무동작 확정이 칸의 글자를 모델과 어긋난 채 남겼다. 패널이 상태 동일성으로 판정한다.
+  test('설비 칸: 클램프로 지금 값과 같아진 확정은 칸의 글자를 모델 값으로 되돌린다(I-2b)', () => {
+    const { store, ui, el, hood, counter } = setup();
+    ui.set({ selection: { type: 'item', id: hood } });
+    typeAndCommit(q(el, 'eqNo'), 99);                 // 후드 번호를 칸의 최대값까지 올린다(한 단계)
+    counter.reset();
+    typeAndCommit(q(el, 'eqNo'), 50099);              // 최대 99로 잘려 지금 값과 같다
+    expect(counter.get()).toBe(0);
+    expect(activeFloor(store.get()).items.find(i => i.id === hood).props.no).toBe(99);
+    expect(q(el, 'eqNo').value).toBe('99');           // 예전에는 50099가 그대로 남았다
+  });
+
+  test('덕트 칸: 클램프로 지금 값과 같아진 확정도 글자를 모델 값으로 되돌린다(I-2b)', () => {
+    const { store, ui, el, duct, counter } = setup();
+    ui.set({ selection: { type: 'duct', id: duct, segment: 0, vertex: null } });
+    typeAndCommit(q(el, 'segW'), 3000);               // 단면 W를 DUCT_RANGE.w의 최대까지 올린다(한 단계)
+    counter.reset();
+    typeAndCommit(q(el, 'segW'), 53000);              // 최대 3000으로 잘려 지금 값과 같다
+    expect(counter.get()).toBe(0);
+    expect(activeFloor(store.get()).ducts[0].segments[0].w).toBe(3000);
+    expect(q(el, 'segW').value).toBe('3000');         // 예전에는 53000이 그대로 남았다
+  });
 });
