@@ -170,12 +170,14 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     // [Enter] 확정 뒤 blur가 내는 같은 값의 네이티브 change는 한 번 삼킨다(§16.1). 적용 함수가
     // 이미 값을 거르지만, 클램프 토스트·잠금 토스트가 두 번 뜨는 것은 그쪽에서 막지 못한다.
     if (isDuplicateCommit(el)) return;
-    if (applyMaterialField(store, sel, el)) return;      // 마감재 오프셋·각도
-    // 설비·덕트 갈래의 boolean은 "내 필드다"를 뜻할 뿐 "적용했다"가 아니다(반환 규약은 그대로 둔다).
+    // 마감재·설비·덕트 갈래의 boolean은 "내 필드다"를 뜻할 뿐 "적용했다"가 아니다(반환 규약은 그대로 둔다).
     // store.dispatch는 언제나 새 structuredClone을 상태로 앉히므로 상태 동일성이 곧 "dispatch가
     // 없었다"다 → 그때만 직접 다시 그려 칸의 글자를 모델 값으로 되돌린다(리뷰 I-2b: eqNo가 이미
-    // 99(최대)일 때 50099를 확정하면 상태는 99인데 글자가 50099로 남았다).
+    // 99(최대)일 때 50099를 확정하면 상태는 99인데 글자가 50099로 남았다. 리뷰 N-6: 마감재 오프셋
+    // 칸을 비우고 확정하면 값은 지켜지는데 칸이 빈 채로 남았다 — materialRows.js의 주석이 약속한
+    // "패널이 원래 값으로 다시 그린다"가 이 갈래에만 빠져 있었다).
     const before = store.get();
+    if (applyMaterialField(store, sel, el)) { if (store.get() === before) render(); return; }   // 마감재 오프셋·각도
     if (applyVentField(store, ui, sel, el)) { if (store.get() === before) render(); return; }   // 설비 속성 · 방 설계 풍량
     if (applyDuctField(store, sel, el)) { if (store.get() === before) render(); return; }       // 덕트 종류·계통·구간 단면
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }

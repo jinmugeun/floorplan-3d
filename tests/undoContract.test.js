@@ -13,6 +13,7 @@ import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
 import { addWalls, addItem } from '../src/state/floorOps.js';
 import { addDuct } from '../src/state/ductOps.js';
+import { applyMaterial } from '../src/state/materialOps.js';
 import { createDuct } from '../src/state/ductSchema.js';
 import { rectWalls, wallLength } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
@@ -229,5 +230,50 @@ describe('값이 바뀌지 않는 확정 (리뷰 I-1·I-2·I-3)', () => {
     expect(counter.get()).toBe(0);
     expect(activeFloor(store.get()).ducts[0].segments[0].w).toBe(3000);
     expect(q(el, 'segW').value).toBe('3000');         // 예전에는 53000이 그대로 남았다
+  });
+});
+
+// 리뷰 N-6: 마감재 오프셋·각도 칸은 이 계약 밖에 남아 있었다 — 같은 값 확정이 **빈 단계**를
+// 남기고(applyMaterialField에 같은 값 가드가 없었다), 칸을 비운 확정은 값은 지키면서 **칸을 빈
+// 채로** 뒀다(패널의 상태 동일성 재렌더가 이 갈래만 비켜 갔다 — materialRows.js:72의 주석이
+// "패널이 원래 값으로 다시 그린다"고 이미 약속하고 있었다).
+describe('마감재 오프셋·각도 칸도 같은 계약을 지킨다 (리뷰 N-6)', () => {
+  // 벽 내벽에 재질을 붙여 둔다(오프셋 [10, 20] · 각도 30). 준비는 { record: false }로 앉혀
+  // 이 자체가 되돌림 단계가 되지 않게 한다.
+  function withMaterial() {
+    const ctx = setup();
+    const id = activeFloor(ctx.store.get()).walls[0].id;
+    applyMaterial(ctx.store, { kind: 'wall', id, side: 'in' },
+      { id: 'paint-white', offset: [10, 20], angle: 30 }, { record: false });
+    ctx.ui.set({ selection: { type: 'wall', id } });
+    ctx.counter.reset();
+    return ctx;
+  }
+  const matIn = store => activeFloor(store.get()).walls[0].matIn;
+
+  test('같은 값 확정은 단계도 상태 변화도 만들지 않는다', () => {
+    const { store, el, counter } = withMaterial();
+    const before = store.get();
+    typeAndCommit(q(el, 'matU-in'), 10);                  // 지금 값과 같다
+    expect(counter.get()).toBe(0);
+    expect(store.get()).toBe(before);                     // dispatch 자체가 없었다
+    expect(matIn(store)).toEqual({ id: 'paint-white', offset: [10, 20], angle: 30 });
+  });
+
+  test('칸을 비우고 확정하면 글자가 모델 값으로 돌아온다', () => {
+    const { store, el, counter } = withMaterial();
+    typeAndCommit(q(el, 'matU-in'), '');
+    expect(counter.get()).toBe(0);
+    expect(matIn(store).offset).toEqual([10, 20]);        // 빈 칸에 0이 저장되지 않는다(I-12)
+    expect(q(el, 'matU-in').value).toBe('10');            // 예전에는 칸이 빈 채로 남았다
+  });
+
+  test('실제로 고친 확정은 그대로 한 단계다', () => {
+    const { store, el, counter } = withMaterial();
+    typeAndCommit(q(el, 'matU-in'), 40);
+    expect(counter.get()).toBe(1);
+    expect(matIn(store).offset).toEqual([40, 20]);
+    store.undo();
+    expect(matIn(store).offset).toEqual([10, 20]);
   });
 });

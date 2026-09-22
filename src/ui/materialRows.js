@@ -1,6 +1,6 @@
 // 속성 패널의 마감재 행(벽 내벽/외벽, 방 바닥/천장). propsPanel이 300줄을 넘지 않게 여기로 나눴다.
 import { assignmentOf, applyMaterial, MAT_TARGET_LABELS } from '../state/materialOps.js';
-import { activeFloor } from '../state/schema.js';
+import { activeFloor, normalizeAssignment } from '../state/schema.js';
 import { materialById } from '../materials/catalog.js';
 import { drawSwatch } from './materialPanel.js';
 import { esc } from '../util/html.js';
@@ -76,6 +76,12 @@ export function applyMaterialField(store, sel, el) {
   const next = { id: cur.id, offset: [...cur.offset], angle: cur.angle };
   if (which === 'A') next.angle = v;
   else next.offset[which === 'U' ? 0 : 1] = v;
+  // 같은 값 가드(리뷰 N-6): applyMaterial이 실제로 앉힐 모양과 지금 값을 비교해 같으면 dispatch를
+  // 하지 않는다 — 그러지 않으면 같은 값 확정이 빈 undo 단계를 남긴다(§16.1 · 감사 §41).
+  // normalizeAssignment를 지나므로 클램프·각도 정규화로 지금 값과 같아진 입력(오프셋 50099 → 1000,
+  // 각도 390 → 30)도 함께 걸린다. 이 칸이 건드리는 것은 offset·angle뿐이라 세 값만 본다.
+  const want = normalizeAssignment(next);
+  if (want && want.angle === cur.angle && want.offset[0] === cur.offset[0] && want.offset[1] === cur.offset[1]) return true;
   applyMaterial(store, target, next);
   return true;
 }

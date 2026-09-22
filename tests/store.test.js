@@ -38,6 +38,19 @@ describe('store', () => {
     s.dispatch(d => { d.list.push(1); });
     expect(before.list).toEqual([]);
   });
+  // ui/propsPanel.js는 "상태 객체가 그대로면 dispatch가 없었다"로 무동작 확정을 판정하고(리뷰 I-2b·N-6)
+  // 그때만 칸을 다시 그린다. 그 규칙은 dispatch가 **언제나** 새 객체를 앉힌다는 이 성질에 기댄다 —
+  // store를 "바뀐 게 없으면 상태를 그대로 둔다"로 최적화하면 그 패널 규칙이 조용히 죽는다(리뷰 N-8).
+  test('dispatch always installs a new state object', () => {
+    const s = createStore({ n: 0 });
+    const a = s.get();
+    s.dispatch(d => { d.n = 1; });
+    expect(s.get()).not.toBe(a);
+    const b = s.get();
+    s.dispatch(() => {});                       // 아무것도 바꾸지 않는 mutate도 새 객체를 앉힌다
+    expect(s.get()).not.toBe(b);
+    expect(s.get()).toEqual({ n: 1 });
+  });
   test('history is capped', () => {
     const s = createStore({ n: 0 }, { limit: 3 });
     for (let i = 1; i <= 5; i++) s.dispatch(d => { d.n = i; });
