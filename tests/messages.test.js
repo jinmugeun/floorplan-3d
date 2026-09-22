@@ -80,7 +80,8 @@ test('§16.8이 모은 나머지 문구도 한 곳에서 온다', () => {
 
 // §16.8: 사용자에게 보이는 문구는 messages.js 한 곳에서 온다. 사람 눈으로는 30개가 지나갔으므로
 // (감사 §37) 정적으로 센다 — toast( 호출의 첫 인자에 한국어 리터럴이 있으면 실패다.
-// 그물은 문자열 리터럴 세 종류(홑·쌍따옴표·백틱)를 모두 덮고, 줄 주석은 먼저 지운다.
+// 그물은 문자열 리터럴 세 종류(홑·쌍따옴표·백틱)를 모두 덮고, 줄 주석·블록 주석은 먼저 지운다.
+// 한계: 한 줄 안에서만 본다 — 문구를 줄바꿈해 숨기지 말 것(여러 줄로 쪼갠 호출은 못 잡는다).
 const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
 const walkJs = dir => readdirSync(dir, { withFileTypes: true })
   .flatMap(e => (e.isDirectory() ? walkJs(join(dir, e.name)) : e.name.endsWith('.js') ? [join(dir, e.name)] : []));
@@ -92,8 +93,10 @@ test('src/의 toast( 인자에 한국어 리터럴이 없다(§16.8)', () => {
   for (const f of files) {
     const rel = f.slice(SRC_DIR.length + 1).replace(/\\/g, '/');
     readFileSync(f, 'utf8').split('\n').forEach((raw, i) => {
-      const line = raw.replace(/\/\/.*$/, '');         // 줄 주석은 문구가 아니다
-      for (const m of line.matchAll(/\btoast\(\s*([^)]*)/g)) {
+      const line = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/, '');   // 주석은 문구가 아니다
+      // [^;]* = 첫 인자 구간을 문장 끝까지 본다: toast(fn(x) ? '한국어' : '')·toast(fmt(n) + '한국어')처럼
+      // 인자 안에 )가 있는 모양도 잡는다([^)]*는 첫 )에서 끊겨 놓쳤다 — 리뷰 I-2).
+      for (const m of line.matchAll(/\btoast\(\s*([^;]*)/g)) {
         if (/[가-힣]/.test(m[1])) bad.push(`${rel}:${i + 1} ${m[1].trim()}`);
       }
     });

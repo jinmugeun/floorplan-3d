@@ -129,7 +129,18 @@ test('더보기를 열면 포커스가 팝오버 안으로 들어가고 [Esc]로
 // 것**이다 → 꼬리가 붙기 전에 2단계(잠금)·3단계(단위)를 접는다.
 // 폭 스텁: 묶음마다 프로브 측정값에 맞춘 폭을 주고 **바에 남아 있는 묶음의 합**을 scrollWidth로 돌려준다
 // (팝오버로 옮긴 묶음은 빠진다). 꼬리는 압축되면 라벨이 아이콘이 되어 199 → 132 px이다(styles.css).
-const STUB = { seg3d: 132, segLock: 60, segCapture: 96, segPreset: 150, segGizmo: 62, unitSeg: 118 };
+// segCapture 96 → 41: 96은 라벨이 "스크린 캡쳐"(5자)일 때의 값이고, §16.8이 "캡처"(2자)로 줄였다.
+// 41은 2026-09-22 실제 브라우저 재측정값이다(1600×900 · 비압축 · #segCapture의 getBoundingClientRect).
+// 단계별 합(= 그 단계에서 바에 남는 묶음 폭의 합. 0 = 모드 200 · 1 = 보기 62는 STUB 밖의 기본값):
+//   0단계 200+62+132+60+41+150+62+118+199(꼬리) = 1024   ← 라벨이 짧아져 1079에서 55 px 줄었다
+//   1단계 3D 전용(seg3d·segCapture·segPreset·segGizmo)을 접고 꼬리 아이콘화 → 200+62+60+118+132 = 572
+//   2단계 잠금(segLock)까지 → 512          3단계 단위(unitSeg)까지 → 394
+// segCapture는 1단계에서 이미 빠지므로 1~3단계 합은 라벨 길이와 무관하다(572·512·394 그대로) —
+// 아래 두 테스트의 clientWidth는 그래서 그대로 각 단계를 집는다:
+//   672(1366 px): 1024 > 672 → 1단계, 572 ≤ 672에서 멈춘다
+//   506(1100 px): 1024 > 506 → 1단계 572 > 506 → 2단계 512 > 506 → 3단계 394 ≤ 506에서 멈춘다
+// 달라지는 것은 fullWidth(0단계 합)뿐이라, 히스테리시스 경계를 쓰는 래칫 테스트만 1079 → 1024다.
+const STUB = { seg3d: 132, segLock: 60, segCapture: 41, segPreset: 150, segGizmo: 62, unitSeg: 118 };
 function widthStub(bottom, viewport) {
   const init = [...bottom.children];
   const w0 = new Map(init.map((el, i) => [el, STUB[el.id] ?? (i === 0 ? 200 : 62)]));   // 0 = 모드, 1 = 보기
@@ -182,7 +193,7 @@ test('폭이 다시 넓어지면 3단계에서 곧바로 펼쳐진다(단계가 
   viewport.w = 672; bar.sync();
   expect(bar.tier()).toBe(1);                                    // 1단계부터 다시 셈한다
   expect(bottom.contains(document.querySelector('#btnLock'))).toBe(true);
-  viewport.w = 1079 + BOTTOM_HYSTERESIS; bar.sync();
+  viewport.w = 1024 + BOTTOM_HYSTERESIS; bar.sync();      // fullWidth(0단계 합 1024) + 히스테리시스 = 펼침 경계
   expect(bar.tier()).toBe(0);
   expect(document.querySelector('#bottomMore').children).toHaveLength(0);
   bar.destroy();
