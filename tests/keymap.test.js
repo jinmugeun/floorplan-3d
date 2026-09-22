@@ -441,3 +441,13 @@ test('createKeyHandler는 주입한 undo·redo를 부른다', () => {
   handler(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }));
   expect(calls).toEqual(['undo', 'redo']);
 });
+
+// §16.5: 표시 전용 행은 표에 보이지만 키 표(TABLE)에는 들어가지 않는다.
+test('선택 메뉴 열기는 표시 전용 KEYMAP 행이다', () => {
+  const row = KEYMAP.find(e => e.label === '선택 메뉴 열기');
+  expect(row).toBeTruthy();
+  expect(row.keys).toEqual(['Shift+F10', 'ContextMenu']);
+  expect(row.action).toBeNull();
+  expect(TABLE.has('shift+f10')).toBe(false);
+  expect(TABLE.has('contextmenu')).toBe(false);
+});

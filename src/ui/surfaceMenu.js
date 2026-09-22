@@ -7,10 +7,10 @@ import { applyRoomWalls, assignmentOf } from '../state/materialOps.js';
 // 방 삭제는 ui/ 안의 roomActions에서 가져온다: ui/는 view2d/·view3d/·app/을 import하지 않는다(아키텍처 §9).
 import { removeRoom } from './roomActions.js';
 import { toast } from './toast.js';
-import { WALL_DELETE_RESULT, ROOMS_GONE, CURVED_WALL_TITLE } from './messages.js';
+import { WALL_DELETE_RESULT, ROOMS_GONE, CURVED_WALL_TITLE, WHY_NO_MATERIAL, WHY_NO_ACTION } from './messages.js';
 
 const copyItem = (ui, mat) => ({
-  label: '마감재 복사', disabled: !mat,
+  label: '마감재 복사', disabled: !mat, ...(mat ? {} : { title: WHY_NO_MATERIAL }),
   onSelect: () => ui.set({ matPick: { assignment: structuredClone(mat) } }),
 });
 
@@ -24,14 +24,14 @@ export function wallMenuItems({ store, ui, wallId, roomId = null, side = 'in', i
     { label: '벽 나누기', onSelect: () => ui.set({ selection: { type: 'wall', id: wallId }, splitWall: true }) },
     // 2A가 정한 UI 약속: 곡선벽은 범위 밖임을 비활성 항목 + 사유로 알린다(§15.14 · 감사 §10).
     { label: '곡선벽 전환', disabled: true, title: CURVED_WALL_TITLE },
-    { label: '재질 교체', disabled: !actions.replaceMaterial, onSelect: () => actions.replaceMaterial?.(target) },
+    { label: '재질 교체', disabled: !actions.replaceMaterial, ...(actions.replaceMaterial ? {} : { title: WHY_NO_ACTION }), onSelect: () => actions.replaceMaterial?.(target) },
     // 타일은 크기를 면마다 정하고 여러 면에 연속으로 바르는 일이 많다: 재질 교체와 다른 항목이다(§13.3).
-    { label: '타일 배치', disabled: !actions.placeTile, onSelect: () => actions.placeTile?.(target) },
+    { label: '타일 배치', disabled: !actions.placeTile, ...(actions.placeTile ? {} : { title: WHY_NO_ACTION }), onSelect: () => actions.placeTile?.(target) },
     copyItem(ui, mat),
-    { label: '마감재 방 전체 벽에 적용', disabled: !room || !mat, onSelect: () => applyRoomWalls(store, room, mat) },
-    { label: '마감재 편집기로 이동', disabled: !actions.openEditor, onSelect: () => actions.openEditor?.(wallId, target.side) },
+    { label: '마감재 방 전체 벽에 적용', disabled: !room || !mat, ...(room && mat ? {} : { title: mat ? '이 벽이 속한 방이 없음' : WHY_NO_MATERIAL }), onSelect: () => applyRoomWalls(store, room, mat) },
+    { label: '마감재 편집기로 이동', disabled: !actions.openEditor, ...(actions.openEditor ? {} : { title: WHY_NO_ACTION }), onSelect: () => actions.openEditor?.(wallId, target.side) },
   ];
-  if (in3d) items.push({ label: '도면 뷰 전환', disabled: !actions.toPlanView, onSelect: () => actions.toPlanView?.() });
+  if (in3d) items.push({ label: '도면 뷰 전환', disabled: !actions.toPlanView, ...(actions.toPlanView ? {} : { title: WHY_NO_ACTION }), onSelect: () => actions.toPlanView?.() });
   // 결과 문구는 app/deleteActions.js와 같은 규칙이다(§15.6): 제품이 함께 사라지면 그것을,
   // 제품 없이 방만 줄면 방만 알린다.
   items.push('sep', { label: '삭제', shortcut: '⌫', danger: true, onSelect: () => {
@@ -50,11 +50,11 @@ export function roomMenuItems({ store, ui, roomId, in3d = false, actions = {} })
   const target = { kind: 'floor', id: roomId };
   const mat = assignmentOf(f, target);
   return [
-    { label: '템플릿 적용하기', disabled: !actions.applyTemplate, onSelect: () => actions.applyTemplate?.(roomId) },
+    { label: '템플릿 적용하기', disabled: !actions.applyTemplate, ...(actions.applyTemplate ? {} : { title: WHY_NO_ACTION }), onSelect: () => actions.applyTemplate?.(roomId) },
     // M-10: Ctrl+C는 아이템 복사 전용이다(keymap.js의 itemCombo). 없는 단축키를 표기하지 않는다.
     { label: '방 복사', onSelect: () => duplicateRoom(store, roomId) },
     copyItem(ui, mat),
-    { label: '재질 교체', disabled: !actions.replaceMaterial, onSelect: () => actions.replaceMaterial?.(target) },
+    { label: '재질 교체', disabled: !actions.replaceMaterial, ...(actions.replaceMaterial ? {} : { title: WHY_NO_ACTION }), onSelect: () => actions.replaceMaterial?.(target) },
     { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: roomId }, soloRoom: roomId }) },
     'sep',
     // 확인 뒤 재확인(방이 그 사이 사라졌는지)까지 removeRoom이 한다 — 삭제 도구·선택 삭제와 같은 자리다.

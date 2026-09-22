@@ -44,6 +44,8 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
    font-size까지 되돌려야 한다: #banner button의 font: inherit(특이도 1-0-1)가 .hint의 12 px(0-1-0)을 이겨
    13 px로 커진다. */
 #banner button.hint[data-action="hintCancel"] { border: 0; background: none; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline dotted; font-size: 12px; }
+/* 누를 수 없는 안내는 밑줄도 커서도 없다(§16.5): 같은 12 px muted 글자만 남는다. */
+#banner span.hint { color: var(--muted); font-size: 12px; }
 #banner { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 4px 12px; background: #fffbe6; border-bottom: 1px solid var(--line); overflow-x: auto; white-space: nowrap; }
 /* 배너의 "도면 전체 보기" 버튼은 계속 필요하다(교체 대상 24행에 있던 규칙을 옮겨 왔다).
    행이 되면서 gap: 10px가 생겼으니 margin-left는 0이다. */

@@ -45,10 +45,16 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
     if (s.soloRoom) return `단일 공간 모드 ${exitSolo}`;
     const clashes = collisionCount();
     if (clashes) return esc(collisionText(clashes));
-    // 누를 수 있는 것은 버튼이다: <span>은 Tab으로 닿지도 Enter로 눌리지도 않아 키보드만 쓰는
-    // 사람에게는 "메시지를 누르면 취소"가 없는 기능이었다. 모양은 CSS가 글자처럼 되돌린다.
+    // 누를 수 있는 것만 버튼이다(§16.5 · 감사 §39). onHintClick을 구현한 도구(덕트·경로 배열·배치·
+    // 구조물)에서는 "메시지를 누르면 취소"가 실제로 동작하므로 버튼이고 — 키보드로도 닿아야 한다 —
+    // 그러지 않는 도구(벽·방·삭제·보조선·측정)에서는 <span>이다: 예전에는 링크처럼 보이는 탭 스톱이
+    // 생기고 눌러도 아무 일도 일어나지 않았다.
     const t = tool();
-    if (t?.hint) return `<button type="button" class="hint" data-action="hintCancel">${esc(t.hint)}</button>`;
+    if (t?.hint) {
+      return typeof t.onHintClick === 'function'
+        ? `<button type="button" class="hint" data-action="hintCancel">${esc(t.hint)}</button>`
+        : `<span class="hint">${esc(t.hint)}</span>`;
+    }
     return '';
   }
   function render(s = ui.get()) {

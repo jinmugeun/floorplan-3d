@@ -42,4 +42,12 @@ describe('층 바', () => {
     const two = twoFloors().get();
     expect(floorDetailsHtml(two, activeFloor(two), { detailsOpen: false })).not.toMatch(/name="floorDelete"[^>]*disabled/);
   });
+
+  test('층 버튼에도 툴팁이 있다(§16.5)', () => {
+    const p = twoFloors().get();
+    expect(floorBarHtml(p)).toContain('title="층 추가하기"');
+    const d = floorDetailsHtml(p, activeFloor(p), {});
+    expect(d).toContain('title="이 층의 이름을 바꿉니다"');
+    expect(d).toContain('title="이 층과 그 안의 모든 것을 삭제합니다"');
+  });
 });

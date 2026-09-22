@@ -27,7 +27,7 @@ export function floorDetailsHtml(project, floor, { units = 'mm', showUnit = fals
   const p = project ?? {}, f = floor ?? {};
   const lastFloor = (p.floors?.length ?? 1) <= 1;
   return `<h2>층 관리</h2>
-    <div class="row"><button type="button" name="floorRename">이름 변경</button><button type="button" name="floorDelete" class="danger" ${lastFloor ? `disabled title="${LAST_FLOOR_TITLE}"` : ''}>층 삭제</button></div>
+    <div class="row"><button type="button" name="floorRename" title="이 층의 이름을 바꿉니다">이름 변경</button><button type="button" name="floorDelete" class="danger" ${lastFloor ? `disabled title="${LAST_FLOOR_TITLE}"` : 'title="이 층과 그 안의 모든 것을 삭제합니다"'}>층 삭제</button></div>
     ${lenField(withUnit('층 높이', units, showUnit), 'floorHeight', f.height ?? 2300, 2000, 8000, false, units, 10)}
     <details ${detailsOpen ? 'open' : ''}><summary>상세 설정</summary>
       ${field('실면적 기준', `<select name="areaMode"><option value="net" ${p.areaMode !== 'gross' ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option></select>`)}

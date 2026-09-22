@@ -107,6 +107,17 @@ describe('아이템 컨텍스트 메뉴', () => {
     const roomMenu = t.onContextMenu([500, 2000], {});
     expect(labels(roomMenu)).toContain('방 복사');   // 아이템이 없는 자리는 2A 분기로 내려간다
   });
+
+  test('비활성 항목에는 모두 사유(title)가 있다(§16.5)', () => {
+    const one = setup([['sofa-3', { pos: [2000.5, 1500.25] }]]);
+    const two = setup([['sofa-3', { pos: [1000.5, 900.25] }], ['sofa-3', { pos: [2500.5, 1900.25] }]]);
+    const items = [
+      ...itemMenuItems({ store: one.store, ui: one.ui, ids: one.ids, itemActions: {} }),
+      ...itemMenuItems({ store: two.store, ui: two.ui, ids: two.ids, itemActions: {} }),
+    ];
+    const missing = items.filter(it => it !== 'sep' && it.disabled && !String(it.title ?? '').trim()).map(it => it.label);
+    expect(missing).toEqual([]);
+  });
 });
 
 // §13.1: 경로는 2D 캔버스에 그린다 — 3D에서는 항목을 비활성으로 두고 이유를 title로 알린다.

@@ -9,6 +9,48 @@ import { productById } from '../src/products/catalog.js';
 import { COLLISION_BANNER, COLLISION_BANNER_QUIET } from '../src/ui/messages.js';
 import { LAYOUT_DEBOUNCE_MS } from '../src/ui/layout.js';
 
+// 세 태스크(6·8·12)의 테스트가 이 한 헬퍼로 셸을 띄운다. opts는 createShell에 그대로 넘어가므로
+// mountShell({ onToolChange })처럼 셸 생성 인자를 더할 수 있다.
+function mountShell(opts = {}) {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  const shell = createShell(root, { store, ui, ...opts });
+  return { root, store, ui, shell };
+}
+
+// §16.5(감사 §38): 아이콘·짧은 이름만 있는 버튼에 마우스 툴팁이 없어 무엇인지 알 수 없었다.
+// 규칙을 글로 적는 대신 실측으로 센다 — 네 묶음의 버튼은 모두 title 또는 aria-label을 갖는다.
+test('상단 바·하단 바·반전 회전·층 버튼에 툴팁 공백이 없다', () => {
+  const { root } = mountShell();
+  const groups = ['#topbar button', '#bottombar button', '#panel .row button', '#floorBar button'];
+  const gaps = [];
+  for (const sel of groups) {
+    for (const b of root.querySelectorAll(sel)) {
+      const title = (b.getAttribute('title') ?? '').trim();
+      const label = (b.getAttribute('aria-label') ?? '').trim();
+      if (!title && !label) gaps.push(`${sel} → ${b.id || b.dataset.action || b.textContent.trim()}`);
+    }
+  }
+  expect(gaps).toEqual([]);
+  // 단축키가 있는 버튼은 대괄호 표기로 알려 준다(전역 규칙).
+  expect(root.querySelector('#btnSave').title).toContain('[Ctrl+S]');
+  expect(root.querySelector('#btnUndo').title).toContain('[Ctrl+Z]');
+});
+// (`#floorBar`는 속성 패널이 그리므로 셸만 띄운 이 테스트에서는 비어 있다 — 그 묶음은
+//  `floorBar.test.js`의 문자열 단정과 Task 13의 브라우저 프로브가 함께 확인한다.)
+
+// §16.5(감사 §39): onHintClick이 없는 도구에서는 안내가 탭 스톱도 링크도 아니어야 한다.
+test('배너 안내는 취소를 구현한 도구에서만 버튼이다', () => {
+  const { shell, root } = mountShell();
+  shell.setOptionBar({ name: 'wall', opts: {}, hint: '첫 점을 클릭하세요 (1/2)' });   // onHintClick 없음
+  expect(root.querySelector('#banner button.hint')).toBeNull();
+  expect(root.querySelector('#banner span.hint').textContent).toBe('첫 점을 클릭하세요 (1/2)');
+  shell.setOptionBar({ name: 'place', opts: {}, hint: '배치할 위치를 클릭해주세요', onHintClick() {} });
+  expect(root.querySelector('#banner button.hint[data-action="hintCancel"]')).not.toBeNull();
+  expect(root.querySelector('#banner span.hint')).toBeNull();
+});
+
 test('shell renders regions and option bar reflects tool opts', () => {
   const root = document.createElement('div'); document.body.appendChild(root);
   const shell = createShell(root, { store: createStore(createEmptyProject()), ui: createUiState() });

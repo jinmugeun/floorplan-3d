@@ -18,3 +18,7 @@ describe('도움말 팝오버', () => {
     expect(helpHtml()).toBe(helpHtml('2d'));
   });
 });
+
+test('도움말이 선택 메뉴 단축키를 알려 준다(§16.5)', () => {
+  expect(helpHtml('2d')).toContain('[Shift+F10]');
+});

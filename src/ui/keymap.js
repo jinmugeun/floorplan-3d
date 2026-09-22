@@ -28,6 +28,10 @@ export const KEYMAP = [
   { group: '뷰', label: '화면 맞추기', keys: ['0'], action: 'fit' },
   { group: '선택', label: '다중 선택 토글', keys: ['Shift+클릭'], action: null },
   { group: '선택', label: '영역 선택', keys: ['Shift+드래그'], action: null },
+  // 표시 전용 행(§16.5 · 계획 7 재리뷰의 잔여): 이 두 키는 createKeyHandler가 직접 처리하고
+  // (contextMenu 콜백) TABLE을 지나지 않는다 — action: null이라 재지정 대상도 아니다.
+  // 그래도 단축키 표·도움말에는 보여야 한다: 예전에는 충돌 토스트에서만 이름이 나왔다.
+  { group: '선택', label: '선택 메뉴 열기', keys: ['Shift+F10', 'ContextMenu'], action: null },
   { group: '일인칭', label: '이동', keys: ['W A S D'], action: null },
   { group: '일인칭', label: '높이', keys: ['Q E'], action: null },
   { group: '제품', label: '이동 10mm / 100mm', keys: ['방향키', 'Shift+방향키'], action: null },

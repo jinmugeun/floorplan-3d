@@ -194,3 +194,24 @@ test('곡선벽 전환은 비활성이고 사유를 말한다', () => {
   expect(item.title).toBe('곡선벽은 아직 지원하지 않습니다');
   expect(item.onSelect).toBeUndefined();          // 누를 수 있는 것처럼 보이지도 않는다
 });
+
+// §16.5(감사 §19): 비활성 항목은 왜 못 쓰는지 말한다. 규칙을 한 항목씩 적는 대신 전수로 센다.
+test('비활성 항목에는 모두 사유(title)가 있다', () => {
+  const a = setup();                                  // actions = {} → 동작이 붙지 않은 항목이 모두 비활성
+  const items = [
+    ...wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, roomId: a.roomId, in3d: true, actions: a.actions }),
+    ...roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: a.actions }),
+  ];
+  const missing = items.filter(it => it !== 'sep' && it.disabled && !String(it.title ?? '').trim()).map(it => it.label);
+  expect(missing).toEqual([]);
+});
+
+test('마감재가 없으면 "마감재 복사"가 사유와 함께 비활성이다', () => {
+  const a = setup();
+  const items = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: a.actions });
+  const copy = pick(items, '마감재 복사');
+  expect(copy.disabled).toBe(true);
+  expect(copy.title).toBe('바른 마감재가 없음');
+  // 화면에서 쓸 수 없는 항목은 같은 한 마디를 쓴다.
+  expect(pick(items, '템플릿 적용하기').title).toBe('이 화면에서 쓸 수 없음');
+});

@@ -1,5 +1,6 @@
 import { activeFloor } from '../state/schema.js';
 import { ductLinksOf } from '../state/ductOps.js';
+import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY } from './messages.js';
 
 // 경로 배열을 못 쓰는 두 이유. 문구는 메뉴 title과 단축키 토스트(app/arrangeActions.js)가 나눠 쓴다(M-10).
 export const PATH_2D_HINT = '2D에서 사용';
@@ -36,11 +37,11 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
     { label: '경로 배열 복사', shortcut: 'Alt+S', disabled: !in2d, ...(in2d ? {} : { title: why }), onSelect: call('pathArray') },
     'sep',
     { label: '복사', shortcut: 'Ctrl+C', onSelect: call('copy') },
-    { label: '붙여넣기', shortcut: 'Ctrl+V', disabled: !(ui.get().clipboard?.length), onSelect: call('paste') },
-    { label: '그룹화', shortcut: 'Ctrl+G', disabled: items.length < 2, onSelect: call('group') },
-    { label: '그룹 해제', shortcut: 'Ctrl+Shift+G', disabled: !grouped, onSelect: call('ungroup') },
+    { label: '붙여넣기', shortcut: 'Ctrl+V', disabled: !(ui.get().clipboard?.length), ...(ui.get().clipboard?.length ? {} : { title: WHY_CLIPBOARD_EMPTY }), onSelect: call('paste') },
+    { label: '그룹화', shortcut: 'Ctrl+G', disabled: items.length < 2, ...(items.length < 2 ? { title: WHY_MIN_TWO } : {}), onSelect: call('group') },
+    { label: '그룹 해제', shortcut: 'Ctrl+Shift+G', disabled: !grouped, ...(grouped ? {} : { title: WHY_NOT_GROUPED }), onSelect: call('ungroup') },
     'sep',
-    { label: '같은 제품 선택', disabled: items.length !== 1, onSelect: call('selectSame') },
+    { label: '같은 제품 선택', disabled: items.length !== 1, ...(items.length === 1 ? {} : { title: WHY_ONE_ONLY }), onSelect: call('selectSame') },
     { label: allHidden ? '숨김 해제' : '숨김', shortcut: 'Ctrl+H', onSelect: call('toggleHidden') },
     { label: allLocked ? '잠금 해제' : '잠금', shortcut: 'Ctrl+L', onSelect: call('toggleLocked') },
     'sep',

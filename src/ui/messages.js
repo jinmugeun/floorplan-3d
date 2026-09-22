@@ -134,3 +134,22 @@ export const FLOOR_ADDED = (name, copied = 0) => `${name} 추가${copied > 0 ? `
 export const CROSS_FLOOR_UNDO = name => `다른 층(${name})의 변경을 되돌렸습니다`;
 // 다시 실행이 층을 갈아탄 경우. 방향이 반대이므로 문구도 반대다(리뷰 I-2: redo가 undo 문구를 썼다).
 export const CROSS_FLOOR_REDO = name => `다른 층(${name})의 변경을 다시 실행했습니다`;
+
+// 비활성 메뉴 항목의 사유(§16.5 · 감사 §19). 말투는 하나다: "무엇이 없음/아님" 한 마디.
+// 계획 7의 CURVED_WALL_TITLE("곡선벽은 아직 지원하지 않습니다")이 만든 자리를 나머지 항목에 넓힌다.
+export const WHY_LOCKED_ITEM = '잠긴 제품';
+export const WHY_LOCKED_DUCT = '잠긴 덕트';
+export const WHY_NO_SELECTION = '선택이 없음';
+export const WHY_NO_MATERIAL = '바른 마감재가 없음';
+export const WHY_NO_SEGMENT = '구간을 고르지 않음';
+export const WHY_NO_VERTEX = '꼭짓점을 고르지 않음';
+export const WHY_NO_CONNECTION = '연결된 설비가 없음';
+export const WHY_MIN_TWO = '제품이 2개 미만';
+export const WHY_NOT_GROUPED = '그룹이 아님';
+export const WHY_ONE_ONLY = '제품 하나만 고를 때';
+export const WHY_CLIPBOARD_EMPTY = '복사한 제품이 없음';
+export const WHY_MIN_POINTS = '점이 2개뿐';
+// 동작(actions)이 붙지 않아 이 화면에서는 아예 쓸 수 없는 항목의 사유. surfaceMenu의
+// 다섯 항목(재질 교체·타일 배치·마감재 편집기로 이동·도면 뷰 전환·템플릿 적용하기)은
+// main.js가 넘기는 actions가 없으면 꺼진다 — 사용자에게는 "고장"이 아니라 "여기서는 아님"이다.
+export const WHY_NO_ACTION = '이 화면에서 쓸 수 없음';
