@@ -4,6 +4,7 @@ import { estimateRows, estimateCsv } from '../io/estimate.js';
 import { downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
+import { POPUP_BLOCKED } from './messages.js';
 import { esc } from '../util/html.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
 
@@ -50,7 +51,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
     if (name === 'print') {
       const ok = printHtml(`<h1>${esc(store.get().name)} 견적서</h1>${tableHtml(rows)}<p>합계 ${won(rows.total)}</p>
         <style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:6px;text-align:left}</style>`, { title: '견적서' });
-      if (!ok) toast('팝업이 차단되어 인쇄 창을 열 수 없습니다');
+      if (!ok) toast(POPUP_BLOCKED);
     }
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });

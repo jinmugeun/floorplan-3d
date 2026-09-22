@@ -74,3 +74,44 @@ export const CURVED_WALL_TITLE = '곡선벽은 아직 지원하지 않습니다'
 // 접근 가능한 이름(§15.14 · 감사 §2): 캔버스와 미니맵에 이름이 없었다.
 export const CANVAS_LABEL = '도면 캔버스';
 export const MINIMAP_LABEL = '미니맵 — 클릭하면 그 자리로 이동합니다';
+
+// ── §16.8 문구 단일화 2차 ────────────────────────────────────────────────────
+// 잠금 거부 한 벌(감사 §35): 같은 사실을 네 가지로 말하던 자리다. 주체(제품/덕트)와
+// 막힌 동작(편집/삭제/이동)만 다르고 말투는 하나다.
+export const LOCKED_ITEM_EDIT = '잠긴 제품은 편집할 수 없습니다';
+export const LOCKED_DUCT_EDIT = '잠긴 덕트는 편집할 수 없습니다';
+export const LOCKED_DUCT_DELETE = '잠긴 덕트는 삭제할 수 없습니다';
+export const LOCKED_DUCT_MOVE = '잠긴 덕트는 움직일 수 없습니다';
+
+// 복사·배열(감사 §37).
+export const COPIED = '복사했습니다';
+export const COPIED_N = n => `${n}개 복사했습니다`;
+export const ARRAY_TOO_MANY = max => `배치 수가 너무 많습니다(최대 ${max})`;
+export const ARRAY_MULTI_WARN = '여러 개를 고르면 사본이 경로점마다 같은 자리에 겹칩니다';
+
+// 파일·프로젝트(감사 §37).
+export const LOADED = '불러왔습니다';
+export const RESTORED = '이어서 작업합니다';
+export const JSON_EXPORTED = 'JSON을 내보냈습니다';
+export const TEMPLATE_SAVED = name => `템플릿 "${name}"을 저장했습니다`;
+export const TEMPLATE_SAVE_FAIL = '템플릿을 저장하지 못했습니다(저장 공간 부족)';
+
+// 제품·재질 교체와 도구 피드백(감사 §37).
+export const REPLACE_NONE = '교체할 제품이 없습니다';
+export const REPLACE_DONE = n => `제품 ${n}개를 교체했습니다`;
+export const MATERIAL_REPLACED = '재질을 교체했습니다';
+export const STRUCTURES_SHOWN = '"건축/자재" 보기를 다시 켰습니다';
+export const PLAN_LOCKED = '현재 도면 잠금 상태입니다';
+export const SPLIT_REGIONS_RESET = '벽을 나누면 마감재 영역은 초기화됩니다';
+export const OPENING_NEEDS_WALL = '개구부는 벽 위에만 놓입니다';
+
+// 설정·산출물(감사 §37).
+export const KEYS_RESET = '단축키를 초기화했습니다';
+export const KEYS_LOADED = '단축키를 불러왔습니다';
+export const KEY_TAKEN = (label, owner) => `[${label}]은 이미 "${owner}"이(가) 쓰고 있습니다`;
+export const POPUP_BLOCKED = '팝업이 차단되어 인쇄 창을 열 수 없습니다';
+export const SHOT_SAVED = '갤러리에 저장했습니다';
+export const GALLERY_LOAD_FAIL = '갤러리를 불러오지 못했습니다';
+export const GALLERY_DELETE_FAIL = '삭제하지 못했습니다';
+export const SPEC_IMAGES_FAIL = n => `도면 이미지 ${n}장을 만들지 못했습니다`;
+export const SPEC_FAIL = msg => `시방서를 만들지 못했습니다: ${msg}`;

@@ -4,7 +4,7 @@ import { openGalleryDialog } from '../ui/galleryDialog.js';
 import { openEstimateDialog } from '../ui/estimateDialog.js';
 import { openSpecDialog } from '../ui/specDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
-import { savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE } from '../ui/messages.js';
+import { savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, SHOT_SAVED } from '../ui/messages.js';
 
 // 저장 표시 한 곳(§14.10 → §15.7). 수동 저장도 시각을 갖는다("파일로 저장했습니다"만 적혀 시각이
 // 사라진 것이 감사 §18이다). 문구는 messages.js에서 온다.
@@ -41,7 +41,7 @@ export function createTopbar({ store, ui, shell, menu, view3d, actions = {} }) {
     { label: '나가기', onSelect: () => actions.exit?.() },
   ];
 
-  on('btnRender', () => openRenderDialog({ store, view3d, onSaved: () => shell.toast('갤러리에 저장했습니다') }));
+  on('btnRender', () => openRenderDialog({ store, view3d, onSaved: () => shell.toast(SHOT_SAVED) }));
   on('btnGallery', () => openGalleryDialog({}));
   on('btnEstimate', () => openEstimateDialog({ store }));
   on('btnSpec', () => openSpecDialog({ store, ui, view3d }));

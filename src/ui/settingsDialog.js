@@ -1,5 +1,6 @@
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
+import { KEY_TAKEN, KEYS_RESET, KEYS_LOADED } from './messages.js';
 import { downloadText } from '../io/file.js';
 import { setTable } from './keymap.js';
 import { loadOverrides, saveOverrides, effectiveKeymap, buildTable, exportJson, importJson, reset, keyLabel, conflictAction, labelOf } from './keyBindings.js';
@@ -62,7 +63,7 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
     const label = keyLabel(ev);
     const km = effectiveKeymap();
     const clash = conflictAction(km, label, waiting);
-    if (clash) { toast(`[${label}]은 이미 "${labelOf(clash)}"이(가) 쓰고 있습니다`); stopWaiting(); return; }
+    if (clash) { toast(KEY_TAKEN(label, labelOf(clash))); stopWaiting(); return; }
     // 삭제(Delete/Backspace)처럼 키가 두 개 이상인 동작도 여기서 배열 전체가 [label] 하나로 바뀐다(추가가 아니라 교체).
     saveOverrides({ ...loadOverrides(), [waiting]: [label] });
     setTable(buildTable(effectiveKeymap()));
@@ -99,14 +100,14 @@ export function openSettingsDialog({ store, tab = 'general', onClose = () => {} 
     const name = ev.target.name;
     if (name === 'replayOnboarding') { close(); openOnboarding({ store }); return; }
     if (name === 'keyExport') { downloadText('kvp-keymap.json', exportJson()); return; }
-    if (name === 'keyReset') { reset(); setTable(buildTable(effectiveKeymap())); renderKeys(); toast('단축키를 초기화했습니다'); return; }
+    if (name === 'keyReset') { reset(); setTable(buildTable(effectiveKeymap())); renderKeys(); toast(KEYS_RESET); return; }
     if (name === 'keyImport') {
       const input = document.createElement('input');
       input.type = 'file'; input.accept = '.json,application/json';
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) return;
-        try { importJson(await file.text()); setTable(buildTable(effectiveKeymap())); renderKeys(); toast('단축키를 불러왔습니다'); }
+        try { importJson(await file.text()); setTable(buildTable(effectiveKeymap())); renderKeys(); toast(KEYS_LOADED); }
         catch (e) { toast(e.message); }
       };
       input.click();

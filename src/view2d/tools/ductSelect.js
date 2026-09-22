@@ -6,6 +6,7 @@ import { lerp } from '../../geom/vec.js';
 import { ductById, moveDuctPoint, translateDuct, connectDuct, disconnectDuct, deleteDuctSelection } from '../../state/ductOps.js';
 import { ductMenuItems } from '../../ui/ductMenu.js';
 import { drawDuctSelection, ductVisible } from '../ducts2d.js';
+import { LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE } from '../../ui/messages.js';
 
 // Delete 키의 덕트 규칙(판정은 state/ductOps.js의 deleteDuctSelection에 있다 — 아키텍처 §11.3·§9).
 // main.js의 deleteSelection과 ui/ductPanel.js의 삭제 버튼도 그 판정 함수를 부른다: 이 함수는
@@ -17,7 +18,7 @@ export function deleteSelectedDuct({ store, ui, toast = () => {} }) {
   if (s?.type !== 'duct') return false;
   const r = deleteDuctSelection(store, s);
   if (r.missing) { ui.set({ selection: null }); return true; }
-  if (r.locked) { toast('잠긴 덕트는 삭제할 수 없습니다'); return true; }
+  if (r.locked) { toast(LOCKED_DUCT_DELETE); return true; }
   if (r.deleted === 'point') { ui.set({ selection: { type: 'duct', id: s.id, segment: null, vertex: null } }); return true; }
   ui.set({ selection: null });   // r.deleted === 'duct'
   return true;
@@ -38,7 +39,7 @@ export function createDuctSelect({ store, ui, toast = () => {} }) {
     const d = ductById(floor(), hit.ductId);
     ui.set({ selection: { type: 'duct', id: hit.ductId, segment: hit.segment ?? null, vertex: hit.vertex ?? null } });
     if (!d) return true;
-    if (d.locked) { toast('잠긴 덕트는 움직일 수 없습니다'); return true; }
+    if (d.locked) { toast(LOCKED_DUCT_MOVE); return true; }
     drag = {
       kind: hit.vertex != null ? 'vertex' : 'duct', id: hit.ductId, index: hit.vertex ?? hit.segment,
       startP: p, base: d.points.map(q => [...q]), applied: [0, 0], moved: false,

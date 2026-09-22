@@ -41,7 +41,7 @@ import { createProjectActions } from './app/projectActions.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
 import { stickyTools } from './ui/prefs.js';
-import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT } from './ui/messages.js';
+import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED } from './ui/messages.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -60,7 +60,7 @@ const itemActions = {
   ids: selectedItemIds,
   mirror: axis => mirrorItems(store, selectedItemIds(), axis),
   replace: () => { library.setMode('replace', { itemIds: selectedItemIds() }); shell.showPanel('products'); },
-  copy: () => { ui.set({ clipboard: itemsOf(store.get(), selectedItemIds()).map(i => structuredClone(i)) }); shell.toast('복사했습니다'); },
+  copy: () => { ui.set({ clipboard: itemsOf(store.get(), selectedItemIds()).map(i => structuredClone(i)) }); shell.toast(COPIED); },
   canPaste: () => (ui.get().clipboard?.length ?? 0) > 0,
   // 붙여넣을 것이 없으면 선택도 건드리지 않고 알리지도 않는다. 복사에는 문구가 있었는데
   // 붙여넣기에는 없어 "먹었나?" 싶었다(§15.14 · 감사 §30).
@@ -81,7 +81,7 @@ const itemActions = {
   },
   arrayCopy: kind => {
     const ids = selectedItemIds(); if (!ids.length) return;
-    openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(`${made.length}개 복사했습니다`); } });
+    openArrayDialog(kind, { onApply: params => { const made = arrayCopy(store, ids, kind, params); if (made.length) shell.toast(COPIED_N(made.length)); } });
   },
   pathArray: () => arrange.pathArray(selectedItemIds()),
 };
@@ -95,9 +95,9 @@ view3d.controls.addEventListener('change', () => minimap.requestRender()); // 3D
 // 교체 대상이 그 사이 지워졌을 수 있다: 실제로 바꾼 개수를 세어 토스트를 띄운다.
 function replaceProductOf(itemIds, product) {
   const live = itemsOf(store.get(), itemIds ?? []).map(i => i.id);
-  if (!live.length) { shell.toast('교체할 제품이 없습니다'); return; }
+  if (!live.length) { shell.toast(REPLACE_NONE); return; }
   replaceProduct(store, live, product);
-  shell.toast(`제품 ${live.length}개를 교체했습니다`);
+  shell.toast(REPLACE_DONE(live.length));
 }
 // onDragEnd는 라이브러리 타일(드래그 소스)에서만 온다 — dragend는 캔버스에서 일어나지 않으므로
 // 캔버스 위에서 [Esc]로 취소한 드래그를 되돌릴 수 있는 유일한 경로다(§14.11).
@@ -107,7 +107,7 @@ const materials = createMaterialPanel(shell.els.materials, {
   onPick: (m, { mode, target } = {}) => {
     if (mode !== 'replace' || !target) return;                     // 배치 모드는 패널이 ui.matPick을 이미 켰다
     applyMaterial(store, target, { id: m.id, offset: [0, 0], angle: 0 });
-    shell.toast('재질을 교체했습니다');
+    shell.toast(MATERIAL_REPLACED);
   },
 });
 surfaceActions.replaceMaterial = target => { materials.setMode('replace', { target }); shell.showPanel('materials'); };
@@ -149,12 +149,12 @@ let structKey = null;
 const structTool = kind => () => {
   const key = structOptsKey(store.get());
   if (key !== structKey) { structKey = key; for (const k of Object.keys(structOpts)) delete structOpts[k]; }
-  if (ensureStructuresVisible(store)) shell.toast('"건축/자재" 보기를 다시 켰습니다'); // 꺼져 있으면 놓아도 보이지 않는다(M-9)
+  if (ensureStructuresVisible(store)) shell.toast(STRUCTURES_SHOWN); // 꺼져 있으면 놓아도 보이지 않는다(M-9)
   return createStructTool({ store, ui, view, kind, opts: (structOpts[kind] ??= structDefaults(kind, activeFloor(store.get()).height)), onDone: () => setTool('select'), onPlaced: stickyDone, toast: shell.toast });
 };
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
-  select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast('현재 도면 잠금 상태입니다') }),
+  select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast(PLAN_LOCKED) }),
   room: () => createRoomTool({ store, opts: toolOpts.room, onDone: stickyDone }),
   wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: stickyDone }),
   delete: createDeleteTool,

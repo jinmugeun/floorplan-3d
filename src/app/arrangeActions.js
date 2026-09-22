@@ -7,6 +7,7 @@ import { MAX_PLACEMENTS, pathPlacementCount } from '../geom/arrange.js';
 import { openArrayDialog, MIN_SPACING, MAX_COUNT } from '../ui/itemDialogs.js';
 import { PATH_2D_HINT, PATH_FP_HINT } from '../ui/itemMenu.js';
 import { createPathArrayTool } from '../view2d/tools/pathArrayTool.js';
+import { ARRAY_MULTI_WARN, ARRAY_TOO_MANY, COPIED_N } from '../ui/messages.js';
 
 export const PATH_TOOL = 'pathArray';
 export { MAX_PLACEMENTS, MIN_SPACING };
@@ -51,18 +52,18 @@ export function createArrangeActions({ store, ui, view, toast = () => {}, setToo
     const found = itemsOf(store.get(), target);
     // 간격 기본값은 "선택 순서의 첫 아이템"이다(itemsOf는 도면 배열 순서로 돌려준다 — L-4).
     const first = found.find(it => it.id === target[0]) ?? found[0] ?? null;
-    if (target.length > 1) toast('여러 개를 고르면 사본이 경로점마다 같은 자리에 겹칩니다');
+    if (target.length > 1) toast(ARRAY_MULTI_WARN);
     openArrayDialog('path', {
       length: spacingDefault(first),
       onApply: raw => {
         const params = { ...clampParams(raw), points };
         // 간격으로 채우는 모드에는 개수 입력이 없으니 놓을 수를 먼저 세고, 상한을 넘으면 만들지 않는다.
         if (pathPlacementCount(points, params) * found.length > MAX_PLACEMENTS) {
-          toast(`배치 수가 너무 많습니다(최대 ${MAX_PLACEMENTS})`);
+          toast(ARRAY_TOO_MANY(MAX_PLACEMENTS));
           return;
         }
         const made = arrayCopy(store, target, 'path', params);
-        if (made.length) toast(`${made.length}개 복사했습니다`);
+        if (made.length) toast(COPIED_N(made.length));
       },
     });
   }

@@ -4,6 +4,7 @@
 import { activeFloor, deg360 } from '../state/schema.js';
 import { updateWall, updateRoom, setRoomWallThickness, updateFloor, setWallLength, setRoomWallHeight, updateWallProps, updateItem, resizeItem } from '../state/floorOps.js';
 import { toast } from './toast.js';
+import { LOCKED_ITEM_EDIT } from './messages.js';
 import { wallLength } from '../geom/walls.js';
 
 // "크기 비율 유지"는 체크박스를 읽는 쪽(propsPanel의 렌더·change)과 값을 쓰는 쪽(applyNumber)이
@@ -35,7 +36,7 @@ export function applyNumber(store, sel, name, v) {
   }
   if (sel.type === 'item') {
     const it = f.items.find(x => x.id === sel.id); if (!it) return false;
-    if (it.locked) { toast('잠긴 제품은 편집할 수 없습니다'); return false; }              // 잠금 = 이동·회전·크기 불가
+    if (it.locked) { toast(LOCKED_ITEM_EDIT); return false; }              // 잠금 = 이동·회전·크기 불가
     if ((name === 'posX' || name === 'posY') && it.attach === 'wall' && it.wallId) return false; // 벽 부착 제품의 pos는 (wallId, t)의 결과다
     if (name === 'w' || name === 'd' || name === 'h') {
       const i = { w: 0, d: 1, h: 2 }[name];

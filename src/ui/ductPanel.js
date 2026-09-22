@@ -10,7 +10,7 @@ import { productById } from '../products/catalog.js';
 import { fmtLen } from '../util/units.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
-import { DAMPER_ADDED, DAMPER_DELETED } from './messages.js';
+import { DAMPER_ADDED, DAMPER_DELETED, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE } from './messages.js';
 
 const segIndex = sel => (Number.isInteger(sel?.segment) ? sel.segment : 0);
 
@@ -72,7 +72,7 @@ export function applyDuctField(store, sel, el) {
   // §16.1: 어느 갈래든 값이 지금과 같으면 dispatch하지 않는다(빈 undo 단계 금지 — 감사 §41).
   if (name === 'ductLocked') { if (!!d.locked !== el.checked) updateDuct(store, d.id, { locked: el.checked }); return true; }
   if (name === 'ductHidden') { if (!!d.hidden !== el.checked) updateDuct(store, d.id, { hidden: el.checked }); return true; }
-  if (d.locked) { toast('잠긴 덕트는 편집할 수 없습니다'); return true; }
+  if (d.locked) { toast(LOCKED_DUCT_EDIT); return true; }
   if (name === 'ductKind') { const kind = el.value === 'supply' ? 'supply' : 'exhaust'; if (d.kind !== kind) updateDuct(store, d.id, { kind }); return true; }
   if (name === 'ductSystem') { const system = String(el.value).trim(); if (d.system !== system) updateDuct(store, d.id, { system }); return true; }
   // 댐퍼 크기(명세 DT-06). 길이 입력이 아니라 순수 mm 숫자 칸이다(목록 안에 들어가 좁다).
@@ -104,12 +104,12 @@ export function ductPanelClick(store, ui, sel, el) {
   // 패널엔 꼭짓점 선택 개념이 없지만 판정 함수는 sel 그대로 받으므로 여기서도 안전하다.
   if (name === 'ductDelete') {
     const r = deleteDuctSelection(store, sel);
-    if (r.locked) toast('잠긴 덕트는 삭제할 수 없습니다');
+    if (r.locked) toast(LOCKED_DUCT_DELETE);
     else if (r.deleted === 'point') ui.set({ selection: { type: 'duct', id: d.id, segment: null, vertex: null } });
     else if (r.deleted === 'duct') ui.set({ selection: null });
     return true;
   }
-  if (d.locked) { toast('잠긴 덕트는 편집할 수 없습니다'); return true; }
+  if (d.locked) { toast(LOCKED_DUCT_EDIT); return true; }
   const i = Math.min(segIndex(sel), d.segments.length - 1);
   if (name === 'segAll') { const s = d.segments[i]; setAllSegments(store, d.id, { w: s.w, h: s.h, z: s.z }); return true; }
   // 새 댐퍼는 고른 구간 가운데에, 그 구간의 단면 크기로 붙는다(DT-06).

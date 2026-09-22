@@ -5,6 +5,7 @@ import { updateItem, updateRoom, resizeItem } from '../state/floorOps.js';
 import { field, num, numValue, lenField, readLen, withUnit } from './fieldUtils.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
+import { LOCKED_ITEM_EDIT } from './messages.js';
 import { EQUIP_TYPE_LABELS, APPLIANCE_KINDS, HEAT_KINDS, FLOW_KINDS, DIFFUSER_SYMBOLS, VENTCAP_DIAS, EQUIP_RANGE, equipType, isEquip, equipLabel } from '../vent/equipment.js';
 import { ductLinksOf } from '../state/ductOps.js';
 import { roomAt } from '../vent/airflow.js';
@@ -114,7 +115,7 @@ export function applyVentField(store, ui, sel, el) {
   if (sel?.type !== 'item') return true;
   const it = activeFloor(store.get()).items.find(x => x.id === sel.id);
   if (!isEquip(it)) return true;
-  if (it.locked) { toast('잠긴 제품은 편집할 수 없습니다'); return true; }
+  if (it.locked) { toast(LOCKED_ITEM_EDIT); return true; }
   const units = store.get().units ?? 'mm';
   const readNum = () => (el.dataset.len ? readLen(el, units) : numValue(el));
   const props = { ...it.props };

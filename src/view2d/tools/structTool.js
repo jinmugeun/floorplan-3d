@@ -8,6 +8,7 @@ import { addItem } from '../../state/floorOps.js';
 import { snapItemPos, nearestWallPlacement, WALL_ATTACH_DIST } from '../../geom/items.js';
 import { productById } from '../../products/catalog.js';
 import { drawGhost } from './placeTool.js';
+import { OPENING_NEEDS_WALL } from '../../ui/messages.js';
 
 export const STRUCT_KINDS = ['column-square', 'column-round', 'opening'];
 export const STRUCT_PRODUCT = { 'column-square': 'column-square', 'column-round': 'column-round', opening: 'opening-pass' };
@@ -84,7 +85,7 @@ export function createStructTool({ store, ui, view, kind = 'column-square', opts
     onPointerDown(p, ev) {
       ghost = ghostAt(p, !!ev?.ctrlKey);
       // 붙일 벽이 없으면 놓지 않는다. 조용히 버리면 "왜 안 놓이지"로만 보이므로 토스트로 알린다(M-8).
-      if (k === 'opening' && !ghost.item.wallId) { toast('개구부는 벽 위에만 놓입니다'); return; }
+      if (k === 'opening' && !ghost.item.wallId) { toast(OPENING_NEEDS_WALL); return; }
       // pos는 정수 mm로 반올림해 저장한다(placeTool과 같은 규칙). 사선 벽의 개구부는 중심이 벽 중심선에서 최대 0.7 mm 벗어나지만 구멍 자체는 t로 계산되므로 어긋나지 않는다.
       const item = { ...ghost.item, pos: [Math.round(ghost.item.pos[0]), Math.round(ghost.item.pos[1])] };
       addItem(store, item);

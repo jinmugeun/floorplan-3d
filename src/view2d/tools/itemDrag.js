@@ -4,6 +4,7 @@ import { sub, add, dist } from '../../geom/vec.js';
 import { pointInItem, itemAABB, snapItemPos, wallGaps, nearestWallPlacement, isEmbed, WALL_ATTACH_DIST, scaleFromHandle, rotateToPoint } from '../../geom/items.js';
 import { itemVisible, itemHandles, drawOrder, HANDLE_HIT_PX } from '../items2d.js';
 import { collidingFor } from '../../geom/collide.js';
+import { COLLISION_ITEM } from '../../ui/messages.js';
 import { LABEL_BG } from '../ducts2d.js';   // 라벨 상자 색은 한 곳에서 온다(§15.14 — 라벨 패스와 같은 값)
 
 // 아이템 드래그 한 묶음. selectTool은 "무엇을 잡았나"만 판단하고 나머지를 여기로 넘긴다.
@@ -97,7 +98,8 @@ export function createItemDragger({ store, ui, view, toast = () => {} }) {
     const fl = flags();
     if (drag.warned || fl.collision === false || fl.collisionLive === false) return;
     const bad = collidingFor(floor().items, drag.ids, drag.preview);
-    if (drag.ids.some(id => bad.has(id))) { drag.warned = true; toast('충돌이 발생중입니다'); }
+    // 문구는 속성 패널의 충돌 줄과 같다(§16.8 · 감사 §36): 같은 사건을 두 말로 알리지 않는다.
+    if (drag.ids.some(id => bad.has(id))) { drag.warned = true; toast(COLLISION_ITEM); }
   }
 
   function apply(p, ev) {

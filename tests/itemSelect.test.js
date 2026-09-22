@@ -6,6 +6,7 @@ import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
+import { COLLISION_ITEM } from '../src/ui/messages.js';
 import { createItemDragger } from '../src/view2d/tools/itemDrag.js';
 
 const fakeView = { camera: { scale: 0.1 }, fit: () => {} };
@@ -229,7 +230,7 @@ test('드래그로 겹치면 경고를 한 번만 낸다', () => {
   t.onPointerMove([1200, 1000], { ctrlKey: true });
   t.onPointerMove([1100, 1000], { ctrlKey: true });
   t.onPointerUp([1100, 1000], {});
-  expect(seen).toEqual(['충돌이 발생중입니다']);
+  expect(seen).toEqual([COLLISION_ITEM]);   // §16.8: 충돌은 속성 패널과 같은 문구로 알린다
 });
 
 test('벽 부착 제품은 회전 핸들이 없고 크기 핸들로 늘려도 벽에 붙어 있다', () => {
@@ -297,7 +298,7 @@ test('실시간 충돌 감지를 끄면 드래그 중 경고 토스트가 없다
   a.t.onPointerDown([1100, 1000], {});
   a.t.onPointerMove([1050, 1000], { ctrlKey: true });
   a.t.onPointerUp([1050, 1000], {});
-  expect(seen).toEqual(['충돌이 발생중입니다']);
+  expect(seen).toEqual([COLLISION_ITEM]);   // §16.8: 충돌은 속성 패널과 같은 문구로 알린다
 });
 
 // §15.2(감사 §29): 이동마다 dispatch하면 511개 도면에서 480 ms/프레임이 된다.

@@ -1,6 +1,10 @@
 // §14.8: 같은 문구가 두 곳에서 갈라지지 않게 상수로 모은다(계획 4의 CONFIRM_ROOM_DELETE와 같은 자리).
 import { test, expect } from 'vitest';
 import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE, DAMPER_ADDED, DAMPER_DELETED, PASTE_RESULT, CURVED_WALL_TITLE, CANVAS_LABEL, MINIMAP_LABEL } from '../src/ui/messages.js';
+import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE, COPIED, COPIED_N, ARRAY_TOO_MANY, ARRAY_MULTI_WARN, LOADED, RESTORED, JSON_EXPORTED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, SPLIT_REGIONS_RESET, OPENING_NEEDS_WALL, KEYS_RESET, KEYS_LOADED, KEY_TAKEN, POPUP_BLOCKED, SHOT_SAVED, GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, SPEC_IMAGES_FAIL, SPEC_FAIL } from '../src/ui/messages.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 test('§14가 글자까지 정한 문구는 그대로다', () => {
   expect(COLLISION_BANNER(3)).toBe('충돌 3건 — 빨간 테두리 제품을 옮겨 주세요');
@@ -51,4 +55,48 @@ test('피드백·이름 문구는 한 곳에서 온다(§15.14)', () => {
   expect(CURVED_WALL_TITLE).toBe('곡선벽은 아직 지원하지 않습니다');
   expect(CANVAS_LABEL).toBe('도면 캔버스');
   expect(MINIMAP_LABEL).toBe('미니맵 — 클릭하면 그 자리로 이동합니다');
+});
+
+test('잠금 거부는 한 벌이다(§16.8 · 감사 §35)', () => {
+  expect(LOCKED_ITEM_EDIT).toBe('잠긴 제품은 편집할 수 없습니다');
+  expect(LOCKED_DUCT_EDIT).toBe('잠긴 덕트는 편집할 수 없습니다');
+  expect(LOCKED_DUCT_DELETE).toBe('잠긴 덕트는 삭제할 수 없습니다');
+  expect(LOCKED_DUCT_MOVE).toBe('잠긴 덕트는 움직일 수 없습니다');
+});
+
+test('§16.8이 모은 나머지 문구도 한 곳에서 온다', () => {
+  expect(COPIED).toBe('복사했습니다');
+  expect(COPIED_N(4)).toBe('4개 복사했습니다');
+  expect(ARRAY_TOO_MANY(300)).toBe('배치 수가 너무 많습니다(최대 300)');
+  expect(LOADED).toBe('불러왔습니다');
+  expect(TEMPLATE_SAVED('내 방')).toBe('템플릿 "내 방"을 저장했습니다');
+  expect(REPLACE_DONE(3)).toBe('제품 3개를 교체했습니다');
+  expect(KEY_TAKEN('Ctrl+Z', '실행 취소')).toBe('[Ctrl+Z]은 이미 "실행 취소"이(가) 쓰고 있습니다');
+  expect(KEYS_LOADED).toBe('단축키를 불러왔습니다');
+  expect(SPEC_IMAGES_FAIL(2)).toBe('도면 이미지 2장을 만들지 못했습니다');
+  expect(SPEC_FAIL('메모리 부족')).toBe('시방서를 만들지 못했습니다: 메모리 부족');
+  expect(POPUP_BLOCKED).toBe('팝업이 차단되어 인쇄 창을 열 수 없습니다');
+});
+
+// §16.8: 사용자에게 보이는 문구는 messages.js 한 곳에서 온다. 사람 눈으로는 30개가 지나갔으므로
+// (감사 §37) 정적으로 센다 — toast( 호출의 첫 인자에 한국어 리터럴이 있으면 실패다.
+// 그물은 문자열 리터럴 세 종류(홑·쌍따옴표·백틱)를 모두 덮고, 줄 주석은 먼저 지운다.
+const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
+const walkJs = dir => readdirSync(dir, { withFileTypes: true })
+  .flatMap(e => (e.isDirectory() ? walkJs(join(dir, e.name)) : e.name.endsWith('.js') ? [join(dir, e.name)] : []));
+
+test('src/의 toast( 인자에 한국어 리터럴이 없다(§16.8)', () => {
+  const files = walkJs(SRC_DIR).filter(f => !f.endsWith('messages.js'));
+  expect(files.length).toBeGreaterThan(50);            // 목록을 못 읽고 조용히 통과하지 않게
+  const bad = [];
+  for (const f of files) {
+    const rel = f.slice(SRC_DIR.length + 1).replace(/\\/g, '/');
+    readFileSync(f, 'utf8').split('\n').forEach((raw, i) => {
+      const line = raw.replace(/\/\/.*$/, '');         // 줄 주석은 문구가 아니다
+      for (const m of line.matchAll(/\btoast\(\s*([^)]*)/g)) {
+        if (/[가-힣]/.test(m[1])) bad.push(`${rel}:${i + 1} ${m[1].trim()}`);
+      }
+    });
+  }
+  expect(bad).toEqual([]);
 });

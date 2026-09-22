@@ -11,6 +11,7 @@ import { openBackgroundDialog } from '../ui/backgroundDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
 import { promptDialog } from '../ui/promptDialog.js';
 import { projectIsEmpty, confirmLeave } from './topbar.js';
+import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED } from '../ui/messages.js';
 
 export function createProjectActions({ store, ui, view, toast = () => {}, restored = null, isDirty = () => true, markSaved = () => {}, saveNow = () => {} }) {
   // 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
@@ -21,7 +22,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       onClose,
       // 복원은 되돌릴 단계가 아니고, 복원한 상태는 자동 저장본과 같으므로 "자동 저장됨"이 사실이다
       // (§15.7). 다만 표시 시각은 자동 저장 시각이 아니라 복원 시각이다 — 저장본에 시각이 없다.
-      onRestore: () => { if (restore) { store.replace(restore, { record: false }); view.fit(); markSaved('auto'); toast('이어서 작업합니다'); } },
+      onRestore: () => { if (restore) { store.replace(restore, { record: false }); view.fit(); markSaved('auto'); toast(RESTORED); } },
       onEmpty: () => {},
       onUpload: () => openBackgroundDialog({ store }),
       onSample: () => { loadSample(store); view.fit(); },
@@ -39,7 +40,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
     });
     if (name === null) return;
     const saved = saveTemplate(name, store.get());
-    toast(saved ? `템플릿 "${saved.name}"을 저장했습니다` : '템플릿을 저장하지 못했습니다(저장 공간 부족)');
+    toast(saved ? TEMPLATE_SAVED(saved.name) : TEMPLATE_SAVE_FAIL);
   }
 
   const actions = {
@@ -54,7 +55,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       showStart({ restore: null });      // 방금 비웠으므로 "이어서 작업" 카드는 뜻이 없다
     },
     saveAsTemplate,
-    exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); toast('JSON을 내보냈습니다'); },
+    exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); toast(JSON_EXPORTED); },
     // 시작 화면은 샘플·템플릿으로 프로젝트를 갈아 끼운다: 작업 중이면 먼저 묻는다(새로만들기와 같은 규칙).
     exit: async () => { if (await confirmLeave(store.get(), { saveNow, dirty: isDirty() })) showStart({ restore: null }); },
   };

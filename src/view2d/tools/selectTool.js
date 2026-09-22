@@ -12,7 +12,7 @@ import { LABEL_BG } from '../ducts2d.js';
 import { itemMenuItems } from '../../ui/itemMenu.js';
 import { wallMenuItems, roomMenuItems } from '../../ui/surfaceMenu.js';
 import { pickAt } from './pick.js';
-import { MATERIAL_BOTH_SIDES } from '../../ui/messages.js';
+import { MATERIAL_BOTH_SIDES, SPLIT_REGIONS_RESET } from '../../ui/messages.js';
 
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
@@ -55,7 +55,7 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
         const w = hitWall(f.walls, p, px(6));
         if (w) {
           // 벽을 나누면 u 좌표의 뜻이 달라져 영역을 이을 수 없다: 지워진다는 것을 알린다.
-          if ((w.regions?.in?.length ?? 0) + (w.regions?.out?.length ?? 0) > 0) toast('벽을 나누면 마감재 영역은 초기화됩니다');
+          if ((w.regions?.in?.length ?? 0) + (w.regions?.out?.length ?? 0) > 0) toast(SPLIT_REGIONS_RESET);
           setWalls(store, splitWall(f.walls, w.id, p));
         }
         ui.set({ splitWall: false }); return;

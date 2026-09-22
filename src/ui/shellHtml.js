@@ -49,7 +49,8 @@ export function shellHtml({ name = '' } = {}) {
         <p class="hint">사진이나 스캔을 올리고 모서리를 찍어 펴고, 두 점으로 축척을 잡습니다.</p>
       </section>
       <section data-panel="airflow" hidden><h3>풍량 집계</h3><div id="airflow"></div></section>
-      <section data-panel="layers" hidden><h3>리소스 관리</h3><div id="layers"></div></section>
+      <!-- 레일 라벨과 패널 제목은 같은 이름이다(§16.8 · 감사 §33): 두 이름은 "다른 화면"으로 읽혔다. -->
+      <section data-panel="layers" hidden><h3>레이어</h3><div id="layers"></div></section>
     </aside>
     <div id="panelSplitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="작업 패널 폭 조절"></div>
     <main id="canvasWrap">
@@ -76,7 +77,8 @@ export function shellHtml({ name = '' } = {}) {
            1100 px에서는 1단계 + 꼬리 라벨 아이콘화로도 133 px이 남아 sticky 꼬리가 단위 묶음을
            94 px 덮었다(리뷰 I-1) — 꼬리가 붙기 전에 2·3단계를 접는 것이 "겹침 0"의 조건이다. -->
       <div class="seg" id="segLock" data-overflow="2"><button id="btnLock" aria-pressed="false">도면 잠금</button></div>
-      <div class="seg" id="segCapture" data-overflow="1"><button data-action="capture">스크린 캡쳐</button></div>
+      <!-- 상단 바와 같은 동작(data-action="capture")이므로 같은 표기다(§16.8 · 감사 §34). -->
+      <div class="seg" id="segCapture" data-overflow="1"><button data-action="capture" title="화면 캡처">캡처</button></div>
       <div class="seg" id="segPreset" data-overflow="1"><label class="muted">2D 투영 <select id="viewPreset" aria-label="2D 투영 뷰"><option value="">—</option><option value="front">정면</option><option value="back">배면</option><option value="left">좌측</option><option value="right">우측</option><option value="top">평면</option><option value="bottom">저면</option></select></label></div>
       <div class="seg" id="segGizmo" data-overflow="1"><button id="btnGizmoMode" aria-label="3D 기즈모 모드" aria-pressed="false" hidden>이동</button></div>
       <div class="seg" id="unitSeg" data-overflow="3"><button data-units="mm" class="on" aria-pressed="true">mm</button><button data-units="ftin" aria-pressed="false">ft·in</button></div>

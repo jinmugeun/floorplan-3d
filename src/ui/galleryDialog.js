@@ -3,6 +3,7 @@ import { listShots, deleteShot } from '../io/gallery.js';
 import { downloadDataUrl } from '../io/file.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
+import { GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL } from './messages.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
 
 let current = null;   // 열려 있는 인스턴스: 다시 열 때 DOM만 떼지 않고 트랩까지 해제한다(리뷰 Minor 1)
@@ -24,8 +25,8 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
     try { shots = await listShots(); }
     catch (e) {
       shots = [];
-      part('grid').innerHTML = `<p class="hint">갤러리를 불러오지 못했습니다: ${esc(e.message)}</p>`;
-      toast('갤러리를 불러오지 못했습니다');
+      part('grid').innerHTML = `<p class="hint">${GALLERY_LOAD_FAIL}: ${esc(e.message)}</p>`;
+      toast(GALLERY_LOAD_FAIL);
       return;
     }
     part('grid').innerHTML = shots.length ? shots.map(s => `<figure class="shot" data-shot="${esc(s.id)}">
@@ -51,7 +52,7 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
     if (ev.target.name === 'down') { downloadDataUrl(`${shot.name.replace(/[\/:*?"<>|]/g, '_')}.png`, shot.dataUrl); return; }
     if (ev.target.name === 'del') {
       try { await deleteShot(shot.id); await render(); }
-      catch { toast('삭제하지 못했습니다'); }
+      catch { toast(GALLERY_DELETE_FAIL); }
     }
   });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });

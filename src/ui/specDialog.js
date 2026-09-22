@@ -3,6 +3,7 @@ import { specHtml, SPEC_SECTIONS, PAPER } from '../io/specSheet.js';
 import { capture2D, downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
+import { POPUP_BLOCKED, SPEC_IMAGES_FAIL, SPEC_FAIL } from './messages.js';
 import { esc } from '../util/html.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
 
@@ -52,7 +53,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
         try { images[preset] = view3d.renderImage({ width: 1600, height: 900, preset }); } catch { failed += 1; }
       }
     }
-    if (failed) toast(`도면 이미지 ${failed}장을 만들지 못했습니다`);
+    if (failed) toast(SPEC_IMAGES_FAIL(failed));
     return images;
   }
 
@@ -71,7 +72,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
     busy = true;
     buttons.forEach(b => { b.disabled = true; });
     try { await fn(); }
-    catch (e) { part('msg').textContent = ''; toast(`시방서를 만들지 못했습니다: ${e.message}`); }
+    catch (e) { part('msg').textContent = ''; toast(SPEC_FAIL(e.message)); }
     finally { busy = false; buttons.forEach(b => { b.disabled = false; }); }
   }
 
@@ -84,7 +85,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
         const body = await html();
         if (!printHtml(body, { title: '시방서' })) {
           part('msg').textContent = '팝업이 막혀 인쇄할 수 없습니다. HTML 내려받기를 쓰세요.';
-          toast('팝업이 차단되어 인쇄 창을 열 수 없습니다');
+          toast(POPUP_BLOCKED);
         }
       });
     }
