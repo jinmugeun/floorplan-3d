@@ -14,6 +14,10 @@ const mm = v => Math.max(0, Number(v) || 0) / 1000;
 //   pos = target + r · dir,  dir = (−cosEl·sinAz, sinEl, cosEl·cosAz)
 // three의 lookAt이 up=(0,1,0)에서 만드는 축(z = dir, x = normalize(up × z), y = z × x)을
 // 닫힌 식으로 푼 것이다 — 고도 90°에서도 성립한다(평면 모드: dir=(0,1,0), up=(0,0,−1)).
+// 단 고도 90°는 **방위 0° 전제**다: 축퇴(dir ∥ up)에서 three는 lookAt의 보정(_z.z += 0.0001)으로
+// 방위와 무관하게 up=(0,0,−1)을 쓰지만 이 식은 up=(sin az, 0, −cos az)를 돌려준다. 평면 모드가
+// azimuth를 0으로 고정하므로(view3d.js의 frameScene) 지금은 닿지 않는다 — 그 전제를 바꾸려면
+// 여기도 같이 고쳐야 한다(최종 리뷰 Minor 7).
 function camAxes(el, az) {
   const ce = Math.cos(el), se = Math.sin(el), ca = Math.cos(az), sa = Math.sin(az);
   return { dir: [-ce * sa, se, ce * ca], right: [ca, 0, sa], up: [se * sa, ce, -se * ca] };

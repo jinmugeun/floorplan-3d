@@ -5,7 +5,7 @@ import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, uid, MAT_RANGE } from '../state/schema.js';
 import { regionsOf, setWallRegions } from '../state/materialOps.js';
 import { wallLength } from '../geom/walls.js';
-import { regionRowsHtml, scaleOf } from './materialEditorRows.js';
+import { regionRowsHtml, scaleOf, DEFAULT_TILE_SCALE } from './materialEditorRows.js';
 import { focusTrap } from './dialogBase.js';
 
 const SIDE_LABEL = { in: '내벽', out: '외벽' };
@@ -101,9 +101,14 @@ export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = t
   // 넣는다 — validateRegion도 이 값을 범위 안으로 받아들인다.
   function newRow(kind, { len: L, height: H }) {
     const lenR = Math.round(L);
+    // 타일 크기는 마감재 패널과 같은 300×300으로 열린다(§15.11 — 감사 §14의 "300 대 1000"):
+    // 재질 자신의 scale(MATERIALS[0] = 무광 화이트 페인트는 1000)이 아니라 이 기본값을 실어 주므로
+    // 같은 타일이 패널과 편집기에서 다른 크기로 보이지 않는다. 재질을 바꾸면 이 덮어쓰기는 버려지고
+    // 새 재질의 기본 scale을 따른다(아래 change 핸들러의 name === 'mat').
+    const mat = { id: MATERIALS[0].id, offset: [0, 0], angle: 0, scale: [...DEFAULT_TILE_SCALE] };
     return kind === 'band'
-      ? { id: uid('rg'), kind: 'band', u0: 0, u1: lenR, z0: 0, z1: Math.min(1200, H), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } }
-      : { id: uid('rg'), kind: 'rect', u0: 0, u1: Math.min(1000, lenR), z0: 0, z1: Math.min(1000, H), mat: { id: MATERIALS[0].id, offset: [0, 0], angle: 0 } };
+      ? { id: uid('rg'), kind: 'band', u0: 0, u1: lenR, z0: 0, z1: Math.min(1200, H), mat }
+      : { id: uid('rg'), kind: 'rect', u0: 0, u1: Math.min(1000, lenR), z0: 0, z1: Math.min(1000, H), mat };
   }
   const addRow = kind => {
     rows.push(newRow(kind, { len, height }));

@@ -23,7 +23,11 @@ export function chipsHtml(names, { active = null, all = ALL_LABEL } = {}) {
 export function wasChipFocused(chipBtn) {
   return !!chipBtn && document.activeElement === chipBtn;
 }
+// 카테고리 이름은 데이터라 선택자에 그대로 끼워 넣을 수 없다: 이름에 "나 \가 들어가면
+// querySelector가 던진다(최종 리뷰 Minor 13). 따옴표 안에서 위험한 두 글자만 escape한다
+// (CSS.escape는 jsdom에 없어 테스트로 지킬 수 없다).
+export const attrSelectorValue = v => String(v).replace(/["\\]/g, '\\$&');
 export function refocusChip(chipsEl, cat, hadFocus) {
   if (!hadFocus || !chipsEl) return;
-  chipsEl.querySelector(cat ? `[data-cat="${cat}"]` : '[data-cat-all]')?.focus();
+  chipsEl.querySelector(cat ? `[data-cat="${attrSelectorValue(cat)}"]` : '[data-cat-all]')?.focus();
 }

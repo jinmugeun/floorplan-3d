@@ -58,17 +58,18 @@ export function openOnboarding({ store = null, onDone = () => {} } = {}) {
   // preventDefault는 우리가 쓰는 키에만 건다(브라우저 새로고침·스페이스 버튼 활성화를 막지 않게).
   //
   // stopPropagation만으로는 부족해 stopImmediatePropagation까지 부른다: 전역 단축키(keymap.js)는
-  // document에 **버블** 단계로 붙지만, 같은 document의 **캡처** 단계에 이미 붙어 있는 다른
+  // window에 **버블** 단계로 붙어 stopPropagation으로 끊기지만, 같은 document의 **캡처** 단계에 이미 붙어 있는 다른
   // 리스너는 stopPropagation이 막지 못한다(같은 노드·같은 단계의 나머지 리스너까지 끊는 것은
   // stopImmediatePropagation뿐이다). 그 "나머지"가 우리 것을 덮어쓰지 않게 여기서 끊는다.
   // 그렇다고 다른 오버레이와 충돌하지는 않는다: document 캡처 keydown을 쓰는 다른 것은
-  // popover.js·contextMenu.js·confirmDialog.js·settingsDialog.js:82(단축키 재지정 대기) 네 개뿐이고
-  // 모두 **포인터로만** 열린다(팝오버 버튼 클릭·우클릭·삭제 확인·설정의 키 칸 클릭). 안내는 .modal
+  // popover.js · contextMenu.js · bottomBar.js(더보기 팝오버의 Esc) · dialogBase.js의
+  // openModal(confirm/prompt)과 focusTrap(대화상자·시작 화면) · settingsDialog.js의 단축키 재지정
+  // 대기뿐이고, 모두 **포인터로만** 열린다(팝오버 버튼 클릭·우클릭·삭제 확인·설정의 키 칸 클릭). 안내는 .modal
   // 백드롭(inset: 0, z-index: 50)으로 화면 전체를 덮는다 — 보기에는 반투명해도 포인터 입력은 그 백드롭이
-  // 받는다. 그래서 안내가 떠 있는 동안에는 그 넷이 열릴 수 없다 → 우리가 끊을 캡처 리스너가 애초에 없다.
-  // 반대 순서(먼저 열린 대화상자 위에 안내)는 설정의 "시작 안내 다시 보기"(settingsDialog.js:86)로
-  // 실제로 생기지만, 그 경로는 close()가 앞서 돌아 stopWaiting()으로 onBind를 먼저 해제하고 대화상자를
-  // 떼어낸다(settingsDialog.js:65) → 안내가 뜨는 순간 남아 있는 캡처 리스너가 없다.
+  // 받는다. 그래서 안내가 떠 있는 동안에는 그것들이 열릴 수 없다 → 우리가 끊을 캡처 리스너가 애초에 없다.
+  // 반대 순서(먼저 열린 대화상자 위에 안내)는 설정의 "시작 안내 다시 보기"로 실제로 생기지만, 그 경로는
+  // close()가 앞서 돌아 stopWaiting()으로 onBind를 해제하고 trap.destroy()로 focusTrap의 두 리스너를
+  // 거둔 뒤 대화상자를 떼어낸다 → 안내가 뜨는 순간 남아 있는 캡처 리스너가 없다.
   function onKey(ev) {
     if (ev.key === 'Tab') return;
     ev.stopPropagation();

@@ -60,3 +60,15 @@ test('refocusChip: 포커스가 없던(마우스) 활성화는 손대지 않는�
   expect(document.activeElement).toBe(document.body);
   wrap.remove();
 });
+
+// 최종 리뷰 Minor 13: 카테고리 이름을 선택자에 그대로 끼워 넣었다 — 이름에 "가 들어가면
+// querySelector가 던져 다시 그린 뒤의 포커스 복원이 화면 전체를 깨뜨린다.
+test('refocusChip: 이름에 따옴표가 있어도 선택자가 깨지지 않는다', () => {
+  const name = '소파 "특가"';
+  const wrap = document.createElement('div');
+  document.body.appendChild(wrap);
+  wrap.innerHTML = chipsHtml([name], { active: name });
+  expect(() => refocusChip(wrap, name, true)).not.toThrow();
+  expect(document.activeElement).toBe(wrap.querySelector('button[class="on"]'));
+  wrap.remove();
+});

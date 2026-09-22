@@ -193,14 +193,15 @@ describe('마감재 편집기', () => {
   });
 });
 
-// §13.3: 편집기도 영역(면 단위)마다 타일 크기를 정할 수 있다. 기본값은 그 행 재질의 scale이다.
+// §13.3: 편집기도 영역(면 단위)마다 타일 크기를 정할 수 있다. 새 행은 DEFAULT_TILE_SCALE(300)로
+// 열리고, 재질을 바꾸면 그 재질의 기본 scale을 따른다(아래 "타일 크기 기본값은 300이다" 테스트).
 test('영역 행마다 타일 크기 두 칸이 있고 값이 저장된다', () => {
   const a = setup();
   click(a.root, '[name="addBand"]');
   const row = a.q('[data-region="0"]');
   const first = row.querySelector('[name="mat"]').value;
   expect(row.querySelector('[name="scaleW"]')).not.toBeNull();
-  expect(Number(row.querySelector('[name="scaleW"]').value)).toBeGreaterThan(0);  // 기본값 = 그 재질의 scale
+  expect(Number(row.querySelector('[name="scaleW"]').value)).toBeGreaterThan(0);  // 기본값 = 300
   set(row.querySelector('[name="scaleW"]'), 250);
   set(a.q('[data-region="0"] [name="scaleH"]'), 9999);
   click(a.root, '[name="apply"]');
@@ -245,19 +246,33 @@ test('[취소]는 적용하지 않고 닫는다(열 때의 배정이 그대로 �
   expect(JSON.stringify(a.wall().regions ?? {})).toBe(before);
 });
 
+// 최종 리뷰 Minor 1: 카탈로그 44개 재질이 모두 자기 scale을 갖고 있어서 scaleOf의 세 번째 항
+// (DEFAULT_TILE_SCALE)에 닿지 않았고, 새 행은 MATERIALS[0](페인트, 1000)의 scale로 열려
+// 마감재 패널의 300과 어긋났다(감사 §14의 "300 대 1000"). 새 행이 기본값을 직접 싣는다.
 test('타일 크기 기본값은 300이다(마감재 패널과 같다)', async () => {
-  const { MATERIALS } = await import('../src/materials/catalog.js');
-  const plain = MATERIALS.find(m => !Array.isArray(m.scale)) ?? null;
+  const { DEFAULT_TILE_SCALE } = await import('../src/ui/materialEditorRows.js');
+  const { materialById } = await import('../src/materials/catalog.js');
+  expect(DEFAULT_TILE_SCALE).toEqual([300, 300]);
   const a = setup();
   click(a.root, '[name="addBand"]');
   const row = a.q('.region-row');
-  if (plain) {
-    set(row.querySelector('[name="mat"]'), plain.id);
-    expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(300);
-  }
-  // 모든 재질이 scale을 갖는 카탈로그라면 기본값 상수만 확인한다(같은 값을 두 곳에 두지 않는다).
-  const { DEFAULT_TILE_SCALE } = await import('../src/ui/materialEditorRows.js');
-  expect(DEFAULT_TILE_SCALE).toEqual([300, 300]);
+  const first = row.querySelector('[name="mat"]').value;
+  expect(materialById(first).scale).toEqual([1000, 1000]);                       // 재질 자신의 scale은 1000인데
+  expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(300);          // 새 행은 패널과 같은 300으로 열린다
+  expect(Number(row.querySelector('[name="scaleH"]').value)).toBe(300);
+  // 재질을 바꾸면 덮어쓰기를 버리고 그 재질의 기본 scale을 따른다(놀라지 않게).
+  const tile = 'tile-gray-600';
+  set(row.querySelector('[name="mat"]'), tile);
+  expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(materialById(tile).scale[0]);
+  click(a.root, '[name="apply"]');
+  expect(a.wall().regions.in[0].mat.scale).toBeUndefined();                      // 덮어쓰기가 없으면 저장도 안 한다
+});
+
+test('새 행의 300×300은 그대로 저장된다(패널이 배치한 타일과 같은 값)', () => {
+  const a = setup();
+  click(a.root, '[name="addRect"]');
+  click(a.root, '[name="apply"]');
+  expect(a.wall().regions.in[0].mat.scale).toEqual([300, 300]);
 });
 
 // §15.10(Task 10 리뷰 추가분): 편집기는 자기 DOM을 직접 만드는 모달이라 Task 10의 파일 목록에

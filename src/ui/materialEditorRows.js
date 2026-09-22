@@ -12,9 +12,11 @@ export const REGION_COLUMNS = [
 ];
 export const CELL_LABELS = { u0: '가로 시작', u1: '가로 끝', z0: '높이 시작', z1: '높이 끝', scaleW: '타일 너비', scaleH: '타일 높이' };
 // 타일 크기 기본값은 마감재 패널과 같은 300이다(§15.11 — 편집기만 1000이어서 같은 재질이 두
-// 곳에서 다른 크기로 반복됐다: 감사 §14).
+// 곳에서 다른 크기로 반복됐다: 감사 §14). 새 영역 행이 이 값을 mat.scale로 싣고 열린다
+// (materialEditor.js의 newRow) — 카탈로그 재질 44개가 모두 자기 scale을 갖고 있어서
+// 아래 세 번째 항만으로는 기본값이 되지 못했다(최종 리뷰 Minor 1).
 export const DEFAULT_TILE_SCALE = [300, 300];
-// 행이 덮어쓴 값 → 그 재질의 기본 scale → 300.
+// 행이 덮어쓴 값 → 그 재질의 기본 scale → 300(카탈로그에 없는 id의 마지막 안전망).
 export const scaleOf = r => r?.mat?.scale ?? materialById(r?.mat?.id)?.scale ?? DEFAULT_TILE_SCALE;
 
 const numCell = (name, value, min, max) =>
