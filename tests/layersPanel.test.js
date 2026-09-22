@@ -224,6 +224,27 @@ describe('레이어 패널', () => {
     }
   });
 
+  test('패널이 숨겨진 동안의 선택은 패널이 열릴 때 스크롤된다(재리뷰 N-1)', () => {
+    const { store, ui, el, inRoom } = setup();
+    const section = document.createElement('section'); section.hidden = true;
+    el.parentElement ? el.parentElement.insertBefore(section, el) : document.body.appendChild(section);
+    section.appendChild(el);
+    const seen = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function stub(opts) { seen.push([this.dataset.id, opts]); };
+    try {
+      ui.set({ selection: { type: 'item', id: inRoom } });     // 숨겨진 패널: 스크롤도 기억도 없다
+      expect(seen).toHaveLength(0);
+      section.hidden = false;
+      setItemFlag(store, [inRoom], 'locked', true);             // 열린 뒤 첫 렌더 → 그 선택으로 스크롤
+      expect(seen).toEqual([[inRoom, { block: 'nearest' }]]);
+      setItemFlag(store, [inRoom], 'locked', false);            // 같은 선택의 다음 렌더는 스크롤 없음
+      expect(seen).toHaveLength(1);
+    } finally {
+      if (orig) Element.prototype.scrollIntoView = orig; else delete Element.prototype.scrollIntoView;
+    }
+  });
+
   test('"숨긴 항목 보기"가 꺼져 있어도 되살릴 줄이 남는다(감사 §26)', () => {
     const { store, ui, el, inRoom } = setup();
     setItemFlag(store, [inRoom], 'hidden', true);
