@@ -540,6 +540,27 @@ test('벽 패널: change 이벤트로 들어온 오프셋·각도도 normalizeAs
   expect(activeFloor(store.get()).walls[0].matOut.angle).toBe(40); // deg360 순환 정규화
 });
 
+// 리뷰 I-1: 한 화면이 두 말을 하지 않는다 — 마감재 행이 '미지정'인 면에서만 색 선택기가 뜬다.
+// 레거시 폴백을 조회 한 곳에만 넣었을 때는 행이 "무광 화이트 페인트"를 보여 주는데 바로 아래
+// 색 칸도 함께 떴다("재질이 없을 때만 색을 고른다"가 그 줄의 뜻이다).
+test('벽 패널: 레거시 문자열만 있는 면은 마감재 행도 색 선택기도 미지정으로 일치한다', () => {
+  const store = createStore(createEmptyProject()); const ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const el = document.createElement('div');
+  createPropsPanel(el, store, ui, {});
+  const wallId = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id: wallId } });
+  expect(el.querySelector('[data-mat-row="in"]').textContent).toContain('미지정');
+  expect(el.querySelector('[data-mat-row="out"]').textContent).toContain('미지정');
+  expect(el.querySelector('input[name="colorIn"]')).not.toBeNull();
+  expect(el.querySelector('input[name="colorOut"]')).not.toBeNull();
+  // 명시 지정을 바르면 그 면의 색 칸만 사라진다(3D도 그때부터 무늬를 바른다).
+  applyMaterial(store, { kind: 'wall', id: wallId, side: 'in' }, { id: 'brick-terra', offset: [0, 0], angle: 0 });
+  expect(el.querySelector('[data-mat-row="in"]').textContent).not.toContain('미지정');
+  expect(el.querySelector('input[name="colorIn"]')).toBeNull();
+  expect(el.querySelector('input[name="colorOut"]')).not.toBeNull();
+});
+
 test('방 패널: 바닥·천장 행은 {kind:"floor"|"ceiling", id}로 지정을 읽고 색 입력 유무로 반영한다', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));

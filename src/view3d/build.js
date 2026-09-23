@@ -9,6 +9,9 @@ import { buildItems } from './items3d.js';
 import { buildDucts } from './ducts3d.js';
 import { buildLabels } from './labels3d.js';
 import { applyAssignment } from '../materials/texture.js';
+// 무늬를 바를지는 **명시 지정**만 본다(리뷰 I-1): 레거시 문자열 필드는 아직 고르지 않은 면이고,
+// 견적서(io/estimate.js)도 같은 조회로 물량을 센다 — 3D와 견적이 같은 면을 다르게 말하지 않는다.
+import { explicitMat } from '../state/materialOps.js';
 
 const M = v => v / 1000;
 export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
@@ -140,11 +143,11 @@ export function buildFloorGroup(floor, view) {
     const inner = roomInnerPolygon(r, floor.walls);
     const shape = shapeFrom(inner);
     // ShapeGeometry는 정점 좌표(미터)를 그대로 uv로 쓴다 → worldUv. 방 크기와 무관하게 무늬 한 칸이 같은 크기로 나온다.
-    const fl = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('floor', view, hex(r.floorColor, null), { assignment: r.floorMat, worldUv: true }));
+    const fl = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('floor', view, hex(r.floorColor, null), { assignment: explicitMat(r, 'floor'), worldUv: true }));
     fl.rotation.x = Math.PI / 2; fl.position.y = M(r.floorOffset); fl.name = 'floor'; fl.userData.roomId = r.id; fl.receiveShadow = true;
     g.add(fl);
     if (!r.hideCeiling) {
-      const ce = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('ceiling', view, hex(r.ceilingColor, null), { assignment: r.ceilingMat, worldUv: true }));
+      const ce = new THREE.Mesh(new THREE.ShapeGeometry(shape), surfaceMaterial('ceiling', view, hex(r.ceilingColor, null), { assignment: explicitMat(r, 'ceiling'), worldUv: true }));
       ce.rotation.x = Math.PI / 2; ce.position.y = M(r.floorOffset + r.height); ce.name = 'ceiling'; ce.userData.roomId = r.id; ce.visible = false; g.add(ce);
     }
     // 방 안쪽에서 보이는 벽면 색(colorIn). 내부 폴리곤보다 5 mm 더 들여 z-파이팅을 피한다.
@@ -179,7 +182,7 @@ export function buildFloorGroup(floor, view) {
         // (metricPlaneUv)과 floorOffset만큼 위상이 어긋난다. 모두 벽 밑 기준이라야 원점이 하나다.
         geo.setAttribute('uv', new THREE.Float32BufferAttribute([M(uA), M(z0), M(uB), M(z0), M(uB), M(z1), M(uA), M(z1)], 2));
         geo.computeVertexNormals();
-        const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: w.matIn, worldUv: true }));
+        const face = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorIn, null), { assignment: explicitMat(w, 'in'), worldUv: true }));
         face.name = 'wallFace'; face.userData.wallId = w.id; face.userData.roomId = r.id;
         // 방 폴리곤의 회전 방향이 반대로 나올 수 있어(법선이 밖을 향할 수 있어) 양면으로 둔다.
         face.material.side = THREE.DoubleSide;
@@ -201,7 +204,7 @@ export function buildFloorGroup(floor, view) {
     // 조각마다 부른다 — 모두 같은 name: 'wall' / userData.wallId라 컷어웨이가 그대로 동작한다.
     // 지오메트리는 모두 벽 축 미터 uv라 반복은 월드 uv(미터당 반복 수)로 잡는다.
     const addWallMesh = (geo, pos = null, rotY = 0) => {
-      const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null), { assignment: w.matOut, worldUv: true }));
+      const mesh = new THREE.Mesh(geo, surfaceMaterial('wall', view, hex(w.colorOut, null), { assignment: explicitMat(w, 'out'), worldUv: true }));
       if (pos) mesh.position.copy(pos);
       mesh.rotation.y = rotY;
       mesh.name = 'wall'; mesh.userData.wallId = w.id; mesh.castShadow = true; mesh.receiveShadow = true;
@@ -229,7 +232,7 @@ export function buildFloorGroup(floor, view) {
       }
     }
     // 벽 윗면도 월드 uv(shape의 x/y)라 벽이 회전해 있어도 미터당 반복 수로 잡아야 크기가 맞는다.
-    const top = new THREE.Mesh(new THREE.ShapeGeometry(shapeFrom(poly)), surfaceMaterial('wallTop', view, null, { assignment: w.matOut, worldUv: true }));
+    const top = new THREE.Mesh(new THREE.ShapeGeometry(shapeFrom(poly)), surfaceMaterial('wallTop', view, null, { assignment: explicitMat(w, 'out'), worldUv: true }));
     top.rotation.x = Math.PI / 2; top.position.y = M(w.height) + 0.002; top.name = 'wallTop'; top.userData.wallId = w.id; g.add(top);
     // 컷어웨이로 감춘 벽이 바닥에 남기는 밑동 윤곽(명세 9.3.2). 기본은 숨김, view3d가 필요할 때 켠다.
     const foot = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(poly.map(p => new THREE.Vector3(M(p[0]), 0.004, M(p[1])))), lineMaterial(COLOR.foot));

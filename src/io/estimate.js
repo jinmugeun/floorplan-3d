@@ -4,7 +4,7 @@
 // 실판매 연동은 범위 밖이므로 단가는 정적 값이다.
 import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
-import { faceArea } from '../state/materialOps.js';
+import { faceArea, explicitMat } from '../state/materialOps.js';
 import { wallLength } from '../geom/walls.js';
 import { segmentLength } from '../geom/ducts.js';
 
@@ -67,13 +67,15 @@ export function estimateRows(floor) {
       }
       // 영역이 덮은 부분은 뺀다. 영역끼리 u·z 구간이 겹치면 각각 세어 합계가 실제 벽 면적을 넘을 수
       // 있다(겹침 금지는 범위 밖 — 마감재 편집기는 순서대로 덧칠하는 모델이다, M-32).
-      add(side === 'out' ? w.matOut : w.matIn, Math.max(0, full - covered));
+      // 물량은 **명시 지정**만 센다(리뷰 I-1): 레거시 문자열은 "아직 고르지 않은 면"이고, 그것을
+      // 세면 도면을 열기만 해도 견적 총액이 생긴다. 3D의 무늬 판정(build.js)과 같은 조회다.
+      add(explicitMat(w, side), Math.max(0, full - covered));
     }
   }
   for (const r of floor.rooms ?? []) {
     const m2 = faceArea(floor, { kind: 'floor', id: r.id });   // 검출된 실면적(방 폴리곤)
-    add(r.floorMat, m2);
-    if (!r.hideCeiling) add(r.ceilingMat, m2);
+    add(explicitMat(r, 'floor'), m2);
+    if (!r.hideCeiling) add(explicitMat(r, 'ceiling'), m2);
   }
 
   const materials = [...area.entries()].map(([id, m2]) => {

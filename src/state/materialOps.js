@@ -5,8 +5,10 @@ import { wallLength } from '../geom/walls.js';
 import { openingsOnWall } from '../geom/openings.js';
 
 export const MAT_TARGET_LABELS = { in: '내벽 재질', out: '외벽 재질', floor: '바닥 재질', ceiling: '천장 재질' };
-const matKey = side => (side === 'out' ? 'matOut' : 'matIn');
+// 새 형식(명시 지정)이 앉는 필드 이름 한 표. LEGACY_MAT_KEY와 같은 키를 쓴다(in·out·floor·ceiling).
+export const MAT_KEY = { in: 'matIn', out: 'matOut', floor: 'floorMat', ceiling: 'ceilingMat' };
 const sideKey = side => (side === 'out' ? 'out' : 'in');
+const matKey = side => MAT_KEY[sideKey(side)];
 // 지정을 문서에 넣기 전에 배열을 복사한다: store.dispatch는 mutate 전에 스냅샷을 복제하므로,
 // 호출자가 준 offset·scale 배열을 그대로 넣으면 여러 면이 한 배열을 나눠 갖는다(§13.3).
 const cloneAssign = a => (a ? { ...a, offset: [...a.offset], ...(a.scale ? { scale: [...a.scale] } : {}) } : null);
@@ -73,17 +75,31 @@ export const LEGACY_MAT_KEY = { in: 'material', out: 'material', floor: 'floorMa
 export const LEGACY_MATERIAL = { wood: 'wood-oak' };
 const legacyAssign = v => (typeof v === 'string' && v ? normalizeAssignment({ id: LEGACY_MATERIAL[v] ?? v }) : null);   // 모르는 id면 null
 
+// 조회는 둘이다(리뷰 I-1). assignmentOf = **보고용 파생**: 레거시 문자열까지 읽어 "이 면은 무엇으로
+// 마감되는가"를 답한다 — 시방서·"배치된 마감재"처럼 읽기만 하는 산출물이 쓴다.
 export function assignmentOf(floor, target) {
   if (!target) return null;
   if (target.kind === 'wall') {
     const w = floor.walls.find(x => x.id === target.id);
     if (!w) return null;
-    return w[matKey(target.side)] ?? legacyAssign(w[LEGACY_MAT_KEY[sideKey(target.side)]]);
+    return explicitMat(w, sideKey(target.side)) ?? legacyAssign(w[LEGACY_MAT_KEY[sideKey(target.side)]]);
   }
   const r = floor.rooms.find(x => x.id === target.id);
   if (!r) return null;
   const k = target.kind === 'ceiling' ? 'ceiling' : 'floor';
-  return (k === 'ceiling' ? r.ceilingMat : r.floorMat) ?? legacyAssign(r[LEGACY_MAT_KEY[k]]);
+  return explicitMat(r, k) ?? legacyAssign(r[LEGACY_MAT_KEY[k]]);
+}
+
+// explicitAssignmentOf = **작성 상태**: 새 형식만 본다(레거시도 별칭도 없다). 편집 표면과 물량이
+// 쓴다 — 속성 패널의 마감재 행·색 선택기, 견적서의 칠한 면적, 3D의 무늬 판정. 이 셋이 assignmentOf를
+// 읽으면 "패널은 무광 화이트 페인트를 보여 주는데 색 선택기도 같이 뜨고, 3D는 무늬 없이 칠하고,
+// 견적서는 그 면적을 0으로 센다"가 된다(리뷰 I-1). 레거시 문자열은 **아직 고르지 않은 면**이다.
+// explicitMat은 기록에서 바로 읽는 판이다(M-5): 면마다 walls.find를 돌지 않아도 규칙은 하나다.
+export const explicitMat = (rec, key) => rec?.[MAT_KEY[key]] ?? null;
+export function explicitAssignmentOf(floor, target) {
+  if (!target) return null;
+  if (target.kind === 'wall') return explicitMat(floor.walls.find(x => x.id === target.id), sideKey(target.side));
+  return explicitMat(floor.rooms.find(x => x.id === target.id), target.kind === 'ceiling' ? 'ceiling' : 'floor');
 }
 
 // 읽기 전용: 상태 배열을 그대로 주지 않고 얕은 사본을 돌려준다(호출자가 push/splice해도

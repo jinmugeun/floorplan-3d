@@ -90,6 +90,22 @@ describe('견적서 계산', () => {
     expect(rows.materials.find(r => r.id === 'paint-white')).toBeUndefined();
   });
 
+  // 리뷰 I-1: 물량은 **명시 지정**만 센다. makeWall의 material·detectRooms의 floorMaterial까지
+  // 세면 방 하나를 그린 것만으로 벽 4면 + 바닥이 견적 총액에 잡힌다 — 3D도 같은 조회를 쓴다.
+  test('레거시 마감재 문자열은 물량에 잡히지 않는다(명시 지정만 센다)', () => {
+    const a = setup();
+    const f = a.floor();
+    expect(f.walls[0].material).toBe('paint-white');
+    expect(f.rooms[0].floorMaterial).toBe('wood-oak');
+    expect(estimateRows(f).materials).toEqual([]);
+    expect(estimateRows(f).total).toBe(0);
+    applyMaterial(a.store, { kind: 'floor', id: f.rooms[0].id }, mat('wood-oak'));
+    const rows = estimateRows(a.floor()).materials;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('wood-oak');
+    expect(rows[0].areaM2).toBeCloseTo(Math.round(a.floor().rooms[0].area * 100) / 100, 2);
+  });
+
   test('빈 층은 빈 견적이 된다', () => {
     const rows = estimateRows({ items: [], walls: [], rooms: [] });
     expect(rows).toEqual({ products: [], materials: [], ducts: [], total: 0 });

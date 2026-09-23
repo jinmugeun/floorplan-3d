@@ -281,6 +281,22 @@ test('벽 본체는 matOut, 방 안쪽 면은 matIn 텍스처를 쓴다(소수 �
   expect(fu).toBeCloseTo(3.79, 6);                                  // 4000 − 양 끝 벽 105씩
 });
 
+// 리뷰 I-1: 무늬는 **명시 지정**만 바른다. makeWall의 material·detectRooms의 floorMaterial은
+// 아직 고르지 않은 면이고, 3D가 그것을 무늬로 바르면 견적서(같은 조회를 쓴다)와 어긋난다.
+test('레거시 마감재 문자열만 있는 면은 무늬 없이 색으로 칠한다', () => {
+  const walls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200);
+  expect(walls[0].material).toBe('paint-white');                    // makeWall이 지금도 넣는 레거시 값
+  const rooms = detectRooms(walls);
+  expect(rooms[0].floorMaterial).toBe('wood-oak');                  // detectRooms가 지금도 넣는 레거시 값
+  const g = buildFloorGroup({ walls, rooms, height: 2300 }, { wallOpacity: 1 });
+  expect(g.children.find(c => c.name === 'wall').material.map).toBeNull();
+  expect(g.children.find(c => c.name === 'wallFace').material.map).toBeNull();
+  expect(g.children.find(c => c.name === 'floor').material.map).toBeNull();
+  // 같은 면에 새 형식을 바르면 그때 무늬가 붙는다.
+  const g2 = buildFloorGroup({ walls: walls.map(w => ({ ...w, matOut: assign('brick-red') })), rooms, height: 2300 }, { wallOpacity: 1 });
+  expect(g2.children.find(c => c.name === 'wall').material.map).toBeTruthy();
+});
+
 test('바닥·천장은 방 재질을 쓰고 월드 uv 반복(미터당)을 쓴다', () => {
   // 벽 두께 200, 외곽 4200 × 3200 → 방 안쪽 바닥이 정확히 4000 × 3000 mm.
   const walls = rectWalls([0, 0], [4200, 3200], 200);

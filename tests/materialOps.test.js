@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeProject, normalizeAssignment, normalizeRegion, MAT_RANGE } from '../src/state/schema.js';
 import { addWalls, duplicateRoom, addFloor } from '../src/state/floorOps.js';
-import { applyMaterial, applyRoomWalls, setWallRegions, assignmentOf, regionsOf, faceArea, LEGACY_MAT_KEY, LEGACY_MATERIAL } from '../src/state/materialOps.js';
+import { applyMaterial, applyRoomWalls, setWallRegions, assignmentOf, explicitAssignmentOf, explicitMat, regionsOf, faceArea, LEGACY_MAT_KEY, LEGACY_MATERIAL, MAT_KEY } from '../src/state/materialOps.js';
 import { rectWalls, makeWall, splitWall, wallLength } from '../src/geom/walls.js';
 
 function setup() {
@@ -162,6 +162,36 @@ describe('마감재 상태 연산', () => {
     expect(faceArea(g, { kind: 'floor', id: roomId })).toBeCloseTo(g.rooms[0].area, 6);
     expect(faceArea(g, { kind: 'ceiling', id: roomId })).toBeCloseTo(g.rooms[0].area, 6);
     expect(faceArea(g, { kind: 'wall', id: '없음', side: 'in' })).toBe(0);
+  });
+
+  // 리뷰 I-1: 조회는 둘이다. assignmentOf = 보고용(레거시 포함) · explicitAssignmentOf = 작성 상태
+  // (새 형식만). 하나로 두었더니 같은 면을 두고 시방서·견적서·3D·속성 패널이 서로 다른 답을 말했다.
+  test('explicitAssignmentOf는 새 형식만 본다(레거시 문자열도 별칭도 읽지 않는다)', () => {
+    const s = setup();
+    const f0 = activeFloor(s.get());
+    const wallId = f0.walls[0].id, roomId = f0.rooms[0].id;
+    // 레거시 값을 옛 파일 모양('wood' 별칭)까지 갖춰 둔다 — 보고용 조회만 이것을 읽어야 한다.
+    s.dispatch(d => { activeFloor(d).rooms.find(r => r.id === roomId).floorMaterial = 'wood'; }, { record: false });
+    const g = activeFloor(s.get());
+    expect(assignmentOf(g, { kind: 'wall', id: wallId, side: 'out' }).id).toBe('paint-white');
+    expect(explicitAssignmentOf(g, { kind: 'wall', id: wallId, side: 'out' })).toBeNull();
+    expect(assignmentOf(g, { kind: 'floor', id: roomId }).id).toBe('wood-oak');     // 별칭을 지난 파생값
+    expect(explicitAssignmentOf(g, { kind: 'floor', id: roomId })).toBeNull();
+    expect(explicitAssignmentOf(g, { kind: 'ceiling', id: roomId })).toBeNull();
+    // 명시 지정을 바르면 두 조회가 같은 답을 준다(그때부터 편집·물량·무늬가 함께 움직인다).
+    applyMaterial(s, { kind: 'wall', id: wallId, side: 'out' }, mat('brick-terra'));
+    const h = activeFloor(s.get());
+    expect(explicitAssignmentOf(h, { kind: 'wall', id: wallId, side: 'out' }).id).toBe('brick-terra');
+    expect(assignmentOf(h, { kind: 'wall', id: wallId, side: 'out' }).id).toBe('brick-terra');
+    // 없는 대상·없는 기록은 둘 다 null이다(호출자가 ?. 없이 쓴다).
+    expect(explicitAssignmentOf(h, null)).toBeNull();
+    expect(explicitAssignmentOf(h, { kind: 'wall', id: '없음', side: 'in' })).toBeNull();
+    expect(explicitAssignmentOf(h, { kind: 'floor', id: '없음' })).toBeNull();
+    // explicitMat은 같은 규칙을 기록에서 바로 읽는 판이다(견적서·3D가 면마다 find를 돌지 않는다).
+    expect(MAT_KEY).toEqual({ in: 'matIn', out: 'matOut', floor: 'floorMat', ceiling: 'ceilingMat' });
+    expect(explicitMat(h.walls.find(x => x.id === wallId), 'out').id).toBe('brick-terra');
+    expect(explicitMat(h.walls.find(x => x.id === wallId), 'in')).toBeNull();
+    expect(explicitMat(null, 'in')).toBeNull();
   });
 
   test('벽을 옮겨 방을 다시 검출해도 방 재질이 살아남는다', () => {

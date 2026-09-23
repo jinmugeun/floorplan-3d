@@ -8,7 +8,7 @@ import { esc } from '../util/html.js';
 import { confirmDialog } from './confirmDialog.js';
 import { toast } from './toast.js';
 import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
-import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
+import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor, hasMaterial } from './materialRows.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField, ventRowsClick } from './equipRows.js';
 import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField, isDuplicateCommit, nextFocusName, tabWatcher } from './fieldUtils.js';
@@ -103,8 +103,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${lenField(withUnit('벽 높이', units, showUnit), 'height', w.height, 2, 8000, false, units)}
         ${field('선택된 벽 면적', `<output name="wallArea">${fmtArea((len * w.height) / 1e6, { pyeong })}</output>`)}
         ${materialRowsHtml(f, sel, { detailsOpen: false })}
-        ${w.matIn ? '' : colorField('내벽 색', 'colorIn', w.colorIn)}
-        ${w.matOut ? '' : colorField('외벽 색', 'colorOut', w.colorOut)}
+        ${hasMaterial(f, sel, 'in') ? '' : colorField('내벽 색', 'colorIn', w.colorIn)}
+        ${hasMaterial(f, sel, 'out') ? '' : colorField('외벽 색', 'colorOut', w.colorOut)}
         <button type="button" name="split">벽 나누기 (나눌 지점 클릭)</button>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
     }
@@ -142,8 +142,8 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${field('좌석수', num('seats', r.seats ?? 0, 0, 999, 1))}
         <label class="check"><input type="checkbox" name="matchWallHeight" ${r.matchWallHeight ? 'checked' : ''}> 공간 높이 맞추기</label>
         ${materialRowsHtml(f, sel, { detailsOpen: false })}
-        ${r.floorMat ? '' : colorField('바닥 색', 'floorColor', r.floorColor)}
-        ${r.ceilingMat ? '' : colorField('천장 색', 'ceilingColor', r.ceilingColor)}
+        ${hasMaterial(f, sel, 'floor') ? '' : colorField('바닥 색', 'floorColor', r.floorColor)}
+        ${hasMaterial(f, sel, 'ceiling') ? '' : colorField('천장 색', 'ceilingColor', r.ceilingColor)}
         <label class="check"><input type="checkbox" name="hideCeiling" ${r.hideCeiling ? 'checked' : ''}> 천장 감추기</label>
         ${roomDesignRowsHtml(r, roomAirflow(f).find(x => x.roomId === r.id) ?? null)}
         <button type="button" name="delete" class="danger">방 삭제</button>`;

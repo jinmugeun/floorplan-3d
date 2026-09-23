@@ -119,6 +119,25 @@ describe('라벨 후보 수집(collectLabels)', () => {
     expect(collectLabels(v, floor(), { flags: { ceilingItems: false } }).some(c => c.kind === 'equip')).toBe(false);
   });
 
+  // 리뷰 C-1: 장애물을 모든 후보에 걸었더니 덕트 **자신의** 단면 라벨이 100% 사라졌다 — ductSize
+  // 후보는 구간 중점에 놓이므로 상자 중심이 언제나 자기 띠 안이고, ducts2d의 폴백도 shown이
+  // non-null이라 그리지 않는다. 장애물은 방 이름·면적에만 건다(§17.4(4)의 목적은 그대로다).
+  test('덕트 단면 라벨은 자기 띠에 지워지지 않는다', () => {
+    const { floor } = setup();
+    const v = fakeView(0.05);
+    const cands = collectLabels(v, floor(), { flags: {} });
+    const obstacles = ductObstacles(v, floor(), { flags: {} });
+    expect(obstacles).toEqual([[25, 6.25, 175, 43.75]]);          // 구간 8 m · 폭 750 mm의 띠 하나
+    expect(placeLabels(cands).map(c => c.key)).toEqual(expect.arrayContaining(['duct:dk1:0', 'damper:dk1:0']));
+    const withBand = placeLabels(cands, { obstacles }).map(c => c.key);
+    expect(withBand).toContain('duct:dk1:0');                     // 상자 중심이 자기 띠 안이지만 남는다
+    expect(withBand).toContain('damper:dk1:0');
+    // 같은 띠가 방 이름에는 그대로 걸린다: 띠 한가운데 놓인 후보는 kind가 roomName일 때만 지워진다.
+    const onBand = { key: 'onBand', kind: 'roomName', text: '조리실', size: 13, sp: [2000 * 0.05, 500 * 0.05] };
+    expect(placeLabels([onBand], { obstacles })).toEqual([]);
+    expect(placeLabels([{ ...onBand, kind: 'ductSize' }], { obstacles }).map(c => c.key)).toEqual(['onBand']);
+  });
+
   // m-3: 제품 코드 라벨과 측정선 라벨이 LOD 패스 밖에 있어 "제품 코드" 보기를 켜면 겹쳤다(감사 #22).
   test('제품 코드·측정선 라벨도 후보로 들어오고 겹치면 코드가 먼저 생략된다', () => {
     const { store, floor, hood } = setup();

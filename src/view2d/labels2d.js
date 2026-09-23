@@ -7,7 +7,7 @@
 // ducts2d·items2d는 shown이 오면 자기 라벨을 그리지 않는다.
 import { centroid } from '../geom/rooms.js';
 import { wallLength } from '../geom/walls.js';
-import { damperPos, segmentQuad } from '../geom/ducts.js';
+import { damperPos, ductPolygons } from '../geom/ducts.js';
 import { itemAABB } from '../geom/items.js';
 import { sub, norm, perp, dist } from '../geom/vec.js';
 import { textWidth } from '../geom/textWidth.js';
@@ -55,25 +55,29 @@ const hits = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 // 들어가므로, y로 겹치는 두 상자는 반드시 한 밴드를 공유한다(판정 결과는 전수 비교와 같다).
 export const BAND_PX = 16;
 
-// obstacles(§17.4(4) · 감사 §40): 화면 좌표 상자 [x0, y0, x1, y1]의 배열. 라벨을 놓기 **전에**
-// bands에 채워 넣으므로 라벨끼리와 같은 규칙으로 부딪힌다 — 덕트 띠에 묻혀 읽을 수 없던 방 이름이
-// 아예 놓이지 않는다(겹쳐 찍는 것보다 낫다). 넘기지 않으면 지금과 같은 결과다.
+// obstacles(§17.4(4) · 감사 §40): 화면 좌표 상자 [x0, y0, x1, y1]의 배열. 덕트 띠에 묻혀 읽을 수
+// 없던 방 이름이 아예 놓이지 않는다(겹쳐 찍는 것보다 낫다). 넘기지 않으면 지금과 같은 결과다.
+// 장애물은 **OBSTACLE_KINDS 후보에만** 적용한다(리뷰 C-1): 덕트 자신의 단면 라벨(750×400)은 구간
+// 중점에 놓이므로 상자 중심이 언제나 자기 띠 안이다 — 모두에게 적용하면 배율·폭과 무관하게 100%
+// 사라진다(감사가 "판독된다"고 적어 둔 것이 지워졌다). 라벨끼리의 겹침 규칙은 그대로 전부에 돈다.
+export const OBSTACLE_KINDS = new Set(['roomName', 'roomArea']);
 export function placeLabels(candidates, { priority = LABEL_PRIORITY, scale = null, obstacles = [] } = {}) {
   const rank = k => { const i = priority.indexOf(k); return i < 0 ? priority.length : i; };
   const pool = (candidates ?? []).filter(c => c && c.text !== '' && c.text != null
     && !(scale != null && scale < LOD_SCALE && c.kind !== 'roomName'));
   // 우선순위 → 입력 순서(같은 순위에서는 도면 배열 순서가 곧 안정된 순서다).
   const order = pool.map((c, i) => [c, i]).sort((a, b) => rank(a[0].kind) - rank(b[0].kind) || a[1] - b[1]);
-  const placed = [], bands = new Map();
-  const addBox = box => { for (let b = Math.floor(box[1] / BAND_PX); b <= Math.floor(box[3] / BAND_PX); b++) { const a = bands.get(b); a ? a.push(box) : bands.set(b, [box]); } };
-  for (const o of obstacles ?? []) if (Array.isArray(o) && o.length === 4 && o.every(Number.isFinite)) addBox(o);
+  const placed = [], bands = new Map(), blocks = new Map();
+  const addBox = (map, box) => { for (let b = Math.floor(box[1] / BAND_PX); b <= Math.floor(box[3] / BAND_PX); b++) { const a = map.get(b); a ? a.push(box) : map.set(b, [box]); } };
+  for (const o of obstacles ?? []) if (Array.isArray(o) && o.length === 4 && o.every(Number.isFinite)) addBox(blocks, o);
   for (const [c] of order) {
     const box = labelBox(c);
     const b0 = Math.floor(box[1] / BAND_PX), b1 = Math.floor(box[3] / BAND_PX);
     let clash = false;
     for (let b = b0; b <= b1 && !clash; b++) clash = (bands.get(b) ?? []).some(o => hits(o, box));
+    if (!clash && OBSTACLE_KINDS.has(c.kind)) for (let b = b0; b <= b1 && !clash; b++) clash = (blocks.get(b) ?? []).some(o => hits(o, box));
     if (clash) continue;
-    addBox(box);
+    addBox(bands, box);
     placed.push(c);
   }
   // 반환 순서는 "자리를 잡은 순서" = 우선순위 오름차순이다. 그리기는 반드시 이 역순이어야 한다(§14.5):
@@ -139,14 +143,14 @@ export function drawLabels(ctx, v, placed) {
   for (const c of placed ?? []) v.label(c.text, c.at, { size: c.size, color: c.color, bg: c.bg });
 }
 
-// 보이는 덕트 구간의 사각형(segmentQuad)을 화면 AABB로 바꾼다(§17.4(4)). 라벨 후보와 같은 좌표계다.
+// 보이는 덕트 구간의 사각형을 화면 AABB로 바꾼다(§17.4(4)). 라벨 후보와 같은 좌표계다.
+// 구간을 직접 돌지 않고 ductPolygons를 쓴다(M-1): points·segments 길이가 어긋난 덕트(정규화를
+// 거치지 않은 객체)에서도 던지지 않는다 — 여기는 매 프레임 도는 렌더 루프다.
 export function ductObstacles(v, floor, { flags = {} } = {}) {
   const out = [];
   for (const d of floor?.ducts ?? []) {
     if (!ductVisible(d, flags)) continue;
-    for (let i = 0; i < d.segments.length; i++) {
-      const quad = segmentQuad(d.points[i], d.points[i + 1], d.segments[i].w);
-      if (!quad) continue;
+    for (const quad of ductPolygons(d)) {
       const ps = quad.map(p => v.toScreen(p));
       out.push([Math.min(...ps.map(p => p[0])), Math.min(...ps.map(p => p[1])), Math.max(...ps.map(p => p[0])), Math.max(...ps.map(p => p[1]))]);
     }

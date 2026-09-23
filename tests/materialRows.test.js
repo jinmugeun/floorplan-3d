@@ -7,7 +7,8 @@ import { addWalls } from '../src/state/floorOps.js';
 import { applyMaterial, assignmentOf, MAT_TARGET_LABELS } from '../src/state/materialOps.js';
 import { materialById } from '../src/materials/catalog.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor, MATERIAL_ROWS } from '../src/ui/materialRows.js';
+import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor, hasMaterial, MATERIAL_ROWS } from '../src/ui/materialRows.js';
+import { MATERIAL_PICK_FIRST } from '../src/ui/messages.js';
 
 // 소수 좌표를 가진 사각 평면(벽 4개·방 1개)을 만들고 첫 벽/방을 선택 대상으로 돌려준다.
 function buildFixture() {
@@ -61,9 +62,15 @@ describe('materialRows: 벽 행 — 내벽 지정 / 외벽 미지정', () => {
     expect(inRow.textContent).toContain(mat.name);
     expect(inRow.textContent).toContain(mat.maker);
     expect(inRow.textContent).not.toContain('미지정');
-    // §17.4(1): 새 형식을 바르지 않은 외벽은 이제 makeWall의 레거시 material('paint-white')을 보여준다.
-    expect(outRow.textContent).toContain(materialById('paint-white').name);
-    expect(outRow.textContent).not.toContain('미지정');
+    // 리뷰 I-1: 편집 표면은 **명시 지정**만 본다 — 새 형식을 바르지 않은 외벽은 '미지정'이다
+    // (그래야 속성 패널이 같은 화면에서 마감재와 색 선택기를 함께 보여 주지 않는다).
+    expect(outRow.textContent).toContain('미지정');
+    expect(outRow.textContent).not.toContain(materialById('paint-white').name);
+    // 같은 면을 **보고용** 조회는 여전히 makeWall의 레거시 material로 읽는다(시방서가 그 답을 쓴다).
+    expect(assignmentOf(floor(), { kind: 'wall', id: wallSel.id, side: 'out' }).id).toBe('paint-white');
+    // 속성 패널의 색 선택기는 이 답을 쓴다(같은 면을 두고 마감재와 색 칸이 함께 뜨지 않는다).
+    expect(hasMaterial(floor(), wallSel, 'in')).toBe(true);
+    expect(hasMaterial(floor(), wallSel, 'out')).toBe(false);
 
     expect(host.querySelector('[name="matU-in"]').value).toBe('64.5');
     expect(host.querySelector('[name="matV-in"]').value).toBe('12');
@@ -88,7 +95,7 @@ describe('materialRows: 벽 행 — 내벽 지정 / 외벽 미지정', () => {
 });
 
 describe('materialRows: 방 행 — 바닥 / 천장', () => {
-  test('바닥에만 새 형식을 바르면 천장은 레거시 마감재로 남는다', () => {
+  test('바닥에만 새 형식을 바르면 천장 행은 미지정이다(레거시는 보고용 조회만 읽는다)', () => {
     const { store, floor, roomSel } = buildFixture();
     applyMaterial(store, { kind: 'floor', id: roomSel.id }, { id: 'tile-gray-600', offset: [30.25, 0], angle: 0 });
     const host = renderRows(floor(), roomSel);
@@ -96,9 +103,10 @@ describe('materialRows: 방 행 — 바닥 / 천장', () => {
     expect(rows.map(r => r.dataset.matRow)).toEqual(['floor', 'ceiling']);
     const mat = materialById('tile-gray-600');
     expect(rows[0].textContent).toContain(mat.name);
-    // §17.4(1): detectRooms의 ceilingMaterial('paint-white')이 레거시 폴백으로 읽힌다(예전에는 '미지정').
-    expect(rows[1].textContent).toContain(materialById('paint-white').name);
-    expect(rows[1].textContent).not.toContain('미지정');
+    // 리뷰 I-1: detectRooms의 ceilingMaterial('paint-white')은 아직 **고르지 않은** 천장이다 —
+    // 편집 표면은 미지정으로 그리고, 보고용 조회(시방서)만 그 레거시 값을 읽는다.
+    expect(rows[1].textContent).toContain('미지정');
+    expect(assignmentOf(floor(), { kind: 'ceiling', id: roomSel.id }).id).toBe('paint-white');
     expect(host.querySelector('[name="matU-floor"]').value).toBe('30.25');
   });
 
@@ -181,6 +189,27 @@ describe('materialRows: 입력을 무시해야 하는 경우', () => {
     u.value = '777';
     expect(applyMaterialField(store, wallSel, u)).toBe(true);
     expect(floor().walls.find(w => w.id === wallSel.id).matOut).toBeNull();
+  });
+
+  // 리뷰 I-2: 레거시 문자열만 있는 면(makeWall의 material)에서 오프셋 한 칸을 고쳐도 아무것도
+  // 굳지 않는다 — 사용자는 "오프셋"을 요청했지 "이 벽에 무광 화이트 페인트를 바르겠다"고 하지
+  // 않았다. 예전에는 assignmentOf가 준 파생값이 matOut에 써져 문서가 바뀌었다(저장 형식 무변경이
+  // 깨진 것은 아니지만 "되쓰지 않는다"는 약속이 한 층 위에서 깨졌다).
+  test('레거시 문자열만 있는 면의 오프셋 편집은 무동작이고 안내를 띄운다', () => {
+    const { store, floor, wallSel } = buildFixture();
+    const wall = () => floor().walls.find(w => w.id === wallSel.id);
+    expect(wall().material).toBe('paint-white');          // makeWall이 지금도 넣는 레거시 값
+    const host = renderRows(floor(), wallSel);
+    expect(host.querySelector('[data-mat-row="out"]').textContent).toContain('미지정');
+    const u = host.querySelector('[name="matU-out"]');
+    u.value = '123.5';
+    const before = store.canUndo();
+    expect(applyMaterialField(store, wallSel, u)).toBe(true);
+    expect(wall().matOut).toBeNull();                     // 새 형식으로 굳지 않는다
+    expect(wall().material).toBe('paint-white');          // 레거시 문자열도 그대로다(읽기 전용)
+    expect(store.canUndo()).toBe(before);                 // 되돌릴 단계도 남기지 않는다
+    const toasts = [...document.querySelectorAll('#toasts .toast')];
+    expect(toasts.at(-1).textContent).toBe(MATERIAL_PICK_FIRST);
   });
 
   test('mat*가 아닌 input 이름은 처리하지 않는다(false)', () => {

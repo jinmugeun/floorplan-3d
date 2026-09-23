@@ -1,8 +1,10 @@
 // 속성 패널의 마감재 행(벽 내벽/외벽, 방 바닥/천장). propsPanel이 300줄을 넘지 않게 여기로 나눴다.
-import { assignmentOf, applyMaterial, MAT_TARGET_LABELS } from '../state/materialOps.js';
+import { explicitAssignmentOf, applyMaterial, MAT_TARGET_LABELS } from '../state/materialOps.js';
 import { activeFloor, normalizeAssignment } from '../state/schema.js';
 import { materialById } from '../materials/catalog.js';
 import { drawSwatch } from './materialPanel.js';
+import { toast } from './toast.js';
+import { MATERIAL_PICK_FIRST } from './messages.js';
 import { esc } from '../util/html.js';
 
 // 라벨은 materialOps의 MAT_TARGET_LABELS 한 곳에서 온다(같은 문자열을 두 벌 들지 않는다, M-30).
@@ -19,6 +21,9 @@ export function targetFor(sel, key) {
   if (sel?.type === 'room') return { kind: key === 'ceiling' ? 'ceiling' : 'floor', id: sel.id };
   return null;
 }
+// 편집 표면은 **명시 지정만** 본다(리뷰 I-1): 마감재 행이 '미지정'이라고 말하는 면에서는 속성 패널의
+// 색 선택기가 뜬다("재질이 없을 때만 색을 고른다"가 그 줄의 뜻이다) — 한 화면이 두 말을 하지 않는다.
+export const hasMaterial = (floor, sel, key) => !!explicitAssignmentOf(floor, targetFor(sel, key));
 const numRow = (name, label, value, min, max) =>
   `<label class="field"><span>${label}</span><input type="number" name="${name}" value="${value}" min="${min}" max="${max}" step="any"></label>`;
 
@@ -29,7 +34,7 @@ export function materialRowsHtml(floor, sel, { detailsOpen = null } = {}) {
   // (예전 `detailsOpen || matDetailsOpen`은 접은 상태를 다음 렌더에서 다시 켜 버렸다 — I-13).
   if (matDetailsOpen === null) matDetailsOpen = !!detailsOpen;
   return rows.map(([k, label]) => {
-    const a = assignmentOf(floor, targetFor(sel, k));
+    const a = explicitAssignmentOf(floor, targetFor(sel, k));
     const m = a ? materialById(a.id) : null;
     const editor = sel.type === 'wall' ? `<button type="button" name="matEditor" data-side="${k}">마감재 편집기</button>` : '';
     return `<div class="mat-row" data-mat-row="${k}">
@@ -51,7 +56,7 @@ export function materialRowsHtml(floor, sel, { detailsOpen = null } = {}) {
 // 캔버스는 문자열로 그릴 수 없으므로 innerHTML 다음에 그린다. <details> 토글도 여기서 기억한다.
 export function mountSwatches(container, floor, sel) {
   for (const c of container.querySelectorAll('canvas[data-mat-swatch]')) {
-    const a = assignmentOf(floor, targetFor(sel, c.dataset.matSwatch));
+    const a = explicitAssignmentOf(floor, targetFor(sel, c.dataset.matSwatch));
     const m = a ? materialById(a.id) : null;
     drawSwatch(c, m ?? { base: '#eef1f4', accent: '#d8dde3', pattern: 'solid', scale: [1000, 1000] });
   }
@@ -59,15 +64,19 @@ export function mountSwatches(container, floor, sel) {
 }
 
 const FIELD = /^mat([UVA])-(in|out|floor|ceiling)$/;
-// 오프셋·각도 입력 한 칸. 그 면에 재질이 없으면 바꿀 것이 없다(입력은 처리한 것으로 본다).
+// 오프셋·각도 입력 한 칸. 그 면에 **명시 지정**이 없으면 바꿀 것이 없다(입력은 처리한 것으로 본다).
+// 레거시 문자열만 있는 면도 여기서는 미지정이다(리뷰 I-2): 예전에는 assignmentOf가 준 파생값이
+// matIn·floorMat에 써져, 오프셋 한 칸을 고친 사용자가 고른 적 없는 마감재를 바르게 됐다
+// ("문서에 되쓰지 않는다"는 assignmentOf의 약속이 한 층 위에서 깨졌다). 이제 조용히 아무것도
+// 하지 않는 대신 무엇을 해야 하는지 한 줄 알린다 — 마감재 행도 같은 면을 '미지정'으로 그린다.
 export function applyMaterialField(store, sel, el) {
   const m = FIELD.exec(el?.name ?? '');
   if (!m) return false;
   const [, which, key] = m;
   const target = targetFor(sel, key);
   if (!target) return true;
-  const cur = assignmentOf(activeFloor(store.get()), target);
-  if (!cur) return true;
+  const cur = explicitAssignmentOf(activeFloor(store.get()), target);
+  if (!cur) { toast(MATERIAL_PICK_FIRST); return true; }
   // Number('')는 0이고 유한하다: 빈 칸을 먼저 걸러내지 않으면 칸을 비운 사용자에게 0이 저장되고
   // 되돌림 단계까지 쌓인다(I-12). 빈 칸은 처리한 것으로 보고 무시한다(패널이 원래 값으로 다시 그린다).
   if (String(el.value ?? '').trim() === '') return true;
