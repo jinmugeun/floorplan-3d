@@ -38,6 +38,7 @@ import { openOnboarding, isOnboarded } from './ui/onboarding.js';
 import { createTopbar, projectIsEmpty } from './app/topbar.js';
 import { createDirtyTracker, createSaveIndicator } from './app/dirty.js';
 import { createProjectActions } from './app/projectActions.js';
+import { createFirstRoomFit } from './app/firstRoomFit.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
 import { stickyTools } from './ui/prefs.js';
@@ -223,15 +224,16 @@ const restored = loadAutosave();
 const dirty = createDirtyTracker(store, { onChange: () => saveInd.show() });
 const saveInd = createSaveIndicator(dirty);
 const auto = startAutosave(store, { onSaved: t => saveInd.markSaved('auto', t) });   // 표시 시각 = 저장 시각
-const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow() });
+// 첫 방이 생기면 화면을 한 번 맞춘다(§16.12 · 감사 §49 · 리뷰 I-1). 규칙과 "한 번" 래치는
+// app/firstRoomFit.js에 있다: undo/redo·방 전체 삭제·층 전환이 카메라를 다시 낚아채지 않게
+// 한 프로젝트 세션에 한 번만 튀고, 같은 자리에서 첫 방 유도(firstRoomHint)도 끈다.
+// 프로젝트를 갈아 끼우는 길은 스스로 fit을 부르므로 래치만 다시 잡는다(onProjectSwap = rearm).
+const firstRoomFit = createFirstRoomFit({ store, ui, view });
+const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm });
 // 온보딩을 닫으면 배너가 다음 행동을 가리킨다(§16.12 · 감사 §47).
 const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store, onDone: () => ui.set({ firstRoomHint: true }) }); };
 if (projectIsEmpty(store.get())) project.showStart({ onClose: maybeOnboard });
 else maybeOnboard();
-// 첫 방이 생기면 화면을 맞춘다(§16.12 · 감사 §49): 빈 프로젝트 기본 배율 0.056에서 처음 그린
-// 3000 mm 벽이 168 px이고 치수 라벨이 11 px이라 "화면 맞추기"를 스스로 눌러야 했다.
-let hadRooms = (activeFloor(store.get()).rooms ?? []).length > 0;
-store.subscribe(s => { const n = (activeFloor(s).rooms ?? []).length; if (!hadRooms && n > 0) view.fit(); hadRooms = n > 0; });
 document.getElementById('btnSave').addEventListener('click', () => {
   downloadText(filenameFor(store.get()), serializeProject(store.get()));
   auto.saveNow();               // 자동 저장본도 최신으로 만든다(그 onSaved가 시각을 먼저 적는다)
@@ -240,7 +242,7 @@ document.getElementById('btnSave').addEventListener('click', () => {
 });
 createTopbar({ store, ui, shell, menu, view3d, actions: project.actions });
 
-const files = createFileActions({ store, ui, view, view3d, toast: shell.toast, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow() });
+const files = createFileActions({ store, ui, view, view3d, toast: shell.toast, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm });
 document.getElementById('btnLoad').addEventListener('click', () => files.openFileDialog());
 document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventListener('click', () => files.captureNow()));
 files.wireDrop(document.getElementById('canvasWrap'));

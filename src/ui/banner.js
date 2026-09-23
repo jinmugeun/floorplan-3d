@@ -55,8 +55,8 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
         ? `<button type="button" class="hint" data-action="hintCancel">${esc(t.hint)}</button>`
         : `<span class="hint">${esc(t.hint)}</span>`;
     }
-    // 온보딩을 닫은 뒤의 첫 방 유도(§16.12 · 감사 §47). 방이 생기면 조건이 저절로 풀린다 —
-    // 플래그를 지우는 코드가 없어도 사라지므로 "한 번"이 지켜진다(다시 켜는 경로도 없다).
+    // 온보딩을 닫은 뒤의 첫 방 유도(§16.12 · 감사 §47). 방이 없는 동안만 보이고, 첫 방이 생기면
+    // app/firstRoomFit.js의 래치가 플래그를 끈다 — 그래서 새로 더한 빈 층에서 되살아나지 않는다.
     if (s.firstRoomHint && !(activeFloor(store.get())?.rooms?.length)) return `<span class="hint">${esc(FIRST_ROOM_HINT)}</span>`;
     return '';
   }

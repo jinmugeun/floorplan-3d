@@ -9,7 +9,9 @@ import { projectIsEmpty } from './topbar.js';
 
 // isDirty 기본값이 false인 것은 판정을 넘기지 않는 기존 호출자(드롭 배선 테스트)를 위한 것이다
 // — confirmLeave는 반대로 true(묻는 쪽)를 기본값으로 쓴다. 새로 배선하는 곳은 반드시 넘긴다(m2).
-export function createFileActions({ store, ui, view, view3d, toast = () => {}, confirm = confirmDialog, isDirty = () => false, markSaved = () => {}, saveNow = () => {} }) {
+// onProjectSwap: 불러오기로 프로젝트를 갈아 끼운 직후(view.fit()과 같은 자리) 부른다 — 첫 방 자동 fit
+// 래치를 새 프로젝트 기준으로 다시 잡는다(app/firstRoomFit.js).
+export function createFileActions({ store, ui, view, view3d, toast = () => {}, confirm = confirmDialog, isDirty = () => false, markSaved = () => {}, saveNow = () => {}, onProjectSwap = () => {} }) {
   async function loadFile(file) {
     if (!file) return;                            // 파일 선택 취소
     // §15.13(감사 §19): 작업 중이면 먼저 묻는다. 빈 프로젝트나 저장 직후에는 잃을 것이 없다.
@@ -20,7 +22,7 @@ export function createFileActions({ store, ui, view, view3d, toast = () => {}, c
     }
     // 불러온 직후는 "파일과 같은 상태"이지만 저장한 것은 아니다: 표시는 "저장 이력 없음"이 사실이다
     // (이 순간 자동 저장본은 방금 남긴 직전 프로젝트다 — "자동 저장됨"이라고 적으면 거짓이다).
-    try { store.replace(parseProject(await readTextFile(file))); view.fit(); markSaved('none'); toast(LOADED); }
+    try { store.replace(parseProject(await readTextFile(file))); view.fit(); onProjectSwap(); markSaved('none'); toast(LOADED); }
     catch (e) { toast(e.message); }
   }
   function openFileDialog() {

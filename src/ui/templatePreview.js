@@ -36,32 +36,43 @@ export function previewShapes(room, items = [], { size = PREVIEW_PX, pad = 4 } =
 }
 
 // 층 전체의 축소 도면(§16.12): 시작 화면 카드가 "어떤 도면인가"를 보여 준다. bbox는 방 폴리곤과
-// 벽 끝점을 함께 본다(방이 검출되지 않은 도면도 벽 모양이 보이게).
+// 벽 끝점을 함께 본다.
 export function projectShapes(floor, { size = PREVIEW_PX, pad = 4 } = {}) {
   const rooms = floor?.rooms ?? [];
-  const pts = [...rooms.flatMap(r => r.points ?? []), ...(floor?.walls ?? []).flatMap(w => [w.a, w.b])];
+  const walls = floor?.walls ?? [];
+  const pts = [...rooms.flatMap(r => r.points ?? []), ...walls.flatMap(w => [w.a, w.b])];
   const box = previewBox(pts);
   if (!box) return { outline: [], rooms: [], boxes: [] };
   const at = fitTransform(box, size, pad);
   const polys = rooms.map(r => (r.points ?? []).map(at)).filter(p => p.length > 2);
-  return { outline: polys[0] ?? [], rooms: polys, boxes: itemBoxes(floor?.items ?? [], at) };
+  // 방이 검출되지 않은 도면(열린 벽만 남은 자동 저장본)은 벽 선을 그려야 카드가 비지 않는다(리뷰 I-2).
+  // 방이 있으면 폴리곤이 이미 벽 자리를 보여 주므로 선을 겹쳐 그리지 않는다(96 px에서는 잡음이다).
+  return { outline: polys[0] ?? [], rooms: polys, walls: polys.length ? [] : walls.map(w => [at(w.a), at(w.b)]), boxes: itemBoxes(floor?.items ?? [], at) };
 }
 
 // 캔버스가 없거나 2D 컨텍스트를 못 얻는 환경(jsdom 기본)에서는 조용히 지나간다.
 export function drawPreview(canvas, shapes) {
   const ctx = canvas?.getContext?.('2d');
-  if (!ctx || !shapes?.outline?.length) return false;
+  // 방이 하나도 없어도 벽·제품이 있으면 그린다(리뷰 I-2): outline만 보던 가드가 방이 검출되지
+  // 않은 도면(열린 벽·제품만)의 카드를 통째로 비워 두었다.
+  if (!ctx || !(shapes?.rooms?.length || shapes?.outline?.length || shapes?.walls?.length || shapes?.boxes?.length)) return false;
   const w = canvas.width, h = canvas.height;
   ctx.clearRect(0, 0, w, h);
   // 방이 여러 개면 전부 그린다(projectShapes). 방 하나짜리(previewShapes)는 outline 하나다.
-  for (const poly of shapes.rooms ?? [shapes.outline]) {
+  for (const poly of (shapes.rooms ?? [shapes.outline]).filter(p => p?.length > 2)) {
     ctx.beginPath();
     poly.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
     ctx.closePath();
     ctx.fillStyle = FILL; ctx.fill();
     ctx.strokeStyle = OUTLINE; ctx.lineWidth = 1; ctx.stroke();
   }
-  for (const b of shapes.boxes) {
+  // 방 없는 도면의 벽 선(projectShapes가 그때만 채운다).
+  for (const seg of shapes.walls ?? []) {
+    ctx.beginPath();
+    ctx.moveTo(seg[0][0], seg[0][1]); ctx.lineTo(seg[1][0], seg[1][1]);
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = 1; ctx.stroke();
+  }
+  for (const b of shapes.boxes ?? []) {
     ctx.fillStyle = b.color ?? '#9aa4b2';
     ctx.fillRect(b.x, b.y, b.w, b.h);
     ctx.strokeStyle = OUTLINE; ctx.lineWidth = 0.5;

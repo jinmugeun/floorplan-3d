@@ -34,8 +34,9 @@ export function createPopover(root) {
     // 이 리스너는 document의 **캡처** 단계다(아래 addEventListener(..., true)): 여기서 전파를
     // 끊으면 타깃과 그 안의 어떤 keydown 리스너에도 이벤트가 닿지 않는다(글자 삽입 자체는
     // 기본 동작이라 살아남는다). 그래서 팝오버 안의 입력·선택·여러 줄 칸에서는 끊지 않는다 —
-    // 그러지 않으면 그 칸에서 누른 [Enter]·[Esc]가 keymap.js의 INPUT 가드(commitField·
-    // revertField)까지 가지 못한다. 읽기만 하는 상태에서 누른 [L]만 막는 것이 목표다.
+    // 그러지 않으면 그 칸에서 누른 [Enter]가 keymap.js의 INPUT 가드(commitField)까지 가지 못한다.
+    // [Esc]는 위 :27이 타깃과 무관하게 먼저 팝오버를 닫으므로 revertField에는 닿지 않는다(기존 동작).
+    // 읽기만 하는 상태에서 누른 [L]만 막는 것이 목표다.
     const t = ev.target;
     const inField = t?.tagName === 'INPUT' || t?.tagName === 'SELECT' || t?.tagName === 'TEXTAREA';
     if (!inField && !ev.ctrlKey && !ev.metaKey && !ev.altKey) ev.stopPropagation();

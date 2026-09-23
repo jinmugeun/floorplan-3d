@@ -13,7 +13,9 @@ import { promptDialog } from '../ui/promptDialog.js';
 import { projectIsEmpty, confirmLeave } from './topbar.js';
 import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN } from '../ui/messages.js';
 
-export function createProjectActions({ store, ui, view, toast = () => {}, restored = null, isDirty = () => true, markSaved = () => {}, saveNow = () => {} }) {
+// onProjectSwap: 프로젝트를 갈아 끼운 직후(view.fit()과 같은 자리) 부른다 — 첫 방 자동 fit 래치를
+// 새 프로젝트 기준으로 다시 잡는다(app/firstRoomFit.js). 넘기지 않는 호출자(테스트)에는 아무 일도 없다.
+export function createProjectActions({ store, ui, view, toast = () => {}, restored = null, isDirty = () => true, markSaved = () => {}, saveNow = () => {}, onProjectSwap = () => {} }) {
   // 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
   function showStart({ restore = restored, onClose = () => {} } = {}) {
     openStartScreen({
@@ -22,11 +24,11 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       onClose,
       // 복원은 되돌릴 단계가 아니고, 복원한 상태는 자동 저장본과 같으므로 "자동 저장됨"이 사실이다
       // (§15.7). 다만 표시 시각은 자동 저장 시각이 아니라 복원 시각이다 — 저장본에 시각이 없다.
-      onRestore: () => { if (restore) { store.replace(restore, { record: false }); view.fit(); markSaved('auto'); toast(RESTORED); } },
+      onRestore: () => { if (restore) { store.replace(restore, { record: false }); view.fit(); onProjectSwap(); markSaved('auto'); toast(RESTORED); } },
       onEmpty: () => {},
       onUpload: () => openBackgroundDialog({ store }),
-      onSample: () => { loadSample(store); view.fit(); },
-      onTemplate: id => { const p = templateProject(id); if (p) { store.replace(p); view.fit(); } },
+      onSample: () => { loadSample(store); view.fit(); onProjectSwap(); },
+      onTemplate: id => { const p = templateProject(id); if (p) { store.replace(p); view.fit(); onProjectSwap(); } },
     });
   }
 
@@ -51,6 +53,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       store.replace(createEmptyProject());
       ui.set({ selection: null, soloRoom: null, matPick: null });
       view.fit();
+      onProjectSwap();                   // 빈 프로젝트의 첫 방도 한 번은 화면을 맞춘다(래치 재무장)
       markSaved('none');                 // 빈 프로젝트는 "저장 안 된 변경"도, 저장된 것도 아니다
       showStart({ restore: null });      // 방금 비웠으므로 "이어서 작업" 카드는 뜻이 없다
     },

@@ -56,3 +56,44 @@ test('projectShapes는 층 전체(방 여러 개 + 제품)를 한 상자에 담�
   expect(projectShapes({ walls: [], rooms: [], items: [] })).toEqual({ outline: [], rooms: [], boxes: [] });
   expect(projectShapes(null)).toEqual({ outline: [], rooms: [], boxes: [] });
 });
+
+// 리뷰 I-2: 방이 검출되지 않은 도면(열린 벽 + 제품)의 카드가 통째로 비어 있었다 — outline만 보던
+// 가드가 벽·제품을 함께 버렸다. 캔버스 호출을 세어 "무언가 그렸다"를 못 박는다.
+test('방이 없어도 벽과 제품을 그린다(빈 카드가 되지 않는다)', () => {
+  const floor = {
+    walls: [{ id: 'w1', a: [0, 0], b: [4000, 0], thickness: 200 }, { id: 'w2', a: [4000, 0], b: [4000, 3000], thickness: 200 }],
+    rooms: [],   // 열린 벽이라 방이 검출되지 않는다
+    items: [createItem(productById('sofa-3'), { pos: [2000, 1500] })],
+  };
+  const s = projectShapes(floor, { size: PREVIEW_PX, pad: 4 });
+  expect(s.rooms).toEqual([]);
+  expect(s.outline).toEqual([]);
+  expect(s.walls).toHaveLength(2);      // 방이 없을 때만 벽 선을 돌려준다
+  expect(s.boxes).toHaveLength(1);
+  // 가짜 2D 컨텍스트로 호출을 센다(jsdom에는 컨텍스트가 없다).
+  const ops = [];
+  const rec = new Proxy({}, {
+    get: (_, k) => (typeof k === 'string' && /^(clearRect|beginPath|moveTo|lineTo|closePath|fill|stroke|fillRect|strokeRect)$/.test(k)
+      ? (...a) => ops.push([k, ...a])
+      : undefined),
+    set: () => true,                    // fillStyle·strokeStyle·lineWidth 대입은 흘려보낸다
+  });
+  const canvas = { width: PREVIEW_PX, height: PREVIEW_PX, getContext: () => rec };
+  expect(drawPreview(canvas, s)).toBe(true);
+  const names = ops.map(o => o[0]);
+  expect(names.filter(n => n === 'lineTo')).toHaveLength(2);   // 벽 두 장
+  expect(names).toContain('fillRect');                        // 제품 발자국
+  expect(names.filter(n => n === 'fill')).toHaveLength(0);     // 방 폴리곤은 없다
+  // 그릴 것이 하나도 없으면 여전히 false다(카드는 빈 채 남는다).
+  expect(drawPreview(canvas, { outline: [], rooms: [], walls: [], boxes: [] })).toBe(false);
+});
+
+// 방이 있는 도면에서는 벽 선을 겹쳐 그리지 않는다(폴리곤이 이미 벽 자리를 보여 준다).
+test('방이 검출되면 walls는 비어 있다', () => {
+  const floor = {
+    walls: [{ id: 'w1', a: [0, 0], b: [4000, 0], thickness: 200 }],
+    rooms: [{ id: 'r1', points: [[0, 0], [4000, 0], [4000, 3000], [0, 3000]] }],
+    items: [],
+  };
+  expect(projectShapes(floor, { size: PREVIEW_PX, pad: 4 }).walls).toEqual([]);
+});
