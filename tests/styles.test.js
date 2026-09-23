@@ -204,3 +204,19 @@ test('시작 화면 축소 도면 캔버스도 화면에서 96 px 정사각이�
   // 커서는 선언하지 않는다: 카드가 버튼이므로 pointer를 물려받아야 "누르면 열린다"가 참이다.
   expect(box).not.toMatch(/cursor:/);
 });
+
+// 리뷰 M-20: `:not(.primary)`가 .danger(0,1,0)의 빨간 테두리를 이기는 덫이 두 자리 더 있었다 —
+// `#props .row`의 [층 삭제](floorBar.js)와 갤러리의 [삭제](galleryDialog.js)가 특이도 0,2,1로
+// 이겨 [이름 변경]·[내려받기]와 같은 회색 테두리가 됐다. §16.9·§16.10이 "파괴적 동작을 눈에
+// 띄게"를 두 번 정한 브랜치에서 남길 값이 아니다.
+test('.danger 버튼의 빨간 테두리를 덮는 규칙이 없다(리뷰 M-20)', () => {
+  expect(CSS).toContain('#props .row button:not(.primary):not(.danger)');
+  expect(CSS).toContain('.shot button:not(.primary):not(.danger)');
+  expect(CSS).toContain('.start-card.tpl.user .row button:not(.primary):not(.danger)');
+  // 이겨야 하는 상대가 실제로 빨간 테두리를 선언한다는 것도 함께 못 박는다.
+  expect(CSS).toMatch(/\.danger \{[^}]*border-color:\s*var\(--exhaust\)/);
+  // 나머지 `button:not(.primary)` 규칙의 범위 안에는 .danger 버튼이 없다(리뷰가 전수 확인한 셋만
+  // 문제였다). 그 규칙이 늘면 여기서 다시 보아야 한다는 표시로 개수를 고정한다.
+  const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  expect(bare.match(/button:not\(\.primary\)(?!:not\(\.danger\))/g)).toHaveLength(13);
+});

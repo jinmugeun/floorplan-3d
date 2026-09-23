@@ -86,6 +86,11 @@ test('레이어 일괄 표시 문구는 §16.3이 적은 글자 그대로다', (
   expect(LAYERS_HIDDEN(39, 10)).toBe('제품 39개 · 덕트 10개를 숨겼습니다');
   expect(LAYERS_SHOWN(39, 10)).toBe('제품 39개 · 덕트 10개를 보이게 했습니다');
   expect(LAYERS_HIDDEN(2, 0)).toBe('제품 2개를 숨겼습니다');      // 없는 쪽은 말하지 않는다
+  expect(LAYERS_SHOWN(0, 3)).toBe('덕트 3개를 보이게 했습니다');
+  // 경계(리뷰 M-7): 둘 다 0이면 주어 없는 '를 숨겼습니다'가 아니라 **빈 문자열**이다 —
+  // 문구 함수가 스스로 방어한다(예전에는 호출자의 if 하나에만 기댔다).
+  expect(LAYERS_HIDDEN(0, 0)).toBe('');
+  expect(LAYERS_SHOWN(0, 0)).toBe('');
 });
 
 // §16.8: 사용자에게 보이는 문구는 messages.js 한 곳에서 온다. 사람 눈으로는 30개가 지나갔으므로

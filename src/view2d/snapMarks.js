@@ -18,14 +18,19 @@ export function drawSnapMark(ctx, view, mark) {
   const text = `${SNAP_GLYPH[hit]} ${SNAP_LABEL[hit]}`;
   ctx.save();
   ctx.font = MARK_FONT;
-  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   // 라벨은 반투명 흰 상자 위에 올린다(덕트 띠·방 이름 위에서도 읽히게 — 라벨 규칙과 같은 LABEL_BG).
   const w = ctx.measureText(text).width + 8;
+  // 캔버스 우변에서는 커서 왼쪽에 그린다(리뷰 M-16): 늘 오른쪽에만 그리면 상자와 글자가 잘려
+  // 새 §16.6 기능이 그 자리에서 읽히지 않았다.
+  const cw = ctx.canvas?.clientWidth || ctx.canvas?.width || 0;
+  const flip = cw > 0 && s[0] + MARK_OFFSET_PX + w > cw;   // 폭을 모르면 예전처럼 오른쪽이다
+  ctx.textAlign = flip ? 'right' : 'left';
+  const x = flip ? s[0] - MARK_OFFSET_PX : s[0] + MARK_OFFSET_PX;
   ctx.fillStyle = LABEL_BG;
-  ctx.fillRect(s[0] + MARK_OFFSET_PX - 4, s[1] - 9, w, 18);
+  ctx.fillRect(flip ? x - w + 4 : x - 4, s[1] - 9, w, 18);
   ctx.fillStyle = view.COLORS.dim;
-  ctx.fillText(text, s[0] + MARK_OFFSET_PX, s[1]);
+  ctx.fillText(text, x, s[1]);
   // 스냅이 잡은 **자리**도 표시한다: 라벨만 있으면 어디에 물렸는지가 여전히 애매하다.
   ctx.strokeStyle = view.COLORS.wallSel;
   ctx.lineWidth = 2;

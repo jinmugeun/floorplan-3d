@@ -57,16 +57,23 @@ function ductRow(d, { units, selected }) {
 // buckets = [{ room, items, ducts }] (layersPanel.buckets()의 결과 그대로).
 export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidden = true, selectedIds = new Set(), renaming = null, openState = new Map() } = {}) {
   // 꼬리표는 **트리 전체**에서 같은 이름을 센다: 같은 후드 세 개가 서로 다른 방에 있어도 구분된다.
+  // 번호도 같은 목록(숨김 필터 **전**)에서 매긴다(리뷰 M-6): 그려진 행에서만 세면 소파 둘 중 앞의
+  // 것을 숨기고 "숨긴 항목 보기"를 끄는 순간 남은 #2가 #1이 됐다 — 같은 물건의 번호가 바뀌면
+  // 꼬리표가 하려던 일(무엇이 무엇인지 알려 주기)을 못 한다.
   const counts = new Map();
-  for (const b of buckets) for (const it of b.items) counts.set(nameOf(it), (counts.get(nameOf(it)) ?? 0) + 1);
-  const seen = new Map();
+  const seqOf = new Map();
+  for (const b of buckets) for (const it of b.items) {
+    const n = (counts.get(nameOf(it)) ?? 0) + 1;
+    counts.set(nameOf(it), n);
+    seqOf.set(it.id, n);
+  }
   const node = b => {
     const items = b.items.filter(it => showHidden || !it.hidden);
     const ducts = b.ducts.filter(d => showHidden || !d.hidden);
     const hiddenCount = (b.items.length - items.length) + (b.ducts.length - ducts.length);
     const rows = items.map(it => {
       const name = nameOf(it);
-      const seq = (seen.get(name) ?? 0) + 1; seen.set(name, seq);
+      const seq = seqOf.get(it.id) ?? 1;
       return itemRow(it, { tag: itemTag(it, { seq, total: counts.get(name) ?? 1 }), selected: selectedIds.has(it.id), renaming: renaming === it.id });
     }).join('') + ducts.map(d => ductRow(d, { units, selected: selectedIds.has(d.id) })).join('');
     const hiddenLine = hiddenCount > 0

@@ -3,7 +3,7 @@ import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
 import { focusTrap } from './dialogBase.js';
 import { toast } from './toast.js';
-import { FLOOR_ADDED } from './messages.js';
+import { FLOOR_ADDED, NAME_REQUIRED } from './messages.js';
 
 const COPY_OPTIONS = [['none', '없음'], ['plan', '도면만'], ['all', '전체']];
 
@@ -16,7 +16,7 @@ export function openFloorDialog({ store, mode = 'add', index = null, onClose = (
     <header><h2>${mode === 'rename' ? '층 이름 변경' : '층 추가하기'}</h2><button type="button" name="close" aria-label="닫기">✕</button></header>
     <label class="field"><span>이름</span><input type="text" name="floorName" value="${esc(current)}"></label>
     ${mode === 'rename' ? '' : `<fieldset class="field"><legend>복사 옵션</legend>${COPY_OPTIONS.map(([v, l], i) => `<label class="check"><input type="radio" name="copy" value="${v}" ${i === 0 ? 'checked' : ''}> ${l}</label>`).join('')}</fieldset>`}
-    <p class="error" name="error" hidden>이름을 입력해 주세요</p>
+    <p class="error" name="error" hidden>${NAME_REQUIRED}</p>
     <div class="toolbar"><button type="button" name="submit" class="primary">${mode === 'rename' ? '변경' : '추가'}</button></div>
   </div>`;
   document.body.appendChild(root);

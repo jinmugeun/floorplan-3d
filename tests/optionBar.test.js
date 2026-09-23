@@ -158,6 +158,22 @@ describe('옵션 바의 치수 칸(§16.7)', () => {
     root.remove();
   });
 
+  // 리뷰 M-11: ft·in 치수 칸의 data-mm은 그릴 때의 모델 값으로 굳어 마우스를 움직이는 동안
+  // 영구히 낡았다. 이 속성의 유일한 의미는 "readLen이 *고치지 않았다*를 판정하는 기준"이다.
+  test('syncDimBar는 ft·in 칸의 data-mm도 값과 함께 갱신한다', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div id="optionBar"><span id="optionDims"></span></div>';
+    document.body.appendChild(root);
+    const host = root.querySelector('#optionDims');
+    syncDimBar(root, wallTool(3000), { units: 'ftin' });
+    const el = host.querySelector('[name="dim:len"]');
+    expect(el.dataset.mm).toBe('3000');
+    syncDimBar(root, wallTool(3500), { units: 'ftin' });
+    expect(el.dataset.mm).toBe('3500');                       // 예전에는 3000으로 남았다
+    expect(el.value).toBe('3500');                            // 값은 도구가 준 text 그대로다
+    root.remove();
+  });
+
   test('옵션 숫자 칸에 단위별 step과 min/max가 붙고 값이 범위로 잘린다(M-1)', () => {
     expect(OPTION_RANGE.thickness).toEqual([2, 1000]);
     const html = optionBarHtml({ name: 'wall', opts: { thickness: 200 } }, { units: 'mm' });

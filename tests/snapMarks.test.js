@@ -3,10 +3,11 @@
 import { describe, test, expect } from 'vitest';
 import { drawSnapMark, SNAP_GLYPH, SNAP_LABEL, MARK_OFFSET_PX } from '../src/view2d/snapMarks.js';
 
-const fakeCtx = () => {
+const fakeCtx = (clientWidth = 800) => {
   const calls = [];
   return {
-    calls, save() { calls.push(['save']); }, restore() { calls.push(['restore']); },
+    calls, canvas: { clientWidth, width: clientWidth },
+    save() { calls.push(['save']); }, restore() { calls.push(['restore']); },
     fillRect(...a) { calls.push(['fillRect', ...a]); }, strokeRect(...a) { calls.push(['strokeRect', ...a]); },
     fillText(...a) { calls.push(['fillText', ...a]); }, measureText: t => ({ width: t.length * 7 }),
     set font(v) { calls.push(['font', v]); }, set fillStyle(v) { calls.push(['fillStyle', v]); },
@@ -32,6 +33,23 @@ describe('스냅 마커', () => {
     expect(text[3]).toBeCloseTo(890.25 / 10, 6);
     expect(ctx.calls.some(c => c[0] === 'strokeRect')).toBe(true);   // 스냅 점 자체의 표시
     expect(ctx.calls.at(-1)[0]).toBe('restore');                     // 상태를 되돌린다
+  });
+
+  // 리뷰 M-16: 라벨이 언제나 커서 오른쪽에만 그려져 캔버스 우변에서 상자와 글자가 잘렸다.
+  test('캔버스 우변에서는 커서 왼쪽에 그린다(리뷰 M-16)', () => {
+    const ctx = fakeCtx(200);                                  // 200 px 폭
+    expect(drawSnapMark(ctx, view, { point: [1950.5, 400.25], hit: 'point' })).toBe(true);   // x = 195.05 px
+    const text = ctx.calls.find(c => c[0] === 'fillText');
+    const align = ctx.calls.filter(c => c[0] === 'textAlign').at(-1);
+    const box = ctx.calls.find(c => c[0] === 'fillRect');
+    expect(align[1]).toBe('right');
+    expect(text[2]).toBeCloseTo(195.05 - MARK_OFFSET_PX, 6);   // 커서 왼쪽으로 14 px
+    expect(box[1]).toBeGreaterThanOrEqual(0);                  // 상자가 캔버스 안에 들어온다
+    expect(box[1] + box[3]).toBeLessThanOrEqual(200);
+    // 여유가 있으면 그대로 오른쪽이다.
+    const ok = fakeCtx(800);
+    drawSnapMark(ok, view, { point: [1950.5, 400.25], hit: 'point' });
+    expect(ok.calls.filter(c => c[0] === 'textAlign').at(-1)[1]).toBe('left');
   });
 
   test('hit이 없거나 모르는 종류면 아무것도 그리지 않는다', () => {

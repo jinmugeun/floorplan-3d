@@ -61,3 +61,19 @@ describe('레이어 트리 HTML', () => {
     expect(ALL_HIDE).toBe('모두 숨기기');
   });
 });
+
+// 리뷰 M-6: 번호는 숨김 필터 **전** 목록에서 매긴다 — 그려진 행에서만 세면 앞의 것을 숨기는
+// 순간 남은 #2가 #1이 되어 같은 물건의 꼬리표가 바뀐다(사용자에게 보이는 오정보).
+const tags = html => [...html.matchAll(/layer-tag">([^<]*)</g)].map(m => m[1]);
+test('꼬리표 번호가 숨김 필터에 흔들리지 않는다(리뷰 M-6)', () => {
+  const a = sofa(), b = { ...sofa(), hidden: true }, c = sofa();
+  const bucket = () => [{ room: room('r1', '가열조리실', 18.2), items: [a, b, c], ducts: [] }];
+  expect(tags(layerTreeHtml(bucket(), ctx))).toEqual(['#1', '#2', '#3']);
+  expect(tags(layerTreeHtml(bucket(), { ...ctx, showHidden: false }))).toEqual(['#1', '#3']);   // 예전에는 ['#1','#2']
+  // 방이 갈려도 트리 전체에서 한 번호다(숨김 필터 앞의 순서 그대로).
+  const split = layerTreeHtml([
+    { room: room('r1', '가열조리실', 18.2), items: [a, b], ducts: [] },
+    { room: room('r2', '부식창고', 5.4), items: [c], ducts: [] },
+  ], { ...ctx, showHidden: false });
+  expect(tags(split)).toEqual(['#1', '#3']);
+});

@@ -149,6 +149,11 @@ export function syncDimBar(root, tool, { units = 'mm' } = {}) {
     el.parentElement?.classList.toggle('on', !!f.active);
     if (el === host.ownerDocument?.activeElement) continue;
     if (el.value !== f.text) el.value = f.text;
+    // 값과 함께 기준값도 갱신한다(리뷰 M-11): data-mm의 유일한 의미는 "readLen이 *고치지 않았다*를
+    // 판정하는 기준"인데, 그리기 때의 값 그대로 남아 마우스를 움직이는 동안 영구히 낡았다.
+    // 지금은 읽는 곳이 없어 무해하지만, 누군가 치수 칸의 change를 applyOptionInput으로 흘리면
+    // 낡은 기준값이 틀린 mm를 확정한다. lenField·optionBarHtml은 setLen이 이미 이렇게 한다.
+    if (el.dataset.len) el.dataset.mm = String(f.mm);
   }
   return true;
 }

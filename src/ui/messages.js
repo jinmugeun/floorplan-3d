@@ -123,9 +123,11 @@ export const EST_EMPTY_TITLE = '배치된 제품·마감재·덕트가 없습니
 // 레이어 일괄 표시(§16.3 · 감사 §20·§25): 39 + 10개가 조용히 사라지던 자리다.
 // 0인 쪽은 문구에서 뺀다("덕트 0개를 숨겼습니다"는 없는 일을 말한다). 둘 다 있으면
 // §16.3이 적어 둔 글자 그대로가 된다: "제품 39개 · 덕트 10개를 숨겼습니다".
+// 둘 다 0이면 **빈 문자열**을 돌려준다(리뷰 M-7): 그러지 않으면 주어 없는 '를 숨겼습니다'가 나오고,
+// 그것을 막는 것이 호출자의 if 하나뿐이었다(layersPanel.js). 문구 함수가 스스로 방어한다.
 const countPhrase = (items, ducts) => [items ? `제품 ${items}개` : '', ducts ? `덕트 ${ducts}개` : ''].filter(Boolean).join(' · ');
-export const LAYERS_HIDDEN = (items, ducts) => `${countPhrase(items, ducts)}를 숨겼습니다`;
-export const LAYERS_SHOWN = (items, ducts) => `${countPhrase(items, ducts)}를 보이게 했습니다`;
+export const LAYERS_HIDDEN = (items, ducts) => { const p = countPhrase(items, ducts); return p ? `${p}를 숨겼습니다` : ''; };
+export const LAYERS_SHOWN = (items, ducts) => { const p = countPhrase(items, ducts); return p ? `${p}를 보이게 했습니다` : ''; };
 
 // 층 관리(§16.4 · 감사 §28·§30): 91개를 복제하고 활성 층까지 바뀌는데 아무 말이 없었다.
 // 복사하지 않았으면 뒷절을 빼고 "Floor 2 추가"만 말한다.
