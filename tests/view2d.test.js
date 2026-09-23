@@ -472,3 +472,29 @@ test('그리기 도구의 getPreview 고스트는 드래그 프리뷰로 새지 
     v.destroy();
   } finally { globalThis.requestAnimationFrame = realRaf; globalThis.cancelAnimationFrame = realCancel; }
 });
+
+// §17.4(4): 라벨 패스가 덕트 띠를 장애물로 넘긴다(순수 규칙은 labels2d.test.js가 본다).
+// 캔버스 스텁·프레임 대기는 이 파일의 `test('v2 flags decide what the 2D canvas draws')`와 같은 모양이다.
+test('덕트 띠 위의 방 이름은 라벨 패스에서 빠진다', async () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0.5, 0.25], [6000.5, 4000.25], 200));
+  store.dispatch(d => { activeFloor(d).rooms[0].name = '비가열조리실'; }, { record: false });
+  const texts = [];
+  const c = makeCanvas();
+  c.getContext = () => new Proxy({}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 10 }) : k === 'fillText' ? (s => texts.push(s)) : (k in t ? t[k] : () => {})), set: (t, k, v) => { t[k] = v; return true; } });
+  const v = createView2D(c, store, createUiState());
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  await frame(); await frame();
+  expect(texts).toContain('비가열조리실');
+  // 방 중심선을 그대로 지나는 폭 1600 mm 덕트를 놓으면 그 자리가 장애물이 된다.
+  // 수치는 못 박혀 있다(기본 카메라 cx 4000 · cy 3000 · scale 0.08 px/mm · 캔버스 800×600):
+  //   방 중심(벽 중심선 폴리곤의 centroid) = [3000.5, 2000.25] → 화면 [320.0, 220.0]
+  //   방 이름은 중심 위 ROOM_NAME_DY(16 px) → 화면 y 204.0, 상자 높이 13 + 6 = 19 px → y ∈ [194.5, 213.5]
+  //   덕트 띠(y 2000.25 · w 1600) → 화면 y ∈ [156.0, 284.0] · x ∈ [80.0, 600.0]
+  // → 이름 상자가 띠 안에 완전히 들어가므로 placeLabels가 그 후보를 버린다("정한 것 25"의 대가다).
+  texts.length = 0;
+  store.dispatch(d => { activeFloor(d).ducts.push({ id: 'd1', kind: 'supply', system: 'SA-1', hidden: false, locked: false, points: [[0.5, 2000.25], [6000.5, 2000.25]], segments: [{ w: 1600, h: 400, z: 2900 }], dampers: [], connections: [] }); }, { record: false });
+  await frame(); await frame();
+  expect(texts).not.toContain('비가열조리실');
+  v.destroy();
+});

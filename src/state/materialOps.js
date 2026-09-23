@@ -61,12 +61,29 @@ export function setWallRegions(store, wallId, side, regions, opts = {}) {
   }, opts);
 }
 
+// 새 형식(matIn·matOut·floorMat·ceilingMat)이 비어 있으면 **레거시 문자열 필드**로 떨어진다(§17.4(1)).
+// 레거시 필드는 옛 파일만의 것이 아니다: geom/walls.js의 makeWall({ material = 'paint-white' })과
+// geom/rooms.js의 floorMaterial · ceilingMaterial: 'paint-white'가 지금도 만든다.
+// 값은 **읽기 전용 파생**이다 — 문서에 되쓰지 않는다(저장 형식 무변경).
+// 레거시 값 중 'wood'는 **카탈로그에 없는 id**다(마루는 wood-oak·wood-walnut·wood-ash). 그래서
+// 별칭 표를 카탈로그 조회 **앞에** 둔다: 옛 파일이 들고 있는 'wood'가 조용히 null이 되어 시방서
+// 바닥 마감이 다시 `-`가 되는 것을 막는다. 가장 가까운 값은 오크 원목마루(WD-01)다.
+// 별칭은 읽기 전용이다 — 문서의 문자열은 그대로 남는다(새 방의 기본값만 rooms.js가 고친다).
+export const LEGACY_MAT_KEY = { in: 'material', out: 'material', floor: 'floorMaterial', ceiling: 'ceilingMaterial' };
+export const LEGACY_MATERIAL = { wood: 'wood-oak' };
+const legacyAssign = v => (typeof v === 'string' && v ? normalizeAssignment({ id: LEGACY_MATERIAL[v] ?? v }) : null);   // 모르는 id면 null
+
 export function assignmentOf(floor, target) {
   if (!target) return null;
-  if (target.kind === 'wall') return floor.walls.find(x => x.id === target.id)?.[matKey(target.side)] ?? null;
+  if (target.kind === 'wall') {
+    const w = floor.walls.find(x => x.id === target.id);
+    if (!w) return null;
+    return w[matKey(target.side)] ?? legacyAssign(w[LEGACY_MAT_KEY[sideKey(target.side)]]);
+  }
   const r = floor.rooms.find(x => x.id === target.id);
   if (!r) return null;
-  return (target.kind === 'ceiling' ? r.ceilingMat : r.floorMat) ?? null;
+  const k = target.kind === 'ceiling' ? 'ceiling' : 'floor';
+  return (k === 'ceiling' ? r.ceilingMat : r.floorMat) ?? legacyAssign(r[LEGACY_MAT_KEY[k]]);
 }
 
 // 읽기 전용: 상태 배열을 그대로 주지 않고 얕은 사본을 돌려준다(호출자가 push/splice해도

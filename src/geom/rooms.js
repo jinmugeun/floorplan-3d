@@ -113,7 +113,8 @@ export function detectRooms(walls, prevRooms = []) {
       id: prev?.id ?? uid('r'),
       name: prev?.name ?? '', type: prev?.type ?? 'none',
       floorOffset: prev?.floorOffset ?? 0, height: prev?.height ?? 2300, hideCeiling: prev?.hideCeiling ?? false,
-      floorMaterial: prev?.floorMaterial ?? 'wood', ceilingMaterial: prev?.ceilingMaterial ?? 'paint-white',
+      // 카탈로그 id로 둔다(materialOps의 LEGACY_MATERIAL 별칭은 **옛 파일**만을 위한 것이다).
+      floorMaterial: prev?.floorMaterial ?? 'wood-oak', ceilingMaterial: prev?.ceilingMaterial ?? 'paint-white',
       seats: prev?.seats ?? 0, matchWallHeight: prev?.matchWallHeight ?? false,
       floorColor: prev?.floorColor ?? ROOM_FLOOR_COLOR, ceilingColor: prev?.ceilingColor ?? ROOM_CEILING_COLOR,
       floorMat: prev?.floorMat ?? null, ceilingMat: prev?.ceilingMat ?? null,

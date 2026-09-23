@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeProject, normalizeAssignment, normalizeRegion, MAT_RANGE } from '../src/state/schema.js';
 import { addWalls, duplicateRoom, addFloor } from '../src/state/floorOps.js';
-import { applyMaterial, applyRoomWalls, setWallRegions, assignmentOf, regionsOf, faceArea } from '../src/state/materialOps.js';
+import { applyMaterial, applyRoomWalls, setWallRegions, assignmentOf, regionsOf, faceArea, LEGACY_MAT_KEY, LEGACY_MATERIAL } from '../src/state/materialOps.js';
 import { rectWalls, makeWall, splitWall, wallLength } from '../src/geom/walls.js';
 
 function setup() {
@@ -153,8 +153,9 @@ describe('마감재 상태 연산', () => {
     applyMaterial(s, { kind: 'wall', id: wallId, side: 'in' }, mat('paint-navy'));
     const g = activeFloor(s.get());
     expect(assignmentOf(g, { kind: 'wall', id: wallId, side: 'in' }).id).toBe('paint-navy');
-    expect(assignmentOf(g, { kind: 'wall', id: wallId, side: 'out' })).toBeNull();
-    expect(assignmentOf(g, { kind: 'floor', id: roomId })).toBeNull();
+    // §17.4(1): 새 형식이 비어 있는 면은 이제 레거시 문자열 필드로 떨어진다(예전 기대값은 null이었다).
+    expect(assignmentOf(g, { kind: 'wall', id: wallId, side: 'out' }).id).toBe('paint-white');   // makeWall의 material
+    expect(assignmentOf(g, { kind: 'floor', id: roomId }).id).toBe('wood-oak');                  // detectRooms의 floorMaterial
     expect(assignmentOf(g, null)).toBeNull();
     const w = g.walls.find(x => x.id === wallId);
     expect(faceArea(g, { kind: 'wall', id: wallId, side: 'in' })).toBeCloseTo((wallLength(w) * w.height) / 1e6, 6);
@@ -272,6 +273,48 @@ describe('마감재 상태 연산', () => {
     expect(net).toBeCloseTo(gross - (900 * 2100) / 1e6, 6);
     // 옵션을 생략하면(기본 false) 여전히 총면적이다.
     expect(faceArea(g0, { kind: 'wall', id: w.id, side: 'in' })).toBeCloseTo(gross, 6);
+  });
+
+  // §17.4(1) · 감사 §38·§10: 레거시 문자열 필드는 옛 파일만의 것이 아니다 — geom/walls.js의
+  // makeWall({ material: 'paint-white' })과 geom/rooms.js의 floorMaterial이 **지금도** 만든다.
+  // 그 값 중 'wood'는 마감재 카탈로그에 **없는 id**다(마루는 wood-oak·wood-walnut·wood-ash).
+  // 그래서 조회에는 별칭 표(LEGACY_MATERIAL)가 있고, 새 방은 Step 3(b)부터 'wood-oak'로 만들어진다.
+  test('assignmentOf는 새 형식이 없으면 레거시 문자열 필드로 떨어진다', () => {
+    expect(LEGACY_MAT_KEY).toEqual({ in: 'material', out: 'material', floor: 'floorMaterial', ceiling: 'ceilingMaterial' });
+    expect(LEGACY_MATERIAL).toEqual({ wood: 'wood-oak' });
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+    const f = activeFloor(store.get());
+    const w = f.walls[0], r = f.rooms[0];
+    expect(w.material).toBe('paint-white');           // rectWalls → makeWall의 기본값
+    expect(r.floorMaterial).toBe('wood-oak');         // Step 3(b)가 고친 detectRooms의 기본값
+    const inAssign = assignmentOf(f, { kind: 'wall', id: w.id, side: 'in' });
+    expect(inAssign).toEqual({ id: 'paint-white', offset: [0, 0], angle: 0 });
+    expect(assignmentOf(f, { kind: 'wall', id: w.id, side: 'out' }).id).toBe('paint-white');
+    expect(assignmentOf(f, { kind: 'floor', id: r.id }).id).toBe('wood-oak');
+    expect(assignmentOf(f, { kind: 'ceiling', id: r.id }).id).toBe('paint-white');
+    // 옛 파일이 들고 있는 'wood'는 별칭 표를 지나 wood-oak가 된다(저장 형식은 그대로 — 되쓰지 않는다).
+    const legacy = { walls: [], rooms: [{ id: 'r9', floorMaterial: 'wood', ceilingMaterial: 'paint-white' }] };
+    expect(assignmentOf(legacy, { kind: 'floor', id: 'r9' })).toEqual({ id: 'wood-oak', offset: [0, 0], angle: 0 });
+    expect(legacy.rooms[0].floorMaterial).toBe('wood');   // 문서는 손대지 않는다
+    // 카탈로그에 없고 별칭에도 없는 id면 null이다(모르는 재질을 이름으로 찍지 않는다).
+    const bad = { walls: [{ id: 'w9', material: '없는재질' }], rooms: [] };
+    expect(assignmentOf(bad, { kind: 'wall', id: 'w9', side: 'in' })).toBeNull();
+    expect(assignmentOf(f, { kind: 'wall', id: '없는벽', side: 'in' })).toBeNull();
+    expect(assignmentOf(f, null)).toBeNull();
+  });
+
+  test('새 형식이 있으면 그것이 이기고, 조회는 문서를 바꾸지 않는다', () => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+    const id = activeFloor(store.get()).walls[0].id;
+    applyMaterial(store, { kind: 'wall', id, side: 'in' }, { id: 'steel-brush', offset: [10, 20], angle: 30 });
+    const f = activeFloor(store.get());
+    expect(assignmentOf(f, { kind: 'wall', id, side: 'in' })).toEqual({ id: 'steel-brush', offset: [10, 20], angle: 30 });
+    const before = JSON.stringify(store.get());
+    assignmentOf(f, { kind: 'wall', id, side: 'out' });        // 레거시 폴백 경로
+    assignmentOf(f, { kind: 'floor', id: f.rooms[0].id });
+    expect(JSON.stringify(store.get())).toBe(before);          // 읽기 전용 파생(저장 형식 무변경)
   });
 });
 

@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 import { activeFloor } from '../state/schema.js';
 import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPACITY } from './build.js';
-import { hiddenWallIds, applyCutawayTo, soloMeshVisible } from './cutaway.js';
+import { hiddenWallIds, applyCutawayTo, shotCutaway, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
 import { cameraDistance, fitDistance, shotPosition, canReframeShot } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
@@ -164,7 +164,9 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
       shot.position.set(...p.pos); shot.up.set(...p.up);
       shot.lookAt(new THREE.Vector3(...p.target)); shot.updateProjectionMatrix();
       cam = shot;
-      showAllWalls();                       // 정면·평면 도면은 컷어웨이로 벽을 지우지 않는다
+      // 정면도·측면도는 앞쪽 벽을 지운다(§17.4(2) · 감사 §37: "회색 띠 하나"가 여기서 풀린다).
+      const hid = shotCutaway(activeFloor(store.get()), [p.pos[0] * 1000, p.pos[2] * 1000, p.pos[1] * 1000], preset, store.get().view);
+      if (hid) applyCutawayTo(group, { hidden: hid, baseOpacity: store.get().view.wallOpacity ?? 1 }); else showAllWalls();
     }
     // 화면↔출력 종횡비 차이만큼 거리를 보정한다(§16.9 · 감사 §10): 방향과 사용자의 줌은 그대로 둔다.
     // 조건·수학은 fit.js에 있다(이 파일의 300줄 상한): 프리셋·1인칭·2D 투영은 타지 않는다(리뷰 I-1).

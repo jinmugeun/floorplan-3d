@@ -61,7 +61,9 @@ describe('materialRows: 벽 행 — 내벽 지정 / 외벽 미지정', () => {
     expect(inRow.textContent).toContain(mat.name);
     expect(inRow.textContent).toContain(mat.maker);
     expect(inRow.textContent).not.toContain('미지정');
-    expect(outRow.textContent).toContain('미지정'); // 외벽은 아직 지정하지 않았다
+    // §17.4(1): 새 형식을 바르지 않은 외벽은 이제 makeWall의 레거시 material('paint-white')을 보여준다.
+    expect(outRow.textContent).toContain(materialById('paint-white').name);
+    expect(outRow.textContent).not.toContain('미지정');
 
     expect(host.querySelector('[name="matU-in"]').value).toBe('64.5');
     expect(host.querySelector('[name="matV-in"]').value).toBe('12');
@@ -86,7 +88,7 @@ describe('materialRows: 벽 행 — 내벽 지정 / 외벽 미지정', () => {
 });
 
 describe('materialRows: 방 행 — 바닥 / 천장', () => {
-  test('바닥에만 재질을 지정하면 천장은 미지정으로 남는다', () => {
+  test('바닥에만 새 형식을 바르면 천장은 레거시 마감재로 남는다', () => {
     const { store, floor, roomSel } = buildFixture();
     applyMaterial(store, { kind: 'floor', id: roomSel.id }, { id: 'tile-gray-600', offset: [30.25, 0], angle: 0 });
     const host = renderRows(floor(), roomSel);
@@ -94,7 +96,9 @@ describe('materialRows: 방 행 — 바닥 / 천장', () => {
     expect(rows.map(r => r.dataset.matRow)).toEqual(['floor', 'ceiling']);
     const mat = materialById('tile-gray-600');
     expect(rows[0].textContent).toContain(mat.name);
-    expect(rows[1].textContent).toContain('미지정');
+    // §17.4(1): detectRooms의 ceilingMaterial('paint-white')이 레거시 폴백으로 읽힌다(예전에는 '미지정').
+    expect(rows[1].textContent).toContain(materialById('paint-white').name);
+    expect(rows[1].textContent).not.toContain('미지정');
     expect(host.querySelector('[name="matU-floor"]').value).toBe('30.25');
   });
 
@@ -106,7 +110,9 @@ describe('materialRows: 방 행 — 바닥 / 천장', () => {
     v.value = '18.75';
     expect(applyMaterialField(store, roomSel, v)).toBe(true);
     expect(assignmentOf(floor(), { kind: 'ceiling', id: roomSel.id }).offset[1]).toBeCloseTo(18.75);
-    expect(assignmentOf(floor(), { kind: 'floor', id: roomSel.id })).toBeNull(); // 바닥은 그대로 미지정
+    // 바닥에는 새 형식이 들어가지 않았다(§17.4(1): 조회는 레거시 floorMaterial로 떨어질 뿐이다).
+    expect(floor().rooms.find(r => r.id === roomSel.id).floorMat).toBeNull();
+    expect(assignmentOf(floor(), { kind: 'floor', id: roomSel.id }).id).toBe('wood-oak');
   });
 });
 
@@ -167,6 +173,9 @@ describe('materialRows: 입력을 무시해야 하는 경우', () => {
 
   test('재질이 없는 면의 오프셋 입력은 아무 상태도 바꾸지 않는다', () => {
     const { store, floor, wallSel } = buildFixture();
+    // §17.4(1): makeWall이 지금도 넣는 레거시 material을 지워 **정말로** 마감재가 없는 면을 만든다
+    // (레거시 문자열만 있는 면은 이제 조회가 그 값을 돌려주므로 입력이 새 형식으로 굳는다).
+    store.dispatch(d => { activeFloor(d).walls.find(w => w.id === wallSel.id).material = null; }, { record: false });
     const host = renderRows(floor(), wallSel);
     const u = host.querySelector('[name="matU-out"]');
     u.value = '777';

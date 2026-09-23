@@ -108,6 +108,47 @@ describe('시방서 HTML', () => {
     expect(specHtml({ project: p, floorIndex: 0, images: {}, options: { sections: { airflow: false } } })).not.toContain('풍량 집계');
     expect(roomAirflow(p.floors[0])[0].EA).toBe(4990);
   });
+
+  // §17.4(1) · 감사 §38: 마감재가 지정된 도면의 시방서가 "마감 미지정"으로 인쇄됐다.
+  test('레거시 마감재도 표에 이름으로 찍힌다(마감 칸의 - 0개)', () => {
+    // project()는 방 **바닥**에 tile-white-300을 명시로 바른다(그 자리는 새 형식 경로다).
+    // 레거시 폴백이 실제로 도는 칸은 방 천장(ceilingMaterial 'paint-white')과 벽 안·밖(material)이다.
+    const p = project();
+    const html = specHtml({ project: p, images: {}, options: {} });
+    const rooms = html.split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
+    const walls = html.split('<h2>벽 목록</h2>')[1].split('<h2>')[0];
+    expect(rooms).not.toContain('<td>-</td>');
+    expect(walls).not.toContain('<td>-</td>');
+    expect(rooms).toContain('화이트 타일 300');              // 새 형식(floorMat tile-white-300)
+    expect(rooms).toContain('무광 화이트 페인트');           // 레거시 ceilingMaterial 'paint-white'
+    expect(walls).toContain('무광 화이트 페인트');           // 레거시 material 'paint-white'
+
+    // 바닥 레거시는 **새 형식을 바르지 않은** 방으로 본다: detectRooms가 만든 방이 floorMaterial을 갖는다.
+    const bare = createStore(createEmptyProject('레거시 도면'));
+    addWalls(bare, rectWalls([0, 0], [4000.5, 3000.25], 200));
+    const bareRooms = specHtml({ project: bare.get(), images: {}, options: {} }).split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
+    expect(bareRooms).toContain('오크 원목마루');            // floorMaterial 'wood-oak'
+    expect(bareRooms).not.toContain('<td>-</td>');
+  });
+
+  // §17.4(2)(3) · 감사 §37·§41: 입면도만 캡션을 갖고 층고를 그림 밖에 적는다(렌더에 글자를 그리지 않는다).
+  test('평면도 절에는 캡션이 없고 입면도 캡션에 층고가 붙는다', () => {
+    const p = project();
+    const images = { plan: 'data:,plan', front: 'data:,front', top: 'data:,top' };
+    const html = specHtml({ project: p, images, options: {} });
+    const plan = html.split('<h2>평면도</h2>')[1].split('<h2>')[0];
+    expect(plan).not.toContain('<figcaption>');
+    const elev = html.split('<h2>입면도</h2>')[1].split('<h2>')[0];
+    expect(elev).toContain('<figcaption>정면도 · 층고 2300 mm</figcaption>');
+    expect(elev).toContain('<figcaption>천장 평면도 · 층고 2300 mm</figcaption>');
+  });
+
+  // §17.4(2): 입면도는 한 줄에 한 장이어야 본문 폭 기준 배율 0.5가 실제로 지켜진다.
+  test('입면도 절만 한 줄 한 장이다', () => {
+    const html = specHtml({ project: project(), images: { front: 'data:,f', back: 'data:,b' }, options: {} });
+    expect(html).toContain('<div class="figs elev">');
+    expect(html).toContain('.figs.elev figure { flex: 1 1 100%; }');
+  });
 });
 
 // §16.2(감사 §6): 실별 표와 계통별 표가 제목 없이 연달아 붙고 EA·SA 헤더에 CMH가 없었다.

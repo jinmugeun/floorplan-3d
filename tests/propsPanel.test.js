@@ -552,7 +552,9 @@ test('방 패널: 바닥·천장 행은 {kind:"floor"|"ceiling", id}로 지정�
   expect(el.querySelector('input[name="ceilingColor"]')).toBeNull();
   expect(el.querySelector('input[name="floorColor"]')).not.toBeNull();
   expect(assignmentOf(activeFloor(store.get()), { kind: 'ceiling', id: roomId }).id).toBe('paint-ivory');
-  expect(assignmentOf(activeFloor(store.get()), { kind: 'floor', id: roomId })).toBeNull();
+  // §17.4(1): 바닥에는 새 형식이 들어가지 않았다 — 조회는 레거시 floorMaterial('wood-oak')로 떨어진다.
+  expect(activeFloor(store.get()).rooms.find(r => r.id === roomId).floorMat).toBeNull();
+  expect(assignmentOf(activeFloor(store.get()), { kind: 'floor', id: roomId }).id).toBe('wood-oak');
 });
 
 test('propsPanel.js는 applyNumber·lenField·withUnit·readLen을 여전히 내보낸다(fieldUtils.js 분리 이후에도)', () => {

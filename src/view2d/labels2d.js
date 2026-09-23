@@ -7,7 +7,7 @@
 // ducts2d·items2d는 shown이 오면 자기 라벨을 그리지 않는다.
 import { centroid } from '../geom/rooms.js';
 import { wallLength } from '../geom/walls.js';
-import { damperPos } from '../geom/ducts.js';
+import { damperPos, segmentQuad } from '../geom/ducts.js';
 import { itemAABB } from '../geom/items.js';
 import { sub, norm, perp, dist } from '../geom/vec.js';
 import { textWidth } from '../geom/textWidth.js';
@@ -55,20 +55,25 @@ const hits = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 // 들어가므로, y로 겹치는 두 상자는 반드시 한 밴드를 공유한다(판정 결과는 전수 비교와 같다).
 export const BAND_PX = 16;
 
-export function placeLabels(candidates, { priority = LABEL_PRIORITY, scale = null } = {}) {
+// obstacles(§17.4(4) · 감사 §40): 화면 좌표 상자 [x0, y0, x1, y1]의 배열. 라벨을 놓기 **전에**
+// bands에 채워 넣으므로 라벨끼리와 같은 규칙으로 부딪힌다 — 덕트 띠에 묻혀 읽을 수 없던 방 이름이
+// 아예 놓이지 않는다(겹쳐 찍는 것보다 낫다). 넘기지 않으면 지금과 같은 결과다.
+export function placeLabels(candidates, { priority = LABEL_PRIORITY, scale = null, obstacles = [] } = {}) {
   const rank = k => { const i = priority.indexOf(k); return i < 0 ? priority.length : i; };
   const pool = (candidates ?? []).filter(c => c && c.text !== '' && c.text != null
     && !(scale != null && scale < LOD_SCALE && c.kind !== 'roomName'));
   // 우선순위 → 입력 순서(같은 순위에서는 도면 배열 순서가 곧 안정된 순서다).
   const order = pool.map((c, i) => [c, i]).sort((a, b) => rank(a[0].kind) - rank(b[0].kind) || a[1] - b[1]);
   const placed = [], bands = new Map();
+  const addBox = box => { for (let b = Math.floor(box[1] / BAND_PX); b <= Math.floor(box[3] / BAND_PX); b++) { const a = bands.get(b); a ? a.push(box) : bands.set(b, [box]); } };
+  for (const o of obstacles ?? []) if (Array.isArray(o) && o.length === 4 && o.every(Number.isFinite)) addBox(o);
   for (const [c] of order) {
     const box = labelBox(c);
     const b0 = Math.floor(box[1] / BAND_PX), b1 = Math.floor(box[3] / BAND_PX);
     let clash = false;
     for (let b = b0; b <= b1 && !clash; b++) clash = (bands.get(b) ?? []).some(o => hits(o, box));
     if (clash) continue;
-    for (let b = b0; b <= b1; b++) { const a = bands.get(b); a ? a.push(box) : bands.set(b, [box]); }
+    addBox(box);
     placed.push(c);
   }
   // 반환 순서는 "자리를 잡은 순서" = 우선순위 오름차순이다. 그리기는 반드시 이 역순이어야 한다(§14.5):
@@ -132,4 +137,19 @@ export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = f
 // 우선순위가 높은 라벨이 맨 위에 남게 한다 — 알파도 부르는 쪽의 몫이다(결정 39).
 export function drawLabels(ctx, v, placed) {
   for (const c of placed ?? []) v.label(c.text, c.at, { size: c.size, color: c.color, bg: c.bg });
+}
+
+// 보이는 덕트 구간의 사각형(segmentQuad)을 화면 AABB로 바꾼다(§17.4(4)). 라벨 후보와 같은 좌표계다.
+export function ductObstacles(v, floor, { flags = {} } = {}) {
+  const out = [];
+  for (const d of floor?.ducts ?? []) {
+    if (!ductVisible(d, flags)) continue;
+    for (let i = 0; i < d.segments.length; i++) {
+      const quad = segmentQuad(d.points[i], d.points[i + 1], d.segments[i].w);
+      if (!quad) continue;
+      const ps = quad.map(p => v.toScreen(p));
+      out.push([Math.min(...ps.map(p => p[0])), Math.min(...ps.map(p => p[1])), Math.max(...ps.map(p => p[0])), Math.max(...ps.map(p => p[1]))]);
+    }
+  }
+  return out;
 }

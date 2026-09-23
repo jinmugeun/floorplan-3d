@@ -38,6 +38,9 @@ describe('벽·방 공용 메뉴', () => {
 
   test('재질이 없으면 마감재 복사·방 전체 적용은 꺼져 있다', () => {
     const a = setup();
+    // §17.4(1): makeWall이 지금도 넣는 레거시 material('paint-white')을 지워야 "재질이 없는" 벽이 된다
+    // (조회가 레거시 문자열로 떨어지므로, 그것까지 없어야 메뉴가 꺼진다).
+    a.store.dispatch(d => { activeFloor(d).walls.find(w => w.id === a.wallId).material = null; }, { record: false });
     let items = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, roomId: a.roomId, side: 'in' });
     expect(pick(items, '마감재 복사').disabled).toBe(true);
     expect(pick(items, '마감재 방 전체 벽에 적용').disabled).toBe(true);
@@ -208,6 +211,8 @@ test('비활성 항목에는 모두 사유(title)가 있다', () => {
 
 test('마감재가 없으면 "마감재 복사"가 사유와 함께 비활성이다', () => {
   const a = setup();
+  // §17.4(1): detectRooms가 지금도 넣는 레거시 floorMaterial을 지워야 "바른 마감재가 없는" 방이 된다.
+  a.store.dispatch(d => { activeFloor(d).rooms.find(r => r.id === a.roomId).floorMaterial = null; }, { record: false });
   const items = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: a.actions });
   const copy = pick(items, '마감재 복사');
   expect(copy.disabled).toBe(true);

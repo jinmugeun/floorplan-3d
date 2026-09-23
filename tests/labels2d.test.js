@@ -2,7 +2,7 @@
 // 덕트 단면·댐퍼·치수 라벨이 서로 겹쳐 아무것도 읽히지 않았다. 라벨은 화면 px 단위로 놓고,
 // 우선순위가 높은 것부터 자리를 잡되 겹치면 생략한다(LOD).
 import { describe, test, expect } from 'vitest';
-import { LABEL_PRIORITY, LOD_SCALE, ROOM_NAME_DY, ROOM_AREA_DY, WALL_DIM_MIN_PX, LABEL_BG, CHAR_EM, textWidth, labelBox, placeLabels, collectLabels, drawLabels } from '../src/view2d/labels2d.js';
+import { LABEL_PRIORITY, LOD_SCALE, ROOM_NAME_DY, ROOM_AREA_DY, WALL_DIM_MIN_PX, LABEL_BG, CHAR_EM, textWidth, labelBox, placeLabels, collectLabels, drawLabels, ductObstacles } from '../src/view2d/labels2d.js';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
 import { addWalls, addItem } from '../src/state/floorOps.js';
@@ -229,4 +229,36 @@ describe('인쇄 배율의 LOD(§16.11)', () => {
     expect(kinds(print)).toEqual(['roomName']);                           // 치수·면적이 전부 빠진다
     expect(kinds(screen)).toEqual(['roomName', 'roomArea', 'wallDim']);
   });
+});
+
+// §17.4(4) · 감사 §40: 인쇄 평면도에서 `비가열조리실 27.0 m²`를 파란 급기 띠가 가로질렀다.
+// 라벨끼리와 **같은 규칙**으로 부딪힌다: 장애물을 먼저 bands에 채워 넣는다.
+test('obstacles는 라벨을 밀어내고, 넘기지 않으면 결과가 같다', () => {
+  const cands = [
+    { key: 'name', kind: 'roomName', text: '비가열조리실', sp: [400, 300], size: 13 },
+    { key: 'area', kind: 'roomArea', text: '27.0 m²', sp: [400, 340], size: 12 },
+  ];
+  expect(placeLabels(cands).map(c => c.key)).toEqual(['name', 'area']);
+  expect(placeLabels(cands, { obstacles: [] }).map(c => c.key)).toEqual(['name', 'area']);
+  // 방 이름 자리를 띠가 덮으면 그 라벨은 놓지 않는다(글자를 띠 위에 겹쳐 찍는 것보다 낫다).
+  const band = [340, 292, 460, 308];
+  expect(placeLabels(cands, { obstacles: [band] }).map(c => c.key)).toEqual(['area']);
+  // 띠에서 벗어난 자리는 그대로다.
+  expect(placeLabels(cands, { obstacles: [[0, 0, 40, 40]] }).map(c => c.key)).toEqual(['name', 'area']);
+  // 모양이 틀린 장애물은 조용히 무시한다(뷰가 빈 배열·부분 배열을 줄 수 있다).
+  expect(placeLabels(cands, { obstacles: [null, [1, 2]] }).map(c => c.key)).toEqual(['name', 'area']);
+});
+
+test('ductObstacles는 보이는 덕트 구간만 화면 AABB로 준다', () => {
+  const v = { toScreen: p => [p[0] / 10, p[1] / 10], camera: { scale: 0.1 } };
+  const duct = { id: 'd1', kind: 'supply', hidden: false, points: [[1000.5, 1000.25], [4000.5, 1000.25]], segments: [{ w: 500, h: 300, z: 2900 }] };
+  const floor = { ducts: [duct, { ...duct, id: 'd2', hidden: true }] };
+  const boxes = ductObstacles(v, floor, { flags: {} });
+  expect(boxes).toHaveLength(1);                       // 숨긴 덕트는 장애물이 아니다
+  const [x0, y0, x1, y1] = boxes[0];
+  expect(x0).toBeCloseTo(100.05, 6);
+  expect(x1).toBeCloseTo(400.05, 6);
+  expect(y1 - y0).toBeCloseTo(50, 6);                  // 폭 500 mm ÷ 10
+  expect(ductObstacles(v, floor, { flags: { ducts: false } })).toEqual([]);
+  expect(ductObstacles(v, { ducts: [] }, {})).toEqual([]);
 });

@@ -62,8 +62,12 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
     let failed = 0;
     if (sections.plan) { try { images.plan = await capture2D(store, ui, { cssWidth: printBodyPx(paper, landscape), ratio: 2 }); } catch { failed += 1; } }
     if (sections.elevations) {
+      // 평면도와 같은 배율 규칙(§17.4(2)): 논리 폭은 본문 폭, 비트맵은 그 2배다. A4 세로에서
+      // 폭 1530 px → 본문 765 px = 배율 0.5. 높이는 16:9를 지킨다(직교 프리셋의 절두체 비율).
+      const width = printBodyPx(paper, landscape) * 2;
+      const height = Math.round((width * 9) / 16);
       for (const preset of ELEV) {
-        try { images[preset] = view3d.renderImage({ width: 1600, height: 900, preset }); } catch { failed += 1; }
+        try { images[preset] = view3d.renderImage({ width, height, preset }); } catch { failed += 1; }
       }
     }
     if (failed) toast(SPEC_IMAGES_FAIL(failed));

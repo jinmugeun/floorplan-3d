@@ -9,6 +9,7 @@ import { wallLength } from '../geom/walls.js';
 import { fmtLen, fmtArea } from '../util/units.js';
 import { roomAirflow, systemAirflow, UNPLACED_ROOM } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // src/io/ → src/ui/ import는 계층 역전이다(아키텍처 §9)
+import { assignmentOf } from '../state/materialOps.js';   // io/ → state/는 열려 있는 방향이다(roomTypes와 같다)
 import { esc } from '../util/html.js';
 
 export const SPEC_SECTIONS = [['plan', '평면도'], ['elevations', '입면도'], ['products', '제품 목록'], ['rooms', '공간 목록'], ['walls', '벽 목록'], ['airflow', '풍량 집계'], ['notes', '비고']];
@@ -21,7 +22,9 @@ export const AIRFLOW_TITLES = { room: '실별 풍량', system: '계통별 풍량
 export const CMH = '(CMH)';
 
 const typeLabel = t => ROOM_TYPES.find(([v]) => v === t)?.[1] ?? '미지정';
+// 마감재 조회의 정본은 assignmentOf 한 함수다(§17.4(1)): 레거시 문자열 필드까지 같은 답을 읽는다.
 const matName = a => (a?.id ? materialById(a.id)?.name ?? a.id : '-');
+const matOf = (f, target) => matName(assignmentOf(f, target));
 // rowAttr(i)는 그 행의 <tr> 속성이다(미배치 행의 경고색에만 쓴다).
 const table = (head, rows, rowAttr = () => '') => `<table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
     <tbody>${rows.length ? rows.map((r, i) => `<tr${rowAttr(i)}>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${head.length}">항목이 없습니다.</td></tr>`}</tbody></table>`;
@@ -50,11 +53,11 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
 
   const roomRows = (f.rooms ?? []).map(r => [
     esc(r.name || '이름 없는 공간'), esc(typeLabel(r.type)), esc(fmtArea(r.area, { pyeong })), len(r.height),
-    esc(matName(r.floorMat)), esc(r.hideCeiling ? '천장 감춤' : matName(r.ceilingMat)),
+    esc(matOf(f, { kind: 'floor', id: r.id })), esc(r.hideCeiling ? '천장 감춤' : matOf(f, { kind: 'ceiling', id: r.id })),
   ]);
   const wallRows = (f.walls ?? []).map((w, i) => [
     `W${i + 1}`, len(wallLength(w)), len(w.thickness), len(w.height ?? f.height),
-    esc(matName(w.matIn)), esc(matName(w.matOut)),
+    esc(matOf(f, { kind: 'wall', id: w.id, side: 'in' })), esc(matOf(f, { kind: 'wall', id: w.id, side: 'out' })),
   ]);
   // 풍량 집계(명세 §11.3). 설비도 덕트도 없는 층에서는 빈 표가 되고, table()이 "항목이 없습니다"를 찍는다.
   const cmh = n => Number(n || 0).toLocaleString('ko-KR');
@@ -63,8 +66,10 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   // '미배치'는 어느 방에도 들지 않은 설비다(roomId === null): 인쇄물에서도 눈에 걸려야 한다(§16.2).
   const airAttr = i => (air[i]?.roomId === null || air[i]?.name === UNPLACED_ROOM ? ' class="warn"' : '');
   const sysRows = systemAirflow(f).map(x => [esc(x.system), FLOW_LABELS[x.kind], cmh(x.EA), cmh(x.SA), x.itemIds.length]);
-  const img = (src, label) => (src ? `<figure><img src="${esc(src)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>` : '');
-  const elevFigs = ELEVATIONS.map(([k, l]) => img(images[k], l)).join('');
+  // 캡션은 그림이 여럿인 절(입면도)에만 붙인다(§17.4(3) · 감사 §41): 절 제목이 곧 캡션인 평면도에는
+  // 같은 말을 두 번 적지 않는다. 층고는 **그림 밖 캡션**에 적는다 — 렌더에 글자를 그리지 않는다.
+  const img = (src, label, caption = '') => (src ? `<figure><img src="${esc(src)}" alt="${esc(label)}">${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>` : '');
+  const elevFigs = ELEVATIONS.map(([k, l]) => img(images[k], l, `${l} · 층고 ${fmtLen(f.height ?? 0, units)} ${uLabel}`)).join('');
   // 제목 블록(§16.11 · 감사 §8): 값이 없어도 칸은 남는다 — 인쇄물에 손으로 적을 자리다.
   const cell = (label, v) => `<td><b>${esc(label)}</b> ${esc(String(v ?? '').trim())}</td>`;
   const sheetHead = `<table class="title-block"><tbody><tr>
@@ -87,6 +92,10 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     th, td { border: 1px solid #c8ccd2; padding: 4px 6px; text-align: left; }
     .figs { display: flex; flex-wrap: wrap; gap: 8px; }
     figure { margin: 0; flex: 1 1 45%; }
+    /* elev 절(그림 여러 장)은 한 줄 한 장이다(§17.4(2)): 두 장씩 놓으면 본문 폭의 절반이 되어
+       배율이 0.25로 떨어진다. 절 이름을 이 주석에 적지 않는다 — "빈 절은 인쇄에서 빠진다" 테스트가
+       문서 전체에서 그 글자를 찾기 때문이다. */
+    .figs.elev figure { flex: 1 1 100%; }
     figure img { width: 100%; border: 1px solid #c8ccd2; }
     figcaption { font-size: 11px; color: #5b6775; }
     .meta { font-size: 12px; color: #5b6775; }
@@ -96,7 +105,7 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   <p class="meta">${esc(f.name || 'Floor 1')} · 층 높이 ${len(f.height ?? 0)} ${esc(uLabel)} · 작성 ${esc(new Date().toLocaleDateString('ko-KR'))}</p>
   ${sheetHead}
   ${on('plan') && images.plan ? `<h2>평면도</h2><div class="figs">${img(images.plan, '평면도')}</div>` : ''}
-  ${on('elevations') && elevFigs ? `<h2>입면도</h2><div class="figs">${elevFigs}</div>` : ''}
+  ${on('elevations') && elevFigs ? `<h2>입면도</h2><div class="figs elev">${elevFigs}</div>` : ''}
   ${on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H, mm)', '수량'], productRows)}` : ''}
   ${on('rooms') ? `<h2>공간 목록</h2>${table(['공간', '타입', '면적', `높이(${uLabel})`, '바닥 마감', '천장 마감'], roomRows)}` : ''}
   ${on('walls') ? `<h2>벽 목록</h2>${table(['기호', `길이(${uLabel})`, `두께(${uLabel})`, `높이(${uLabel})`, '내벽 마감', '외벽 마감'], wallRows)}` : ''}

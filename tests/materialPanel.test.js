@@ -6,7 +6,7 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { applyMaterial, setWallRegions } from '../src/state/materialOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { createMaterialPanel, isFavMaterial, toggleFavMaterial, placedMaterials } from '../src/ui/materialPanel.js';
+import { createMaterialPanel, isFavMaterial, toggleFavMaterial, placedMaterials, tileScaleHtml } from '../src/ui/materialPanel.js';
 
 function setup() {
   const store = createStore(createEmptyProject()), ui = createUiState();
@@ -97,7 +97,8 @@ describe('마감재 패널', () => {
     expect(counts.get('wood-oak')).toBe(1);
     expect(counts.get('tile-white-300')).toBe(1);
     click(a.el, '[data-tab="placed"]');
-    expect([...a.el.querySelectorAll('.tile')].map(t => t.dataset.id).sort()).toEqual(['brick-red', 'tile-white-300', 'wood-oak']);
+    // §17.4(1): 새 형식을 바르지 않은 면은 레거시 material·ceilingMaterial('paint-white')로 떨어진다.
+    expect([...a.el.querySelectorAll('.tile')].map(t => t.dataset.id).sort()).toEqual(['brick-red', 'paint-white', 'tile-white-300', 'wood-oak']);
     expect(a.el.textContent).toContain('2개');
   });
 
@@ -221,4 +222,24 @@ test('마우스로 누른 칩은(포커스 없이) 다시 그려도 포커스를
   const { el } = setup();
   click(el, '[data-cat="벽돌"]'); // 기존 click 헬퍼는 focus를 주지 않는다 — 실제 마우스 클릭과 같다
   expect(document.activeElement).toBe(document.body);
+});
+
+// §17.4(1) · 감사 §10: "배치된 마감재" 탭이 샘플에서 0장이었다(레거시 필드를 세지 않았다).
+test('placedMaterials가 레거시 문자열 마감재도 센다', async () => {
+  const { buildSampleProject } = await import('../src/samples/gangdang.js');
+  const f = activeFloor(buildSampleProject());
+  const counts = placedMaterials(f);
+  expect(counts.get('paint-white')).toBeGreaterThanOrEqual(f.walls.length);   // 벽 안·밖 + 천장
+  expect(counts.get('wood-oak')).toBe(f.rooms.length);                        // 방 바닥(카탈로그 id)
+  expect(counts.get('wood')).toBeUndefined();                                 // 카탈로그에 없는 id는 세지 않는다
+  expect([...counts.values()].reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+});
+
+// §17.4(5) · 감사 §14: 타일 크기 두 칸에 aria-label만 있고 마우스 툴팁이 없었다.
+test('타일 크기 칸에 aria-label과 같은 글자의 title이 있다', () => {
+  const html = tileScaleHtml([300, 300]);
+  expect(html).toContain('title="타일 가로 크기(mm)"');
+  expect(html).toContain('title="타일 세로 크기(mm)"');
+  expect(html).toContain('aria-label="타일 가로 크기(mm)"');
+  expect(html).toContain('aria-label="타일 세로 크기(mm)"');
 });

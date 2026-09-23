@@ -1,6 +1,7 @@
 import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById } from '../materials/catalog.js';
 import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, MAT_RANGE } from '../state/schema.js';
+import { assignmentOf } from '../state/materialOps.js';
 import { esc } from '../util/html.js';
 import { chipsHtml, wasChipFocused, refocusChip } from './libraryChips.js';
 
@@ -11,14 +12,20 @@ export const toggleFavMaterial = id => { try { isFavMaterial(id) ? localStorage.
 export const favMaterials = () => MATERIALS.filter(m => isFavMaterial(m.id));
 
 // 이 층에서 실제로 쓰인 재질과 그 횟수(벽 안·밖, 영역, 방 바닥·천장).
+// 조회는 assignmentOf 한 함수를 지난다(§17.4(1)): 레거시 문자열 필드(material·floorMaterial·
+// ceilingMaterial)도 세어야 샘플에서 이 탭이 비지 않는다(감사 §10 — 0장이었다).
 export function placedMaterials(floor) {
   const counts = new Map();
   const add = a => { if (a?.id) counts.set(a.id, (counts.get(a.id) ?? 0) + 1); };
   for (const w of floor.walls ?? []) {
-    add(w.matIn); add(w.matOut);
+    add(assignmentOf(floor, { kind: 'wall', id: w.id, side: 'in' }));
+    add(assignmentOf(floor, { kind: 'wall', id: w.id, side: 'out' }));
     for (const side of ['in', 'out']) for (const rg of w.regions?.[side] ?? []) add(rg.mat);
   }
-  for (const r of floor.rooms ?? []) { add(r.floorMat); add(r.ceilingMat); }
+  for (const r of floor.rooms ?? []) {
+    add(assignmentOf(floor, { kind: 'floor', id: r.id }));
+    add(assignmentOf(floor, { kind: 'ceiling', id: r.id }));
+  }
   return counts;
 }
 
@@ -36,9 +43,9 @@ export const TILE_SCALE_RANGE = [...MAT_RANGE.scale];   // 카탈로그·스키�
 const clampScale = v => Math.min(TILE_SCALE_RANGE[1], Math.max(TILE_SCALE_RANGE[0], Math.round(Number(v) || TILE_SCALE_RANGE[0])));
 export const tileScaleHtml = ([w, h]) => `<div class="mat-scale">
   <span class="muted">타일 크기</span>
-  <input type="number" name="scaleW" value="${w}" min="${TILE_SCALE_RANGE[0]}" max="${TILE_SCALE_RANGE[1]}" step="10" aria-label="타일 가로 크기(mm)">
+  <input type="number" name="scaleW" value="${w}" min="${TILE_SCALE_RANGE[0]}" max="${TILE_SCALE_RANGE[1]}" step="10" title="타일 가로 크기(mm)" aria-label="타일 가로 크기(mm)">
   <span class="muted">×</span>
-  <input type="number" name="scaleH" value="${h}" min="${TILE_SCALE_RANGE[0]}" max="${TILE_SCALE_RANGE[1]}" step="10" aria-label="타일 세로 크기(mm)">
+  <input type="number" name="scaleH" value="${h}" min="${TILE_SCALE_RANGE[0]}" max="${TILE_SCALE_RANGE[1]}" step="10" title="타일 세로 크기(mm)" aria-label="타일 세로 크기(mm)">
 </div>`;
 const defaultTileScale = () => [...(materialsIn(TILE_CATEGORY)[0]?.scale ?? [300, 300])];
 

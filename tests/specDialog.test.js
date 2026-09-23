@@ -17,10 +17,10 @@ vi.mock('../src/io/file.js', async orig => {
 function setup() {
   const store = createStore(createEmptyProject('내 도면'));
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
-  const calls = [];
-  const view3d = { renderImage: opts => { calls.push(opts.preset); return `data:image/png;base64,${opts.preset}`; } };
+  const calls = [], shots = [];
+  const view3d = { renderImage: opts => { calls.push(opts.preset); shots.push(opts); return `data:image/png;base64,${opts.preset}`; } };
   const dlg = openSpecDialog({ store, ui: createUiState(), view3d });
-  return { store, view3d, calls, dlg, root: document.querySelector('.modal.spec') };
+  return { store, view3d, calls, shots, dlg, root: document.querySelector('.modal.spec') };
 }
 const click = (root, sel) => root.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
@@ -94,5 +94,20 @@ describe('시방서 대화상자', () => {
     await vi.waitFor(() => expect(globalThis.__down?.[1]).toContain('M-106'));
     expect(globalThis.__down[1]).toContain('홍길동');
     expect(globalThis.__down[1]).toContain('강당중학교');
+  });
+
+  // §17.4(2) · 감사 §37: 입면도가 자연 크기 1600×900으로 나와 본문 393 px에 눌려 배율 0.245였다
+  // (평면도는 0.5). 논리 폭을 본문 폭으로 두고 비트맵만 2배로 키운다 — 평면도와 같은 규칙이다.
+  test('입면도 렌더 크기는 본문 폭 × 2이고 16:9다', async () => {
+    const { printBodyPx } = await import('../src/io/file.js');
+    const a = setup();
+    click(a.root, '[name="download"]');
+    await vi.waitFor(() => expect(globalThis.__down).not.toBeNull());
+    const w = printBodyPx('A4', false) * 2;                 // A4 세로: 765 × 2 = 1530
+    expect(a.shots).toHaveLength(5);
+    for (const s of a.shots) {
+      expect(s.width).toBe(w);
+      expect(s.height).toBe(Math.round((w * 9) / 16));
+    }
   });
 });
