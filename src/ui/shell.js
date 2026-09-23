@@ -3,7 +3,7 @@ import { toast } from './toast.js';
 import { createShellPopovers } from './shellPopovers.js';
 import { optionBarHtml, applyOptionInput, syncDimBar, autoFocusDim } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
-import { trackFields, isDuplicateCommit } from './fieldUtils.js';
+import { trackFields, isDuplicateCommit, commitFocusedIn } from './fieldUtils.js';
 import { shellHtml } from './shellHtml.js';
 import { createBottomBar } from './bottomBar.js';
 import { createBanner } from './banner.js';
@@ -190,7 +190,11 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // 먼저 돈다. **왼쪽 버튼만** 본다(리뷰 M-1): 오른쪽 클릭(맥락 메뉴)·가운데 드래그(패닝)는
   // §17.8(2)가 말한 "다음 점을 클릭"이 아니다. 클릭 프레임은 실측이 0이라 autoFocusDim의 래치가
   // 닫히고, 마우스가 다시 움직여 확정할 값이 생기면 그때 칸이 포커스를 되찾는다(§17.8(1)).
-  els.canvas2d.addEventListener('pointerdown', ev => { if (ev.button) return; const a = document.activeElement; if (dimKey(a)) a.blur(); }, true);
+  // 속성 패널에서 타이핑하던 값도 같은 자리에서 확정한다(Task 3 재리뷰 N-1): 이 뒤에 도는 도구의
+  // pointerdown이 선택을 먼저 비우고, 브라우저가 mousedown의 포커스 정리에서 뒤늦게 내는 change는
+  // 빈 선택에 닿아 아무 데도 적용되지 않았다(계획 8부터). 누르는 순간 확정해 **아직 살아 있는**
+  // 선택에 적용한다 — 치수 칸은 위에서 이미 걸러 냈으므로 두 번 확정되지 않는다.
+  els.canvas2d.addEventListener('pointerdown', ev => { if (ev.button) return; const a = document.activeElement; if (dimKey(a)) { a.blur(); return; } commitFocusedIn(els.props); }, true);
   // 길이 입력은 change뿐 아니라 [Enter]로도 반영한다(값을 고치고 Enter만 누르면 그대로였다 — §12.5).
   // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다). 뒤이어 오는
   // 네이티브 change는 isDuplicateCommit이 한 번 삼킨다(§16.1). select는 INPUT이 아니라 애초에 걸리지

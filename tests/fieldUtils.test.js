@@ -227,6 +227,27 @@ test('nextFocusName은 닫힌 <details> 안의 칸을 건너뛴다', () => {
   expect(nextFocusName(d, d.querySelector('[name="a"]'))).toBe('closed');
 });
 
+// 재리뷰 N-2: [Shift+Tab]으로 확정해도 늘 **뒤** 칸으로 갔다 — 브라우저의 [Shift+Tab]은 앞으로 간다.
+test('nextFocusName은 back이면 앞 칸을 주고, tabWatcher가 그 방향을 적는다', () => {
+  const d = document.createElement('div');
+  document.body.appendChild(d);
+  d.innerHTML = '<input name="a"><button>이름 없음</button><input name="b" disabled><select name="c"><option>x</option></select><input name="e">';
+  const c = d.querySelector('[name="c"]');
+  expect(nextFocusName(d, c, true)).toBe('a');            // 이름 없는 버튼·disabled는 뒤로도 건너뛴다
+  expect(nextFocusName(d, c)).toBe('e');                  // 기본은 그대로 다음 칸이다
+  expect(nextFocusName(d, d.querySelector('[name="a"]'), true)).toBeNull();   // 앞이 없으면 제자리(null)
+  const w = tabWatcher(d);
+  expect(w.back()).toBe(false);
+  c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+  expect(w.take()).toBe(true);
+  expect(w.back()).toBe(true);
+  c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  expect(w.take()).toBe(true);
+  expect(w.back()).toBe(false);
+  w.destroy();
+  d.remove();
+});
+
 // 리뷰 C-2: change 하나로는 [Tab] 확정과 "포커스를 받을 수 없는 곳 클릭" 확정이 구분되지 않는다
 // (둘 다 그 순간 activeElement가 <body>다). 실제 키를 캡처해 두고 한 번만 쓴다.
 test('tabWatcher는 [Tab] 키가 있었을 때만 한 번 참이다', () => {

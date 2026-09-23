@@ -180,9 +180,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     // (1) 그 칸에 포커스가 있었다(클램프 화살표 연타·[Enter] 확정): 제자리로 돌려준다.
     if (el?.name && was === el) ui.set({ focusField: el.name });
     // (2) [Tab]으로 확정했다(브라우저는 change를 blur 뒤에 낸다 → <body>다): 다음 칸으로
-    //     옮겨 준다. 다음 칸이 없으면 제자리다.
+    //     옮겨 준다. 다음 칸이 없으면 제자리다. [Shift+Tab]이면 **앞** 칸이다(재리뷰 N-2).
     else if (el?.name && tabbed && (!was || was === container.ownerDocument?.body))
-      ui.set({ focusField: nextFocusName(container, el) ?? el.name });
+      ui.set({ focusField: nextFocusName(container, el, tabs.back()) ?? el.name });
     // (3) 포커스가 패널 밖으로 갔거나 마우스로 확정했다: 글자만 되맞추고 되끌어오지 않는다(§16.1의 계약).
     else render();
   };

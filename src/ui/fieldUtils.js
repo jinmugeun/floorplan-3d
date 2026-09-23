@@ -102,6 +102,11 @@ export function commitField(el) {
   el.blur?.();
   return true;
 }
+// 캔버스처럼 포커스를 받지 못하는 곳을 누르는 순간, root 안에서 타이핑하던 칸을 확정한다
+// (Task 3 재리뷰 N-1): 그 클릭이 선택을 먼저 비우면 브라우저가 mousedown에서 뒤늦게 내는 change가
+// 빈 선택에 닿아 값이 사라졌다. 누르기 전에 확정하면 아직 살아 있는 선택에 적용된다.
+export const commitFocusedIn = (root, doc = root?.ownerDocument) => (!!root && !!doc?.activeElement && root.contains(doc.activeElement) && commitField(doc.activeElement));
+
 // 지금 처리하려는 change가 commitField 직후의 "같은 값" 네이티브 change인가(§16.1).
 // 한 번만 true다: 표시를 지우고 돌려주므로 그다음 같은 값의 change는 정상 처리된다(사용자가
 // 값을 되돌려 놓고 다시 확정하는 경우를 막지 않는다).
@@ -122,26 +127,32 @@ export function trackFields(root) {
 // [Tab]·blur 확정 뒤에 포커스를 둘 다음 칸의 **이름**(§17.6(4)). 이름이 없는 버튼과 포커스를
 // 받을 수 없는 요소는 건너뛴다. el이 이미 DOM에서 떨어졌으면(재렌더 뒤) 같은 name의 새 노드를
 // 기준으로 삼는다 — 속성 패널은 innerHTML을 통째로 갈아 치우므로 두 순간이 모두 필요하다.
-export function nextFocusName(root, el) {
+// back이면 **앞** 칸을 준다(Task 3 재리뷰 N-2): [Shift+Tab]으로 확정해도 포커스가 앞이 아니라
+// 뒤로 갔다 — 브라우저의 [Shift+Tab]은 앞으로 가는데 확정 복구 장치만 늘 뒤를 가리켰기 때문이다.
+export function nextFocusName(root, el, back = false) {
   // 닫힌 <details> 안의 칸은 브라우저가 탭 순서에서 빼고 focus()도 무동작이다(리뷰 M-1):
   // 그 이름을 돌려주면 포커스가 <body>에 남아 §30이 고치려던 자리로 되돌아간다.
   const list = focusables(root).filter(x => !x.closest?.('details:not([open])'));
   let at = list.indexOf(el);
   if (at < 0 && el?.name) at = list.findIndex(x => x.name === el.name);
   if (at < 0) return null;
-  for (let i = at + 1; i < list.length; i++) if (list[i].name) return list[i].name;
+  const step = back ? -1 : 1;
+  for (let i = at + step; i >= 0 && i < list.length; i += step) if (list[i].name) return list[i].name;
   return null;
 }
 
 // change 하나만으로는 "[Tab]으로 확정"과 "포커스를 받을 수 없는 곳(캔버스)을 클릭해 확정"이
 // 구분되지 않는다 — 실측상 둘 다 change 순간의 activeElement가 <body>다(리뷰 C-2). 실제 [Tab]
 // 키를 캡처로 받아 같은 태스크 동안만 참으로 둔다: 키 하나가 확정 하나를 연다(take()가 곧 비운다).
+// 방향도 함께 적는다(재리뷰 N-2): [Shift+Tab]은 앞 칸으로 돌아가는 확정이다. back()은 take()가
+// 지우지 않는다 — 부르는 쪽이 "탭이었다"를 먼저 묻고 그다음 방향을 묻기 때문이다.
 export function tabWatcher(root) {
-  let on = false;
-  const down = ev => { if (ev.key === 'Tab') { on = true; setTimeout(() => { on = false; }, 0); } };
+  let on = false, back = false;
+  const down = ev => { if (ev.key === 'Tab') { on = true; back = !!ev.shiftKey; setTimeout(() => { on = false; }, 0); } };
   root.addEventListener('keydown', down, true);
   return {
     take() { const was = on; on = false; return was; },
+    back: () => back,
     destroy() { root.removeEventListener('keydown', down, true); },
   };
 }

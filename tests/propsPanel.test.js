@@ -875,3 +875,48 @@ test('캔버스 클릭으로 확정하면 포커스를 패널로 되끌어오지
   expect(calls).toEqual(['wall']);
   canvas.remove();
 });
+
+// 재리뷰 N-2: [Shift+Tab]으로 확정해도 포커스가 **뒤** 칸으로 갔다(브라우저와 반대 방향).
+test('[Shift+Tab]으로 확정하면 포커스가 앞 칸으로 간다', () => {
+  const { store, ui, el } = setupPanel();
+  const id = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id } });
+  const h = el.querySelector('[name="height"]');
+  expect(nextFocusName(el, h, true)).toBe('thickness');
+  h.focus();
+  h.value = '2400';
+  h.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
+  h.blur();                                                   // 실브라우저의 [Tab]: blur 뒤에 change가 온다
+  h.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).height).toBe(2400);
+  expect(document.activeElement.name).toBe('thickness');      // 예전에는 다음 칸으로 갔다
+});
+
+// Task 3 재리뷰 N-1(계획 8부터의 결함): 칸에 값을 치고 2D 캔버스를 누르면 그 값이 사라졌다 —
+// 캔버스의 pointerdown이 선택을 먼저 비우고, 크로미엄이 mousedown의 포커스 정리에서 뒤늦게 내는
+// change가 선택 없는 패널에 닿았기 때문이다. 셸이 캡처에서 먼저 확정한다.
+test('칸에 값을 치고 2D 캔버스를 누르면 살아 있는 선택에 확정된다(한 단계)', async () => {
+  const { createShell } = await import('../src/ui/shell.js');
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  createShell(root, { store, ui });
+  const props = root.querySelector('#props'), canvas = root.querySelector('#c2d');
+  createPropsPanel(props, store, ui);
+  // 도구의 pointerdown은 셸의 캡처 리스너 **뒤에** 등록된다(main.js의 배선 순서 그대로).
+  canvas.addEventListener('pointerdown', () => ui.set({ selection: null }));
+  const id = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id } });
+  const th = props.querySelector('[name="thickness"]');
+  th.focus();
+  th.value = '240';
+  const canUndo = store.canUndo();
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(240);
+  expect(ui.get().selection).toBeNull();                      // 클릭은 그대로 선택을 비운다
+  store.undo();
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(200);
+  expect(store.canUndo()).toBe(canUndo);                      // 되돌리기 단계는 딱 하나였다
+  root.remove();
+});
