@@ -8,7 +8,9 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addFloor, setActiveFloor } from '../src/state/floorOps.js';
 import { createFirstRoomFit } from '../src/app/firstRoomFit.js';
 
-const ROOM = { id: 'r1', name: '방', points: [[0, 0], [3000, 0], [3000, 3000], [0, 3000]] };
+// 좌표는 소수다(전역 제약: 모든 기하 테스트에 소수 좌표 케이스 · 최종 리뷰 I-5).
+// 래치 판정은 방 **수**만 보므로 기대값은 좌표와 무관하다 — 그래도 격자 가정이 새지 않는지 함께 본다.
+const ROOM = { id: 'r1', name: '방', points: [[0.5, 0.25], [3000.5, 0.25], [3000.5, 3000.25], [0.5, 3000.25]] };
 // 방은 벽에서 파생되지만 이 래치는 "방 수"만 본다: 검출을 거치지 않고 직접 넣어 한 단계로 기록한다.
 const drawRoom = store => store.dispatch(d => { activeFloor(d).rooms = [structuredClone(ROOM)]; });
 const setup = (project = createEmptyProject()) => {

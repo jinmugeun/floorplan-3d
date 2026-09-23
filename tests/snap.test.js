@@ -67,3 +67,37 @@ test('tolMm은 화면 8 px을 mm로 바꾸고 최소 20 mm를 지킨다', () => 
   // 배율을 모르면 예전 기본값으로 떨어진다(뷰 없이 만든 도구·순수 테스트).
   for (const bad of [undefined, null, 0, -1, NaN, Infinity]) expect(tolMm(bad)).toBe(DEFAULT_TOL_MM);
 });
+
+// 전역 제약: **모든 기하 테스트에 소수 좌표 케이스**(최종 리뷰 I-5). 위 케이스는 좌표가 전부
+// 정수여서, snapPoint의 좌표 동등성 분기(point[0] = g.pos · point[1] === anchor[1])가 mm 단위
+// 소수 좌표에서 어떻게 움직이는지 아무도 보지 않았다. snap.js는 이 계획이 다시 쓴 모듈이다.
+test('소수 좌표에서도 끝점·정렬·벽면·직교 스냅이 같은 값을 돌려준다', () => {
+  const p = snapPoint([105.5, 95.25], { points: [[100.5, 100.25]], tol: 20 });
+  expect(p.point).toEqual([100.5, 100.25]);            // 반올림하지 않는다
+  expect(p.hit).toBe('point');
+
+  const a = snapPoint([1005.5, 3000.25], { points: [[1000.5, 0.25], [0.5, 2990.75]], tol: 20 });
+  expect(a.point).toEqual([1000.5, 2990.75]);
+  expect(a.guides).toEqual([{ type: 'v', x: 1000.5 }, { type: 'h', y: 2990.75 }]);
+
+  const w = snapPoint([1500.5, 60.25], { walls: [{ a: [0.5, 0.25], b: [4000.5, 0.25] }], tol: 150 });
+  expect(w.point).toEqual([1500.5, 0.25]);             // 수선의 발도 소수로 남는다
+  expect(w.hit).toBe('wall');
+
+  const o = snapPoint([2000.5, 120.25], { anchor: [0.5, 0.25], ortho: true, snap: false });
+  expect(o.point).toEqual([2000.5, 0.25]);
+  expect(o.hit).toBe('ortho');
+  // 직교로 잠긴 축은 정렬 스냅이 바꾸지 않는다 — 소수 anchor에서도 그렇다(y === anchor[1] 비교).
+  const ol = snapPoint([3000.5, 10.25], { anchor: [0.5, 0.25], ortho: true, points: [[2990.5, 5000.25]], tol: 150 });
+  expect(ol.point).toEqual([2990.5, 0.25]);
+  expect(ol.guides).toEqual([{ type: 'v', x: 2990.5 }]);
+});
+
+// 이월 8(기존 결함 · 이 계획이 만든 것이 아니다): 보조선 스냅은 직교 잠금 **뒤에** 돌면서
+// 잠긴 축을 다시 밀어 버린다. 소수 좌표로 재현해 현재 동작을 글자로 못 박아 둔다 —
+// 고치는 것은 다음 계획의 감사 항목이고, 여기서는 "조용히 달라지지 않게" 지킨다.
+test('보조선 스냅이 직교 잠금을 깬다(이월 8의 기존 동작 고정)', () => {
+  const r = snapPoint([10.5, 2000.25], { anchor: [0, 0], ortho: true, guides: [{ type: 'v', pos: 30 }], tol: 80 });
+  expect(r.point).toEqual([30, 2000.25]);              // x는 anchor[0] = 0에 잠겨 있어야 하는데 30으로 밀린다
+  expect(r.hit).toBe('guide');
+});
