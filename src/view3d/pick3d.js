@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { activeFloor } from '../state/schema.js';
 import { updateItem } from '../state/floorOps.js';
-import { DEG, normDeg } from '../geom/items.js';
+import { DEG, RAD, normDeg } from '../geom/items.js';
 import { itemMenuItems } from '../ui/itemMenu.js';
 
 // three 오브젝트(m, y = 위) → 아이템 필드(mm, z = 밑면 높이, rot = 화면 시계 방향 각도)
@@ -13,6 +13,21 @@ export function gizmoPatch(object, item) {
     z: object.position.y * 1000 - item.size[2] / 2,
     rot: normDeg(Math.round(-DEG(object.rotation.y))),
   };
+}
+
+// items 그룹에서 아이템 하나의 오브젝트를 찾는다(조합 형상은 Group이고, 개구부는 메시가 없어 null이다).
+export const itemMeshOf = (group, id) => group?.children.find(c => c.name === 'items')?.children.find(o => o.userData?.itemId === id) ?? null;
+
+// 드래그 중 미리보기: store에 쓰지 않고 아이템 오브젝트만 옮긴다(§15.2의 프리뷰 계약을 3D에도 — 리뷰 I-4).
+// 패치의 pos·z·rot을 items3d.js:53-54와 **같은 수식**으로 되돌린다(패치에 없는 필드는 아이템 값 그대로).
+// matrixWorld까지 갱신한다: 레이캐스트(아이템·면 피커)와 다음 렌더가 최신 행렬을 본다.
+export function previewItemMesh(obj, item, patch = {}) {
+  if (!obj || !item) return null;
+  const pos = patch.pos ?? item.pos, z = patch.z ?? item.z, rot = patch.rot ?? item.rot;
+  obj.position.set(pos[0] / 1000, (z + item.size[2] / 2) / 1000, pos[1] / 1000);
+  obj.rotation.y = -RAD(rot);
+  obj.updateMatrixWorld(true);
+  return obj;
 }
 
 // three 0.169의 TransformControls.dispose()는 Controls에 없는 this.traverse를 부른다(던진다).
@@ -114,16 +129,17 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   scene.add(gizmo.getHelper ? gizmo.getHelper() : gizmo);
   tintGizmo(gizmo);                      // 첫 렌더 전에 칠한다(§13.6)
   gizmo.enabled = false;
-  let current = null;
+  let current = null, pending = null;   // pending: 기즈모 드래그 중의 미리보기 패치(store에는 드래그가 끝날 때 한 번만 쓴다)
 
   const pointFrom = ev => {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, getCamera());
-    const g = getGroup()?.children.find(c => c.name === 'items');
+    const g = getGroup()?.children.find(c => c.name === 'items'); g?.updateMatrixWorld();   // 다시 지은 직후(렌더 전) 클릭도 맞아야 한다
     // 조합 형상은 Group이라 재귀로 맞힌다. 엣지 선(LineSegments)은 건너뛴다 — Raycaster의 Line
-    // 허용치는 월드 1 m라 선이 먼 거리에서 엉뚱하게 이긴다.
-    const hit = g ? ray.intersectObjects(g.children, true).find(x => x.object.isMesh) : null;
+    // 허용치는 월드 1 m라 선이 먼 거리에서 엉뚱하게 이긴다. visible도 여기서 본다(레이캐스터는
+    // 보지 않으므로 숨긴 아이템이 모든 픽을 이겼다 — facePick.js:36과 같은 규칙, Task 6 리뷰 M-4).
+    const hit = g ? ray.intersectObjects(g.children, true).find(x => x.object.isMesh && x.object.visible) : null;
     return hit?.object?.userData?.itemId ?? null;
   };
 
@@ -155,14 +171,21 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
 
   gizmo.addEventListener('dragging-changed', e => {
     controls.enabled = !e.value;
-    if (e.value) { dragLatch.arm(); store.beginTransaction(); } else store.endTransaction();
+    if (e.value) { dragLatch.arm(); pending = null; store.beginTransaction(); return; }
+    // 드래그당 dispatch는 이 하나다(§15.2의 프리뷰 계약 · 리뷰 I-4). 10 mm마다 쓰면 sceneSignature가
+    // 바뀌어 층 전체를 다시 짓는다(감사 §29의 480 ms/프레임). 트랜잭션 안이므로 record: false이고
+    // endTransaction이 그것을 되돌리기 한 단계로 닫는다 — 움직이지 않았으면 빈 단계도 남지 않는다.
+    if (pending && current) updateItem(store, current, pending, { record: false });
+    pending = null;
+    store.endTransaction();
   });
   gizmo.addEventListener('objectChange', () => {
     if (!current) return;
     const it = activeFloor(store.get()).items.find(x => x.id === current);
     if (!it) return;
     const patch = gizmoPatch(proxy, it);
-    updateItem(store, current, { pos: [Math.round(patch.pos[0]), Math.round(patch.pos[1])], z: Math.round(patch.z), rot: patch.rot }, { record: false });
+    pending = { pos: [Math.round(patch.pos[0]), Math.round(patch.pos[1])], z: Math.round(patch.z), rot: patch.rot };
+    previewItemMesh(itemMeshOf(getGroup(), current), it, pending);   // 씬을 다시 짓지 않고 아이템 메시만 옮긴다
     requestRender();
   });
 

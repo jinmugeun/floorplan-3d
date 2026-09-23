@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, test, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch, tintGizmo, gizmoTintFor, GIZMO_COLORS } from '../src/view3d/pick3d.js';
-import { createItem, createEmptyProject } from '../src/state/schema.js';
+import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch, tintGizmo, gizmoTintFor, itemMeshOf, previewItemMesh, GIZMO_COLORS } from '../src/view3d/pick3d.js';
+import { createItem, createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { addItem } from '../src/state/floorOps.js';
@@ -72,6 +72,31 @@ describe('3D 편집 계산', () => {
     const p = orthoViewParams('없음', { center: [0, 0], extent: 6000, height: 2300, aspect: 1 });
     expect(p.pos[2]).toBeGreaterThan(0);
     expect(p.up).toEqual([0, 1, 0]);
+  });
+});
+
+// 몸체 드래그(bodyDrag.js)와 기즈모가 나눠 쓰는 조각들(리뷰 I-4 · Task 6 리뷰 M-4).
+describe('드래그 미리보기의 순수 조각', () => {
+  test('previewItemMesh는 패치의 pos·z·rot만 적용하고 나머지는 아이템 값을 쓴다', () => {
+    const item = { pos: [1000.5, 2000.25], z: 700, size: [600, 600, 900], rot: 0 };
+    const obj = new THREE.Object3D();
+    expect(previewItemMesh(obj, item, { pos: [2000, 3000] })).toBe(obj);
+    expect(obj.position.x).toBeCloseTo(2, 6);
+    expect(obj.position.y).toBeCloseTo((700 + 450) / 1000, 6);   // items3d.js와 같은 수식(z + 높이/2)
+    expect(obj.position.z).toBeCloseTo(3, 6);
+    previewItemMesh(obj, item, { rot: 90 });
+    expect(obj.rotation.y).toBeCloseTo(-Math.PI / 2, 6);
+    expect(obj.position.x).toBeCloseTo(1.0005, 6);               // 패치에 없는 필드는 아이템 값으로
+    expect(previewItemMesh(null, item)).toBeNull();
+    expect(previewItemMesh(obj, null)).toBeNull();
+  });
+
+  test('itemMeshOf는 items 그룹에서 그 아이템의 오브젝트만 찾는다', () => {
+    const group = new THREE.Group(), items = new THREE.Group(); items.name = 'items'; group.add(items);
+    const a = new THREE.Object3D(); a.userData.itemId = 'i1'; items.add(a);
+    expect(itemMeshOf(group, 'i1')).toBe(a);
+    expect(itemMeshOf(group, 'i2')).toBeNull();   // 개구부처럼 메시가 없는 아이템
+    expect(itemMeshOf(null, 'i1')).toBeNull();
   });
 });
 
@@ -240,7 +265,7 @@ function setupMatPick() {
     getGroup: () => group, requestRender: () => {}, openMenu: (x, y, its) => menu.push(its),
   });
   return {
-    store, ui, picker, menu, id,
+    store, ui, picker, menu, id, box, group,
     click: () => {
       domElement.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }));
       domElement.dispatchEvent(new MouseEvent('pointerup', { button: 0, clientX: 100, clientY: 100 }));
@@ -271,6 +296,69 @@ describe('마감재 적용 모드의 아이템 피커', () => {
     const ev = a.rightClick();
     expect(a.menu).toHaveLength(0);
     expect(ev.defaultPrevented).toBe(false);       // 면 피커가 쓰도록 이벤트를 막지도 않는다
+  });
+});
+
+// Task 6 리뷰 M-4: 레이캐스터는 object.visible을 보지 않는다 — 숨긴 아이템이 광선 위에 있으면
+// 모든 클릭을 이겼다. 면 피커(facePick.js:36)와 같은 규칙을 아이템 피커에도 쓴다.
+test('숨긴 아이템 메시는 3D 클릭으로 잡히지 않는다', () => {
+  const a = setupMatPick();
+  a.box.visible = false;
+  a.click();
+  expect(a.ui.get().selection).toBeNull();
+  a.box.visible = true;
+  a.click();
+  expect(a.ui.get().selection).toEqual({ type: 'item', id: a.id });
+});
+
+// 리뷰 I-4: 기즈모도 몸체 드래그(bodyDrag.js)와 같은 프리뷰 계약을 쓴다 — 드래그 중에는 store에
+// 쓰지 않고 아이템 메시만 옮기고(씬을 다시 짓지 않는다), 드래그가 끝날 때 한 번 커밋한다.
+describe('기즈모 드래그의 프리뷰 계약 (리뷰 I-4)', () => {
+  function setupGizmoDrag() {
+    const store = createStore(createEmptyProject()), ui = createUiState();
+    const domElement = document.createElement('div'); document.body.appendChild(domElement);
+    domElement.setPointerCapture = () => {}; domElement.releasePointerCapture = () => {}; domElement.hasPointerCapture = () => false;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    const group = new THREE.Group(), items = new THREE.Group(); items.name = 'items'; group.add(items);
+    const id = addItem(store, createItem(productById('sofa-3'), { pos: [1000.5, 2000.25] }));
+    const it = activeFloor(store.get()).items.find(x => x.id === id);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    mesh.userData.itemId = id;
+    mesh.position.set(it.pos[0] / 1000, (it.z + it.size[2] / 2) / 1000, it.pos[1] / 1000);
+    items.add(mesh); scene.add(group);
+    const picker = createItemPicker({ renderer: { domElement }, getCamera: () => camera, controls: { enabled: true }, scene, store, ui, getGroup: () => group, requestRender: () => {} });
+    const gizmo = scene.children.find(c => c.isTransformControlsRoot).controls;
+    picker.attach({ type: 'item', id });
+    const count = () => { const raw = store.dispatch.bind(store); const box = { n: 0 }; store.dispatch = (fn, opts) => { box.n += 1; return raw(fn, opts); }; return box; };
+    return { store, picker, gizmo, mesh, id, count, item: () => activeFloor(store.get()).items.find(x => x.id === id) };
+  }
+
+  test('축을 끄는 동안 dispatch는 0이고 놓을 때 한 번 커밋된다', () => {
+    const a = setupGizmoDrag();
+    const before = a.store.get(), n = a.count();
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: true });
+    const proxy = a.gizmo.object;
+    for (const x of [1.1, 1.2, 1.3]) { proxy.position.x = x; a.gizmo.dispatchEvent({ type: 'objectChange' }); }
+    expect(n.n).toBe(0);                                  // 세 번 움직여도 store는 그대로다
+    expect(a.store.get()).toBe(before);
+    expect(a.mesh.position.x).toBeCloseTo(1.3, 6);        // 씬을 다시 짓지 않고 메시만 따라온다
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: false });
+    expect(n.n).toBe(1);
+    expect(a.item().pos[0]).toBe(1300);
+    expect(a.store.canUndo()).toBe(true);
+    a.store.undo();
+    expect(a.item().pos).toEqual(before.floors[0].items[0].pos);   // 한 번에 원위치(한 단계)
+  });
+
+  test('축을 잡았다 그대로 놓으면 dispatch도 빈 단계도 없다', () => {
+    const a = setupGizmoDrag();
+    const before = a.store.get(), canUndo = a.store.canUndo(), n = a.count();
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: true });
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: false });
+    expect(n.n).toBe(0);
+    expect(a.store.get()).toBe(before);
+    expect(a.store.canUndo()).toBe(canUndo);
   });
 });
 
