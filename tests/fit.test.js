@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { cameraDistance, viewForMode, fitDistance, FIT_MARGIN, orbitOf, reframePosition, shotPosition, canReframeShot } from '../src/view3d/fit.js';
+import { cameraDistance, viewForMode, fitDistance, FIT_MARGIN, occupancyOf, orbitOf, reframePosition, shotPosition, canReframeShot } from '../src/view3d/fit.js';
 
 test('small or empty floors get the minimum distance', () => {
   expect(cameraDistance(0)).toBe(10);
@@ -42,33 +42,9 @@ test('fitDistance는 여백 비율 8%를 고정하고 종횡비·고도를 반�
 
 // 리뷰 B-1: 예전 직교 근사식은 ISO에서 거리를 절반 이하로 잡아 8꼭짓점 중 5~6개가 프레임 밖으로
 // 잘렸는데도, "자기 식으로 자기를 검산하는" 테스트라 통과했다. 이제는 **결과 카메라의 절두체에
-// bbox 8꼭짓점을 직접 투영**해 단정한다 — 같은 실수가 다시 통과할 수 없다.
-// view3d.frameScene의 배치식·three의 lookAt(up=(0,1,0))을 그대로 옮긴다.
-const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const unit = a => { const n = Math.hypot(...a); return [a[0] / n, a[1] / n, a[2] / n]; };
-
-// 화면 점유: 1.0이 프레임 경계다(세로·가로 각각 max|오프셋| / (깊이 · tan)).
-// 여백 비율 m이면 점유 = 1 − 2m가 되어야 한다(양쪽에 m씩 남는다).
-// offset(m)은 목표가 bbox 기준점에서 벗어난 양이다(팬) — 목표를 원점에 두고 꼭짓점을 −offset만큼 옮긴다.
-function occupancy(r, { fov, aspect, elevation, azimuth, width, depth, height, plan = false, offset = [0, 0, 0] }) {
-  // 카메라 위치: 평면 모드는 목표 바로 위(+z 0.01은 lookAt이 퇴화하지 않게 하는 실제 코드의 값).
-  const el = (elevation * Math.PI) / 180, az = (azimuth * Math.PI) / 180;
-  const pos = plan
-    ? [0, r, 0.01]
-    : [-r * Math.cos(el) * Math.sin(az), r * Math.sin(el), r * Math.cos(el) * Math.cos(az)];
-  const zA = unit(pos), xA = unit(cross3([0, 1, 0], zA)), yA = cross3(zA, xA);   // three의 lookAt
-  const tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * aspect;
-  let fillV = 0, fillH = 0, front = Infinity;
-  for (const cx of [-width / 2000, width / 2000]) for (const cy of [0, height / 1000]) for (const cz of [-depth / 2000, depth / 2000]) {
-    const v = [cx - offset[0] - pos[0], cy - offset[1] - pos[1], cz - offset[2] - pos[2]];
-    const z = -dot3(v, zA);                                   // 카메라 앞쪽 깊이
-    front = Math.min(front, z);
-    fillV = Math.max(fillV, Math.abs(dot3(v, yA)) / (z * tanV));
-    fillH = Math.max(fillH, Math.abs(dot3(v, xA)) / (z * tanH));
-  }
-  return { fill: Math.max(fillV, fillH), fillV, fillH, front };
-}
+// bbox 8꼭짓점을 직접 투영**해 단정한다(occupancyOf: 점유 1.0이 프레임 경계 · 여백 비율 m이면 1 − 2m).
+// 이 파일이 갖고 있던 occupancy()가 그 함수인데, 수정 파동 2에서 fit.js로 올렸다 — shotPosition이
+// 잘림을 판단할 때 **테스트와 한 글자도 같은 식**을 써야 하기 때문이다(리뷰 N-1). 여기서는 import해 쓴다.
 
 test('fit()의 거리는 bbox 8꼭짓점을 절두체 안에 8% 여백으로 넣는다 (평면·ISO · fix wave 1)', () => {
   const k = 1 - 2 * FIT_MARGIN;                               // 0.84 = 프레임 경계까지 8%씩 남는다
@@ -85,7 +61,7 @@ test('fit()의 거리는 bbox 8꼭짓점을 절두체 안에 8% 여백으로 넣
   ];
   for (const c of cases) {
     const r = fitDistance(Math.max(c.width, c.depth), c);
-    const { fill, front } = occupancy(r, c);
+    const { fill, front } = occupancyOf({ ...c, radius: r });
     // 평면 카메라는 lookAt이 퇴화하지 않게 목표에서 z로 0.01 m 비켜 선다(view3d.js) → 점유가
     // 0.3% 안쪽으로 커질 수 있다. 34 m 도면에서 mm 단위이고 8% 여백 안에서 흡수된다.
     const slack = c.plan ? 3e-3 : 1e-9;
@@ -100,7 +76,7 @@ test('width·depth를 주지 않으면 extent를 양변으로 써 보수적(더 
   const exact = fitDistance(33800, { ...opt, width: 33800, depth: 29600 });
   const square = fitDistance(33800, opt);
   expect(square).toBeGreaterThan(exact);                      // 잘리는 쪽이 아니라 남는 쪽으로 틀린다
-  expect(occupancy(square, { ...opt, width: 33800, depth: 29600 }).fill).toBeLessThan(1 - 2 * FIT_MARGIN);
+  expect(occupancyOf({ ...opt, width: 33800, depth: 29600, radius: square }).fill).toBeLessThan(1 - 2 * FIT_MARGIN);
 });
 
 // §16.9(감사 §10): 화면 종횡비로 맞춰 둔 거리를 16:9 출력에 그대로 쓰면 모델이 프레임의 절반만 쓴다.
@@ -135,9 +111,9 @@ test('fitDistance는 팬으로 벗어난 목표(소수 좌표)를 반영해 잘�
   const offsetMm = offset.map(v => v * 1000);
   const naive = fitDistance(33800, c);                        // 목표가 중앙이라고 가정한 거리
   const fixed = fitDistance(33800, { ...c, offsetMm });
-  expect(occupancy(naive, { ...c, offset }).fill).toBeGreaterThan(1);   // 예전 거리는 실제로 잘린다(1.03)
+  expect(occupancyOf({ ...c, offsetMm, radius: naive }).fill).toBeGreaterThan(1);   // 예전 거리는 실제로 잘린다(1.03)
   expect(fixed).toBeGreaterThan(naive);                       // 벗어난 만큼 더 물러난다
-  const { fill, front } = occupancy(fixed, { ...c, offset });
+  const { fill, front } = occupancyOf({ ...c, offsetMm, radius: fixed });
   expect(front, '카메라 앞쪽').toBeGreaterThan(0);
   expect(fill, '8꼭짓점이 프레임 안').toBeLessThanOrEqual(k + 1e-9);
   expect(fill, '그러면서 꽉 채운다').toBeGreaterThan(k - 1e-6);
@@ -176,6 +152,10 @@ test('shotPosition은 줌을 지키고 화면↔출력 종횡비 차이만 보�
   const ratio = fitDistance(33800, { ...opts, aspect: 1 }) / fitDistance(33800, { ...opts, aspect: 16 / 9 });
   expect(ratio).toBeGreaterThan(1);
   const sq = orbitOf(shotPosition({ position, target, center, ...dims, aspect: 1, screenAspect }), target);
+  // 12 m는 33.8 m 도면의 bbox **안**이다(꼭짓점이 카메라 뒤에 있다 = front < 0) → 8꼭짓점 점유로는
+  // 판단할 수 없는 영역이고, 이 영역에서는 순수 비율이 계약이다(리뷰 N-1의 잘림 증상은 "화면에 전부
+  // 들어와 있었는데"가 전제여서 여기서는 성립하지 않는다). 점유로 판단할 수 있는 영역의 가드는 아래 테스트다.
+  expect(occupancyOf({ ...opts, aspect: screenAspect, radius: 12 }).front).toBeLessThan(0);
   expect(sq.radius).toBeCloseTo(12 * ratio, 9);
   expect(sq.elevation).toBeCloseTo(35, 6);                    // 방향은 그대로다
   expect(sq.azimuth).toBeCloseTo(47, 6);
@@ -184,4 +164,74 @@ test('shotPosition은 줌을 지키고 화면↔출력 종횡비 차이만 보�
   expect(sq.radius).toBeLessThan(20);
   // screenAspect를 주지 않으면 출력 비율과 같다고 보아 거리를 건드리지 않는다(줌 보존이 기본값).
   expect(orbitOf(shotPosition({ position, target, center, ...dims, aspect: 1 }), target).radius).toBeCloseTo(12, 9);
+});
+
+// 리뷰 N-1·N-4: 수정 파동 1의 순수 비율 보정(r_cur × F(출력)/F(화면))은 "점유가 1/r로 간다"고 가정했다.
+// 원근에서는 1/(r − dot(v,dir))이므로 상사변환이 아니다 → 사용자가 화면 맞추기보다 조금만 더 확대해 두면
+// (화면에는 도면이 **전부 들어와 있다**) 더 넓은 출력에서 잘렸다. 여기서는 식을 식으로 검산하지 않고
+// **결과 프레임의 점유를 직접 잰다**. 팬·종횡비·줌을 모두 소수로 준다.
+const shotCase = ({ elevation, azimuth, screenAspect, aspect, zoom = 1, off = [0, 0, 0] }) => {
+  const base = { extentMm: 33800, width: 33800, depth: 29600, height: 3500, fov: 60, elevation, azimuth, offsetMm: off.map(v => v * 1000) };
+  const dims = { extentMm: 33800, width: 33800, depth: 29600, height: 3500, fov: 60 };
+  const center = { x: 1.5, y: 0, z: -2.25 };                  // bbox 기준점(가로·세로 중앙 · 바닥)
+  const target = { x: center.x + off[0], y: center.y + off[1], z: center.z + off[2] };
+  const fitScreen = fitDistance(dims.extentMm, { ...base, aspect: screenAspect });
+  const r = fitScreen * zoom;                                 // zoom < 1 = 화면 맞추기보다 더 확대해 둔 상태
+  const el = (elevation * Math.PI) / 180, az = (azimuth * Math.PI) / 180;
+  const position = {
+    x: target.x - r * Math.cos(el) * Math.sin(az),
+    y: target.y + r * Math.sin(el),
+    z: target.z + r * Math.cos(el) * Math.cos(az),
+  };
+  const cur = orbitOf(position, target).radius;
+  const radius = orbitOf(shotPosition({ position, target, center, ...dims, aspect, screenAspect }), target).radius;
+  const fit = fitDistance(dims.extentMm, { ...base, aspect });
+  return {
+    cur, radius, fit,
+    screen: occupancyOf({ ...base, aspect: screenAspect, radius: cur }),
+    out: occupancyOf({ ...base, aspect, radius }),
+    wave1: occupancyOf({ ...base, aspect, radius: (cur * fit) / fitScreen }).fill,   // 순수 비율만 썼을 때의 점유
+  };
+};
+
+test('shotPosition의 출력 프레임은 화면보다 나빠지지 않는다(리뷰 N-1 · 회귀 가드 N-4)', () => {
+  const k = 1 - 2 * FIT_MARGIN;
+  // (a) 감사 §10의 원래 경우: 정사각 화면에서 화면 맞추기 → 16:9 출력. 고침 전 0.707(프레임 절반 남짓) →
+  //     0.84. **이 가드가 없어 §16.9의 원래 고침이 조용히 사라질 수 있었다**(리뷰 N-4).
+  const a = shotCase({ elevation: 35, azimuth: 47, screenAspect: 1, aspect: 16 / 9 });
+  expect(a.screen.fill).toBeCloseTo(k, 9);                    // 화면 맞추기 직후 = 0.84
+  expect(a.out.fill).toBeCloseTo(0.84, 2);                    // 0.84 ± 0.005
+  expect(a.out.front).toBeGreaterThan(0);
+  expect(a.radius).toBeCloseTo(a.fit, 9);                     // 이 한 점에서는 비율 보정 = 출력 맞추기 거리
+  // (b) 화면 맞추기보다 10% 더 확대한 상태(화면 점유 0.942 — 아직 전부 프레임 안): 순수 비율은 1.011로
+  //     잘랐다. 이제 출력 점유가 화면 점유를 넘지 않는다(= 0.942에 붙여 가로 여백만 회수한다).
+  const b = shotCase({ elevation: 35, azimuth: 47, screenAspect: 1, aspect: 16 / 9, zoom: 0.9 });
+  expect(b.screen.fill).toBeCloseTo(0.942, 3);
+  expect(b.screen.fill).toBeLessThan(1);                      // 화면에는 전부 들어와 있다
+  expect(b.wave1).toBeGreaterThan(1);                          // 수정 파동 1은 여기서 잘랐다(1.011)
+  expect(b.out.fill).toBeLessThanOrEqual(b.screen.fill + 1e-9);
+  expect(b.out.fill).toBeLessThanOrEqual(1);
+  expect(b.radius).toBeLessThanOrEqual(b.fit + 1e-9);         // 화면 맞추기보다 멀어지지도 않는다
+  expect(b.radius).toBeGreaterThan(b.cur * 0.9);              // 사용자의 줌에서 필요한 만큼만 물러난다
+  // (b2) 같은 상황 + 소수 좌표 팬(목표가 bbox 기준점에서 1.6 m 벗어나 있다).
+  const b2 = shotCase({ elevation: 35, azimuth: 47, screenAspect: 1, aspect: 16 / 9, zoom: 0.9, off: [0.85, 0.75, -1.15] });
+  expect(b2.wave1).toBeGreaterThan(1);
+  expect(b2.out.fill).toBeLessThanOrEqual(b2.screen.fill + 1e-9);
+  expect(b2.out.fill).toBeLessThanOrEqual(1);
+  // (c) 저고도·좁은 뷰포트 극단(고도 2° · 화면비 0.46): 순수 비율은 점유 1.3~3.6까지 갔다.
+  const c = shotCase({ elevation: 2, azimuth: 47, screenAspect: 0.46, aspect: 16 / 9, zoom: 0.9, off: [0.85, 0.75, -1.15] });
+  expect(c.wave1).toBeGreaterThan(1.3);
+  expect(c.out.fill).toBeLessThanOrEqual(c.screen.fill + 1e-9);
+  expect(c.out.fill).toBeLessThanOrEqual(1);
+  expect(c.out.front).toBeGreaterThan(0.05);                  // 근평면(0.05 m) 앞에 있다
+  // (d) 출력 비율이 화면과 같으면 반지름을 **비트 그대로** 지킨다(줌 보존의 기본 보장 · 화면이 이미
+  //     프레임을 넘치는 상태여도 도면 전체 맞춤으로 물러나지 않는다 — 리뷰 I-4).
+  const d = shotCase({ elevation: 35, azimuth: 47, screenAspect: 16 / 9, aspect: 16 / 9, zoom: 0.9, off: [0.85, 0.75, -1.15] });
+  expect(d.radius).toBe(d.cur);
+  expect(d.screen.fill).toBeGreaterThan(1);                   // 넘침을 1로 깎지 않는다
+  expect(d.out.fill).toBe(d.screen.fill);
+  // (e) 줌아웃 영역(r_cur > F(화면))은 원래 안전했다 — 순수 비율 그대로여야 한다(동작 불변).
+  const e = shotCase({ elevation: 35, azimuth: 47, screenAspect: 1, aspect: 16 / 9, zoom: 3 });
+  expect(e.out.fill).toBeCloseTo(e.wave1, 12);
+  expect(e.radius).toBeGreaterThan(e.fit);                    // 사용자의 줌아웃을 끌어당기지 않는다
 });

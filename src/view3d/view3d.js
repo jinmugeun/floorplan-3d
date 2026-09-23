@@ -168,7 +168,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     const prevAspect = cam.isPerspectiveCamera ? cam.aspect : null;
     // 렌더가 던져도(컨텍스트 소실 · 오염된 캔버스) 화면이 렌더샷 상태로 남지 않게 되돌리기는 finally에 있다(리뷰 I-3).
     try {
-      if (home) { const b = bounds(); camera.position.copy(shotPosition({ position: home, target: controls.target, center: toThree([b.center[0], b.center[1], 0]), extentMm: b.extent, aspect: width / height, screenAspect: (container.clientWidth || 1) / (container.clientHeight || 1), fov: camera.fov, height: activeFloor(store.get()).height, width: b.size[0], depth: b.size[1] })); }
+      if (home) { const b = bounds(); camera.position.copy(shotPosition({ position: home, target: controls.target, center: toThree([b.center[0], b.center[1], 0]), extentMm: b.extent, aspect: width / height, screenAspect: camera.aspect, fov: camera.fov, height: activeFloor(store.get()).height, width: b.size[0], depth: b.size[1] })); }
       renderer.setPixelRatio(1);
       renderer.setSize(width, height, false);
       if (cam.isPerspectiveCamera) { cam.aspect = width / height; cam.updateProjectionMatrix(); }
