@@ -20,7 +20,7 @@ export function targetOf(hit) {
 export function createFacePicker({ renderer, getCamera, scene, getGroup, store, ui, openMenu = () => {}, onSelect = null, surfaceActions = {}, getMode = () => 'iso', requestRender = () => {}, dragLatch = { latched: () => false } }) {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 
-  function hitAt(ev) {
+  function hitAt(ev, { skipItems = false } = {}) {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set(((ev.clientX - r.left) / (r.width || 1)) * 2 - 1, -((ev.clientY - r.top) / (r.height || 1)) * 2 + 1);
     ray.setFromCamera(ndc, getCamera());
@@ -29,7 +29,11 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     const roots = root.children;
     const itemGroup = roots.find(c => c.name === 'items');
     // 조합 형상은 Group이다: 재귀로 맞히고 엣지 선(LineSegments)은 건너뛴다(Line 허용치가 월드 1 m다).
-    const itemHit = itemGroup ? ray.intersectObjects(itemGroup.children, true).find(x => x.object.isMesh) ?? null : null;
+    // 레이캐스터는 object.visible을 보지 않으므로 여기서 거른다(숨긴 아이템이 모든 픽을 이기지 않게 — M-5).
+    // skipItems는 마감재 적용 모드다: 그 모드에서는 아이템이 선택 대상이 아니므로(pick3d의 아이템
+    // 피커도 물러난다) 아이템을 겨루지 않는다 — 광선 위 어디든 아이템이 있으면 그 **뒤의** 면까지
+    // 칠할 수 없어 "클릭이 먹지 않는다"가 됐다(리뷰 I-1).
+    const itemHit = !skipItems && itemGroup ? ray.intersectObjects(itemGroup.children, true).find(x => x.object.isMesh && x.object.visible) ?? null : null;
     const ductGroup = roots.find(c => c.name === 'ducts');
     const ductHit = ductGroup ? ray.intersectObjects(ductGroup.children, false)[0] : null;
     const faceHit = ray.intersectObjects(roots.filter(c => FACE_NAMES.has(c.name) && c.visible), false)[0] ?? null;
@@ -63,7 +67,7 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     if (ev.button !== 0 || !start || getMode() === 'fp') return;
     if (Math.hypot(ev.clientX - start[0], ev.clientY - start[1]) > 4) return; // 궤도 회전은 선택이 아니다
     const pick = ui.get().matPick;
-    const hit = hitAt(ev);
+    const hit = hitAt(ev, { skipItems: !!pick });
     if (pick) {
       if (hit && hit.kind !== 'item' && hit.kind !== 'duct') { applyMaterial(store, targetOf(hit), pick.assignment); requestRender(); }
       return;                                    // 적용 모드는 Esc까지 계속된다(덕트에는 재질을 바르지 않는다)
@@ -77,7 +81,7 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     // defaultPrevented는 보지 않는다: OrbitControls가 enabled인 동안 모든 contextmenu를 먼저 막으므로
     // 그것으로는 "아이템 피커가 이미 열었다"를 알 수 없다. 아래 hit.kind === 'item'이 그 판정을 한다.
     if (getMode() === 'fp') return;
-    const hit = hitAt(ev);
+    const hit = hitAt(ev, { skipItems: !!ui.get().matPick });
     if (!hit || hit.kind === 'item') return;
     ev.preventDefault();
     if (hit.kind === 'duct') {

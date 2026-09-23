@@ -9,6 +9,13 @@ export function isExteriorWall(floor, wall) { return wallOwners(floor, wall).len
 // 내벽 컷어웨이의 문턱: |cos(법선, 카메라 방향)|이 이보다 작으면(≈78° 이상 비스듬하면) 남긴다.
 export const CUTAWAY_EDGE_COS = 0.2;
 
+// 층 바운딩 박스 중심(월드 mm). 내벽 컷어웨이에서 "카메라 쪽 절반"을 가르는 기준선이다(§17.1 개정).
+export function floorCenter(walls = []) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const w of walls) for (const p of [w.a, w.b]) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  return walls.length ? [(x0 + x1) / 2, (y0 + y1) / 2] : [0, 0];
+}
+
 export function hiddenWallIds(floor, camPos, elevationDeg, view) {
   const out = new Set();
   const v3 = view?.v3 ?? {};
@@ -20,20 +27,28 @@ export function hiddenWallIds(floor, camPos, elevationDeg, view) {
     }
   }
   if (!view?.cutaway || elevationDeg >= 70 || camPos[2] <= 0) return out;
+  const camXY = [camPos[0], camPos[1]], c = floorCenter(floor.walls);
   for (const w of floor.walls) {
     const owners = wallOwners(floor, w);
     const mid = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2];
-    const toCam = sub([camPos[0], camPos[1]], mid);
-    // 방 하나에 속한 벽(외벽)은 "바깥"이 정해진다: 방 중심의 반대쪽 법선이 카메라를 향하면 숨긴다.
-    if (owners.length === 1) {
+    const toCam = sub(camXY, mid);
+    // 외벽(소유 방 ≤ 1 = isExteriorWall)은 "바깥"이 정해진다: 방 중심의 반대쪽 법선이 카메라를
+    // 향하면 숨긴다. 아직 방이 닫히지 않은 벽(소유 방 0)은 뒤집을 기준이 없으니 법선 그대로 **한쪽만**
+    // 본다 — 양쪽으로 판정하면 그리는 중인 벽이 어느 각도에서나 사라지고, 둘러싼 방이 없어 그 벽이
+    // 가리는 설비도 없다(리뷰 I-2 · §17.1의 isExteriorWall = owners.length <= 1).
+    if (owners.length <= 1) {
       let n = wallNormal(w);
-      if (dot(n, sub(centroid(owners[0].points), mid)) > 0) n = mul(n, -1); // 바깥쪽
+      if (owners[0] && dot(n, sub(centroid(owners[0].points), mid)) > 0) n = mul(n, -1); // 바깥쪽
       if (dot(n, toCam) > 0) out.add(w.id);
       continue;
     }
-    // 내벽(방 2개 이상)과 어느 방에도 속하지 않은 벽은 "바깥"을 정할 수 없다(§17.1 · 감사 §1):
-    // 벽 법선의 **양쪽**으로 판정한다. CUTAWAY_EDGE_COS보다 비스듬히 보이는 벽(≈78° 이상)은
-    // 남긴다 — 도면의 골격이 다 사라지지 않게 하는 유일한 안전장치다.
+    // 내벽(방 2개 이상)은 "바깥"을 정할 수 없다(§17.1 · 감사 §1): 벽 법선의 **양쪽**으로 판정하되,
+    // 도면 중심보다 카메라 쪽 절반에 있는 벽만 숨긴다(§17.1 개정 · 리뷰 I-3). 축 정렬 도면을 기본
+    // iso(방위 47°·고도 35°)에서 보면 남북 벽도 동서 벽도 |cos| ≈ 0.7이라, 이 반쪽 규칙이 없으면
+    // 내벽이 한꺼번에 사라져 3D가 밑동 윤곽(평면도)만 남는다. 먼 쪽 절반은 배경 골격으로 선다.
+    if (dot(sub(mid, c), sub(camXY, c)) <= 0) continue;
+    // CUTAWAY_EDGE_COS보다 비스듬히 보이는 벽(≈78° 이상)은 가리는 것이 없으므로 남긴다 —
+    // 도면의 골격이 다 사라지지 않게 하는 둘째 안전장치다.
     if (Math.abs(dot(norm(wallNormal(w)), norm(toCam))) >= CUTAWAY_EDGE_COS) out.add(w.id);
   }
   return out;
@@ -86,6 +101,7 @@ export function applyCutawayTo(group, { hidden = new Set(), seeThrough = false, 
 // (정면도·측면도는 눈높이 도면이다). null이면 컷어웨이 없이 모든 벽을 그린다:
 // 천장 평면도('top')는 위에서 내려보므로 벽이 골격이고, 프리셋이 없는 렌더(= 현재 카메라)는
 // 화면의 컷어웨이가 이미 적용된 그룹을 그대로 찍는다.
+// camPos는 **월드 mm [x, y, z(높이)]**다: three 카메라는 [p.x * 1000, p.z * 1000, p.y * 1000]로 바꿔 넘긴다(M-1).
 export function shotCutaway(floor, camPos, preset, view = {}) {
   if (!preset || preset === 'top') return null;
   return hiddenWallIds(floor, camPos, 0, { ...view, cutaway: true });

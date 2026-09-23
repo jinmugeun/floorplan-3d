@@ -380,6 +380,39 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     expect(ev.defaultPrevented).toBe(false);               // 아이템 피커가 자기 메뉴를 연다
   });
 
+  // 리뷰 I-1: 마감재 적용 모드에서는 아이템을 겨루지 않는다 — 광선 위 어디든(클릭한 면보다 **뒤**여도)
+  // 아이템 메시가 있으면 적용 분기가 통째로 건너뛰어져, 사용자에게는 "클릭이 먹지 않는다"만 남았다.
+  // 그 모드에서는 pick3d의 아이템 피커도 물러나므로 아이템은 애초에 선택 대상이 아니다.
+  test('적용 모드에서는 아이템 뒤의 면도 칠해진다(평소에는 아이템이 이긴다)', () => {
+    const ev = { clientX: 100, clientY: 100 };
+    const a = setup({ mesh: 'wall' });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+    box.position.set(0, -3, 0); box.name = 'item'; box.userData.itemId = 'i1';   // 벽 평면(y = 0)보다 뒤
+    a.items.add(box);
+    expect(a.picker.hitAt(ev)).toEqual({ kind: 'item', id: 'i1' });              // 평소 모드: 아이템이 이긴다
+    expect(a.picker.hitAt(ev, { skipItems: true }).kind).toBe('wall');           // 적용 모드의 같은 클릭
+    a.ui.set({ matPick: { assignment: mat('brick-red') } });
+    a.click();
+    expect(a.floor().walls.find(x => x.id === a.wallId).matOut.id).toBe('brick-red');
+    expect(a.ui.get().matPick).not.toBeNull();                                   // 적용 모드는 Esc까지 계속된다
+    expect(a.ui.get().selection).toBeNull();                                     // 아이템이 선택되지도 않는다
+    // 우클릭도 같은 답을 낸다: 적용 모드에서는 아이템 위에서도 면 메뉴가 열린다(아이템 피커가 물러났다).
+    expect(a.rightClick().defaultPrevented).toBe(true);
+    expect(labels(a.menu[0].items)).toContain('재질 교체');
+  });
+
+  // M-5: three의 레이캐스터는 object.visible을 보지 않는다 — 숨긴 아이템이 조용히 모든 픽을 이기지 않게
+  // 아이템 후보에서 직접 거른다(면 후보는 이미 c.visible로 거른다).
+  test('보이지 않는 아이템 메시는 레이캐스트 후보가 아니다', () => {
+    const a = setup({ mesh: 'wall' });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+    box.position.set(0, 3, 0); box.name = 'item'; box.userData.itemId = 'i1';    // 벽보다 카메라에 가깝다
+    a.items.add(box);
+    expect(a.picker.hitAt({ clientX: 100, clientY: 100 })).toEqual({ kind: 'item', id: 'i1' });
+    box.visible = false;
+    expect(a.picker.hitAt({ clientX: 100, clientY: 100 }).kind).toBe('wall');    // 뒤의 벽이 잡힌다
+  });
+
   // 컷어웨이로 숨긴 벽은 후보에서 빠진다(§17.1이 픽률을 올리는 기계 자체다).
   test('보이지 않는 벽 메시는 레이캐스트 후보가 아니다', () => {
     const a = setup({ mesh: 'wall' });

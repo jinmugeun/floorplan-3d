@@ -1,14 +1,14 @@
 import { test, expect } from 'vitest';
-import { rectWalls } from '../src/geom/walls.js';
+import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { detectRooms } from '../src/geom/rooms.js';
-import { hiddenWallIds, wallOwners, isExteriorWall, cutawayMeshStyle, soloMeshVisible, applyCutawayTo, shotCutaway, CUTAWAY_EDGE_COS } from '../src/view3d/cutaway.js';
+import { hiddenWallIds, wallOwners, isExteriorWall, cutawayMeshStyle, soloMeshVisible, applyCutawayTo, shotCutaway, floorCenter, CUTAWAY_EDGE_COS } from '../src/view3d/cutaway.js';
 import { sceneSignature } from '../src/view3d/build.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 
-function floor() { const walls = rectWalls([0, 0], [4000, 3000], 200); return { walls, rooms: detectRooms(walls) }; }
-const top = f => f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id;
-const bottom = f => f.walls.find(w => w.a[1] === 3000 && w.b[1] === 3000).id;
-const left = f => f.walls.find(w => w.a[0] === 0 && w.b[0] === 0).id;
+function floor() { const walls = rectWalls([0.5, 0.25], [4000.5, 3000.25], 200); return { walls, rooms: detectRooms(walls) }; }
+const top = f => f.walls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25).id;
+const bottom = f => f.walls.find(w => w.a[1] === 3000.25 && w.b[1] === 3000.25).id;
+const left = f => f.walls.find(w => w.a[0] === 0.5 && w.b[0] === 0.5).id;
 const view = { cutaway: true };
 
 test('camera south-west hides south and west walls', () => {
@@ -29,17 +29,16 @@ test('cutaway off shows all walls', () => {
   expect(hiddenWallIds(f, [-5000, 8000, 4000], 35, { cutaway: false }).size).toBe(0);
 });
 // §17.1(감사 §1): 내벽도 카메라 쪽이면 지운다 — 그러지 않으면 그 뒤의 설비가 보이지도, 집히지도 않는다.
-// 내벽은 "바깥"을 정할 수 없으므로 **벽 법선의 양쪽**으로 판정한다(정면으로 보이면 숨긴다).
+// 내벽은 "바깥"을 정할 수 없으므로 **벽 법선의 양쪽**으로 판정한다(정면으로 보이면 숨긴다). 단, 도면
+// 중심보다 카메라 쪽 절반에 있을 때만이다(§17.1 개정 · 리뷰 I-3 — 아래 iso 테스트가 그 절반을 못 박는다).
 test('카메라를 마주보는 내벽은 숨는다', () => {
-  const a = rectWalls([0, 0], [4000, 3000], 200), b = rectWalls([4000, 0], [7000, 3000], 200);
-  const shared = b.find(w => w.a[0] === 4000 && w.b[0] === 4000);
-  const walls = [...a, ...b.filter(w => w !== shared)];
-  const f = { walls, rooms: detectRooms(walls) };
-  const mid = a.find(w => w.a[0] === 4000 && w.b[0] === 4000).id;
-  // 동쪽에서 보면 남북으로 뻗은 공유 벽을 정면으로 마주본다(법선이 동서다).
-  expect(hiddenWallIds(f, [20000, 1500, 3000], 35, view).has(mid)).toBe(true);
+  const f = twoRooms();                                     // 공유 벽은 x = 4000.5의 남북 벽(법선 ±x)
+  const mid = f.shared.id;
+  // 동쪽에서 보면 남북으로 뻗은 공유 벽을 정면으로 마주본다(법선이 동서다). 공유 벽은 도면 중심보다
+  // 동쪽이므로 카메라 쪽 절반이기도 하다(§17.1 개정 · 리뷰 I-3).
+  expect(hiddenWallIds(f, [20000.5, 1500.25, 3000], 35, view).has(mid)).toBe(true);
   // 컷어웨이를 끄면 예전처럼 아무것도 숨지 않는다.
-  expect(hiddenWallIds(f, [20000, 1500, 3000], 35, { cutaway: false }).size).toBe(0);
+  expect(hiddenWallIds(f, [20000.5, 1500.25, 3000], 35, { cutaway: false }).size).toBe(0);
 });
 
 // 안전장치 하나: 비스듬히 보이는 벽은 남긴다(도면의 골격이 다 사라지지 않게).
@@ -87,10 +86,64 @@ test('innerWalls off hides only the shared wall', () => {
 
 test('with both flags on, the cutaway rules are unchanged', () => {
   const f = twoRooms();
-  const hid = hiddenWallIds(f, [-5000, 8000, 4000], 35, { cutaway: true, v3: { outerWalls: true, innerWalls: true } });
-  // §17.1: 내벽도 카메라 쪽이면 숨는다(북서쪽에서 보면 공유 벽의 법선과 45°다).
-  expect(hid.has(f.shared.id)).toBe(true);
+  const v = { cutaway: true, v3: { outerWalls: true, innerWalls: true } };
+  const hid = hiddenWallIds(f, [-5000, 8000, 4000], 35, v);
+  // §17.1 개정(리뷰 I-3): 공유 벽은 도면 중심의 동쪽이라 남서쪽 카메라에게는 **먼 쪽 절반**이다 → 선다.
+  expect(hid.has(f.shared.id)).toBe(false);
   expect(hid.size).toBeGreaterThan(0);
+  // 같은 벽도 카메라가 그 벽 쪽(동쪽)으로 돌면 숨는다.
+  expect(hiddenWallIds(f, [20000.5, 8000, 4000], 35, v).has(f.shared.id)).toBe(true);
+});
+
+// 3×3 격자로 방 4개(소수 좌표): 감사 §1이 실측한 축 정렬 도면의 축소판이다. 내벽은 4개다.
+function gridRooms() {
+  const xs = [0.5, 4000.5, 8000.5], ys = [0.25, 3000.25, 6000.25], walls = [];
+  for (const y of ys) for (let k = 0; k < 2; k++) walls.push(makeWall({ a: [xs[k], y], b: [xs[k + 1], y] }));
+  for (const x of xs) for (let k = 0; k < 2; k++) walls.push(makeWall({ a: [x, ys[k]], b: [x, ys[k + 1]] }));
+  return { walls, rooms: detectRooms(walls) };
+}
+// 기본 iso 카메라의 월드 mm 위치(view3d.applyCameraPreset과 같은 식: 방위 0 = 북, 시계방향).
+const isoCam = (f, az = 47, r = 20000) => {
+  const c = floorCenter(f.walls), a = (az * Math.PI) / 180;
+  return [c[0] - r * Math.sin(a), c[1] + r * Math.cos(a), 8000];
+};
+
+// §17.1 개정(리뷰 I-3): 내벽은 도면 중심보다 **카메라 쪽 절반**에 있을 때만 숨는다. 축 정렬 도면을
+// 기본 iso(방위 47°·고도 35°)의 대각선에서 보면 남북 벽도 동서 벽도 |cos| ≈ 0.7이라, 이 반쪽 규칙이
+// 없으면 내벽이 한꺼번에 사라져 3D가 밑동 윤곽(평면도)만 남는다.
+test('기본 iso 카메라에서 내벽은 절반만 숨고 먼 쪽은 선다', () => {
+  const f = gridRooms();
+  const inner = f.walls.filter(w => wallOwners(f, w).length >= 2);
+  expect(inner).toHaveLength(4);
+  const c = floorCenter(f.walls);
+  expect(c).toEqual([4000.5, 3000.25]);
+  for (const az of [47, 137, 227, 317]) {
+    const cam = isoCam(f, az);
+    const hid = hiddenWallIds(f, cam, 35, view);
+    const hidden = inner.filter(w => hid.has(w.id));
+    expect(hidden.length).toBeGreaterThan(0);                // 앞쪽 내벽은 지운다(감사 §1의 가림 11건)
+    expect(hidden.length).toBeLessThan(inner.length);        // 그래도 내벽을 다 지우지는 않는다
+    for (const w of hidden) {                                // 숨은 내벽은 모두 카메라 쪽 절반이다
+      const mid = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2];
+      expect((mid[0] - c[0]) * (cam[0] - c[0]) + (mid[1] - c[1]) * (cam[1] - c[1])).toBeGreaterThan(0);
+    }
+  }
+  // 기본 iso(남서쪽)에서 북쪽 절반의 세로 내벽은 먼 쪽이라 선다 — 법선이 카메라를 마주보는데도 그렇다.
+  const far = inner.find(w => w.a[0] === 4000.5 && w.b[0] === 4000.5 && Math.min(w.a[1], w.b[1]) === 0.25);
+  expect(hiddenWallIds(f, isoCam(f), 35, view).has(far.id)).toBe(false);
+});
+
+// 리뷰 I-2 · §17.1(isExteriorWall = 소유 방 ≤ 1): 어느 방에도 속하지 않은 벽(방이 아직 닫히지 않은,
+// 그리는 중인 벽)도 외벽이다 — 한쪽 판정이라 한 방향에서만 숨는다. 양쪽 판정이었을 때는 어느 각도에서나
+// 사라져 "그리던 벽이 3D에서 없어진다"가 됐고, 둘러싼 방이 없으니 지워서 얻는 픽률도 0이다.
+test('소유 방이 없는 벽은 외벽 규칙으로 한쪽에서만 숨는다', () => {
+  const lone = { id: 'lone', a: [9000.5, 9000.25], b: [9000.5, 12000.25], thickness: 200, height: 2300 };
+  const f = { walls: [lone], rooms: [] };
+  expect(isExteriorWall(f, lone)).toBe(true);
+  const mid = [9000.5, 10500.25];
+  const east = hiddenWallIds(f, [mid[0] + 10000, mid[1] + 500.5, 3000], 35, view);
+  const west = hiddenWallIds(f, [mid[0] - 10000, mid[1] + 500.5, 3000], 35, view);
+  expect(east.size + west.size).toBe(1);        // 정면으로 마주봐도 한쪽에서만 사라진다
 });
 
 // --- 순수 가시성 규칙(applyCutaway / applySolo가 메시마다 쓰는 규칙) ---
@@ -177,5 +230,5 @@ test('shotCutaway는 프리셋에 따라 촬영 카메라 기준의 숨길 벽�
   expect(shotCutaway(f, [0, -20000, 1750], 'top', {})).toBeNull();     // 천장 평면도
   const hid = shotCutaway(f, [2000, -20000, 1750], 'front', {});       // 남쪽에서 보는 정면도
   expect(hid.has(top(f))).toBe(true);                                  // 앞쪽(북쪽) 벽이 사라진다
-  expect(hid.has(left(f))).toBe(false);                                // 옆벽은 비스듬해서 남는다
+  expect(hid.has(left(f))).toBe(false);                                // 옆벽은 바깥 법선이 카메라를 향하지 않아 남는다(외벽 규칙)
 });
