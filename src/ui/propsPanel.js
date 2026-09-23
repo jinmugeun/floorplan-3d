@@ -163,6 +163,16 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (!colorTx) { store.beginTransaction(); colorTx = true; } // 드래그 시작 상태를 되돌림 지점으로 잡는다
     applyColor(ui.get().selection, el.name, el.value, { record: false });
   };
+  // 무동작 재렌더는 포커스를 되돌려 준다(리뷰 I-2 · MUST-CHECK N-2). render()는 container.innerHTML을
+  // 통째로 갈아 글자를 모델 값으로 되맞추는데(§16.1이 옳게 더한 동작), 그 순간 포커스를 갖고 있던
+  // 입력 노드가 사라져 document.activeElement가 <body>로 떨어졌다 — 클램프 경계에서 화살표를
+  // 두드리면 매 change마다 제자리를 잃었다. 패널은 이미 복구 장치(ui.focusField)를 갖고 있다:
+  // ui.set이 ui.subscribe(render)를 돌려 새 DOM을 만들고 :49-52가 같은 이름의 칸을 다시 잡는다.
+  // [Tab]으로 포커스가 이미 떠난 경우에는 다시 잡지 않는다(그 칸으로 되끌어오면 더 나쁘다).
+  const rerender = el => {
+    if (el?.name && container.contains(el) && document.activeElement === el) ui.set({ focusField: el.name });
+    else render();
+  };
   const onChange = ev => {
     const sel = ui.get().selection, el = ev.target, name = el.name; if (!name) return;
     // [Enter] 확정 뒤 blur가 내는 같은 값의 네이티브 change는 한 번 삼킨다(§16.1). 적용 함수가
@@ -175,9 +185,9 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     // 칸을 비우고 확정하면 값은 지켜지는데 칸이 빈 채로 남았다 — materialRows.js의 주석이 약속한
     // "패널이 원래 값으로 다시 그린다"가 이 갈래에만 빠져 있었다).
     const before = store.get();
-    if (applyMaterialField(store, sel, el)) { if (store.get() === before) render(); return; }   // 마감재 오프셋·각도
-    if (applyVentField(store, ui, sel, el)) { if (store.get() === before) render(); return; }   // 설비 속성 · 방 설계 풍량
-    if (applyDuctField(store, sel, el)) { if (store.get() === before) render(); return; }       // 덕트 종류·계통·구간 단면
+    if (applyMaterialField(store, sel, el)) { if (store.get() === before) rerender(el); return; }   // 마감재 오프셋·각도
+    if (applyVentField(store, ui, sel, el)) { if (store.get() === before) rerender(el); return; }   // 설비 속성 · 방 설계 풍량
+    if (applyDuctField(store, sel, el)) { if (store.get() === before) rerender(el); return; }       // 덕트 종류·계통·구간 단면
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }
     if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }, { record: false }); return; }
     if (name === 'bgLocked') { store.dispatch(d => { d.background.locked = el.checked; }, { record: false }); return; }
@@ -194,16 +204,16 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       const units = store.get().units ?? 'mm';
       const onClampLen = (v, { max }) => toast((v === max ? CLAMP_MAX : CLAMP_MIN)(fmtLen(v, units), ''));
       const v = readLen(el, units, { onClamp: onClampLen });
-      if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
+      if (v === null) { rerender(el); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
       // 적용된 것이 없으면(같은 값·클램프·잠금) dispatch가 없어 패널이 다시 그려지지 않는다 →
       // 칸의 글자가 모델과 어긋난 채 남는다(리뷰 I-2). 그때만 직접 다시 그려 모델 값을 보여 준다.
-      if (!applyNumber(store, sel, name, v)) render();
+      if (!applyNumber(store, sel, name, v)) rerender(el);
       return;
     }
     if (el.type === 'number') {
       const v = numValue(el, { onClamp });
-      if (v === null) { render(); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
-      if (!applyNumber(store, sel, name, v)) render();   // 리뷰 I-2: 적용되지 않았으면 글자를 모델 값으로
+      if (v === null) { rerender(el); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
+      if (!applyNumber(store, sel, name, v)) rerender(el);   // 리뷰 I-2: 적용되지 않았으면 글자를 모델 값으로
       return;
     }
     if (el.type === 'color') {

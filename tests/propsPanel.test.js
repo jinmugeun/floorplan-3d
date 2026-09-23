@@ -722,6 +722,50 @@ test('#floorBar는 선택이 있어도 속성 패널 맨 위에 남는다', () =
   expect(el.querySelector('[name="wallOpacity"]')).toBeNull();
 });
 
+// 리뷰 I-2(MUST-CHECK N-2): 무동작·클램프 확정의 render()는 container.innerHTML을 통째로 갈아
+// 포커스를 <body>로 떨어뜨렸다. 패널이 이미 가진 ui.focusField로 같은 칸을 다시 잡는다.
+// 두께를 최대(1000)까지 올려 둔다: 그다음 확정은 클램프로 같은 값이 되어 dispatch가 없다
+// (= 패널이 render()로 직접 글자를 되맞추는 갈래).
+function atClampedMax() {
+  const ctx = setupPanel();
+  ui2commit(ctx, '1000');
+  return ctx;
+}
+function ui2commit({ store, ui, el }, value) {
+  ui.set({ selection: { type: 'wall', id: activeFloor(store.get()).walls[0].id } });
+  const t = el.querySelector('[name="thickness"]');
+  t.value = value;
+  t.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+test('클램프된 무동작 확정 뒤에도 포커스가 그 칸에 남는다', () => {
+  const { store, ui, el } = atClampedMax();
+  expect(activeFloor(store.get()).walls[0].thickness).toBe(1000);
+  const t = el.querySelector('[name="thickness"]');
+  t.focus();
+  expect(document.activeElement).toBe(t);
+  t.value = '50099';                                     // 최대 1000으로 잘려 지금 값과 같다 → dispatch 없음
+  t.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(el.querySelector('[name="thickness"]').value).toBe('1000');   // 글자는 모델 값으로
+  expect(document.activeElement.name).toBe('thickness');               // 예전에는 body였다
+  expect(el.contains(document.activeElement)).toBe(true);
+  expect(ui.get().focusField).toBeNull();                              // 한 번만 쓰고 비운다
+});
+
+test('포커스가 이미 떠난 칸은 무동작 확정에서도 다시 잡지 않는다', () => {
+  const { ui, el } = atClampedMax();
+  const away = document.createElement('input');          // [Tab]으로 패널 밖으로 나간 자리
+  document.body.appendChild(away);
+  away.focus();
+  const t = el.querySelector('[name="thickness"]');
+  t.value = '50099';
+  t.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(el.querySelector('[name="thickness"]').value).toBe('1000');   // 글자는 그대로 되맞춘다
+  expect(document.activeElement).toBe(away);                           // 되끌어오지 않는다
+  expect(ui.get().focusField).toBeNull();
+  away.remove();
+});
+
 // §16.4(감사 §32): 다른 층의 대상을 가리키는 선택은 풀고 층 정보를 보인다(빈 패널 방어).
 test('다른 층의 대상이 선택된 채 층을 바꾸면 선택이 풀리고 층 정보가 보인다', () => {
   const { store, ui, el } = setupPanel();
