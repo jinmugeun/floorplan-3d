@@ -118,6 +118,8 @@ function setLen(el, mm, units) {
 // 치수 칸 한 덩어리. 값은 도구가 이미 단위에 맞춰 문자열로 준다(tool.dims().fields[].text) —
 // 보조선 좌표까지 그렇다(리뷰 I-4: 라벨만 ft·in이고 값은 mm 정수였다). data-mm은 그릴 때의 모델
 // 값이다: ft·in 표기는 파싱과 왕복하지 않으므로 "글자를 고쳤는가"의 기준이 된다(§16.1).
+// 생산 호출자 0 · 테스트 전용(리뷰 m-11): syncDimBar가 같은 dimFieldsHtml을 부르므로 마크업 규칙을
+// 도구 하나 없이 단정할 수 있는 창이다(브리프가 정한 계약). 지울 때는 그 단정을 syncDimBar로 옮길 것.
 export const dimBarHtml = (tool, { units = 'mm' } = {}) => dimFieldsHtml(tool?.dims?.()?.fields ?? [], units);
 function dimFieldsHtml(fields, units) {
   if (!fields.length) return '';
@@ -132,7 +134,7 @@ function dimFieldsHtml(fields, units) {
 }
 
 // **칸 목록**의 서명이다(값은 넣지 않는다): 이것이 같으면 DOM을 다시 만들지 않는다.
-export const dimBarSignature = tool => (tool?.dims?.()?.fields ?? []).map(f => f.key).join(',');
+export const dimBarSignature = tool => (tool?.dims?.()?.fields ?? []).map(f => f.key).join(',');   // 생산 호출자 0 · 테스트 전용(m-11): syncDimBar 안의 같은 계산을 밖에서 단정한다
 
 // #optionDims를 도구 상태에 맞춘다. 칸 목록이 그대로면 값만 고친다: 칸을 다시 만들면 커서가
 // 튀고 조합 중인 글자가 사라진다. 포커스가 있는 칸도 **사람이 치지 않았으면** 실측을 따라간다

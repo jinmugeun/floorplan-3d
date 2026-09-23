@@ -119,7 +119,9 @@ export function createBodyDrag({ renderer, getCamera, getGroup, scene, store, ui
     // 취소가 되돌릴 자리(pos·rot)도 여기 있다. wasEnabled는 드래그를 열기 전의 궤도 조작 상태다.
     drag = { id: it.id, base: it, slide: onHandle, y, grab: at, from: [...it.pos], px: [ev.clientX, ev.clientY], open: false, preview: null, wasEnabled: controls ? controls.enabled : true };
     if (controls) controls.enabled = false;   // 궤도 회전이 같은 드래그를 함께 먹지 않게(기즈모와 같은 규칙)
-    renderer.domElement.setPointerCapture?.(ev.pointerId);
+    // 활성 포인터가 아닌 id는 NotFoundError를 던진다(리뷰 m-3 · 합성 포인터 이벤트). 캡처는 "있으면
+    // 좋은 것"이지 드래그의 계약이 아니다 — 놓쳤다고 pointerdown이 예외로 끝나서는 안 된다.
+    try { renderer.domElement.setPointerCapture?.(ev.pointerId); } catch { /* 합성 포인터 */ }
   }
 
   // 드래그 중 미리보기(리뷰 I-4): store 대신 아이템 메시와 핸들만 옮긴다. preview가 null이면
@@ -175,7 +177,8 @@ export function createBodyDrag({ renderer, getCamera, getGroup, scene, store, ui
   // 소비하는 이유도 2D와 같다: keymap(window, 버블)이 이어서 선택을 비우거나 **한 단계 더** 되돌리면
   // 취소 한 번이 두 일을 한다. 아직 열리지 않은 드래그(클릭일 수도 있다)는 조용히 버리고 키는 넘긴다.
   function onKey(ev) {
-    if (!drag || !(ev.key === 'Escape' || ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'))) return;
+    // ev.key가 없는 합성 이벤트에서 던지지 않게 감싼다(리뷰 m-2): 던지면 드래그 중 Ctrl을 누른 채 도는 키마다 예외가 보고되고 이 리스너의 취소 경로가 통째로 건너뛰어진다.
+    if (!drag || !(ev.key === 'Escape' || ((ev.ctrlKey || ev.metaKey) && String(ev.key ?? '').toLowerCase() === 'z'))) return;
     const { open, wasEnabled } = drag;
     if (open) { drag.preview = null; showPreview(); }
     drag = null;

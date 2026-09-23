@@ -181,3 +181,27 @@ test('빈 도면에서는 실행 버튼이 비활성이고 사유가 붙는다([
   const a = setup();
   expect(a.root.querySelector('[name="print"]').disabled).toBe(false);
 });
+
+// 리뷰 m-10: run()의 finally가 무조건 disabled = false여서, 빈 도면에서 한 번이라도 run이 돌면
+// 잠금과 사유 title이 사라졌다(렌더샷 대화상자의 syncEmpty와 비대칭). 판정은 한 곳이어야 한다.
+test('run()의 finally가 빈 도면의 잠금을 되살리지 않는다(리뷰 m-10)', async () => {
+  const { OUTPUT_EMPTY_TITLE } = await import('../src/ui/messages.js');
+  const a = setup();                                      // 벽이 있는 도면으로 열고
+  const print = a.root.querySelector('[name="print"]');
+  expect(print.disabled).toBe(false);
+  // 그 사이 도면이 비었다(층을 지웠다·되돌렸다): run 뒤의 finally가 같은 판정을 다시 한다.
+  a.store.dispatch(d => { d.floors[0].walls = []; d.floors[0].rooms = []; }, { record: false });
+  click(a.root, '[name="download"]');
+  await new Promise(r => setTimeout(r, 0));
+  for (const n of ['download', 'print']) {
+    const b = a.root.querySelector(`[name="${n}"]`);
+    expect(b.disabled, n).toBe(true);
+    expect(b.title, n).toBe(OUTPUT_EMPTY_TITLE);
+  }
+  // 도면이 돌아오면 title도 함께 지운다(잠금만 푸는 반쪽 되살리기가 아니다).
+  addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
+  click(a.root, '[name="download"]');
+  await new Promise(r => setTimeout(r, 0));
+  expect(a.root.querySelector('[name="print"]').disabled).toBe(false);
+  expect(a.root.querySelector('[name="print"]').hasAttribute('title')).toBe(false);
+});

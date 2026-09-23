@@ -41,8 +41,14 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
   const part = n => root.querySelector(`[data-part="${n}"]`);
   const buttons = [...root.querySelectorAll('[name="download"], [name="print"]')];
   // 빈 도면에서는 만들 것이 없다(§17.11(1) · 감사 §44 — 견적서만 갖고 있던 규칙이다).
-  // [닫기]는 늘 살아 있다.
-  if (floorIsEmpty(activeFloor(store.get()))) buttons.forEach(b => { b.disabled = true; b.title = OUTPUT_EMPTY_TITLE; });
+  // [닫기]는 buttons에 없으므로 늘 살아 있다. 판정은 함수로 두고 **열 때와 run()의 finally에서
+  // 함께** 부른다(리뷰 m-10): finally가 무조건 disabled = false로 되살리면 한 번 돌린 뒤 잠금과
+  // 사유 title이 사라진다 — 렌더샷 대화상자의 syncEmpty와 같은 계약이어야 한다.
+  const syncEmpty = () => buttons.forEach(b => {
+    b.disabled = floorIsEmpty(activeFloor(store.get()));
+    if (b.disabled) b.title = OUTPUT_EMPTY_TITLE; else b.removeAttribute('title');
+  });
+  syncEmpty();
   const close = () => { root.remove(); trap.destroy(); if (current === self) current = null; onClose(); };
   const self = { close };
 
@@ -103,7 +109,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
     buttons.forEach(b => { b.disabled = true; });
     try { await fn(); }
     catch (e) { part('msg').textContent = ''; toast(SPEC_FAIL(e.message)); }
-    finally { busy = false; buttons.forEach(b => { b.disabled = false; }); }
+    finally { busy = false; syncEmpty(); }   // 빈 도면이면 다시 잠근다(같은 판정 한 곳 — 리뷰 m-10)
   }
 
   root.addEventListener('click', ev => {

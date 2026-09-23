@@ -168,7 +168,7 @@ describe('3D 몸체 드래그와 벽 슬라이드', () => {
     const ptr = (type, x, y) => domElement.dispatchEvent(new MouseEvent(type, { button: 0, clientX: x, clientY: y, bubbles: true }));
     // 오브젝트가 화면 어디에 찍히는지(핸들이 중앙에 있는지를 테스트가 직접 확인한다).
     const screenOf = obj => { const v = obj.position.clone().project(camera); return [((v.x + 1) / 2) * SIZE, ((1 - v.y) / 2) * SIZE]; };
-    return { store, ui, scene, id, bd, toasts, controls, flags, ends, mesh, meshY, worldAt, screenOf, ptr, item: () => activeFloor(store.get()).items.find(x => x.id === id) };
+    return { store, ui, scene, id, bd, toasts, controls, flags, ends, mesh, meshY, worldAt, screenOf, ptr, domElement, item: () => activeFloor(store.get()).items.find(x => x.id === id) };
   }
   // 리스너·노드가 파일 안에 쌓이지 않게 정리한다(리뷰 M-8). bodyDrag는 window에도 keydown을 듣는다.
   const made = [];
@@ -388,5 +388,48 @@ describe('3D 몸체 드래그와 벽 슬라이드', () => {
       a.ptr('pointerup', 160, 130);
       expect(a.store.get()).toBe(before);
     } finally { window.removeEventListener('keydown', spy); }
+  });
+  // 두 방어는 같은 성질이다(리뷰 m-2·m-3): 브라우저는 리스너가 던진 예외를 window 'error'로
+  // **보고**하고 나머지 리스너는 계속 돌리므로, 던지는 리스너는 조용히 제 할 일만 건너뛴다.
+  // 그물은 그래서 "던지지 않는다"가 아니라 "예외가 보고되지 않는다"로 짠다.
+  const noErrors = fn => {
+    const errs = [];
+    const onErr = e => { errs.push(e.message); e.preventDefault(); };
+    window.addEventListener('error', onErr);
+    try { fn(); } finally { window.removeEventListener('error', onErr); }
+    return errs;
+  };
+
+  // 리뷰 m-2: ev.key가 없는 합성 keydown에서 ev.key.toLowerCase()가 TypeError를 던졌다 —
+  // 드래그 중 Ctrl을 누른 채 도는 키마다 이 리스너의 취소 경로가 통째로 건너뛰어진다.
+  test('key 없는 합성 keydown이 드래그의 키 리스너에서 던지지 않는다(리뷰 m-2)', () => {
+    const a = setup();
+    a.ptr('pointerdown', 100, 100);
+    a.ptr('pointermove', 160, 130);
+    expect(ghosts(a.scene)).toHaveLength(1);                     // 드래그가 열려 있다(가드를 지난다)
+    const bad = new Event('keydown', { bubbles: true, cancelable: true });
+    bad.ctrlKey = true;                                          // key는 undefined다
+    expect(noErrors(() => window.dispatchEvent(bad))).toEqual([]);
+    expect(bad.defaultPrevented).toBe(false);
+    expect(ghosts(a.scene)).toHaveLength(1);                     // 드래그도 그대로다
+    window.dispatchEvent(key('Escape'));                         // 진짜 [Esc]는 여전히 취소다
+    expect(ghosts(a.scene)).toHaveLength(0);
+  });
+
+  // 리뷰 m-3: setPointerCapture는 활성 포인터가 아닌 id에서 NotFoundError를 던진다(합성 포인터).
+  // 캡처는 "있으면 좋은 것"이지 드래그의 계약이 아니다 — 놓쳤다고 pointerdown이 예외로 끝나지 않는다.
+  test('setPointerCapture가 던져도 드래그가 끊기지 않는다(리뷰 m-3)', () => {
+    const a = setup();
+    a.domElement.setPointerCapture = () => { throw new DOMException('no pointer', 'NotFoundError'); };
+    const from = [...a.item().pos];
+    expect(noErrors(() => a.ptr('pointerdown', 100, 100))).toEqual([]);
+    expect(a.controls.enabled).toBe(false);                      // 드래그가 정상으로 열렸다
+    a.ptr('pointermove', 160, 130);
+    expect(ghosts(a.scene)).toHaveLength(1);
+    a.ptr('pointerup', 160, 130);
+    expect(a.controls.enabled).toBe(true);                       // 궤도 조작이 되돌아온다
+    expect(a.item().pos).not.toEqual(from);                      // 실제로 옮겨졌다
+    a.store.undo();
+    expect(a.item().pos).toEqual(from);                          // 되돌리기 한 단계 그대로
   });
 });

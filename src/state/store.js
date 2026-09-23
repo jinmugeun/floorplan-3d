@@ -39,6 +39,7 @@ export function createStore(initial, { limit = 100 } = {}) {
     // "기록하지 않는다"와 "앞의 기록을 버린다"는 뜻이 다르고, 둘을 옵션 하나로 묶으면 자동 저장
     // 복원이 조용히 히스토리를 지우는 쪽으로 새기 쉽다. 그래서 별개 이름인 swap이 아래에 있다.
     // resetHistory는 그 swap의 조각이자 기존 호출자를 위한 호환 API다(새 교체 경로는 swap을 쓴다).
+    // 생산 호출자 0(교체 경로는 전부 swap을 쓴다 — 리뷰 m-11): swap의 조각이자 기존 호환 API라 남긴다.
     resetHistory() { tx = null; past.length = 0; future.length = 0; },
     // 프로젝트 교체는 이 한 줄로 한다(리뷰 I-1). replace(p, { record: false }) + resetHistory()를
     // 나란히 쓰면 **replace의 알림이 아직 남아 있는 옛 past를 보고** 지나가므로, 그 알림으로 그리는

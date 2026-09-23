@@ -23,7 +23,7 @@ export function createFirstRoomFit({ store, ui, view }) {
   });
   return {
     rearm: () => { fitted = hasRooms(store.get()); },
-    fitted: () => fitted,
+    fitted: () => fitted,   // 생산 호출자 0 · 테스트 전용(리뷰 m-11): 래치의 현재 값을 밖에서 볼 유일한 창이다
     destroy: unsub,
   };
 }

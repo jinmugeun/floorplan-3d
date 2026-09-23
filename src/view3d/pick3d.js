@@ -228,7 +228,8 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   // 소비하는 이유도 같다: keymap(window, 버블)이 이어서 선택을 비우거나 **한 단계 더** 되돌리면
   // 취소 한 번이 두 일을 한다. 예전에는 [Esc]가 선택만 풀고 pointerup이 그대로 커밋했다.
   function onKey(ev) {
-    if (!dragging || !(ev.key === 'Escape' || ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'))) return;
+    // ev.key가 없는 합성 이벤트에서 던지지 않게 감싼다(리뷰 m-2): 던지면 축 드래그 중 Ctrl을 누른 채 도는 키마다 예외가 보고되고 이 리스너의 취소 경로가 통째로 건너뛰어진다.
+    if (!dragging || !(ev.key === 'Escape' || ((ev.ctrlKey || ev.metaKey) && String(ev.key ?? '').toLowerCase() === 'z'))) return;
     dragging = false;                    // 남은 objectChange와 놓는 순간의 dragging-changed를 막는다
     gizmo.reset?.();                     // 프록시를 드래그 시작 자리로(실제 드래그 중일 때만 동작한다)
     pending = null;

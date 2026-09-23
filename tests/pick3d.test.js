@@ -440,6 +440,35 @@ describe('기즈모 드래그의 프리뷰 계약 (리뷰 I-4)', () => {
     expect(a.item().pos).toEqual(before.floors[0].items[0].pos);
   });
 
+  // 리뷰 m-2: ev.key가 없는 합성 keydown에서 ev.key.toLowerCase()가 TypeError를 던졌다. 브라우저는
+  // 던진 리스너의 예외를 window 'error'로 **보고**하고 나머지 리스너는 계속 돌리므로 조용히 새는
+  // 자리다 — 축 드래그 중 Ctrl을 누른 채 도는 키마다 이 리스너의 취소 경로가 통째로 건너뛰어진다.
+  test('key 없는 합성 keydown이 축 드래그의 키 리스너에서 던지지 않는다(리뷰 m-2)', () => {
+    const a = setupGizmoDrag();
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: true });
+    const proxy = a.gizmo.object;
+    proxy.position.x = 1.5; a.gizmo.dispatchEvent({ type: 'objectChange' });
+    const home = a.item().pos;
+    const errs = [];
+    const onErr = e => { errs.push(e.message); e.preventDefault(); };
+    window.addEventListener('error', onErr);
+    try {
+      // key가 undefined이고 ctrlKey만 참인 이벤트(예전에는 여기서 TypeError였다).
+      const bad = new Event('keydown', { bubbles: true, cancelable: true });
+      bad.ctrlKey = true;
+      window.dispatchEvent(bad);
+      expect(errs).toEqual([]);                            // 예전에는 toLowerCase TypeError 하나가 보고됐다
+      expect(bad.defaultPrevented).toBe(false);            // 취소 키가 아니므로 소비하지도 않는다
+      expect(a.mesh.position.x).toBeCloseTo(1.5, 6);       // 드래그도 그대로다
+      // 진짜 [Esc]는 여전히 취소다.
+      const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      window.dispatchEvent(esc);
+      expect(esc.defaultPrevented).toBe(true);
+    } finally { window.removeEventListener('error', onErr); }
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: false });
+    expect(a.item().pos).toEqual(home);
+  });
+
   test('축을 잡았다 그대로 놓으면 dispatch도 빈 단계도 없다', () => {
     const a = setupGizmoDrag();
     const before = a.store.get(), canUndo = a.store.canUndo(), n = a.count();

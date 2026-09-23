@@ -104,5 +104,8 @@ export function crossFloorStep(prev, next) {
   }
   return pa === na ? none : { index: null, name: b[na]?.name ?? null };
 }
+// 생산 호출자는 crossFloorStep 하나뿐이고 아래 둘은 테스트만 쓴다(리뷰 m-11). 남겨 두는 이유는
+// **브리프가 정한 계약**이라서다: §17.7의 두 갈래("도착 층"과 "그 이름")를 각각 따로 단정할 수
+// 있어야 한 갈래가 조용히 바뀌는 것을 잡는다. 지울 때는 그 단정을 crossFloorStep 쪽으로 옮길 것.
 export function changedFloorIndex(prev, next) { return crossFloorStep(prev, next).index; }
 export function crossFloorName(prev, next) { return crossFloorStep(prev, next).name; }
