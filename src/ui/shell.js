@@ -2,7 +2,7 @@ import { activeFloor } from '../state/schema.js';
 import { toast } from './toast.js';
 import { createPopover } from './popover.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
-import { optionBarHtml, applyOptionInput } from './optionBar.js';
+import { optionBarHtml, applyOptionInput, syncDimBar } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
 import { trackFields, isDuplicateCommit } from './fieldUtils.js';
 import { shellHtml } from './shellHtml.js';
@@ -16,7 +16,9 @@ export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {})
   return mode !== '2d' && mode !== 'fp' && !ortho && !!item && !item.locked && !(item.attach === 'wall' && item.wallId);
 }
 
-export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {} }) {
+// onToolChange: 옵션 바의 치수 칸이 도구 상태를 바꿨다(§16.7). 배선이 캔버스를 다시 그리게 한다 —
+// ui/는 view2d/를 import하지 않으므로(아키텍처 §9) 셸이 직접 requestRender를 부를 수는 없다.
+export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {}, onToolChange = () => {} }) {
   root.innerHTML = shellHtml({ name: store.get().name });
   const q = s => root.querySelector(s);
   const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials'), airflow: q('#airflow') };
@@ -195,26 +197,38 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   let currentTool = null;
   // 옵션 바는 캔버스 위에 뜬 팝업이 아니라 캔버스 위쪽 행이다(§12.1): 옵션이 없으면 행이 접히고(hidden),
   // 안내 문구(hint)는 배너가 맡는다 — 캔버스를 가리고 클릭을 가로채는 요소를 남기지 않는다.
+  const units = () => store.get().units ?? 'mm';
+  // 옵션 바 = 도구 옵션(도구가 바뀔 때만 다시 그린다) + 치수 칸(#optionDims, 값만 자주 갱신한다 — §16.7).
+  // 둘을 한 innerHTML로 묶으면 타이핑 중 칸이 사라지므로 host 하나를 남겨 둔다.
   function renderOptions() {
-    const html = optionBarHtml(currentTool, { units: store.get().units ?? 'mm' });
-    els.optionBar.hidden = !html;
-    els.optionBar.innerHTML = html;
+    els.optionBar.innerHTML = `${optionBarHtml(currentTool, { units: units() })}<span id="optionDims"></span>`;
+    syncDims();                                       // 보일지 말지(hidden)는 여기 한 곳에서만 정한다
   }
+  const syncDims = () => {
+    syncDimBar(els.optionBar, currentTool, { units: units() });
+    els.optionBar.hidden = !currentTool?.dims?.() && !els.optionBar.querySelector('input, select');
+  };
   // 배너(문구 우선순위·드래그 중 행 고정)는 ui/banner.js 한 곳에 있다: 이 파일이 300줄 규칙에 닿아
   // "더하기 전에 나눈다"대로 덩어리째 옮겼다. 셸은 구독에서 render()만 부른다.
   const banner = createBanner({ store, ui, el: els.banner, stack: q('#canvasStack'), tool: () => currentTool, onExitFp });
   const renderBanner = s => banner.render(s);
   function setOptionBar(tool) { currentTool = tool; renderOptions(); renderBanner(); }
+  // 치수 칸의 이름은 dim:<key>다(도구 옵션과 섞이지 않게 — applyOptionInput은 opts에 없는 이름을 받지 않는다).
+  const dimKey = el => (typeof el?.name === 'string' && el.name.startsWith('dim:') ? el.name.slice(4) : null);
   // [Enter] 확정의 합성 change 뒤 blur가 내는 네이티브 change는 삼킨다(§16.1).
   els.optionBar.addEventListener('change', ev => {
     if (isDuplicateCommit(ev.target)) return;
-    applyOptionInput(currentTool, ev.target, store.get().units ?? 'mm');
+    if (dimKey(ev.target)) return;                    // 치수 칸은 input에서 이미 반영했다
+    applyOptionInput(currentTool, ev.target, units());
   });
+  // 치수 칸은 타이핑마다 도구 버퍼에 들어가고(캔버스 프리뷰가 그 값으로 따라온다), 포커스가 옮겨 간
+  // 칸이 곧 활성 칸이다(캔버스의 [Tab]과 같은 상태를 가리킨다 — §16.7).
+  els.optionBar.addEventListener('input', ev => { const k = dimKey(ev.target); if (k && currentTool?.setDim?.(k, ev.target.value)) onToolChange(); });
+  els.optionBar.addEventListener('focusin', ev => { const k = dimKey(ev.target); if (k) { currentTool?.focusDim?.(k); syncDims(); onToolChange(); } });
   // 길이 입력은 change뿐 아니라 [Enter]로도 반영한다(값을 고치고 Enter만 누르면 그대로였다 — §12.5).
-  // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다).
-  // 값이 바뀐 상태로 Enter를 누르면 실제 브라우저에서는 네이티브 change까지 더해 applyOptionInput이
-  // 두 번 돈다 — 멱등하므로(같은 값을 같은 키에 두 번 쓴다) 결과는 같다. select는 INPUT이 아니라
-  // 애초에 걸리지 않고, 체크박스는 Enter로 값이 바뀌지 않으므로 여기서 뺀다.
+  // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다). 뒤이어 오는
+  // 네이티브 change는 isDuplicateCommit이 한 번 삼킨다(§16.1). select는 INPUT이 아니라 애초에 걸리지
+  // 않고, 체크박스는 Enter로 값이 바뀌지 않으므로 여기서 뺀다.
   els.optionBar.addEventListener('keydown', ev => {
     // 한글 입력 조합 중의 Enter는 "글자 확정"이지 "반영"이 아니다(keymap.js:107과 같은 방어).
     // 조합 중에 반영하면 아직 완성되지 않은 값이 들어가고, 이어지는 확정 Enter가 또 한 번 돈다.
@@ -222,6 +236,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     if (ev.key !== 'Enter' || ev.target?.tagName !== 'INPUT' || !ev.target.name) return;
     if (ev.target.type === 'checkbox') return;
     ev.preventDefault();
+    // 치수 칸의 [Enter]는 도구의 확정이다(벽을 놓고 다음 점으로 — §16.7). 옵션 값이 아니다.
+    const k = dimKey(ev.target);
+    if (k) { if (currentTool?.commitDims?.()) onToolChange(); return; }
     ev.target.dispatchEvent(new Event('change', { bubbles: true }));
   });
 
@@ -272,6 +289,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   };
   unsubs.push(store.subscribe(syncTop)); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
   return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, refreshBanner: () => renderBanner(),
+    // 도구 상태가 바뀌었다: 배너 문구와 치수 칸을 함께 맞춘다(§16.7 — view2d의 onHint가 부른다).
+    refreshTool() { renderBanner(); syncDims(); },
     // 셸을 버리면 구독·관찰자·document 리스너까지 함께 뗀다: 남아 있으면 스토어가 바뀔 때
     // syncTop이 사라진 #btnUndo에서 던진다(m-8).
     destroy() { unsubs.forEach(u => u?.()); banner.destroy(); bottom?.destroy(); pop.destroy(); miniRo?.disconnect(); resizeWatch.destroy(); fieldTrack.destroy(); splitters.forEach(s => s.destroy()); } };

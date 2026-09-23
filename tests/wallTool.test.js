@@ -127,7 +127,7 @@ test('벽 도구는 단계에 따라 안내가 바뀐다', () => {
   const t = createWallTool({ store, onDone() {} });
   expect(t.hint).toBe('첫 점을 클릭하세요 (1/2)');
   t.onPointerDown([0.5, 0.25]);
-  expect(t.hint).toBe('다음 점을 클릭 · [Enter] 완료 · [Esc] 취소');
+  expect(t.hint).toBe('다음 점을 클릭 · 길이를 타이핑하고 [Enter] · [Enter] 완료 · [Esc] 취소');   // §16.7: 타이핑 안내 한 줄
   t.onKey({ key: 'Escape', preventDefault() {} });
   expect(t.hint).toBe('첫 점을 클릭하세요 (1/2)');
   // 그리는 중의 첫 [Esc]는 도구가 소비하고(체인만 지운다), 체인이 없으면 소비하지 않는다 → 키맵이 선택으로(결정 19b).
@@ -147,4 +147,23 @@ test('벽 도구가 스냅 종류를 내놓고 허용치는 화면 배율을 따
   const t3 = createWallTool({ store, view: { camera: { scale: 1 } }, onDone() {} });
   t3.onPointerMove([40, 40]);
   expect(t3.getSnap()?.hit).not.toBe('point');
+});
+
+// §16.7: 보이지 않던 typed 버퍼가 옵션 바의 칸이 된다 — 도구는 그 칸의 모델을 내놓는다.
+test('벽 도구의 치수 칸은 길이 하나이고 타이핑·확정이 캔버스와 같은 경로다', () => {
+  const store = createStore(createEmptyProject());
+  const t = createWallTool({ store, onDone() {} });
+  expect(t.dims()).toBeNull();                       // 그리기 전에는 칸이 없다
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([3000.5, 0.25]);
+  expect(t.dims()).toEqual({ fields: [{ key: 'len', text: '3000', mm: 3000, active: true }] });
+  const sig = t.dimSig();
+  expect(t.setDim('len', '4500')).toBe(true);
+  expect(t.dims().fields[0].text).toBe('4500');
+  expect(t.dimSig()).not.toBe(sig);                  // 뷰가 이 서명으로 옵션 바를 다시 맞춘다
+  expect(t.commitDims()).toBe(true);
+  const w = activeFloor(store.get()).walls;
+  expect(w).toHaveLength(1);
+  expect(Math.round(Math.hypot(w[0].b[0] - w[0].a[0], w[0].b[1] - w[0].a[1]))).toBe(4500);
+  expect(t.setDim('nope', '1')).toBe(false);
 });

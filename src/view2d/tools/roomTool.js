@@ -4,6 +4,7 @@ import { rectWalls, endpoints } from '../../geom/walls.js';
 import { snapPoint, tolMm } from '../../geom/snap.js';
 import { drawSnapMark } from '../snapMarks.js';
 import { fmtLen, parseLen, typedChar } from '../../util/units.js';
+import { TYPED_DIM_HINT } from '../../ui/messages.js';
 
 export const ROOM_TOOL_DEFAULTS = { thickness: 200, snap: true };
 
@@ -19,7 +20,8 @@ export function createRoomTool({ store, view = null, onDone = () => {}, opts: gi
     hit = r.hit;
     return r.point;
   };
-  const dims = () => {
+  // 지역 계산의 이름은 measured다: 아래 도구 메서드 dims()(옵션 바의 칸 모델)와 겹치지 않게.
+  const measured = () => {
     const units = store.get().units;
     const sx = Math.sign(cur[0] - start[0]) || 1, sy = Math.sign(cur[1] - start[1]) || 1;
     const w = typed.w ? (parseLen(typed.w, units) ?? 0) : Math.abs(cur[0] - start[0]);
@@ -35,8 +37,8 @@ export function createRoomTool({ store, view = null, onDone = () => {}, opts: gi
     name: 'room', opts,
     // 단계 안내(§14.7). 배너는 shell의 renderBanner가 이 getter를 읽는다 — 도구는 상태만 바꾸고
     // view.requestRender()가 돌 때 onHint가 배너를 다시 그린다.
-    get hint() { return start ? '맞은편 모서리를 클릭 (2/2)' : '첫 모서리를 클릭 (1/2)'; },
-    onPointerDown(p) { const s = snap(p); if (!start) { start = s; cur = s; } else { cur = s; commit(typed.w || typed.h ? dims().end : s); } },
+    get hint() { return start ? `맞은편 모서리를 클릭 (2/2) · ${TYPED_DIM_HINT}` : '첫 모서리를 클릭 (1/2)'; },
+    onPointerDown(p) { const s = snap(p); if (!start) { start = s; cur = s; } else { cur = s; commit(typed.w || typed.h ? measured().end : s); } },
     onPointerMove(p) { cur = snap(p); },   // 첫 모서리 단계에서도 마커가 보이도록 start 가드를 두지 않는다(리뷰 I-2)
     onPointerUp() {},
     onKey(ev) {
@@ -46,11 +48,27 @@ export function createRoomTool({ store, view = null, onDone = () => {}, opts: gi
       if (typedChar(store.get().units).test(ev.key)) { typed[typed.field] += ev.key; return true; }
       if (ev.key === 'Backspace') { typed[typed.field] = typed[typed.field].slice(0, -1); return true; }
       if (ev.key === 'Tab') { ev.preventDefault(); typed.field = typed.field === 'w' ? 'h' : 'w'; return true; }
-      if (ev.key === 'Enter') { commit(dims().end); return true; }
+      if (ev.key === 'Enter') { commit(measured().end); return true; }
       return false;
     },
-    getPreview() { if (!start) return null; const d = dims(); return { start, end: d.end, w: d.w, h: d.h, typed: { ...typed } }; },
+    getPreview() { if (!start) return null; const d = measured(); return { start, end: d.end, w: d.w, h: d.h, typed: { ...typed } }; },
     getSnap() { return cur && hit ? { point: cur, hit } : null; },
+    // §16.7: W·H 두 칸. 활성 칸(typed.field)이 캔버스의 [Tab]과 옵션 바의 포커스에서 함께 움직인다.
+    dims() {
+      if (!start || !cur) return null;
+      const units = store.get().units ?? 'mm';
+      const d = measured();
+      return {
+        fields: [
+          { key: 'w', text: typed.w !== '' ? typed.w : fmtLen(Math.round(d.w), units), mm: Math.round(d.w), active: typed.field === 'w' },
+          { key: 'h', text: typed.h !== '' ? typed.h : fmtLen(Math.round(d.h), units), mm: Math.round(d.h), active: typed.field === 'h' },
+        ],
+      };
+    },
+    dimSig() { const d = this.dims(); return d ? d.fields.map(f => `${f.key}:${f.text}:${f.active ? 1 : 0}`).join('|') : ''; },
+    setDim(key, text) { if ((key !== 'w' && key !== 'h') || !start) return false; typed[key] = String(text ?? ''); return true; },
+    focusDim(key) { if (key === 'w' || key === 'h') typed.field = key; },
+    commitDims() { if (!start) return false; commit(measured().end); return true; },
     draw(ctx, view) {
       // 1단계(첫 모서리)에는 미리보기가 없어 아래에서 조기 반환한다 — 마커는 그 전에 한 번 그린다(리뷰 I-2).
       const pv = this.getPreview();

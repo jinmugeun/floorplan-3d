@@ -95,7 +95,7 @@ test('방 도구는 단계에 따라 안내가 바뀐다', () => {
   const t = createRoomTool({ store, onDone() {} });
   expect(t.hint).toBe('첫 모서리를 클릭 (1/2)');
   t.onPointerDown([0.5, 0.25]);
-  expect(t.hint).toBe('맞은편 모서리를 클릭 (2/2)');
+  expect(t.hint).toBe('맞은편 모서리를 클릭 (2/2) · 길이를 타이핑하고 [Enter]');   // §16.7: 타이핑 안내 한 줄
   t.onPointerDown([4000.5, 3000.25]);
   expect(t.hint).toBe('첫 모서리를 클릭 (1/2)');   // 커밋하면 다시 1단계다(도구는 켜진 채)
 });
@@ -124,4 +124,22 @@ test('방 도구는 첫 클릭 전에도 스냅 종류를 내놓는다(§16.6)',
   expect(drawn).toEqual([]);                       // 1단계에서는 사각형을 그리지 않는다(마커만)
   t.onPointerMove([2000.5, 1500.25]);              // 아무 대상도 없는 가운데
   expect(t.getSnap()).toBeNull();
+});
+
+test('방 도구의 치수 칸은 W·H 두 개이고 활성 칸이 표시된다(§16.7)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store, onDone() {} });
+  expect(t.dims()).toBeNull();
+  t.onPointerDown([1000.5, 1000.25]);
+  t.onPointerMove([1500.5, 1200.25]);
+  expect(t.dims().fields.map(f => f.key)).toEqual(['w', 'h']);
+  expect(t.dims().fields[0].active).toBe(true);
+  expect(t.dims().fields[0].text).toBe('500');
+  t.focusDim('h');
+  expect(t.dims().fields[1].active).toBe(true);
+  t.setDim('h', '2500');
+  expect(t.getPreview().h).toBe(2500);               // 캔버스 프리뷰가 같은 값을 쓴다
+  t.setDim('w', '5000');
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
 });

@@ -5,6 +5,7 @@ import { snapPoint, tolMm } from '../../geom/snap.js';
 import { drawSnapMark } from '../snapMarks.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
 import { fmtLen, parseLen, typedChar } from '../../util/units.js';
+import { TYPED_DIM_HINT } from '../../ui/messages.js';
 
 export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
 
@@ -27,7 +28,7 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
   return {
     name: 'wall', opts,
     // 단계 안내(§14.7).
-    get hint() { return last() ? '다음 점을 클릭 · [Enter] 완료 · [Esc] 취소' : '첫 점을 클릭하세요 (1/2)'; },
+    get hint() { return last() ? `다음 점을 클릭 · ${TYPED_DIM_HINT} · [Enter] 완료 · [Esc] 취소` : '첫 점을 클릭하세요 (1/2)'; },
     onPointerDown(p) {
       const r = snap(p); cursor = r.point; guides = r.guides; hit = r.hit;
       // 고리 닫기 판정도 같은 허용치를 쓴다(§16.6: 확대하면 좁아진다 — 예전에는 고정 150 mm였다).
@@ -56,6 +57,18 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
     },
     getPreview() { return { points: [...points], cursor, guides, typed }; },
     getSnap() { return cursor && hit ? { point: cursor, hit } : null; },
+    // §16.7: 캔버스의 보이지 않는 typed 버퍼가 **옵션 바 칸의 모델**이다. 두 입구(캔버스 숫자 키,
+    // 옵션 바 칸)가 같은 버퍼를 쓰므로 확정 경로도 하나다(onKey의 [Enter]).
+    dims() {
+      if (!last() || !cursor) return null;
+      const units = store.get().units ?? 'mm';
+      const mm = Math.round(dist(last(), cursor));
+      return { fields: [{ key: 'len', text: typed !== '' ? typed : fmtLen(mm, units), mm, active: true }] };
+    },
+    dimSig() { const d = this.dims(); return d ? d.fields.map(f => `${f.key}:${f.text}:1`).join('|') : ''; },
+    setDim(key, text) { if (key !== 'len' || !last()) return false; typed = String(text ?? ''); return true; },
+    focusDim() {},                                    // 칸이 하나뿐이라 옮길 자리가 없다
+    commitDims() { return this.onKey({ key: 'Enter', preventDefault() {} }); },
     draw(ctx, view) {
       for (const g of guides) { const [w, h] = [ctx.canvas.clientWidth || ctx.canvas.width, ctx.canvas.clientHeight || ctx.canvas.height]; ctx.strokeStyle = view.COLORS.guide; ctx.setLineDash([6, 4]); ctx.beginPath(); if (g.type === 'v') { const x = view.toScreen([g.x, 0])[0]; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = view.toScreen([0, g.y])[1]; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
       if (!last() || !cursor) { if (cursor) { const s = view.toScreen(cursor); ctx.beginPath(); ctx.arc(s[0], s[1], 5, 0, Math.PI * 2); ctx.strokeStyle = view.COLORS.wallSel; ctx.stroke(); drawSnapMark(ctx, view, this.getSnap()); } return; }

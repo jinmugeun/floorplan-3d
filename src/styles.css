@@ -38,6 +38,10 @@ body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans KR"
 #optionBar label { display: flex; align-items: center; gap: 4px; flex: none; }
 #optionBar input[type=number], #optionBar input[type=text] { width: 68px; font: inherit; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; }
 #optionBar select { font: inherit; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; }
+/* 치수 칸(§16.7)은 옵션 바의 오른쪽에 붙고, 지금 타이핑이 들어가는 칸만 강조한다. */
+#optionDims { display: flex; align-items: center; gap: 14px; }
+#optionBar label.dim input { width: 84px; }
+#optionBar label.dim.on input { border-color: var(--accent); box-shadow: 0 0 0 2px #e6eefb; }
 /* 안내 문구 취소는 <button>이다(키보드로 닿는다). 아래 #banner button 규칙이 주는 칸·테두리를
    여기서 되돌려 글자처럼 보이게 한다 — #optionBar 쪽 선택자는 죽은 규칙이라 지웠다(옵션 바는
    hint를 그리지 않는다 — optionBar.js의 주석 그대로 배너가 맡는다).

@@ -73,3 +73,14 @@ test('보조선 도구의 마커는 자기 축의 스냅만 보고한다(§16.6)
   t.onPointerMove([2500.5, 1500.25]);  // 아무 대상도 없는 가운데
   expect(t.getSnap()).toBeNull();
 });
+
+test('보조선 도구의 치수 칸은 좌표 하나다(§16.7)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  t.onPointerDown([1234.5, 0.25]);
+  expect(t.dims().fields[0].key).toBe('pos');
+  expect(t.dims().fields[0].text).toBe('1235');       // 놓인 보조선의 좌표(정수 mm)
+  t.setDim('pos', '1500');
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).guides[0].pos).toBe(1500);
+});

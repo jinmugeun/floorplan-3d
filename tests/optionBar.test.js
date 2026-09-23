@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { describe, test, expect } from 'vitest';
-import { optionBarHtml, applyOptionInput, OPTION_LABELS, OPTION_TITLES, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
+import { optionBarHtml, applyOptionInput, dimBarHtml, dimBarSignature, syncDimBar, OPTION_LABELS, OPTION_TITLES, OPTION_RANGE, DIM_LABELS, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
 import { fmtLen } from '../src/util/units.js';
 
 describe('옵션 바 HTML', () => {
@@ -104,5 +105,68 @@ describe('옵션 바 입력 읽기', () => {
     expect(tool.opts.thickness).toBe(254);
     // 그리기 쪽이 그 기준값을 싣는다.
     expect(optionBarHtml({ name: 'wall', opts: { thickness: 200 } }, { units: 'ftin' })).toContain('data-mm="200"');
+  });
+});
+
+describe('옵션 바의 치수 칸(§16.7)', () => {
+  const wallTool = (len = 3000, typed = '') => ({
+    name: 'wall', opts: { thickness: 200 },
+    dims: () => ({ fields: [{ key: 'len', text: typed || String(len), mm: len, active: true }] }),
+  });
+
+  test('도구가 치수 칸을 내놓으면 라벨·단위·step이 붙는다', () => {
+    const html = dimBarHtml(wallTool(), { units: 'mm' });
+    expect(html).toContain('name="dim:len"');
+    expect(html).toContain(`${DIM_LABELS.len} (mm)`);
+    expect(html).toContain('step="10"');
+    expect(html).toContain('class="dim on"');
+    expect(DIM_LABELS.len).toBe('길이');
+    expect(dimBarHtml({ name: 'select', opts: {} }, { units: 'mm' })).toBe('');   // 그리지 않는 도구
+  });
+
+  test('ft·in 모드에서는 텍스트 칸에 1/8" 간격이 실린다', () => {
+    const html = dimBarHtml(wallTool(3048), { units: 'ftin' });
+    expect(html).toContain('data-len="1"');
+    expect(html).toContain('data-step="0.125"');
+    expect(html).not.toContain('type="number"');
+    expect(html).toContain('길이 (ft·in)');
+  });
+
+  test('syncDimBar는 서명이 같으면 값만 맞추고 포커스 칸은 건드리지 않는다', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div id="optionBar"><span id="optionDims"></span></div>';
+    document.body.appendChild(root);
+    const host = root.querySelector('#optionDims');
+    expect(syncDimBar(root, wallTool(3000), { units: 'mm' })).toBe(true);
+    const el = host.querySelector('[name="dim:len"]');
+    expect(el.value).toBe('3000');
+    const sig = host.dataset.sig;
+    syncDimBar(root, wallTool(3500), { units: 'mm' });
+    expect(host.dataset.sig).toBe(sig);                       // 다시 만들지 않는다
+    expect(host.querySelector('[name="dim:len"]')).toBe(el);  // 같은 노드다(타이핑이 끊기지 않게)
+    expect(el.value).toBe('3500');
+    el.focus();
+    syncDimBar(root, wallTool(4000), { units: 'mm' });
+    expect(el.value).toBe('3500');                            // 포커스 칸은 그대로다
+    // 칸 목록이 바뀌면 다시 만든다.
+    const roomish = { name: 'room', opts: {}, dims: () => ({ fields: [{ key: 'w', text: '1', mm: 1, active: true }, { key: 'h', text: '2', mm: 2, active: false }] }) };
+    expect(dimBarSignature(roomish)).toBe('w,h');
+    syncDimBar(root, roomish, { units: 'mm' });
+    expect(host.dataset.sig).toBe('w,h');
+    expect(host.querySelectorAll('input')).toHaveLength(2);
+    root.remove();
+  });
+
+  test('옵션 숫자 칸에 단위별 step과 min/max가 붙고 값이 범위로 잘린다(M-1)', () => {
+    expect(OPTION_RANGE.thickness).toEqual([2, 1000]);
+    const html = optionBarHtml({ name: 'wall', opts: { thickness: 200 } }, { units: 'mm' });
+    expect(html).toContain('step="10"');
+    expect(html).toContain('max="1000"');
+    // min 2는 step 10의 배수가 아니다 → data-min으로 내려간다(fieldUtils.minAttr의 규칙).
+    expect(html).toContain('data-min="2"');
+    const tool = { opts: { thickness: 200 } };
+    const el = { name: 'thickness', type: 'number', value: '99999', checked: false, dataset: {} };
+    expect(applyOptionInput(tool, el, 'mm')).toBe(true);
+    expect(tool.opts.thickness).toBe(1000);                   // 범위로 자른다
   });
 });

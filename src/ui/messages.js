@@ -158,3 +158,6 @@ export const WHY_NO_ACTION = '이 화면에서 쓸 수 없음';
 // 렌더샷·갤러리(§16.9 · 감사 §9·§11).
 export const SHOT_BUSY = '렌더 중입니다';
 export const CONFIRM_SHOT_DELETE = { title: '렌더샷 삭제', message: '이 렌더샷을 갤러리에서 지울까요?', ok: '삭제', danger: true };
+
+// 타이핑 치수(§16.7 · 감사 §43): 정확히 동작하는데 보이지 않던 기능이다.
+export const TYPED_DIM_HINT = '길이를 타이핑하고 [Enter]';

@@ -972,3 +972,31 @@ test('사용자가 연 우측 패널은 다음 자동 접힘에서 제외된다'
     shell.destroy();
   } finally { vi.useRealTimers(); window.innerWidth = vw; }
 });
+
+// §16.7: 그리는 동안 옵션 바에 치수 칸이 뜨고, 그 칸의 타이핑·[Enter]가 도구로 들어간다.
+test('옵션 바의 치수 칸이 도구와 이어진다', () => {
+  const calls = [];
+  const { shell, root } = mountShell({ onToolChange: () => calls.push('render') });   // Task 6 Step 1이 만든 헬퍼(opts가 createShell로 그대로 간다)
+  let typed = '', committed = 0;
+  const tool = {
+    name: 'wall', opts: { thickness: 200 }, hint: '다음 점을 클릭',
+    dims: () => ({ fields: [{ key: 'len', text: typed || '3000', mm: 3000, active: true }] }),
+    dimSig: () => `len:${typed || '3000'}:1`,
+    setDim(k, v) { typed = v; return true; },
+    commitDims() { committed += 1; return true; },
+  };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  expect(el.value).toBe('3000');
+  expect(root.querySelector('[name="thickness"]')).not.toBeNull();   // 도구 옵션도 함께 있다
+  el.value = '4500';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(typed).toBe('4500');
+  expect(calls).toContain('render');
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(committed).toBe(1);
+  // 캔버스에서 타이핑한 값은 refreshTool()로 칸에 되돌아온다.
+  typed = '5000';
+  shell.refreshTool();
+  expect(root.querySelector('#optionDims [name="dim:len"]').value).toBe('5000');
+});

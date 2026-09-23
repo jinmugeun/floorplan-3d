@@ -36,7 +36,7 @@ export function drawEmptyGuide(ctx, v, floor, state, { toolName = null } = {}) {
 export function createView2D(canvas, store, ui, { readonly = false, labels = true, overlay = null, onPick = null, menu = null, onCameraChange = null, onDragOver = null, onDrop = null, onDragLeave = null, onHint = () => {} } = {}) {
   const ctx = canvas.getContext('2d');
   const camera = { cx: 4000, cy: 3000, scale: 0.08 };
-  let tool = null, dirty = true, raf = 0, panning = null, dpr = 1, picking = false, lastHint = null;
+  let tool = null, dirty = true, raf = 0, panning = null, dpr = 1, picking = false, lastHint = null, lastDimSig = null;
   const bgCache = { src: null, img: null };
   // 카메라가 움직였음을 알리는 훅(2D 패닝·줌은 스토어를 건드리지 않으므로 미니맵이 알 방법이 이것뿐이다).
   const cameraMoved = () => { onCameraChange?.(); };
@@ -172,8 +172,10 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     if (tool && !readonly) tool.draw(ctx, api);
     if (overlay) overlay(ctx, api);
     // 도구의 hint는 단계마다 바뀐다(§14.7). 달라진 프레임에만 알려 배너를 다시 그리게 한다.
+    // 치수 칸(§16.7)도 같은 신호를 쓴다: 캔버스에서 숫자를 타이핑하면 옵션 바의 값이 따라와야 한다.
     const hint = tool?.hint ?? null;
-    if (hint !== lastHint) { lastHint = hint; onHint(hint); }
+    const dimSig = tool?.dimSig?.() ?? null;
+    if (hint !== lastHint || dimSig !== lastDimSig) { lastHint = hint; lastDimSig = dimSig; onHint(hint); }
   }
 
   // 입력
