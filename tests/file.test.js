@@ -4,7 +4,7 @@ import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { serializeProject, parseProject, startAutosave, loadAutosave, filenameFor, capture2D, printBodyPx } from '../src/io/file.js';
+import { serializeProject, parseProject, startAutosave, loadAutosave, filenameFor, capture2D, printBodyPx, PRINT_PX_PER_MM } from '../src/io/file.js';
 
 test('serialize/parse round trip keeps walls and rooms', () => {
   const store = createStore(createEmptyProject('테스트'));
@@ -52,11 +52,18 @@ test('assignment.scale은 있을 때만 저장 파일에 실린다', async () =>
 
 // §16.11(감사 §7): 2000 px 캡처를 A4 본문 765 px에 맞추면 12 px 글자가 4.6 px이 된다.
 // 인쇄 배율 캡처는 **논리 크기를 용지 폭으로** 두고 비트맵만 ratio배로 키운다 → 글자 크기가 보존된다.
-test('printBodyPx는 용지 본문 폭을 px로 준다', () => {
+test('printBodyPx는 용지 본문 폭을 px로 준다', async () => {
   expect(printBodyPx('A4', false)).toBe(765);            // 감사가 실측한 A4 본문 폭
   expect(printBodyPx('A4', true)).toBe(printBodyPx('A3', false));   // 가로 A4 = 세로 A3 본문 폭
   expect(printBodyPx('없음', false)).toBe(765);           // 모르는 용지는 A4
   expect(printBodyPx('A3', true)).toBeGreaterThan(printBodyPx('A3', false));
+  // M-1: 용지 치수의 정본은 specSheet.js의 PAPER 하나다 — 목록에 있는 용지는 전부 그 표에서 나오고,
+  // 없는 용지만 A4로 떨어진다(PAPER에만 새 용지를 더해도 캡처 폭이 조용히 A4가 되지 않는다).
+  const { PAPER } = await import('../src/io/specSheet.js');
+  for (const [paper, [short, long]] of Object.entries(PAPER)) {
+    expect(printBodyPx(paper, false)).toBe(Math.round((short - 24) * PRINT_PX_PER_MM));
+    expect(printBodyPx(paper, true)).toBe(Math.round((long - 24) * PRINT_PX_PER_MM));
+  }
 });
 
 test('capture2D는 숫자 인자로는 예전처럼, 객체 인자로는 인쇄 배율로 캡처한다', async () => {

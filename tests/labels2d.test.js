@@ -181,3 +181,52 @@ test('가까이 겹쳐 찍히는 같은 치수는 하나만 남고 멀리 있는
   expect(dedupeDims([])).toEqual([]);
   expect(dedupeDims(undefined)).toEqual([]);
 });
+
+// §16.11(리뷰 I-1): 시방서의 평면도는 **인쇄 배율**로 캡처한다 — 논리 폭이 용지 본문 폭(A4 세로
+// 765 px)이라 예전 2000 px 캡처보다 fit()의 scale이 2.6배 작다. LOD는 화면 px로 재므로(WALL_DIM_MIN_PX·
+// LOD_SCALE) 글자는 커지지만 라벨 수는 줄어든다. "A4에 물리적으로 안 들어간다"가 맞는 거래이므로 LOD는
+// 그대로 두고, 무엇을 잃는지만 숫자로 못 박는다(주석이 조용히 넘어가지 않게).
+describe('인쇄 배율의 LOD(§16.11)', () => {
+  const PRINT_W = 765, SCREEN_W = 2000;                                   // printBodyPx('A4', false) vs 예전 캡처 폭
+  const fitScale = (px, planMm, padding = 500) => px / (planMm + padding * 2);   // capture2D의 v.fit(500), 가로 제한
+  // 20 m 도면. 좌표는 소수 mm다(도면은 mm 소수까지 들고 있다 — 배율 계산이 정수에 기대지 않는다).
+  const floor20 = () => ({
+    walls: [
+      makeWall({ a: [0.5, 0.25], b: [1001, 0.25], thickness: 200, height: 2300 }),              // 1000.5 mm
+      makeWall({ a: [4000.5, 0.25], b: [5200.75, 0.25], thickness: 200, height: 2300 }),        // 1200.25 mm
+      makeWall({ a: [0.5, 6000.75], b: [4001.25, 6000.75], thickness: 200, height: 2300 }),     // 4000.75 mm
+      makeWall({ a: [9000.5, 9000.5], b: [19001, 9000.5], thickness: 200, height: 2300 }),      // 10000.5 mm
+    ],
+    rooms: [], items: [], ducts: [], measures: [],
+  });
+  const dimTexts = scale => collectLabels(fakeView(scale), floor20(), { flags: { dims: true } })
+    .filter(c => c.kind === 'wallDim').map(c => c.text);
+
+  test('20 m 도면을 A4 세로 인쇄 배율로 캡처하면 1.1 m보다 짧은 벽의 치수가 빠진다', () => {
+    const print = fitScale(PRINT_W, 20000), screen = fitScale(SCREEN_W, 20000);
+    expect(print).toBeCloseTo(0.036429, 6);
+    expect(screen / print).toBeCloseTo(SCREEN_W / PRINT_W, 9);            // 2.61배
+    // 치수가 붙는 최소 벽 길이: 0.42 m → 1.10 m
+    expect(WALL_DIM_MIN_PX / screen).toBeCloseTo(420, 6);
+    expect(WALL_DIM_MIN_PX / print).toBeCloseTo(1098.04, 2);
+    expect(dimTexts(screen)).toEqual(['1001', '1200', '4001', '10001']);  // 2000 px 캡처: 넷 다 붙는다
+    expect(dimTexts(print)).toEqual(['1200', '4001', '10001']);           // 인쇄 배율: 1000.5 mm 벽이 빠진다
+    expect(print).toBeGreaterThan(LOD_SCALE);                             // 20 m는 아직 "공간 이름만" 구간이 아니다
+  });
+
+  test('40 m 도면은 A4 인쇄 배율에서 공간 이름만 남는다(2000 px 캡처에서는 남았다)', () => {
+    const print = fitScale(PRINT_W, 40000), screen = fitScale(SCREEN_W, 40000);
+    expect(print).toBeLessThan(LOD_SCALE);                                // 0.0187 px/mm — 경계는 폭 약 37 m
+    expect(screen).toBeGreaterThan(LOD_SCALE);
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0.5, 0.25], [40000.5, 26000.25], 200));
+    store.dispatch(d => { activeFloor(d).rooms[0].name = '조리실'; });
+    const floor = activeFloor(store.get());
+    const flags = { roomName: true, roomArea: true, dims: true };
+    // 후보는 두 배율에서 똑같이 모인다 — 버리는 것은 placeLabels의 LOD다.
+    const kinds = scale => [...new Set(placeLabels(collectLabels(fakeView(scale), floor, { flags }), { scale }).map(c => c.kind))];
+    expect(new Set(collectLabels(fakeView(print), floor, { flags }).map(c => c.kind))).toEqual(new Set(['roomName', 'roomArea', 'wallDim']));
+    expect(kinds(print)).toEqual(['roomName']);                           // 치수·면적이 전부 빠진다
+    expect(kinds(screen)).toEqual(['roomName', 'roomArea', 'wallDim']);
+  });
+});

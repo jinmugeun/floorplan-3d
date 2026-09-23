@@ -1,6 +1,7 @@
 import { migrate } from '../state/schema.js';
 import { createUiState } from '../state/uistate.js';
 import { createView2D } from '../view2d/view2d.js';
+import { PAPER } from './specSheet.js';   // 용지 치수의 정본은 한 곳뿐이다(M-1) — printBodyPx 주석
 
 export const serializeProject = state => JSON.stringify(state);
 export function parseProject(text) { let obj; try { obj = JSON.parse(text); } catch { throw new Error('JSON 파일이 아닙니다'); } return migrate(obj); }
@@ -30,15 +31,23 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise(res => setTimeout(re
 // 인쇄 본문 폭(§16.11). 감사가 A4에서 실측한 765 px을 기준 눈금으로 삼는다(≈104 dpi):
 // 용지 폭에서 좌우 여백 12 mm씩을 뺀 mm에 이 눈금을 곱한다. 가로 방향은 긴 변이 폭이 된다.
 export const PRINT_PX_PER_MM = 765 / 186;
-const PAPER_MM = { A4: [210, 297], A3: [297, 420] };
+// 용지 치수는 시방서의 PAPER 하나만 본다(M-1): 대화상자의 용지 목록도 같은 표에서 나오므로, 나중에
+// B4를 PAPER에만 더해도 캡처 폭이 조용히 A4(765)로 떨어지지 않는다. 순환은 없다 — specSheet.js는
+// io/file.js를 (전이적으로도) import하지 않는다(products·materials·geom·util·vent·state만 본다).
 export const printBodyPx = (paper = 'A4', landscape = false) => {
-  const [short, long] = PAPER_MM[paper] ?? PAPER_MM.A4;
+  const [short, long] = PAPER[paper] ?? PAPER.A4;
   return Math.round(((landscape ? long : short) - 24) * PRINT_PX_PER_MM);
 };
 
 // opts가 숫자면 예전 뜻(비트맵 폭 = 논리 폭, dpr 1)이다. 객체면 **인쇄 배율** 캡처다:
-// 논리 크기(clientWidth)를 용지 본문 폭으로 두어 라벨이 12 px로 그려지게 하고, 비트맵만
+// 논리 크기(clientWidth)를 용지 본문 폭으로 두어 라벨이 명목 12 px로 그려지게 하고, 비트맵만
 // ratio배로 키워 선명하게 만든다(§16.11 · 감사 §7: 2000 px 캡처가 765 px에 눌려 글자가 4~5 px).
+// 거래(I-1): 남는 라벨은 커지지만 **라벨 수는 줄어든다**. 논리 폭이 2000 → 765로 좁아지면 fit()의
+// camera.scale이 2.6배 작아지고 §14.5의 LOD는 화면 px로 재기 때문이다 — 20 m 도면에서 치수가 붙는
+// 최소 벽 길이가 0.42 m → 1.10 m로 오르고, 폭 약 37 m(높이 26 m)를 넘는 도면은 scale < LOD_SCALE이라
+// 공간 이름만 남는다(치수·덕트 규격·설비 라벨이 전부 빠진다. 2000 px에서는 같은 한계가 99 m였다).
+// 읽히지 않는 4 px 글자보다 나은 거래이지만 "다 읽힌다"는 뜻은 아니다 — 큰 도면은 A3·가로를 쓴다.
+// 이 수치는 tests/labels2d.test.js의 "인쇄 배율의 LOD" 테스트가 못 박는다.
 export async function capture2D(store, _ui, opts = 2000) {
   const { width = 2000, cssWidth = null, ratio = 2, aspect = 0.7 } = typeof opts === 'number' ? { width: opts } : (opts ?? {});
   const bg = store.get().background;

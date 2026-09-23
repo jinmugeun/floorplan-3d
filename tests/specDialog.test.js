@@ -7,9 +7,11 @@ import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { openSpecDialog } from '../src/ui/specDialog.js';
 
+// I-2: 모의를 vi.fn으로 둔다 — 인자를 보지 않으면 capture2D(store, ui)로 되돌려도 전부 초록이었다.
+const { cap } = vi.hoisted(() => ({ cap: vi.fn(async () => 'data:image/png;base64,PLAN') }));
 vi.mock('../src/io/file.js', async orig => {
   const real = await orig();
-  return { ...real, capture2D: async () => 'data:image/png;base64,PLAN', downloadText: (name, text) => { globalThis.__down = [name, text]; } };
+  return { ...real, capture2D: cap, downloadText: (name, text) => { globalThis.__down = [name, text]; } };
 });
 
 function setup() {
@@ -22,7 +24,7 @@ function setup() {
 }
 const click = (root, sel) => root.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-beforeEach(() => { document.body.innerHTML = ''; globalThis.__down = null; });
+beforeEach(() => { document.body.innerHTML = ''; globalThis.__down = null; cap.mockClear(); });
 
 describe('시방서 대화상자', () => {
   test('용지·방향·구역 옵션을 보여준다', () => {
@@ -42,6 +44,19 @@ describe('시방서 대화상자', () => {
     expect(name).toMatch(/시방서\.html$/);
     expect(text).toContain('data:image/png;base64,PLAN');
     expect(a.calls).toEqual(['front', 'back', 'left', 'right', 'top']);
+    // §16.11(I-2): 선택한 용지 → printBodyPx → capture2D 배선. 세 번째 인자가 빠지면(capture2D(store, ui))
+    // 여기서 깨진다 — 그때는 논리 폭이 2000 px로 돌아가 인쇄물 글자가 다시 4~5 px이 된다.
+    expect(cap).toHaveBeenCalledTimes(1);
+    expect(cap.mock.calls[0][0]).toBe(a.store);
+    expect(cap.mock.calls[0][2]).toEqual({ cssWidth: 765, ratio: 2 });    // A4 세로 본문 폭
+  });
+
+  test('가로를 켜면 캡처 폭도 가로 본문 폭이 된다', async () => {
+    const a = setup();
+    a.root.querySelector('[name="landscape"]').checked = true;
+    click(a.root, '[name="download"]');
+    await vi.waitFor(() => expect(globalThis.__down).not.toBeNull());
+    expect(cap.mock.calls[0][2]).toEqual({ cssWidth: 1123, ratio: 2 });   // A4 가로 = A3 세로
   });
 
   test('입면도를 끄면 3D 렌더를 부르지 않는다', async () => {
