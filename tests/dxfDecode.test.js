@@ -54,13 +54,27 @@ test('모르는 코드페이지는 windows-1252로 떨어지고 BOM·LF 줄 끝�
 test('바이너리 DXF·DWG·DXF 아님은 각각 자기 코드로 던진다', () => {
   const sentinel = [...'AutoCAD Binary DXF\r\n\u001a\u0000'].map(c => c.charCodeAt(0));
   const bin = Uint8Array.from([...sentinel, 1, 2, 3]);
-  expect(() => decodeDxf(bin)).toThrow(DxfError);
-  try { decodeDxf(bin); } catch (e) { expect(e.code).toBe('binary'); }
+  // 던지지 않으면 null이 돌아와 단언이 깨진다 — 빈 try/catch는 지워진 검사도 통과시킨다(Task 1 리뷰 F1).
+  const codeOf = fn => { try { fn(); } catch (e) { expect(e).toBeInstanceOf(DxfError); return e.code; } return null; };
+  expect(codeOf(() => decodeDxf(bin))).toBe('binary');
   // DWG는 'AC1032' 여섯 글자 뒤가 텍스트가 아니다(0x00). ASCII DXF는 '  0\nSECTION'으로 시작한다.
   const dwg = Uint8Array.from([...[...'AC1032'].map(c => c.charCodeAt(0)), 0, 0, 0, 0, 0]);
-  try { decodeDxf(dwg); } catch (e) { expect(e.code).toBe('dwg'); }
+  expect(codeOf(() => decodeDxf(dwg))).toBe('dwg');
   const json = Uint8Array.from([...'{"version":1,"floors":[]}'].map(c => c.charCodeAt(0)));
-  try { decodeDxf(json); } catch (e) { expect(e.code).toBe('not-dxf'); }
+  expect(codeOf(() => decodeDxf(json))).toBe('not-dxf');
+});
+
+// 경계값 그 자체: AC1021(R2007)이 UTF-8의 첫 버전이고, 바로 아래 AC1018은 코드페이지를 따른다.
+// '<'를 '<='로 잘못 쓰면 R2007 한글 도면이 통째로 깨진다(Task 1 리뷰 F2).
+test('AC1021은 UTF-8이고 AC1018은 코드페이지다(경계값)', () => {
+  const utf8 = [...new TextEncoder().encode('조리실')];
+  const eucKr = [0xc1, 0xb6, 0xb8, 0xae, 0xbd, 0xc7];   // '조리실'의 EUC-KR 바이트
+  const r2007 = decodeDxf(dxfBytes('AC1021', 'ANSI_949', utf8));
+  expect(r2007.encoding).toBe('utf-8');
+  expect(r2007.txt).toContain('조리실');
+  const r2004 = decodeDxf(dxfBytes('AC1018', 'ANSI_949', eucKr));
+  expect(r2004.encoding).toBe('euc-kr');
+  expect(r2004.txt).toContain('조리실');
 });
 
 test('decodeDxf는 ArrayBuffer도 받는다(워커가 transferable로 넘긴다)', () => {
