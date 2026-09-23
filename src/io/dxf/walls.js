@@ -48,6 +48,61 @@ export function mergeCollinear(list, P = DXF_PARAMS) {
   return out;
 }
 
+// 9-②. **같은 벽을 두 번 그린** 중심선을 하나로 접는다. 이 도면은 벽 하나를 레이어 둘(기존 + WAL·
+// FIN)이 겹쳐 그리고, 두꺼운 벽은 면선 쌍이 둘 잡혀 몇 mm~100 mm 떨어진 중심선이 쌍으로 나온다.
+// 그대로 두면 2D에서는 4902×3 mm 같은 유령 방이 되고(실측 55개 방 중 37개가 2 m² 미만이었다)
+// 3D에서는 벽이 두 겹으로 선다. 자리는 mergeCollinear **다음** · snapEndpoints **앞**이다:
+//  ① 중심선이 아직 u·n·off를 들고 있어 판정이 투영 셋(평행·오프셋·구간 겹침)으로 끝난다.
+//  ② 끝점 스냅·접합이 유령 벽을 먼저 붙잡아 가짜 방의 뼈대를 세우기 전이다.
+// 165~560 mm 떨어진 **진짜 이중벽**(이 도면의 공동)은 sep 밖이라 그대로 둘로 남는다.
+export const DUP_SEP = 100;
+const frame = w => {
+  if (w.u && w.n) return [w.u, w.n];
+  const d = [w.b[0] - w.a[0], w.b[1] - w.a[1]], L = Math.hypot(d[0], d[1]) || 1;
+  const u = [d[0] / L, d[1] / L];
+  return [u, [-u[1], u[0]]];
+};
+const proj = (w, u) => {
+  const p = w.a[0] * u[0] + w.a[1] * u[1], q = w.b[0] * u[0] + w.b[1] * u[1];
+  return p <= q ? [p, q] : [q, p];
+};
+// 겹치면 합친 중심선, 아니면 null. 기준 틀은 **긴 쪽**의 u·n이다(짧은 토막의 각도 오차를 끌고
+// 오지 않는다). 두께는 큰 값 — 두 번 그린 한 벽이므로 얇은 쪽은 마감선이다.
+const fuse = (w, v, sep, sinTol) => {
+  const [A, B] = len(w.a, w.b) >= len(v.a, v.b) ? [w, v] : [v, w];
+  const [u, n] = frame(A), [ub] = frame(B);
+  if (Math.abs(u[0] * ub[1] - u[1] * ub[0]) > sinTol) return null;          // 평행(angTol)이 아니다
+  const offOf = x => ((x.a[0] + x.b[0]) * n[0] + (x.a[1] + x.b[1]) * n[1]) / 2;
+  const oA = offOf(A), oB = offOf(B);
+  if (Math.abs(oA - oB) > sep) return null;                                 // 진짜 이중벽이다
+  const sA = proj(A, u), sB = proj(B, u), LA = sA[1] - sA[0], LB = sB[1] - sB[0];
+  if (Math.min(sA[1], sB[1]) - Math.max(sA[0], sB[0]) < 0.5 * Math.min(LA, LB)) return null;
+  const off = (oA * LA + oB * LB) / (LA + LB || 1);                         // 길이 가중 평균
+  const t0 = Math.min(sA[0], sB[0]), t1 = Math.max(sA[1], sB[1]);           // 구간은 합집합
+  return { ...A, a: [u[0] * t0 + n[0] * off, u[1] * t0 + n[1] * off], b: [u[0] * t1 + n[0] * off, u[1] * t1 + n[1] * off], thickness: Math.max(A.thickness, B.thickness), u, n, off };
+};
+export function dedupeParallel(list, sep = DUP_SEP, P = DXF_PARAMS) {
+  const sinTol = Math.sin(P.angTol * Math.PI / 180);
+  let cur = list;
+  for (;;) {                                  // 셋 이상의 사슬이 하나로 접힐 때까지 되돈다
+    const out = [], dead = new Set();
+    let hit = false;
+    for (let i = 0; i < cur.length; i++) {
+      if (dead.has(i)) continue;
+      let w = cur[i];
+      for (let j = i + 1; j < cur.length; j++) {
+        if (dead.has(j)) continue;
+        const m = fuse(w, cur[j], sep, sinTol);
+        if (!m) continue;
+        dead.add(j); w = m; hit = true;
+      }
+      out.push(w);
+    }
+    if (!hit) return out;
+    cur = out;
+  }
+}
+
 // 10-①. 끝점 클러스터 → 무게중심 스냅.
 export function snapEndpoints(list, tol) {
   const clusters = [];
@@ -215,6 +270,7 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   const guessedLayers = new Set();
   if (guessed) for (const c of accepted) for (const f of [c.A, c.B]) for (const n of f.layers) guessedLayers.add(n);
   let walls = mergeCollinear(centerlines(accepted, modes, P, thickness), P).filter(w => len(w.a, w.b) >= P.minWall);
+  walls = dedupeParallel(walls, DUP_SEP, P);   // 두 번 그린 벽을 접고 나서 스냅·접합으로 간다
   for (let pass = 0; pass < P.passes; pass++) {
     walls = snapEndpoints(walls, P.snap);
     walls = closeJunctions(walls, P);

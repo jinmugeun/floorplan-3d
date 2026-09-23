@@ -1,6 +1,6 @@
 // §18.3의 8·9·10단계와 추출 파이프라인. 좌표는 전부 소수다(정수 격자에 우연히 맞는 답을 거른다).
 import { test, expect } from 'vitest';
-import { centerlines, mergeCollinear, snapEndpoints, closeJunctions, bridgeGaps, dropTinyComponents, openingGaps, extractWalls, GAP_RANGE } from '../src/io/dxf/walls.js';
+import { centerlines, mergeCollinear, dedupeParallel, DUP_SEP, snapEndpoints, closeJunctions, bridgeGaps, dropTinyComponents, openingGaps, extractWalls, GAP_RANGE } from '../src/io/dxf/walls.js';
 import { buildFaces, candidatePairs, thicknessModes, matchPairs } from '../src/io/dxf/faces.js';
 import { DXF_PARAMS as P } from '../src/io/dxf/params.js';
 
@@ -43,6 +43,40 @@ test('mergeCollinear는 같은 방향·오프셋·두께 계급을 틈 ≤ merge
   expect(merged.map(w => Math.round(L(w)))).toEqual([5000, 2000]);
   // 두께 계급(25 mm)이 다르면 잇지 않는다.
   expect(mergeCollinear([piece(0.5, 2000.5, 200), piece(2500.5, 4000.5, 300)], P)).toHaveLength(2);
+});
+
+// 9-②. 한 벽을 두 번 그린 중심선(레이어 두 장 · 두꺼운 벽의 면선 쌍 둘)을 하나로 접는다.
+test('dedupeParallel은 sep 안의 중복 중심선만 접고 진짜 이중벽은 남긴다', () => {
+  const u = [1, 0], n = [0, 1];
+  const cl = (t0, t1, off, thickness = 200) => ({ a: [t0, off], b: [t1, off], thickness, u, n, off });
+  expect(DUP_SEP).toBe(100);
+  // (a)·(e) 4.5 mm 떨어진 6000.5 mm 중심선 둘 → 하나. 구간은 합집합(6500.5), 오프셋은 길이 가중
+  // 평균(1002.5), 두께는 큰 쪽(250)이다 — 얇은 쪽은 같은 벽의 마감선이다.
+  const dup = dedupeParallel([cl(0.5, 6001, 1000.25, 100), cl(500.5, 6501, 1004.75, 250)], DUP_SEP, P);
+  expect(dup).toHaveLength(1);
+  expect(dup[0].thickness).toBe(250);
+  expect(dup[0].a[0]).toBeCloseTo(0.5, 6);
+  expect(dup[0].b[0]).toBeCloseTo(6501, 6);
+  expect(L(dup[0])).toBeCloseTo(6500.5, 6);
+  expect(dup[0].a[1]).toBeCloseTo(1002.5, 6);
+  expect(dup[0].b[1]).toBeCloseTo(1002.5, 6);
+  expect(dup[0].off).toBeCloseTo(1002.5, 6);
+  // (b) 165.5 mm 떨어진 100 mm 벽 둘은 **진짜 이중벽**(공동)이다 — 접지 않는다.
+  expect(dedupeParallel([cl(0.5, 6000.5, 1000.25, 100), cl(0.5, 6000.5, 1165.75, 100)], DUP_SEP, P)).toHaveLength(2);
+  // (c) 40.5 mm씩 벌어진 셋(0 · 40.5 · 80.5)은 사슬로 하나가 된다. 오프셋은 둘씩 접을 때마다의
+  // 가중 평균이라 1050.625다(1000.25·1040.75 → 1020.5, 그 뒤 1080.75와 다시 반반).
+  const chain = dedupeParallel([cl(0.5, 6000.5, 1000.25), cl(0.5, 6000.5, 1040.75), cl(0.5, 6000.5, 1080.75)], DUP_SEP, P);
+  expect(chain).toHaveLength(1);
+  expect(chain[0].off).toBeCloseTo(1050.625, 6);
+  expect(L(chain[0])).toBeCloseTo(6000, 6);
+  // (d) 평행하지만 겹치지 않는다(끝과 끝 사이 300 mm) → 둘 그대로.
+  expect(dedupeParallel([cl(0.5, 3000.5, 1000.25), cl(3300.5, 6300.5, 1000.25)], DUP_SEP, P)).toHaveLength(2);
+  // 겹침이 짧은 쪽 길이의 50 % 미만이어도 접지 않는다(1000 < 3000).
+  expect(dedupeParallel([cl(0.5, 6000.5, 1000.25), cl(5000.5, 11000.5, 1004.75)], DUP_SEP, P)).toHaveLength(2);
+  // 직교하는 벽은 평행이 아니다(u·n이 없는 벽도 끝점에서 방향을 얻어 같은 판정을 받는다).
+  expect(dedupeParallel([cl(0.5, 6000.5, 1000.25), { a: [3000.5, 0.25], b: [3000.5, 6000.25], thickness: 200 }], DUP_SEP, P)).toHaveLength(2);
+  // 접을 것이 없으면 목록은 그대로다.
+  expect(dedupeParallel([], DUP_SEP, P)).toEqual([]);
 });
 
 test('snapEndpoints는 250 mm 안의 끝점을 무게중심으로 모은다', () => {
