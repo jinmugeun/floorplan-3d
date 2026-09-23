@@ -1,7 +1,7 @@
 // §18.4. 이 도면의 문은 INSERT 하나가 도면 전체의 문을 담은 블록이라 INSERT 좌표를 쓸 수 없다 —
 // 문 위치는 전개 후 **원호의 중심**이다. 좌표는 전부 앱 좌표(mm · y 남쪽)이고 소수를 섞는다.
 import { test, expect } from 'vitest';
-import { doorHinges, gapOpenings, windowSpans, nearestWall, productForWidth, buildOpenings, DOOR_PRODUCTS, WINDOW_PRODUCTS, OPENING_FALLBACK, OPENING_MATCH_DIST } from '../src/io/dxf/openings.js';
+import { doorHinges, gapOpenings, dedupeGaps, windowSpans, nearestWall, productForWidth, buildOpenings, DOOR_PRODUCTS, WINDOW_PRODUCTS, OPENING_FALLBACK, OPENING_MATCH_DIST } from '../src/io/dxf/openings.js';
 import { DXF_PARAMS as P } from '../src/io/dxf/params.js';
 import { makeWall } from '../src/geom/walls.js';
 
@@ -139,4 +139,73 @@ test('문이 이미 앉은 자리에는 창을 겹쳐 놓지 않고, 창은 카�
   expect(win).toMatchObject({ productId: 'window-slide-1200', attach: 'wall', wallId: WALL.id });
   expect(win.z).toBe(900);                                  // 카탈로그 기본 sill(창 z 900 · h 1200)
   expect(win.size).toEqual([1200, 40, 1200]);
+});
+
+// --- Task 9 리뷰 수정(F1·F2·C3) + Task 6 재리뷰(틈 중복·차례) 회귀 ---
+
+test('productForWidth는 상대 오차로 먼저 거른 뒤 그중 가장 가까운 것을 고른다 (리뷰 F2)', () => {
+  // 절대 거리로 먼저 고르면 1,200(오차 20.9 %)이 이겨 폴백으로 떨어졌다 — 1,800은 19.4 %로 유효했다.
+  expect(productForWidth(WINDOW_PRODUCTS, 1450.5)).toEqual({ id: 'window-slide-1800', width: 1800, exact: true });
+  expect(productForWidth(DOOR_PRODUCTS, 1230.5)).toEqual({ id: 'door-slide-1500', width: 1500, exact: true });
+  expect(productForWidth([], 900.5)).toEqual({ id: OPENING_FALLBACK, width: 900.5, exact: false });
+});
+
+test('개구부는 호스트 벽 안에 들어간다 — 벽보다 넓은 카탈로그 폭은 쓰지 않는다 (리뷰 F1)', () => {
+  // 실파일 실패 입력: 1,057.7 mm 벽을 덮은 창 면선이 window-slide-1200으로 커져 3D에서 벽 아랫단이 사라졌다.
+  const narrow = makeWall({ a: [-528.85, 1500.25], b: [528.85, 1500.25], thickness: 200, height: 3500 });
+  const items = buildOpenings({ ex: exOf({ segs: [seg(-600.5, 1450.25, 550.0, 1450.25)] }), walls: [narrow], openingLayers: OPEN });
+  expect(items).toHaveLength(1);
+  expect(items[0].productId).toBe(OPENING_FALLBACK);
+  expect(items[0].size[0]).toBe(950);                        // 1,057.7 − 2 × 50 = 957.7 → 50 mm 내림
+  const L = 1057.7, half = items[0].size[0] / 2;
+  expect(items[0].t * L - half).toBeGreaterThanOrEqual(50);
+  expect(items[0].t * L + half).toBeLessThanOrEqual(L - 50);
+  // 598.3 mm 벽의 700 mm 틈도 벽 안에 드는 450 mm로 줄여 앉는다(498.3 → 50 mm 내림).
+  const stub = makeWall({ a: [-299.15, 1500.25], b: [299.15, 1500.25], thickness: 200, height: 3500 });
+  const gap = buildOpenings({ ex: exOf({}), walls: [stub], openingLayers: OPEN, gaps: [{ p: [0.5, 1500.25], width: 700 }] });
+  expect(gap).toHaveLength(1);
+  expect(gap[0]).toMatchObject({ productId: OPENING_FALLBACK });
+  expect(gap[0].size).toEqual([450, 40, 2100]);
+});
+
+test('벽 토막에는 개구부를 놓지 않고, 벽 끝 밖의 틈은 안으로 당겨 앉힌다 (리뷰 F1·F4)', () => {
+  // 380.5 − 2 × 50 = 280.5 → 250 mm라 300 mm 미만이다(문이 아니라 벽 토막이다).
+  const tiny = makeWall({ a: [-190.25, 1500.25], b: [190.25, 1500.25], thickness: 200, height: 3500 });
+  expect(buildOpenings({ ex: exOf({}), walls: [tiny], openingLayers: OPEN, gaps: [{ p: [0.5, 1500.25], width: 700 }] })).toEqual([]);
+  const out = buildOpenings({ ex: exOf({}), walls: [WALL], openingLayers: OPEN, gaps: [{ p: [-3500.5, 1500.25], width: 900 }] });
+  expect(out).toHaveLength(1);
+  expect(out[0].t * 6000).toBeCloseTo(500, 6);               // 50(끝 여유) + 450(반폭)
+  expect(out[0].pos[0]).toBeCloseTo(-2500, 3);
+});
+
+test('충돌 판정은 놓일 폭으로 한다 — 같은 벽의 창 둘이 겹치지 않는다 (리뷰 C3)', () => {
+  // 1,000.5 mm 면선 둘의 중심 간격은 1,100.25 mm인데 제품 폭은 1,200 mm다(측정 폭으로 재면 통과했다).
+  const items = buildOpenings({
+    ex: exOf({ segs: [seg(-2000.5, 1450.25, -1000.0, 1450.25), seg(-900.25, 1450.25, 100.25, 1450.25)] }),
+    walls: [WALL], openingLayers: OPEN,
+  });
+  expect(items).toHaveLength(1);
+  expect(items[0].productId).toBe('window-slide-1200');
+  expect(items[0].pos[0]).toBeCloseTo(-1500.25, 3);
+  const iv = items.map(i => [i.t * 6000 - i.size[0] / 2, i.t * 6000 + i.size[0] / 2]).sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < iv.length; i++) expect(iv[i][0]).toBeGreaterThanOrEqual(iv[i - 1][1]);
+});
+
+test('같은 자리의 벽 틈 둘은 개구부 하나다 (Task 6 재리뷰)', () => {
+  const gaps = [{ p: [0.5, 1500.25], width: 900 }, { p: [121.0, 1500.25], width: 1150 }];
+  const deduped = dedupeGaps(gapOpenings(gaps, [WALL]));
+  expect(deduped).toHaveLength(1);
+  expect(deduped[0].width).toBe(900);                        // 카탈로그 폭에 더 가까운 쪽이 남는다
+  const items = buildOpenings({ ex: exOf({}), walls: [WALL], openingLayers: OPEN, gaps });
+  expect(items).toHaveLength(1);
+  expect(items[0].size[0]).toBe(900);
+});
+
+test('창 면선이 같은 자리의 벽 틈을 이기고, 떨어진 틈은 그대로 opening-pass다 (Task 6 재리뷰)', () => {
+  const segs = [seg(-600.25, 1450.25, 600.25, 1450.25)];     // 1,200.5 mm 창
+  const same = buildOpenings({ ex: exOf({ segs }), walls: [WALL], openingLayers: OPEN, gaps: [{ p: [0.5, 1500.25], width: 1200 }] });
+  expect(same).toHaveLength(1);
+  expect(same[0].productId).toBe('window-slide-1200');       // 면선은 창이라는 직접 증거다
+  const apart = buildOpenings({ ex: exOf({ segs }), walls: [WALL], openingLayers: OPEN, gaps: [{ p: [-2500.5, 1500.25], width: 900 }] });
+  expect(apart.map(i => i.productId).sort()).toEqual([OPENING_FALLBACK, 'window-slide-1200']);
 });

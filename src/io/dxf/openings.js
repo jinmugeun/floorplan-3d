@@ -15,6 +15,10 @@ export const DOOR_PRODUCTS = [['door-swing-900', 900], ['door-swing-1000', 1000]
 export const WINDOW_PRODUCTS = [['window-fix-600', 600], ['window-slide-1200', 1200], ['window-slide-1800', 1800]];
 export const OPENING_FALLBACK = 'opening-pass';
 export const OPENING_MATCH_DIST = 900;     // 개구부 중심 → 벽 중심선 최대 거리(mm)
+export const OPENING_EDGE = 50;            // 개구부가 벽 끝에서 떨어져 있어야 할 최소 여유(mm · 리뷰 F1)
+const OPENING_MIN = 300;                   // 이보다 좁으면 개구부가 아니라 벽 토막이다(mm)
+const GAP_SAME = 300;                      // 같은 개구부로 볼 벽 틈 중심 거리(mm)
+const CATALOG_WIDTHS = [...new Set([...DOOR_PRODUCTS, ...WINDOW_PRODUCTS].map(e => e[1]))].sort((a, b) => a - b);
 const DOOR_R = [600, 1200];                // 문 회전 궤적의 반지름 범위(mm)
 const DOOR_SWEEP = [60, 110];              // 스윕 각 범위(°)
 const HINGE_CLUSTER = 100;                 // 같은 문으로 볼 원호 중심 거리(mm)
@@ -74,13 +78,57 @@ export function nearestWall(walls, p, maxDist = OPENING_MATCH_DIST) {
   return best && best.dist <= maxDist ? best : null;
 }
 
-// 폭이 가장 가까운 카탈로그 제품. 20 %를 넘게 다르면 실측 폭 그대로의 개구부를 쓴다.
+// 폭이 가장 가까운 카탈로그 제품. **고르는 척도와 거르는 척도를 맞춘다**(리뷰 F2): 상대 오차
+// |mm − w| / w ≤ 0.2로 후보를 먼저 거르고 그중 절대 거리가 가장 가까운 것을 고른다. 절대 거리로
+// 먼저 고르면 20 % 안에 드는 제품이 있는데도 폴백으로 떨어졌다(창 1,450.5 → window-slide-1800 ·
+// 문 1,230.5 → door-slide-1500). 후보가 하나도 없으면(빈 목록 포함) 실측 폭 그대로의 개구부다.
 export function productForWidth(list, mm) {
-  let best = list[0];
-  for (const e of list) if (Math.abs(mm - e[1]) < Math.abs(mm - best[1])) best = e;
-  return Math.abs(mm - best[1]) / best[1] <= 0.2
-    ? { id: best[0], width: best[1], exact: true }
-    : { id: OPENING_FALLBACK, width: mm, exact: false };
+  let best = null;
+  for (const e of list ?? []) {
+    if (Math.abs(mm - e[1]) / e[1] > 0.2) continue;
+    if (!best || Math.abs(mm - e[1]) < Math.abs(mm - best[1])) best = e;
+  }
+  return best ? { id: best[0], width: best[1], exact: true } : { id: OPENING_FALLBACK, width: mm, exact: false };
+}
+
+// 호스트 벽 길이를 다시 본다(리뷰 F1). 쓸 수 있는 폭은 L − 2·OPENING_EDGE이고 카탈로그 제품은 그
+// 안에 들어가는 것만 후보다. 하나도 못 들어가면 실측 폭을 그 폭으로 자르고 50 mm 단위로 **내림**한
+// opening-pass이며, 그래도 300 mm 미만이면 개구부를 아예 놓지 않는다(문이 아니라 벽 토막이다).
+// 벽보다 넓은 개구부를 놓으면 geom/openings.js의 wallPieces가 그 벽의 아랫단을 통째로 지운다.
+export function fitOpening(list, mm, wallLen) {
+  const usable = wallLen - 2 * OPENING_EDGE;
+  const pick = productForWidth((list ?? []).filter(e => e[1] <= usable), mm);
+  if (pick.id !== OPENING_FALLBACK) return pick;
+  const width = Math.floor(Math.min(mm, usable) / 50) * 50;
+  return width >= OPENING_MIN ? { id: OPENING_FALLBACK, width, exact: false } : null;
+}
+
+// 개구부가 벽 끝 밖으로 삐져나오지 않게 t를 반폭만큼 안으로 당긴다(리뷰 F1·F4).
+export function fitT(t, wallLen, width) {
+  const lo = OPENING_EDGE + width / 2, hi = wallLen - OPENING_EDGE - width / 2;
+  return wallLen > 0 && lo <= hi ? Math.max(lo, Math.min(t * wallLen, hi)) / wallLen : 0.5;
+}
+
+// 같은 물리 개구부를 두 번 세지 않는다(Task 6 재리뷰): 겹치는 면선 쌍이 둘 다 받아들여지면 한 자리의
+// 틈이 둘로 보고된다(실파일 43쌍이 300 mm 안에 붙어 있고 그중 넷은 거리 0이다). 같은 벽에서 구간이
+// 겹치거나 중심이 max(300 mm, 좁은 쪽 반폭) 안이면 하나로 보고, 카탈로그 폭에 가장 가까운 것을
+// 남긴다(같으면 넓은 쪽). 입력·출력 모두 gapOpenings의 { wall, t, width }다.
+export function dedupeGaps(list) {
+  const near = w => Math.min(...CATALOG_WIDTHS.map(x => Math.abs(w - x)));
+  const out = [];
+  for (const g of list ?? []) {
+    const L = Math.hypot(g.wall.b[0] - g.wall.a[0], g.wall.b[1] - g.wall.a[1]);
+    const c = g.t * L;
+    const i = out.findIndex(o => {
+      if (o.g.wall.id !== g.wall.id) return false;
+      const d = Math.abs(o.c - c);
+      return d < (o.g.width + g.width) / 2 || d <= Math.max(GAP_SAME, Math.min(o.g.width, g.width) / 2);
+    });
+    if (i < 0) { out.push({ g, c }); continue; }
+    const o = out[i].g, dn = near(g.width) - near(o.width);
+    if (dn < 0 || (dn === 0 && g.width > o.width)) out[i] = { g, c };
+  }
+  return out.map(o => o.g);
 }
 
 // 개구부 레이어의 긴 면선이 벽 중심선을 덮는 구간 → 창(벽 하나당 최대 여섯 개).
@@ -131,6 +179,19 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
   const wallLen = w => Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
   const clash = (wall, t, width) => (placed.get(wall.id) ?? []).some(o => Math.abs(o.t - t) * o.L < (o.width + width) / 2);
   const mark = (wall, t, width) => (placed.get(wall.id) ?? placed.set(wall.id, []).get(wall.id)).push({ t, width, L: wallLen(wall) });
+  // 세 경로가 같은 규칙을 지난다: 벽 길이에 맞춰 폭을 정하고(fitOpening) → 그 폭만큼 t를 당기고(fitT)
+  // → **놓일 폭 그대로** 충돌을 본다(리뷰 C3 — 예전에는 측정 폭으로 재고 카탈로그 폭으로 앉혔다).
+  const seat = (list, mm, wall, t0) => {
+    const L = wallLen(wall);
+    const fit = fitOpening(list, mm, L);
+    if (!fit) return;
+    const t = fitT(t0, L, fit.width);
+    if (clash(wall, t, fit.width)) return;
+    const item = makeItem(fit.id, fit.width, wall, t);
+    if (!item) return;
+    items.push(item);
+    mark(wall, t, fit.width);
+  };
   for (const h of doorHinges(ex?.arcs ?? [], openingLayers, toApp, scale)) {
     const hit = nearestWall(walls, h.p);
     if (!hit) continue;
@@ -147,30 +208,13 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
       if (dot >= ALONG_DOT && (!bestEnd || dot > bestEnd.dot)) bestEnd = { e, dot };
     }
     const mid = bestEnd ? [(h.p[0] + bestEnd.e[0]) / 2, (h.p[1] + bestEnd.e[1]) / 2] : h.p;
-    const t = clamp01(((mid[0] - wall.a[0]) * u[0] + (mid[1] - wall.a[1]) * u[1]) / L);
-    const { id, width } = productForWidth(DOOR_PRODUCTS, h.width);
-    const item = makeItem(id, width, wall, t);
-    if (!item) continue;
-    items.push(item);
-    mark(wall, t, width);
+    seat(DOOR_PRODUCTS, h.width, wall, clamp01(((mid[0] - wall.a[0]) * u[0] + (mid[1] - wall.a[1]) * u[1]) / L));
   }
-  // 벽 틈 = 문·통로(사전 검토 C-2). 스윙 호가 이미 앉은 자리는 건너뛴다 — 원호 증거가 더 강하다.
-  for (const g of gapOpenings(gaps, walls, toApp, scale)) {
-    if (clash(g.wall, g.t, g.width)) continue;
-    const item = makeItem(OPENING_FALLBACK, g.width, g.wall, g.t);
-    if (!item) continue;
-    items.push(item);
-    mark(g.wall, g.t, g.width);
-  }
+  // 차례가 규칙이다(Task 6 재리뷰): 스윙 호 → **창(면선)** → 벽 틈. 개구부 레이어의 면선은 그 자리가
+  // 창이라는 직접 증거라 같은 자리의 일반 틈을 이긴다. 틈은 마지막 폴백이고, 이미 앉은 개구부와
+  // 겹치면 놓지 않는다(사전 검토 C-2의 "같은 자리에 겹쳐 놓지 않는다").
   const appSegs = (ex?.segs ?? []).map(s => ({ layer: s.layer, a: toApp(s.a), b: toApp(s.b) }));
-  for (const span of windowSpans(appSegs, openingLayers, walls, P)) {
-    // 같은 자리에 문과 창을 겹쳐 놓지 않는다(둘 다 벽에 구멍을 뚫는다).
-    if (clash(span.wall, span.t, span.width)) continue;
-    const { id, width } = productForWidth(WINDOW_PRODUCTS, span.width);
-    const item = makeItem(id, width, span.wall, span.t);
-    if (!item) continue;
-    items.push(item);
-    mark(span.wall, span.t, width);
-  }
+  for (const span of windowSpans(appSegs, openingLayers, walls, P)) seat(WINDOW_PRODUCTS, span.width, span.wall, span.t);
+  for (const g of dedupeGaps(gapOpenings(gaps, walls, toApp, scale))) seat([], g.width, g.wall, g.t);
   return items;
 }

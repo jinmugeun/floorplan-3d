@@ -96,7 +96,11 @@ test('만들어진 프로젝트가 normalizeProject를 통과하고 한글 실�
 // expected.json은 건드리지 않는다(Task 8의 스냅숏은 벽까지다) — 여기서는 하한만 본다.
 test('픽스처의 개구부는 벽 틈에서 나오고 전부 벽에 붙는다', () => {
   const items = buildOpenings({ ex, walls: built.walls, toApp: built.toApp, openingLayers: openRole, gaps: extracted.gaps });
-  expect(items.filter(i => i.productId === 'opening-pass').length).toBeGreaterThanOrEqual(10);
+  expect(items.filter(i => i.productId === 'opening-pass').length).toBeGreaterThanOrEqual(5);
+  expect(items.length).toBeGreaterThanOrEqual(12);                  // 하한만 본다(2026-09-23 실측 17 · pass 9 · 1200 4 · 1800 4)
+  // 리뷰 F1: 개구부는 호스트 벽보다 넓을 수 없다(넓으면 wallPieces가 그 벽의 아랫단을 통째로 지운다).
+  const wlen = w => Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+  expect(items.filter(i => i.size[0] > wlen(built.walls.find(w => w.id === i.wallId)))).toHaveLength(0);
   expect(items.every(i => i.attach === 'wall' && typeof i.wallId === 'string')).toBe(true);
   expect(items.every(i => built.walls.some(w => w.id === i.wallId))).toBe(true);
   expect(items.filter(i => i.kind === 'door')).toHaveLength(0);     // 스윙 호가 없다
