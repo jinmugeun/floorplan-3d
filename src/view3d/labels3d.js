@@ -1,7 +1,8 @@
 // 설비·덕트 라벨을 3D에 띄운다(명세 §11.4). 스프라이트라 카메라를 늘 마주보고, 텍스처는 글자·색으로
-// 캐시한다(같은 후드 번호가 여럿이어도 텍스처는 하나다). disposeGroup은 재질만 정리하고 캐시는 남긴다
+// 캐시한다(labelTexture.js). disposeGroup은 재질만 정리하고 캐시는 남긴다
 // (materials/texture.js와 같은 규칙: userData.clone이 없는 map은 공용 캐시다).
-// node 테스트에는 document가 없으므로 캔버스 공장을 주입한다.
+// 접힌 라벨의 점(●) 배치는 labelDots.js가 갖는다(최종 리뷰 I-3: 이 파일이 299/299였다). 캐시와
+// 캔버스 공장을 잎 모듈 labelTexture.js로 함께 내려 두 파일이 서로를 import하지 않게 했다.
 import * as THREE from 'three';
 import { toThree } from './build.js';
 import { equipLabel, isEquip, FLOW_COLORS } from '../vent/equipment.js';
@@ -11,6 +12,10 @@ import { perfSettings } from './perfMode.js';
 import { textWidth } from '../geom/textWidth.js';
 import { placeLabels } from '../view2d/labels2d.js';
 import { labelDensity } from '../ui/prefs.js';
+import { cachedTexture, setLabelCanvasFactory, clearLabelCache } from './labelTexture.js';
+import { syncLabelDots, LABEL_DOT_TEXT, LABEL_DOT_H, LABEL_DOTS_NAME } from './labelDots.js';
+// 부르는 쪽(build.js·view3d.js·테스트)은 예전처럼 이 파일 하나만 보면 된다.
+export { setLabelCanvasFactory, clearLabelCache, syncLabelDots, LABEL_DOT_TEXT, LABEL_DOT_H, LABEL_DOTS_NAME };
 
 // 텍스처는 글자 폭을 따른다(§15.12 · 감사 §11): 128×128 정사각에 그리고 스프라이트 비율을 2.5로
 // 고정해 `750×400`이 잘렸다. 높이는 고정(44 px)이고 폭만 글자 폭 + 여백이다.
@@ -22,43 +27,29 @@ export const LABEL3D_PRIORITY = ['equip', 'ductSize'];   // 설비 번호가 덕
 export const LABEL_BOX_PX = 12;      // 카메라를 모를 때(투영 주입 등) 쓰는 상자 글자 크기
 export const LABEL_BOX_MIN_PX = 6;   // 아주 멀어도 상자가 0으로 사라지지 않게(겹침을 놓치지 않게)
 const LABEL_LIFT = 150;          // 설비 윗면·덕트 윗면에서 라벨까지(mm) — bodyDrag.js의 SLIDE_LIFT와 같은 값(M-14)
-export const LABEL_DOT_TEXT = '●';
-export const LABEL_DOT_H = 0.18;   // 점 스프라이트의 높이(m). 기본 라벨 0.4의 절반 이하다.
 
 export function labelTextureSize(text) {
   const w = Math.ceil(textWidth(String(text ?? ''), LABEL_FONT_PX) + LABEL_PAD_PX);
   return { w: Math.max(32, w), h: LABEL_H_PX };
 }
-const cache = new Map();
-let makeCanvas = null;
-
-export function setLabelCanvasFactory(fn) { clearLabelCache(); makeCanvas = typeof fn === 'function' ? fn : null; }
-export function clearLabelCache() { for (const t of cache.values()) t.dispose?.(); cache.clear(); }
-
-function newCanvas() {
-  if (makeCanvas) return makeCanvas();
-  return typeof document === 'undefined' ? null : document.createElement('canvas');
-}
 
 function labelTexture(text, color) {
-  const key = `${color}|${text}`;
-  if (cache.has(key)) return cache.get(key);
-  const c = newCanvas();
-  const ctx = c?.getContext?.('2d');
-  if (!ctx) return null;
-  const { w, h } = labelTextureSize(text);
-  c.width = w; c.height = h;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';        // 흰 바탕: 어두운 벽·바닥 위에서도 읽힌다
-  ctx.fillRect(0, 0, w, h);                           // 텍스처가 곧 라벨 상자다(여백을 폭에 넣었다)
-  ctx.fillStyle = color;
-  ctx.font = `bold ${LABEL_FONT_PX}px "IBM Plex Sans KR", sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(text), w / 2, h / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  cache.set(key, tex);
-  return tex;
+  return cachedTexture(`${color}|${text}`, c => {
+    const ctx = c.getContext?.('2d');
+    if (!ctx) return null;
+    const { w, h } = labelTextureSize(text);
+    c.width = w; c.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';        // 흰 바탕: 어두운 벽·바닥 위에서도 읽힌다
+    ctx.fillRect(0, 0, w, h);                           // 텍스처가 곧 라벨 상자다(여백을 폭에 넣었다)
+    ctx.fillStyle = color;
+    ctx.font = `bold ${LABEL_FONT_PX}px "IBM Plex Sans KR", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(text), w / 2, h / 2);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  });
 }
 
 export function labelSprite(text, { color = '#1b2430', height = 0.4 } = {}) {
@@ -204,57 +195,6 @@ export function setLabelCollapsed(sprite, collapsed) {
 // 밀도가 바뀌었을 때 층을 다시 지어야 하는가(§17.10 · 리뷰 I-2). 라벨을 **짓느냐 마느냐**가 갈리는
 // 것은 '끔' 진입·이탈뿐이다 — '모두'↔'자동'은 이미 있는 스프라이트를 다시 세기만 하면 된다(재컬링).
 export function labelRefreshKind(prev, next) { return prev === 'off' || next === 'off' ? 'rebuild' : 'cull'; }
-
-// 접힌 라벨의 점(●)은 스프라이트마다 그리지 않고 한 덩어리(THREE.Points)로 모은다(리뷰 I-3): 500개가
-// 접혀도 드로우콜은 1개다. 글자가 없으니 텍스처는 흰 ● 하나면 되고(색은 정점 색으로 섞는다), 좌표는
-// 라벨이 서 있던 자리 그대로라 앵커가 움직이지 않는다. 자리를 되찾으면 같은 Sprite가 다시 보인다.
-export const LABEL_DOTS_NAME = 'labelDots';
-const DOT_TEX_PX = 64;
-function dotTexture() {
-  const key = `dots|${LABEL_DOT_TEXT}`, P = DOT_TEX_PX;
-  if (cache.has(key)) return cache.get(key);
-  const c = newCanvas(), ctx = c?.getContext?.('2d');
-  if (!ctx) return null;
-  c.width = P; c.height = P;
-  ctx.clearRect(0, 0, P, P);
-  ctx.fillStyle = '#ffffff';          // 흰 ●에 정점 색을 곱한다 — 라벨 상자와 달리 바탕이 없다
-  ctx.font = `bold ${Math.round(P * 0.8)}px "IBM Plex Sans KR", sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(LABEL_DOT_TEXT, P / 2, P / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace; cache.set(key, tex);
-  return tex;
-}
-// 자리는 라벨 수만큼 미리 잡고 drawRange로 실제 개수만 그린다(매 컬링마다 버퍼를 새로 만들지 않는다). disposeGroup은 Sprite가 아닌 geometry와 perMesh 재질을 버리므로 이 Points도 그 규칙을 탄다.
-function makeDotPoints(group, capacity) {
-  const map = dotTexture();
-  if (!map) return null;
-  const geo = new THREE.BufferGeometry();
-  for (const k of ['position', 'color']) geo.setAttribute(k, new THREE.BufferAttribute(new Float32Array(capacity * 3), 3));
-  const mat = new THREE.PointsMaterial({ map, size: LABEL_DOT_H, sizeAttenuation: true, vertexColors: true, transparent: true, depthTest: false, depthWrite: false });
-  mat.userData.perMesh = true;
-  const p = new THREE.Points(geo, mat);
-  p.name = LABEL_DOTS_NAME; p.frustumCulled = false;   // 자리를 다 채우지 않은 버퍼라 경계구를 믿을 수 없다
-  group.add(p);
-  return p;
-}
-// dots = 접힌 스프라이트들. 점이 하나도 없으면 배치를 만들지도 않는다(기존 그룹 모양을 바꾸지 않게).
-export function syncLabelDots(group, dots, capacity = dots.length, size = LABEL_DOT_H) {
-  let p = (group?.children ?? []).find(o => o.name === LABEL_DOTS_NAME) ?? null;
-  if (!p && !dots.length) return null;
-  if (!p || p.geometry.getAttribute('position').count < capacity) {
-    if (p) { group.remove(p); p.geometry.dispose(); p.material.dispose(); }
-    p = makeDotPoints(group, Math.max(capacity, dots.length));
-  }
-  if (!p) return null;
-  const pos = p.geometry.getAttribute('position'), col = p.geometry.getAttribute('color'), c = new THREE.Color();
-  // Color.set이 sRGB → 작업 색공간 변환까지 맡는다(정점 색은 three가 변환해 주지 않는다).
-  dots.forEach((s, i) => { pos.setXYZ(i, s.position.x, s.position.y, s.position.z); c.set(s.userData.color ?? '#1b2430'); col.setXYZ(i, c.r, c.g, c.b); });
-  pos.needsUpdate = col.needsUpdate = true;
-  p.geometry.setDrawRange(0, dots.length);
-  p.material.size = size; p.visible = dots.length > 0;
-  return p;
-}
 
 // 'labels' 그룹의 스프라이트를 화면에 투영해 visible을 맞춘다. 카메라가 멈춘 뒤 한 번만 부른다
 // (view3d가 LABEL_DEBOUNCE_MS 디바운스, 2D 투영 진입·이탈도 같은 디바운스로 다시 잰다).

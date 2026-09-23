@@ -345,3 +345,19 @@ test('createCameraWatch는 움직인 프레임에만 true를 준다(1인칭 저�
   expect(moved(cam)).toBe(true);        // 방향만 돌아도 다시 잰다
   expect(moved(null)).toBe(false);
 });
+
+// 최종 리뷰 I-3: labels3d.js가 299/299라 주석 한 줄도 더할 수 없었다. 점 배치를 labelDots.js로,
+// 텍스처 캐시를 잎 모듈 labelTexture.js로 내렸다. 나눈 값이 **순환 없이** 유지되는지를 정적으로
+// 못 박는다: labelDots가 labels3d를 도로 import하면 상수 둘이 TDZ에 걸린다(런타임에만 터진다).
+test('점 배치와 텍스처 캐시는 labels3d를 도로 import하지 않는다(순환 없음)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const read = p => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8');
+  expect(read('../src/view3d/labelDots.js')).not.toMatch(/from\s+'\.\/labels3d\.js'/);
+  expect(read('../src/view3d/labelTexture.js')).not.toMatch(/from\s+'\.\//);   // 잎 모듈: 지역 import 0건
+  // 부르는 쪽은 예전처럼 labels3d.js 하나만 본다(다시 내보낸다).
+  const dots = await import('../src/view3d/labelDots.js');
+  expect(dots.LABEL_DOTS_NAME).toBe(LABEL_DOTS_NAME);
+  expect(dots.LABEL_DOT_TEXT).toBe(LABEL_DOT_TEXT);
+  expect(dots.LABEL_DOT_H).toBe(LABEL_DOT_H);
+});
