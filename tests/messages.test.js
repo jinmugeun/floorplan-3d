@@ -228,3 +228,14 @@ test('내보낸 WHY_* 상수는 모두 호출자가 있고 SHOT_BUSY는 사라�
   expect(src).not.toContain('SHOT_BUSY');                // 비활성 버튼은 click을 내지 않는다(도달 불가)
   expect(others.every(t => !t.includes('SHOT_BUSY'))).toBe(true);
 });
+
+// §18.6의 오류 표. 다섯 코드가 모두 문장을 갖고, 코드 이름은 io/dxf/decode.js가 던지는 것과 같다.
+test('DXF 오류 문구는 §18.6이 적은 글자 그대로다', async () => {
+  const m = await import('../src/ui/messages.js');
+  expect(m.DXF_NOT_DXF).toBe('DXF 파일이 아닙니다 (HEADER 섹션을 찾을 수 없습니다)');
+  expect(m.DXF_BINARY).toBe('바이너리 DXF는 아직 지원하지 않습니다. CAD에서 ASCII DXF로 다시 저장해 주세요');
+  expect(m.DXF_IS_DWG).toBe('DWG는 열 수 없습니다. CAD에서 DXF로 저장해 주세요');
+  expect(m.DXF_NO_WALLS).toBe('벽으로 보이는 평행선을 찾지 못했습니다. 레이어를 직접 골라 주세요');
+  expect(m.DXF_TOO_BIG).toBe('도면이 너무 큽니다. CAD에서 PURGE로 미사용 블록을 지운 뒤 다시 시도해 주세요');
+  expect(Object.keys(m.DXF_ERRORS).sort()).toEqual(['binary', 'dwg', 'no-walls', 'not-dxf', 'oom']);
+});

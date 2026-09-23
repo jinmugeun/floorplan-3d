@@ -235,3 +235,13 @@ export const PATH_FP_HINT = '1인칭 위치를 먼저 찍거나 [Esc]로 취소�
 // 같은 사실을 다른 자리에서 말한다 — 배너는 문장, 대화상자는 수치다.
 export const DXF_OPEN_ENDS = n => `벽이 이어지지 않은 곳이 ${n}군데 있습니다`;
 export const DXF_OPEN_ENDS_VIEW = '보기';
+
+// DXF 가져오기(§18.6의 표 — 글자 그대로다). 파서·워커는 코드만 던지고(io/dxf/decode.js의 DxfError),
+// 사람이 읽는 문장은 여기 하나다: 워커는 ui/를 import할 수 없으므로 문구가 저쪽에 갈 수 없다.
+export const DXF_NOT_DXF = 'DXF 파일이 아닙니다 (HEADER 섹션을 찾을 수 없습니다)';
+export const DXF_BINARY = '바이너리 DXF는 아직 지원하지 않습니다. CAD에서 ASCII DXF로 다시 저장해 주세요';
+export const DXF_IS_DWG = 'DWG는 열 수 없습니다. CAD에서 DXF로 저장해 주세요';
+export const DXF_NO_WALLS = '벽으로 보이는 평행선을 찾지 못했습니다. 레이어를 직접 골라 주세요';
+export const DXF_TOO_BIG = '도면이 너무 큽니다. CAD에서 PURGE로 미사용 블록을 지운 뒤 다시 시도해 주세요';
+// 코드 → 문장. 대화상자의 `.error` 줄이 이 맵만 본다(워커가 보낸 message는 개발자용이다).
+export const DXF_ERRORS = { 'not-dxf': DXF_NOT_DXF, binary: DXF_BINARY, dwg: DXF_IS_DWG, 'no-walls': DXF_NO_WALLS, oom: DXF_TOO_BIG };
