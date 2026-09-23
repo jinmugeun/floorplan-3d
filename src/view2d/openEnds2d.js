@@ -22,7 +22,7 @@ const wallSig = ws => (ws ?? []).map(w => `${w.id},${w.a[0]},${w.a[1]},${w.b[0]}
 // 여기서 그 변화를 보고 카메라를 옮긴다 — 화면에서 보이는 결과는 §18.6의 `centerOn(pts[index++ % n])`과 같다.
 export function createOpenEnds(ui, { centerOn = () => {}, store = null } = {}) {
   let last = 0;
-  // 안내가 뜬 순간의 기준: { floor, sig, ref }. floor는 그때의 활성 층 번호, sig는 그 층의 벽 기하,
+  // 안내가 뜬 순간의 기준: { id, sig, ref }. id는 그 층의 id, sig는 그 층의 벽 기하,
   // ref는 마지막으로 "기하가 같다"고 확인한 walls 배열 참조다(빠른 길).
   let base = null;
   // 기준 층은 안내가 적어 보낸 id로 찾는다(없으면 그때의 활성 층): 번호로 찾으면 앞 층을 지운 순간
