@@ -1203,9 +1203,12 @@ test('라벨 밀도 select는 kvp에 남기고 onLabelDensity를 부른다', asy
   expect(sel).not.toBeNull();
   expect(sel.value).toBe('auto');
   sel.value = 'off';
+  // 한 번의 선택이 input → change를 연달아 쏜다(HTML 명세). 같은 값이면 두 번째는 통과하지 않는다(리뷰 I-1).
+  sel.dispatchEvent(new Event('input', { bubbles: true }));
   sel.dispatchEvent(new Event('change', { bubbles: true }));
   expect(localStorage.getItem(LABEL_DENSITY_KEY)).toBe('off');
   expect(labelDensity()).toBe('off');
-  expect(calls).toEqual(['off']);
+  expect(calls).toEqual(['off']);                         // 씬을 두 번 다시 짓지 않는다
   expect(JSON.stringify(store.get())).toBe(before);       // 프로젝트는 한 글자도 바뀌지 않는다
+  localStorage.clear();                                   // 뒤에 붙는 테스트에 '끔'을 물려주지 않는다(M-5)
 });

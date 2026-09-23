@@ -14,7 +14,7 @@ import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js'
 import { createFacePicker } from './facePick.js';
 import { createBodyDrag } from './bodyDrag.js';
 import { createOrthoView } from './orthoView.js';
-import { cullLabels, createCameraWatch, LABEL_DEBOUNCE_MS } from './labels3d.js';
+import { cullLabels, createCameraWatch, labelRefreshKind, LABEL_DEBOUNCE_MS } from './labels3d.js';
 import { labelDensity } from '../ui/prefs.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
@@ -251,7 +251,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   controls.addEventListener('change', requestRender);
   // 3D 라벨 겹침 억제(§15.12 · 감사 §11): 매 프레임 76개를 투영하면 궤도가 무거워지므로
   // 카메라가 멈춘 뒤 120 ms에 한 번만 잰다. 씬을 다시 짓거나 창이 바뀔 때도 다시 잰다.
-  let labelTimer = 0;
+  let labelTimer = 0, lastDensity = labelDensity();
   const fpMoved = createCameraWatch();   // 1인칭 렌더 루프는 움직인 프레임에만 디바운스를 건다
   function scheduleLabelCull() {
     clearTimeout(labelTimer);
@@ -292,7 +292,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
   return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender,
-    // 라벨 밀도는 kvp라 sceneSignature에 없다(§17.10): 값이 바뀌면 배선이 여기를 부른다.
-    refreshLabels() { rebuild(); scheduleLabelCull(); requestRender(); },
+    // 라벨 밀도는 kvp라 sceneSignature에 없다(§17.10). '끔' 진입·이탈만 다시 짓고 나머지는 다시 센다(I-2).
+    refreshLabels() { const d = labelDensity(), kind = labelRefreshKind(lastDensity, d); lastDensity = d; if (kind === 'rebuild') rebuild(); else scheduleLabelCull(); requestRender(); },
     setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

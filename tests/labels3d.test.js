@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as THREE from 'three';
-import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_H_PX, labelTextureSize, cullSprites, cullLabels, LABEL3D_PRIORITY, LABEL_DEBOUNCE_MS, LABEL_BOX_PX, spriteLabelSize, createCameraWatch, setLabelCollapsed, LABEL_DOT_TEXT, LABEL_DOT_H } from '../src/view3d/labels3d.js';
+import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_H_PX, labelTextureSize, cullSprites, cullLabels, LABEL3D_PRIORITY, LABEL_DEBOUNCE_MS, LABEL_BOX_PX, spriteLabelSize, createCameraWatch, setLabelCollapsed, LABEL_DOT_TEXT, LABEL_DOT_H, LABEL_DOTS_NAME, labelRefreshKind } from '../src/view3d/labels3d.js';
 import { createOrthoView } from '../src/view3d/orthoView.js';
 import { DEFAULT_VIEW, createItem } from '../src/state/schema.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
@@ -152,12 +152,64 @@ test('cullLabels는 화면 밖만 감추고 겹친 것은 점으로 남긴다', 
   cullLabels(g, null, { width: 800, height: 600, project: () => [400, 300] });
   expect(eq.visible).toBe(true);
   expect(eq.userData.collapsed).toBe(false);
-  expect(dl.visible).toBe(true);                            // 사라지지 않는다
-  expect(dl.userData.collapsed).toBe(true);                 // 점으로 남는다
-  // 자리가 떨어지면 저절로 펼쳐진다(지금의 44 → 58 동작과 같은 경로).
+  expect(dl.userData.collapsed).toBe(true);                 // 사라지지 않고 점으로 남는다
+  // 그 점은 스프라이트가 아니라 한 덩어리(Points)가 그린다(리뷰 I-3): 자리는 라벨이 서 있던 곳 그대로다.
+  const dots = g.children.find(c => c.name === LABEL_DOTS_NAME);
+  expect(dots.geometry.drawRange.count).toBe(1);
+  expect(dots.geometry.getAttribute('position').getX(0)).toBeCloseTo(dl.position.x, 5);
+  expect(dots.geometry.getAttribute('position').getY(0)).toBeCloseTo(dl.position.y, 5);
+  expect(dl.visible).toBe(false);                           // 스프라이트 자신은 드로우콜을 쓰지 않는다
+  // 자리가 떨어지면 같은 스프라이트가 저절로 펼쳐진다(지금의 44 → 58 동작과 같은 경로).
   let n = 0;
   cullLabels(g, null, { width: 800, height: 600, project: () => [100 + (n++) * 300, 300] });
-  expect(g.children.every(c => c.visible && !c.userData.collapsed)).toBe(true);
+  expect(g.children.filter(c => c.name === 'label').every(c => c.visible && !c.userData.collapsed)).toBe(true);
+  expect(dots.geometry.drawRange.count).toBe(0);
+  expect(dots.visible).toBe(false);                         // 점이 없으면 배치도 그리지 않는다
+});
+
+// I-3: 접힌 라벨이 500개여도 그리는 객체는 "펼친 라벨 + 점 배치 1개"다(예전에는 화면 안 500개가 모두 드로우콜).
+test('500개가 겹쳐도 그리는 객체 수는 펼친 라벨 + 배치 1개로 묶인다', () => {
+  const g = new THREE.Group();
+  g.name = 'labels';
+  for (let i = 0; i < 500; i++) {
+    const s = labelSprite('750×400', { color: '#dc2626' });
+    s.position.set(400 + (i % 25) * 4, 300 + Math.floor(i / 25) * 4, 0);   // 100×80 px 안에 500개
+    s.userData.kind = 'ductSize';
+    g.add(s);
+  }
+  const keep = cullLabels(g, null, { width: 800, height: 600, project: p => [p.x, p.y] });
+  const sprites = g.children.filter(c => c.name === 'label');
+  const dots = g.children.find(c => c.name === LABEL_DOTS_NAME);
+  expect(sprites).toHaveLength(500);
+  expect(keep.size).toBeLessThan(100);                      // 12 px 상자가 그 좁은 자리에 다 들어가지 않는다
+  expect(sprites.filter(c => c.visible)).toHaveLength(keep.size);
+  expect(dots.geometry.drawRange.count).toBe(500 - keep.size);
+  expect(g.children.filter(c => c.visible).length).toBe(keep.size + 1);
+});
+
+// I-2: '끔' 진입·이탈만 층을 다시 짓는다 — '모두'↔'자동'은 이미 있는 스프라이트를 다시 세기만 한다.
+test('labelRefreshKind는 끔 진입·이탈만 재빌드다(여섯 전이)', () => {
+  expect(labelRefreshKind('all', 'auto')).toBe('cull');
+  expect(labelRefreshKind('auto', 'all')).toBe('cull');
+  expect(labelRefreshKind('all', 'off')).toBe('rebuild');
+  expect(labelRefreshKind('auto', 'off')).toBe('rebuild');
+  expect(labelRefreshKind('off', 'all')).toBe('rebuild');
+  expect(labelRefreshKind('off', 'auto')).toBe('rebuild');
+  expect(labelRefreshKind('auto', 'auto')).toBe('cull');    // 같은 값은 다시 세기만 한다
+});
+
+// 직교 카메라에서 three의 gl_PointSize는 월드가 아니라 픽셀이다(sizeAttenuation이 원근에서만 먹는다).
+test('2D 투영(직교)에서도 점이 같은 높이로 보이게 픽셀로 환산한다', () => {
+  const g = labelGroup([['equip', '③', [0, 0, 0]], ['ductSize', '750×400', [0.01, 0, 0]]]);
+  const cam = new THREE.OrthographicCamera(-5, 5, 4, -4, -100, 100);
+  cam.position.set(0, 0, 5); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+  cullLabels(g, cam, { width: 800, height: 600 });
+  const dots = g.children.find(c => c.name === LABEL_DOTS_NAME);
+  expect(dots.geometry.drawRange.count).toBe(1);
+  expect(dots.material.size).toBeCloseTo((LABEL_DOT_H / 8) * 600, 6);   // 절두체 높이 8 m → 600 px
+  // 원근에서는 월드 크기이되 fov가 빠져 있다(gl_PointSize = size × 화면높이/2 ÷ 거리) — 같은 화면 높이가 되게 보정한다.
+  cullLabels(g, lookFrom(4), { width: 800, height: 600 });
+  expect(dots.material.size).toBeCloseTo(LABEL_DOT_H / Math.tan(THREE.MathUtils.degToRad(50) / 2), 6);
 });
 
 test('라벨 밀도 세 값이 다른 결과를 낸다', () => {
@@ -222,8 +274,9 @@ test('카메라 뒤의 스프라이트는 후보에서 뺀다(거울 투영이 �
   cullLabels(g, cam, { width: 800, height: 600 });
   expect(eq.visible).toBe(true);
   expect(eq.userData.collapsed).toBe(false);
-  expect(dl.visible).toBe(true);              // §17.10: 화면 안이면 사라지지 않고
-  expect(dl.userData.collapsed).toBe(true);   // 점으로 자리를 남긴다
+  expect(dl.userData.collapsed).toBe(true);   // §17.10: 화면 안이면 사라지지 않고 점으로 자리를 남긴다
+  expect(dl.visible).toBe(false);             // 점은 배치가 그리므로 스프라이트는 꺼진다(I-3)
+  expect(g.children.find(c => c.name === LABEL_DOTS_NAME).geometry.drawRange.count).toBe(1);
 });
 
 test('겹침 상자는 스프라이트의 실제 화면 크기를 따른다(줌 2배에도 판정이 같다)', () => {

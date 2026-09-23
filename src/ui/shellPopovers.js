@@ -3,7 +3,7 @@
 // 한 곳에 모이는 규칙 셋: ① 팝오버는 한 번에 하나만 열린다 ② 같은 버튼을 다시 누르면 닫힌다
 // ③ 보기 옵션 변경은 되돌릴 단계가 아니다({ record: false }).
 import { createPopover } from './popover.js';
-import { setLabelDensity } from './prefs.js';
+import { labelDensity, setLabelDensity } from './prefs.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 import { helpHtml } from './helpPopover.js';
 
@@ -35,8 +35,9 @@ export function createShellPopovers(root, { store, ui, onOpenKeymap = () => {}, 
   // 보기 옵션은 되돌릴 단계가 아니다(record: false).
   function applyViewChange(ev) {
     const el = ev.target;
-    // 라벨 밀도만 스토어가 아니라 로컬 설정이다(§17.10(2)).
-    if (el?.dataset?.pref === 'labelDensity') { setLabelDensity(el.value); onLabelDensity(el.value); return; }
+    // 라벨 밀도만 스토어가 아니라 로컬 설정이다(§17.10(2)). select는 한 번의 선택에 input → change를
+    // 연달아 쏘므로 값이 **실제로 바뀔 때만** 통과시킨다(리뷰 I-1): 한 번 고르면 씬도 한 번만 다시 센다.
+    if (el?.dataset?.pref === 'labelDensity') { if (el.value !== labelDensity()) { setLabelDensity(el.value); onLabelDensity(el.value); } return; }
     if (!el || (!el.dataset.v2 && !el.dataset.v3 && !el.dataset.view)) return;
     const value = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value;
     store.dispatch(d => {
