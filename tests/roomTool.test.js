@@ -108,3 +108,20 @@ test('방 도구도 스냅 종류를 내놓는다(§16.6)', () => {
   t.onPointerMove([4000.5, 3000.25]);
   expect(t.getSnap()).toEqual({ point: [4000.5, 3000.25], hit: 'point' });
 });
+
+// 리뷰 I-2: 첫 모서리(1/2) 단계에서도 스냅 종류가 계산되고 마커가 그려진다.
+test('방 도구는 첫 클릭 전에도 스냅 종류를 내놓는다(§16.6)', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  const t = createRoomTool({ store, view: { camera: { scale: 0.1 } }, onDone() {} });
+  t.onPointerMove([40.5, 40.25]);                  // 끝점에서 약 56 mm — 허용 80 mm 안
+  expect(t.getSnap()).toEqual({ point: [0.5, 0.25], hit: 'point' });
+  expect(t.getPreview()).toBeNull();               // 그래도 아직 사각형은 없다
+  const drawn = [];
+  const base = { measureText: x => ({ width: x.length * 7 }) };   // 마커가 라벨 폭을 잰다
+  const ctx = new Proxy(base, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+  t.draw(ctx, { toScreen: p => p, COLORS: {}, label: () => {}, poly: () => drawn.push('poly') });
+  expect(drawn).toEqual([]);                       // 1단계에서는 사각형을 그리지 않는다(마커만)
+  t.onPointerMove([2000.5, 1500.25]);              // 아무 대상도 없는 가운데
+  expect(t.getSnap()).toBeNull();
+});

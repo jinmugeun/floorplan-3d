@@ -104,3 +104,15 @@ describe('단축키 T', () => {
     expect(KEYMAP.filter(x => x.keys.includes('T'))).toHaveLength(1);   // 다른 동작이 T를 쓰지 않는다
   });
 });
+
+// 리뷰 I-4: getSnap()은 브리핑의 Produces 계약이자 마커가 읽는 표면이다(§16.6).
+test('덕트 도구가 스냅 종류를 내놓는다(§16.6)', () => {
+  const { t } = setup();                 // 8000×6000 벽 · scale 0.1 → 허용 80 mm
+  t.onPointerMove([4000.5, 3000.25]);    // 방 한가운데: 아무 대상도 없다(첫 점 전이라 직교도 걸리지 않는다)
+  expect(t.getSnap()).toBeNull();
+  t.onPointerMove([60.5, 40.25]);        // 아래쪽 벽면에서 40.25 mm
+  expect(t.getSnap()).toEqual({ point: [60.5, 0], hit: 'wall' });
+  t.onPointerDown([5000.5, 4000.25]);    // 첫 점(후드·벽에서 멀다)
+  t.onPointerMove([5030.5, 4000.25]);    // 그 점에서 30 mm — 직교로 잠긴 뒤 점 스냅이 이긴다
+  expect(t.getSnap()).toEqual({ point: [5000.5, 4000.25], hit: 'point' });
+});

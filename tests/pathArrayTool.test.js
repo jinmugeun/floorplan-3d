@@ -109,3 +109,15 @@ test('점 스냅 허용오차는 화면 8 px이다(§16.6)', () => {
   a.t.onPointerMove([2000, 1030], {});                  // 30 mm: 여전히 붙는다
   expect(a.t.getPreview().cursor).toEqual([2000, 1000]);
 });
+
+// 리뷰 I-4: getSnap()은 브리핑의 Produces 계약이자 마커가 읽는 표면이다(§16.6).
+test('경로 배열 도구가 스냅 종류를 내놓는다(§16.6)', () => {
+  const a = setup();                                   // 8000×6000 벽 · scale 0.1 → 허용 80 mm
+  a.t.onPointerMove([60.5, 40.25], {});                // 아래쪽 벽면에서 40.25 mm
+  expect(a.t.getSnap()).toEqual({ point: [60.5, 0], hit: 'wall' });
+  a.t.onPointerDown([2000.5, 1000.25], {});
+  a.t.onPointerMove([2000.5, 1030.25], {});            // 앞 점에서 30 mm
+  expect(a.t.getSnap()).toEqual({ point: [2000.5, 1000.25], hit: 'point' });
+  a.t.onPointerMove([4000.5, 3000.25], {});            // 방 한가운데
+  expect(a.t.getSnap()).toBeNull();
+});

@@ -35,15 +35,16 @@ export function createMeasureTool({ store, opts: given = null, view = null }) {
       a = b = null; // 다음 클릭은 새 측정이다(기존 측정선 위를 누르면 지우기로 이어진다)
     },
     onPointerMove(p) { cur = snap(p); }, onPointerUp() {},
-    onKey(ev) { if (ev.key === 'Escape') { const had = !!a; a = b = null; return had; } return false; },
+    onKey(ev) { if (ev.key === 'Escape') { const had = !!a; a = b = cur = null; mark = null; return had; } return false; },
     getSnap() { return mark; },
     draw(ctx, v) {
       const end = b ?? cur;
-      if (!a || !end) { drawSnapMark(ctx, v, mark); return; }
-      drawSnapMark(ctx, v, mark);
-      const s0 = v.toScreen(a), s1 = v.toScreen(end);
-      ctx.strokeStyle = v.COLORS.guide; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.stroke(); ctx.lineWidth = 1;
-      v.label(fmtLen(dist(a, end), v.units, { unit: true }), [(a[0] + end[0]) / 2, (a[1] + end[1]) / 2], { bg: '#fff', color: v.COLORS.dim });
+      if (a && end) {
+        const s0 = v.toScreen(a), s1 = v.toScreen(end);
+        ctx.strokeStyle = v.COLORS.guide; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.stroke(); ctx.lineWidth = 1;
+        v.label(fmtLen(dist(a, end), v.units, { unit: true }), [(a[0] + end[0]) / 2, (a[1] + end[1]) / 2], { bg: '#fff', color: v.COLORS.dim });
+      }
+      drawSnapMark(ctx, v, this.getSnap());   // 늘 마지막이다(측정선·치수 라벨에 덮이지 않게, 리뷰 I-3)
     },
     cancel() { a = b = cur = null; mark = null; },
   };

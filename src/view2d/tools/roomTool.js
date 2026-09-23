@@ -37,7 +37,7 @@ export function createRoomTool({ store, view = null, onDone = () => {}, opts: gi
     // view.requestRender()가 돌 때 onHint가 배너를 다시 그린다.
     get hint() { return start ? '맞은편 모서리를 클릭 (2/2)' : '첫 모서리를 클릭 (1/2)'; },
     onPointerDown(p) { const s = snap(p); if (!start) { start = s; cur = s; } else { cur = s; commit(typed.w || typed.h ? dims().end : s); } },
-    onPointerMove(p) { if (start) cur = snap(p); },
+    onPointerMove(p) { cur = snap(p); },   // 첫 모서리 단계에서도 마커가 보이도록 start 가드를 두지 않는다(리뷰 I-2)
     onPointerUp() {},
     onKey(ev) {
       // 그리던 사각형이 있을 때만 Esc를 소비한다. 없으면 앱이 선택 도구로 돌아가게 둔다.
@@ -52,7 +52,9 @@ export function createRoomTool({ store, view = null, onDone = () => {}, opts: gi
     getPreview() { if (!start) return null; const d = dims(); return { start, end: d.end, w: d.w, h: d.h, typed: { ...typed } }; },
     getSnap() { return cur && hit ? { point: cur, hit } : null; },
     draw(ctx, view) {
-      const pv = this.getPreview(); if (!pv) return;
+      // 1단계(첫 모서리)에는 미리보기가 없어 아래에서 조기 반환한다 — 마커는 그 전에 한 번 그린다(리뷰 I-2).
+      const pv = this.getPreview();
+      if (!pv) { drawSnapMark(ctx, view, this.getSnap()); return; }
       const [x0, y0] = pv.start, [x1, y1] = pv.end;
       view.poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], 'rgba(31,95,208,0.10)', view.COLORS.wallSel, 2);
       const wLabel = `${fmtLen(pv.w, view.units ?? 'mm')}${pv.typed.field === 'w' ? '|' : ''}`, hLabel = `${fmtLen(pv.h, view.units ?? 'mm')}${pv.typed.field === 'h' ? '|' : ''}`;

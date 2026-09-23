@@ -4,7 +4,6 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addMeasure } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createMeasureTool } from '../src/view2d/tools/measureTool.js';
-import { tolMm } from '../src/geom/snap.js';
 
 const ctxProxy = () => new Proxy({}, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
 
@@ -63,7 +62,17 @@ test('측정선 히트 허용치는 확대 배율을 따른다', () => {
   expect(activeFloor(store.get()).measures).toHaveLength(0);
 });
 
-test('측정 도구의 허용치는 tolMm과 같은 값이다(§16.6)', () => {
-  expect(tolMm(0.1)).toBe(80);
-  expect(tolMm(undefined)).toBe(150);   // 뷰 없이 만든 도구의 예전 값과 같다
+test('측정 도구는 스냅 종류를 내놓고 허용치가 배율을 따른다(§16.6)', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  const t = createMeasureTool({ store, view: { camera: { scale: 0.1 } } });     // 허용 80 mm
+  t.onPointerMove([40.5, 40.25]);                                               // 끝점에서 약 56 mm
+  expect(t.getSnap()).toEqual({ point: [0.5, 0.25], hit: 'point' });
+  const zoomed = createMeasureTool({ store, view: { camera: { scale: 1 } } });   // 허용 20 mm
+  zoomed.onPointerMove([40.5, 40.25]);
+  expect(zoomed.getSnap()).toBeNull();                                          // 확대하면 같은 자리가 물지 않는다
+  zoomed.onPointerMove([0.5, 12.25]);                                           // 끝점에서 12 mm
+  expect(zoomed.getSnap()).toEqual({ point: [0.5, 0.25], hit: 'point' });
+  expect(zoomed.onKey({ key: 'Escape', preventDefault() {} })).toBe(false);      // 그리던 것이 없으면 소비하지 않는다
+  expect(zoomed.getSnap()).toBeNull();                                          // [Esc]는 마커도 지운다(리뷰 사소 1)
 });
