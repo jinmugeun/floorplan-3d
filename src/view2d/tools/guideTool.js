@@ -46,7 +46,12 @@ export function createGuideTool({ store, view, opts: given = null }) {
       const del = f.guides.find(g => (g.type === 'v' ? Math.abs(g.pos - p0[0]) : Math.abs(g.pos - p0[1])) <= px(6));
       if (del) { store.dispatch(d => { const fl = activeFloor(d); fl.guides = fl.guides.filter(g => g.id !== del.id); }); lastId = null; mark = null; return; }
       const p = snap(p0);   // 스냅은 새 보조선을 놓을 때만 쓴다
-      const g = { id: uid('g'), type: opts.direction, pos: Math.round(opts.direction === 'v' ? p[0] : p[1]) };
+      const pos = Math.round(opts.direction === 'v' ? p[0] : p[1]);
+      // 스냅이 이미 있는 보조선 위로 붙었으면 겹쳐 놓지 않는다(리뷰 N-1): 화면은 그대로인데 되돌림 단계만 쌓이고,
+      // 지우기·좌표 입력이 겹친 쪽만 건드려 고장처럼 보인다. 그 보조선을 lastId로 집어 두면 이어지는 [숫자]+[Enter]가 그것을 옮긴다.
+      const same = f.guides.find(g => g.type === opts.direction && g.pos === pos);
+      if (same) { lastId = same.id; typed = ''; return; }   // dispatch를 부르지 않는다 = 되돌림 단계도 생기지 않는다
+      const g = { id: uid('g'), type: opts.direction, pos };
       store.dispatch(d => { activeFloor(d).guides.push(g); }); lastId = g.id; typed = '';
     },
     onPointerMove(p) { snap(p); }, onPointerUp() {},

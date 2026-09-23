@@ -53,10 +53,32 @@ test('보조선을 지우는 범위는 스냅 허용치가 아니라 6 px이다'
   const t = createGuideTool({ store, view: { camera: { scale: 1 } } });   // px(6) = 6 mm · tolMm(1) = 20 mm
   t.onPointerDown([1000.5, 0.25]);
   expect(activeFloor(store.get()).guides).toEqual([{ id: expect.any(String), type: 'v', pos: 1001 }]);
-  t.onPointerDown([1015.5, 0.25]);   // 14.5 mm: 스냅 허용치 안이지만 지우기 반경 밖 → 하나 더 놓인다
-  expect(activeFloor(store.get()).guides).toHaveLength(2);
+  t.onPointerDown([1015.5, 0.25]);   // 14.5 mm: 지우기 반경 밖 → 지워지지 않는다(스냅으로 1001에 붙어 겹치지도 않는다)
+  expect(activeFloor(store.get()).guides.map(g => g.pos)).toEqual([1001]);
+  t.onPointerDown([1050.5, 0.25]);   // 49.5 mm: 허용치(20 mm) 밖 → 다른 자리에 하나 더
+  expect(activeFloor(store.get()).guides.map(g => g.pos)).toEqual([1001, 1051]);
   t.onPointerDown([1004.5, 0.25]);   // 3.5 mm: 지우기
-  expect(activeFloor(store.get()).guides).toHaveLength(1);
+  expect(activeFloor(store.get()).guides.map(g => g.pos)).toEqual([1051]);
+});
+
+// 리뷰 N-1: 허용치 안에서 스냅이 기존 보조선에 붙으면 겹쳐 놓지 않고 그 보조선을 집는다(되돌림 단계도 생기지 않는다).
+test('허용치 안의 기존 보조선 위에는 겹쳐 놓지 않고 그 보조선을 집는다', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: { camera: { scale: 1 } } });   // px(6) = 6 mm · tolMm(1) = 20 mm
+  t.onPointerDown([1000.5, 0.25]);
+  const placedId = activeFloor(store.get()).guides[0].id;
+  const before = store.get();
+  t.onPointerDown([1015.5, 0.25]);   // 14.5 mm: 지우기 밖·허용치 안 → 스냅이 1001에 붙는다
+  expect(store.get()).toBe(before);                                   // dispatch 없음 = 되돌림 단계가 쌓이지 않는다
+  expect(activeFloor(store.get()).guides.map(g => g.pos)).toEqual([1001]);   // 겹치지 않는다
+  expect(t.dims().fields[0].mm).toBe(1001);                           // lastId가 유령이 아니라 기존 보조선을 가리킨다
+  t.setDim('pos', '1500');
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).guides).toEqual([{ id: placedId, type: 'v', pos: 1500 }]);   // 그 보조선이 움직인다
+  expect(store.undo()).toBe(true);
+  expect(activeFloor(store.get()).guides.map(g => g.pos)).toEqual([1001]);
+  expect(store.undo()).toBe(true);
+  expect(activeFloor(store.get()).guides).toEqual([]);                // 되돌림 두 번이면 처음으로 — 빈 단계가 없다
 });
 
 // 리뷰 I-1·I-4: getSnap()은 보조선이 실제로 놓이는 축의 스냅만 보고한다(§16.6 마커 계약).
