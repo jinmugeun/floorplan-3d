@@ -103,10 +103,17 @@ test('프로젝트를 갈아 끼우는 네 경로는 되돌릴 단계를 남기�
     ['restore', '[data-start="restore"]'],
     ['template', '[data-template="builtin-studio"]'],
   ];
+  // 되돌릴 단계와 다시 할 단계를 **둘 다** 쌓아 둔 채로 교체를 지나간다(리뷰 M-2): 단계를 하나만
+  // 쌓으면 future가 원래 비어 있어 canRedo() 단정이 공허하다.
+  const dirtyUp = s => {
+    addWalls(s, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+    addWalls(s, rectWalls([9000.5, 0.25], [12000.5, 3000.25], 200));
+    s.undo();                                                  // 되돌린 단계가 redo 스택에 남는다
+    expect([s.canUndo(), s.canRedo()]).toEqual([true, true]);
+  };
   for (const [name, sel] of cases) {
     // 교체 전에 되돌릴 단계를 실제로 쌓아 둔다(이것이 남아 있으면 Ctrl+Z가 옛 도면으로 간다).
-    addWalls(a.store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
-    expect(a.store.canUndo()).toBe(true);
+    dirtyUp(a.store);
     a.showStart({ restore: restored });
     document.querySelector(sel).click();
     await flush();
@@ -114,7 +121,7 @@ test('프로젝트를 갈아 끼우는 네 경로는 되돌릴 단계를 남기�
     document.body.innerHTML = '';
   }
   // 새로 만들기는 작업 중이면 확인창을 지난다. dirty:false이므로 곧바로 비운다.
-  addWalls(a.store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  dirtyUp(a.store);
   await a.actions.newProject();
   expect(a.store.canUndo()).toBe(false);
   expect(a.store.canRedo()).toBe(false);

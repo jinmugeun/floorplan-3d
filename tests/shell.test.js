@@ -1085,3 +1085,19 @@ test('첫 방 안내는 방이 없을 때만, 도구 안내가 없을 때만 보
   expect(activeFloor(store.get()).rooms).toHaveLength(1);
   expect(root.querySelector('#banner').hidden).toBe(true);
 });
+
+// §17.3(리뷰 I-1): 프로젝트를 갈아 끼운 직후 ↶/↷ 버튼이 "되돌릴 수 있다"고 굳은 채 남았다 —
+// 눌러도 store.undo()가 false를 돌려주는 죽은 버튼이다. syncTop은 store.subscribe로만 도는데
+// replace(p, { record: false })의 알림이 **아직 비우기 전의 past**를 보고 지나갔기 때문이다.
+// store.swap은 비운 뒤에 한 번 알리므로, 그 한 번으로 그린 버튼이 곧바로 사실을 말한다.
+test('프로젝트를 갈아 끼우면 ↶/↷ 버튼이 그 자리에서 꺼진다', () => {
+  const { store, root } = mountShell();
+  const btns = () => [root.querySelector('#btnUndo').disabled, root.querySelector('#btnRedo').disabled];
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  addWalls(store, rectWalls([9000.5, 0.25], [12000.5, 3000.25], 200));
+  store.undo();                                  // 되돌릴 단계와 다시 할 단계를 둘 다 만들어 둔다
+  expect(btns()).toEqual([false, false]);        // 교체 전에는 둘 다 켜져 있다
+  store.swap(createEmptyProject());              // 샘플·템플릿·복원·새로 만들기·불러오기가 지나는 자리
+  expect(btns()).toEqual([true, true]);
+  expect(store.undo()).toBe(false);              // 버튼이 말한 것과 스토어가 하는 일이 같다
+});

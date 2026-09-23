@@ -22,9 +22,9 @@ export function createFileActions({ store, ui, view, view3d, toast = () => {}, c
     }
     // 불러온 직후는 "파일과 같은 상태"이지만 저장한 것은 아니다: 표시는 "저장 이력 없음"이 사실이다
     // (이 순간 자동 저장본은 방금 남긴 직전 프로젝트다 — "자동 저장됨"이라고 적으면 거짓이다).
-    // 교체는 기록하지 않고(§17.3), 앞에 쌓인 단계도 그 자리에서 비운다: 파일을 연 직후의
-    // Ctrl+Z가 직전 프로젝트로 돌아가면 "방금 연 도면이 사라졌다"로 읽힌다(감사 §21).
-    try { store.replace(parseProject(await readTextFile(file)), { record: false }); store.resetHistory(); view.fit(); onProjectSwap(); markSaved('none'); toast(LOADED); }
+    // 교체는 기록하지 않고(§17.3), 앞에 쌓인 단계도 그 자리에서 비운다(store.swap 한 줄): 파일을
+    // 연 직후의 Ctrl+Z가 직전 프로젝트로 돌아가면 "방금 연 도면이 사라졌다"로 읽힌다(감사 §21).
+    try { store.swap(parseProject(await readTextFile(file))); view.fit(); onProjectSwap(); markSaved('none'); toast(LOADED); }
     catch (e) { toast(e.message); }
   }
   function openFileDialog() {

@@ -155,6 +155,28 @@ describe('store', () => {
     expect(s.canUndo()).toBe(false);
     expect(s.undo()).toBe(false);
   });
+  // 리뷰 I-1: replace + resetHistory를 나란히 쓰면 replace의 알림이 **아직 남아 있는 옛 past**를
+  // 보고 지나가므로, 그 알림으로 그리는 ↶/↷ 버튼이 "되돌릴 수 있다"고 굳는다. swap은 한 번만
+  // 알리고, 그 한 번이 이미 빈 히스토리를 본다 — 구독자가 보는 값과 실제 값이 갈라지지 않는다.
+  test('swap은 교체·비우기·알림을 한 번에 한다(구독자가 보는 canUndo·canRedo가 false)', () => {
+    const s = createStore({ n: 0 });
+    s.dispatch(d => { d.n = 1; });
+    s.dispatch(d => { d.n = 2; });
+    s.undo();
+    expect(s.canUndo()).toBe(true);
+    expect(s.canRedo()).toBe(true);
+    s.beginTransaction();                   // 열린 트랜잭션도 함께 닫힌다
+    const seen = [];
+    s.subscribe(v => seen.push([v.n, s.canUndo(), s.canRedo()]));
+    s.swap({ n: 7 });
+    expect(seen).toEqual([[7, false, false]]);   // 알림은 정확히 한 번, 그 시점에 이미 비어 있다
+    expect(s.get().n).toBe(7);
+    expect(s.canUndo()).toBe(false);
+    expect(s.canRedo()).toBe(false);
+    s.endTransaction();
+    expect(s.canUndo()).toBe(false);
+    expect(s.undo()).toBe(false);
+  });
 });
 
 describe('ui state', () => {

@@ -51,6 +51,6 @@ export function buildSampleProject() {
   return migrate(p); // 파생값(면적·후드 풍량 등)을 앱과 같은 규칙으로 다시 계산한다
 }
 
-// 프로젝트 교체는 되돌릴 단계가 아니다(§17.3). 히스토리 비우기는 **호출자**가 한다:
-// 이 함수는 스토어를 갈아 끼우기만 하고, 부르는 쪽이 view.fit()·onProjectSwap()과 함께 묶는다.
-export function loadSample(store) { store.replace(buildSampleProject(), { record: false }); }
+// 프로젝트 교체는 되돌릴 단계가 아니다(§17.3): store.swap이 교체·히스토리 비우기·알림을 한 번에
+// 한다(리뷰 I-2 — 잊을 수 있는 둘째 줄을 두지 않는다). 부르는 쪽은 view.fit()·onProjectSwap()만 묶는다.
+export function loadSample(store) { store.swap(buildSampleProject()); }

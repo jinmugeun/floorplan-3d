@@ -36,3 +36,25 @@ test('ui/는 view2d/·view3d/·app/을 import하지 않는다', () => {
   }
   expect(bad).toEqual([]);
 });
+
+// §17.3(감사 §21 · 리뷰 I-2): 프로젝트를 갈아 끼우는 일은 되돌릴 단계가 0개인 동작이다. 규율이
+// "store.replace(p, { record: false }) 다음 줄에 store.resetHistory()를 쓴다"였을 때는 여섯 번째
+// 교체 경로가 둘째 줄을 잊는 것만으로 "샘플을 연 뒤 Ctrl+Z가 도면을 지운다"가 되살아났다 — 어겨도
+// 앱은 잘 돌기 때문에 리뷰에서만 잡히면 반드시 샌다. 이제 교체 경로는 store.swap() 하나만 부르고,
+// 정말 기록해야 하는 교체는 같은 줄에 `// swap-exempt: 이유`를 적어 눈에 보이게 뚫는다.
+test('src/의 프로젝트 교체는 store.swap()으로만 한다', () => {
+  const swaps = [], leaks = [];
+  for (const f of jsFiles) {
+    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (line.includes('store.swap(')) swaps.push(`${rel(f)}:${i + 1}`);
+      if (!line.includes('store.replace(')) return;
+      if (rel(f) === 'state/store.js') return;                 // 스토어 자신의 구현·주석
+      if (/\/\/\s*swap-exempt:\s*\S/.test(line)) return;        // 이유를 적은 예외만 통과시킨다
+      leaks.push(`${rel(f)}:${i + 1}`);
+    });
+  }
+  expect(leaks).toEqual([]);
+  // 배선된 교체 경로(복원·템플릿·새로 만들기·불러오기·샘플)를 세어 둔다: 선택자가 어긋나 아무것도
+  // 읽지 못하면 leaks가 빈 배열이라 테스트 이름만 남고 보증이 사라진다(위 두 규칙과 같은 이유).
+  expect(swaps.length).toBeGreaterThanOrEqual(4);
+});

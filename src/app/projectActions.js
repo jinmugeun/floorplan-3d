@@ -24,11 +24,13 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       onClose,
       // 복원은 되돌릴 단계가 아니고, 복원한 상태는 자동 저장본과 같으므로 "자동 저장됨"이 사실이다
       // (§15.7). 다만 표시 시각은 자동 저장 시각이 아니라 복원 시각이다 — 저장본에 시각이 없다.
-      onRestore: () => { if (restore) { store.replace(restore, { record: false }); store.resetHistory(); view.fit(); onProjectSwap(); markSaved('auto'); toast(RESTORED); } },
+      // 교체는 store.swap 하나로 한다(§17.3 · 리뷰 I-1): 기록하지 않고, 앞에 쌓인 단계도 함께 버리고,
+      // 알림은 그 뒤에 한 번 — 그래야 그 알림으로 그리는 ↶/↷ 버튼이 곧바로 사실을 말한다.
+      onRestore: () => { if (restore) { store.swap(restore); view.fit(); onProjectSwap(); markSaved('auto'); toast(RESTORED); } },
       onEmpty: () => {},
       onUpload: () => openBackgroundDialog({ store }),
-      onSample: () => { loadSample(store); store.resetHistory(); view.fit(); onProjectSwap(); },
-      onTemplate: id => { const p = templateProject(id); if (p) { store.replace(p, { record: false }); store.resetHistory(); view.fit(); onProjectSwap(); } },
+      onSample: () => { loadSample(store); view.fit(); onProjectSwap(); },
+      onTemplate: id => { const p = templateProject(id); if (p) { store.swap(p); view.fit(); onProjectSwap(); } },
     });
   }
 
@@ -52,8 +54,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       if (risky && !(await confirmDialog({ title: '새로 만들기', message: '현재 도면이 초기화됩니다. 새로 만들까요?', ok: '새로 만들기' }))) return;
       // §17.3: 빈 프로젝트로 가는 것도 프로젝트 교체다 — 되돌리기로 옛 도면이 돌아오지 않는다
       // (되돌릴 길은 자동 저장본과 시작 화면이다).
-      store.replace(createEmptyProject(), { record: false });
-      store.resetHistory();
+      store.swap(createEmptyProject());
       ui.set({ selection: null, soloRoom: null, matPick: null });
       view.fit();
       onProjectSwap();                   // 빈 프로젝트의 첫 방도 한 번은 화면을 맞춘다(래치 재무장)

@@ -319,9 +319,9 @@ describe('프로젝트 교체는 되돌릴 단계가 0개다 (§17.3)', () => {
     const { loadSample } = await import('../src/samples/gangdang.js');
     const store = createStore(createEmptyProject());
     addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
-    loadSample(store);
-    store.resetHistory();
-    expect(store.canUndo()).toBe(false);
+    loadSample(store);                       // 히스토리 비우기는 loadSample 안의 store.swap이 한다
+    expect(store.canUndo()).toBe(false);     // 리뷰 M-1: 손으로 resetHistory를 붙이면 생산 경로가 새도 통과한다
+    expect(store.canRedo()).toBe(false);
     expect(store.undo()).toBe(false);
     expect(activeFloor(store.get()).rooms).toHaveLength(11);
     expect(activeFloor(store.get()).items).toHaveLength(39);
