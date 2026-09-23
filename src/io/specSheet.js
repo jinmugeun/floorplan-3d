@@ -123,7 +123,7 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     /* 쪽 번호는 본문 블록의 꼬리가 찍는다(§17.11(6) · 감사 §39): Chromium이 @page의 여백 상자를
        무시한다는 것이 page.pdf() 실측으로 확인됐다. 용지 크기·여백만 여기 남는다. */
     @page { size: ${size}; margin: 12mm; }
-    ${pageCss()}
+    ${pageCss((landscape ? pw : ph) - 24)}
     .title-block { width: 100%; border-collapse: collapse; margin: 4px 0 10px; font-size: 11px; }
     .title-block td { border: 1px solid #c8ccd2; padding: 3px 6px; }
     .title-block b { color: #5b6775; font-weight: 600; margin-right: 4px; }

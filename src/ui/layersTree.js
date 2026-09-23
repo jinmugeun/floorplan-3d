@@ -10,6 +10,7 @@ import { equipLabel } from '../vent/equipment.js';
 import { ductLength } from '../geom/ducts.js';
 import { fmtArea, fmtLen } from '../util/units.js';
 import { esc } from '../util/html.js';
+import { LAYERS_NO_MATCH } from './messages.js';
 
 // "모두 보기" 체크박스는 상태 거울이면서 파괴적 스위치였다(감사 §20): 두 동작으로 가른다.
 export const ALL_SHOW = '모두 보이기';
@@ -86,7 +87,7 @@ export const bucketOpen = (b, openState = new Map(), autoCollapse = false) => {
   return !autoCollapse && (b.items.length + b.ducts.length) > 0;
 };
 
-export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidden = true, selectedIds = new Set(), renaming = null, openState = new Map(), autoCollapse = false } = {}) {
+export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidden = true, selectedIds = new Set(), renaming = null, openState = new Map(), autoCollapse = false, query = '' } = {}) {
   // 꼬리표는 **트리 전체**에서 같은 이름을 센다: 같은 후드 세 개가 서로 다른 방에 있어도 구분된다.
   // 번호도 같은 목록(숨김 필터 **전**)에서 매긴다(리뷰 M-6): 그려진 행에서만 세면 소파 둘 중 앞의
   // 것을 숨기고 "숨긴 항목 보기"를 끄는 순간 남은 #2가 #1이 됐다 — 같은 물건의 번호가 바뀌면
@@ -119,6 +120,10 @@ export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidde
       <ul>${rows}${hiddenLine}</ul></details></li>`;
   };
   // 제품도 덕트도 없으면 트리 대신 한 줄로 말한다(빈 방 헤더만 늘어놓지 않는다).
-  if (!buckets.some(b => b.items.length || b.ducts.length)) return `<p class="hint">${LAYERS_EMPTY}</p>`;
+  // 무엇이 비었는지는 **거르기 전**이 정한다(리뷰 I-1): 검색이 아무것도 맞히지 못해 buckets가
+  // 빈 것을 "이 층에는 제품·덕트가 없습니다"로 읽으면 거짓말이고(층에는 있다), 검색 중이라는
+  // 신호까지 사라져 §17.6이 만든 검색의 결과가 "빈 층"으로 설명된다.
+  if (!buckets.some(b => b.items.length || b.ducts.length))
+    return `<p class="hint">${String(query ?? '').trim() ? LAYERS_NO_MATCH : LAYERS_EMPTY}</p>`;
   return `<ul class="layer-tree">${buckets.map(node).join('')}</ul>`;
 }

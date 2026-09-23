@@ -59,12 +59,26 @@ export function createLayersPanel(container, { store, ui }) {
     const collapse = autoCollapsed(rowCount(all));
     return { all, visible, collapse, anyOpen: visible.some(b => bucketOpen(b, openState, collapse)) };
   }
+  // 두 버튼이 세는 집합은 hideAll이 **실제로 바꾸는** 집합과 같다(리뷰 I-2): 검색 중에는 화면에
+  // 보이는 행에만 적용하므로(아래 visibleIds) 판정도 거른 뒤로 한다 — 아니면 눌러도 아무것도
+  // 바뀌지 않는 죽은 클릭이 되고, hideAll이 0을 돌려주므로 토스트조차 없다.
+  const canFlag = (v, hidden) => (query.trim() ? v.visible : v.all).some(b => [...b.items, ...b.ducts].some(x => !!x.hidden === hidden));
+  // 검색 타이핑은 render()가 아니라 renderTree()로 들어온다: 두 버튼도 같은 자리에서 다시
+  // 칠해야 검색 전 상태로 굳지 않는다(리뷰 I-2).
+  function syncAllBtns(v) {
+    const set = (name, on, title, why) => {
+      const b = container.querySelector(`[name="${name}"]`);
+      if (b) { b.disabled = !on; b.title = on ? title : why; }
+    };
+    set('showAll', canFlag(v, true), ALL_SHOW_TITLE, WHY_NOTHING_TO_SHOW);
+    set('hideAll', canFlag(v, false), ALL_HIDE_TITLE, WHY_NOTHING_TO_HIDE);
+  }
   // 트리만 그린다(머리 한 줄은 그대로 둔다 — 리뷰 I-2). 행이 새로 만들어지는 자리가 여기
   // 하나뿐이므로 스크롤 게이트도 같이 산다.
   function paintTree({ visible, collapse }) {
     const st = store.get();
     container.querySelector('.layer-tree-box').innerHTML =
-      layerTreeHtml(visible, { units: st.units ?? 'mm', pyeong: !!st.settings?.pyeong, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState, autoCollapse: collapse });
+      layerTreeHtml(visible, { units: st.units ?? 'mm', pyeong: !!st.settings?.pyeong, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState, autoCollapse: collapse, query });
     if (renaming) container.querySelector(`input[data-name="${renaming}"]`)?.focus();
     // 캔버스에서 고른 것이 트리 밖에 있으면 스크롤해 보여 준다(49행이 4화면이므로 꼭 필요하다).
     // **선택이 바뀔 때만** 한다: render()는 스토어·ui 양쪽에 걸려 있어 조건 없이 스크롤하면 다른 행의
@@ -94,8 +108,7 @@ export function createLayersPanel(container, { store, ui }) {
     const searching = !!q0 && q0 === container.ownerDocument?.activeElement;
     // 바뀔 대상이 0이면 비활성 + 사유다(§17.11(3)): 빈 단계 금지 규칙과 같은 뿌리다 — hideAll이
     // 세는 것과 **같은 식**으로 센다(숨김 필터로 화면에서 빠진 행도 대상이다).
-    const canShow = v.all.some(b => [...b.items, ...b.ducts].some(x => x.hidden));
-    const canHide = v.all.some(b => [...b.items, ...b.ducts].some(x => !x.hidden));
+    const canShow = canFlag(v, true), canHide = canFlag(v, false);
     // "모두 보기" 체크박스(상태 거울 + 파괴적 스위치)를 두 동작으로 가른다(§16.3 · 감사 §20).
     container.innerHTML = `
       <div class="row layer-actions">${allBtn('showAll', ALL_SHOW, ALL_SHOW_TITLE, WHY_NOTHING_TO_SHOW, canShow)}${allBtn('hideAll', ALL_HIDE, ALL_HIDE_TITLE, WHY_NOTHING_TO_HIDE, canHide)}</div>
@@ -118,6 +131,7 @@ export function createLayersPanel(container, { store, ui }) {
     paintTree(v);
     const btn = container.querySelector('[name="collapseAll"]');
     if (btn) { btn.textContent = collapseLabel(v.anyOpen); btn.title = collapseLabel(v.anyOpen); }
+    syncAllBtns(v);
   }
   // 지금 화면에 보이는(= 검색에 걸린) 행의 id. [모두 숨기기]의 범위를 화면과 맞추는 데 쓴다(리뷰 I-3).
   const visibleIds = () => {

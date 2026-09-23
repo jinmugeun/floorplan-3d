@@ -447,3 +447,31 @@ test('[모두 보이기]·[모두 숨기기]는 대상이 0이면 비활성이�
   expect(hide().title).toBe(WHY_NOTHING_TO_HIDE);
   expect(store.canUndo()).toBe(true);
 });
+
+// 리뷰 I-2: 판정 집합(v.all)과 동작 집합(검색 중이면 보이는 행)이 갈리면 [모두 숨기기]가
+// 죽은 클릭이 된다 — hideAll이 { items: 0, ducts: 0 }을 돌려주고 가드 때문에 토스트조차 없다.
+test('검색 중 두 버튼은 보이는 행으로만 판정한다(리뷰 I-2)', async () => {
+  const { WHY_NOTHING_TO_SHOW, WHY_NOTHING_TO_HIDE } = await import('../src/ui/messages.js');
+  const { ALL_HIDE_TITLE } = await import('../src/ui/layersTree.js');
+  const { el, store, outside } = setup();
+  const hide = () => el.querySelector('[name="hideAll"]');
+  const show = () => el.querySelector('[name="showAll"]');
+  const type = text => { const q = el.querySelector('[name="q"]'); q.value = text; q.dispatchEvent(new Event('input', { bubbles: true })); };
+  type('의자');                                        // '식탁 의자'(미지정) 한 행만 보인다
+  expect(el.querySelectorAll('.layer-item')).toHaveLength(1);
+  click(el, '[name="hideAll"]');                       // 그 한 행만 숨는다(리뷰 I-3의 범위)
+  expect(item(store, outside).hidden).toBe(true);
+  // 보이는 행이 모두 숨겨졌으면 더 숨길 것이 없다 — 층 어딘가의 소파는 이 화면의 대상이 아니다.
+  expect(hide().disabled).toBe(true);
+  expect(hide().title).toBe(WHY_NOTHING_TO_HIDE);
+  expect(show().disabled).toBe(false);                  // 그 한 행은 되살릴 수 있다
+  // 검색 타이핑만으로도 두 버튼이 다시 칠해진다(renderTree가 트리만 고치고 버튼을 굳히면 안 된다).
+  type('');
+  expect(hide().disabled).toBe(false);
+  expect(hide().title).toBe(ALL_HIDE_TITLE);
+  // 아무것도 맞히지 못한 질의에서는 둘 다 비활성이다(빈 집합에 적용하는 죽은 클릭 금지).
+  type('zzz없는검색어');
+  expect(hide().disabled).toBe(true);
+  expect(show().disabled).toBe(true);
+  expect(show().title).toBe(WHY_NOTHING_TO_SHOW);
+});

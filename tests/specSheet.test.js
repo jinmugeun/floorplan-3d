@@ -279,3 +279,13 @@ test('본문은 쪽 블록으로 나뉘고 블록마다 꼬리가 하나씩 붙�
   expect(first).toContain('<h1>');
   expect(first).toContain('title-block');
 });
+
+// 리뷰 I-3: 쪽 상자의 본문 높이 = 용지의 **세로** − @page 여백 24mm. 가로로 놓으면 세로가 짧아진다.
+test('쪽 상자의 본문 높이는 용지·방향에서 나온다(리뷰 I-3)', () => {
+  const css = o => specHtml({ project: project(), images: { plan: 'data:,plan' }, options: o });
+  expect(css({ paper: 'A4' })).toContain('min-height: 273mm');                    // 297 − 24
+  expect(css({ paper: 'A3', landscape: true })).toContain('min-height: 273mm');   // 가로 A3도 세로는 297
+  expect(css({ paper: 'A4', landscape: true })).toContain('min-height: 186mm');   // 210 − 24
+  expect(css({ paper: 'A3' })).toContain('min-height: 396mm');                    // 420 − 24
+  expect(css({ paper: 'A4' })).toContain('.page-foot { position: absolute;');     // 꼬리는 바닥에 선다
+});

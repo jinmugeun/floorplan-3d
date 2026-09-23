@@ -4,6 +4,7 @@ import { describe, test, expect } from 'vitest';
 import { createItem } from '../src/state/schema.js';
 import { productById, fmtSize } from '../src/products/catalog.js';
 import { layerTreeHtml, itemTag, HIDDEN_LINE, BTN_TITLES, ALL_SHOW, ALL_HIDE, layerRowTitle, LAYERS_EMPTY, ALL_SHOW_TITLE, ALL_HIDE_TITLE } from '../src/ui/layersTree.js';
+import { LAYERS_NO_MATCH } from '../src/ui/messages.js';
 
 const hood = no => createItem(productById('hood-box'), { pos: [1000.5, 1000.25], props: { no } });
 const sofa = () => createItem(productById('sofa-3'), { pos: [2000.5, 2000.25] });
@@ -114,4 +115,24 @@ test('버킷이 비면 빈 상태 문구를 그린다', () => {
   // 방은 있는데 제품·덕트가 하나도 없는 층도 빈 상태다(헤더만 남은 트리를 보여 주지 않는다).
   expect(layerTreeHtml([{ room: room('r1', '창고', 5.4), items: [], ducts: [] }], ctx)).toContain(LAYERS_EMPTY);
   expect(layerTreeHtml([{ room: room('r1', '창고', 5.4), items: [sofa()], ducts: [] }], ctx)).not.toContain(LAYERS_EMPTY);
+});
+
+// 리뷰 I-1: 검색이 아무것도 맞히지 못한 것과 층이 빈 것은 다른 사실이다 — 거른 결과만 보고
+// "이 층에는 제품·덕트가 없습니다"라고 하면 거짓말이고, 검색 중이라는 신호까지 사라진다.
+test('검색 0건은 빈 층이 아니라 검색 결과 없음이다(리뷰 I-1)', () => {
+  expect(LAYERS_NO_MATCH).toBe('검색 결과가 없습니다');
+  const empty = layerTreeHtml([], { ...ctx, query: '' });
+  expect(empty).toContain(LAYERS_EMPTY);
+  expect(empty).not.toContain(LAYERS_NO_MATCH);
+  // filterBuckets가 아무것도 남기지 않은 화면(= 검색 중)에서는 다른 말을 한다.
+  const noMatch = layerTreeHtml([], { ...ctx, query: 'zzz없는검색어' });
+  expect(noMatch).toContain(LAYERS_NO_MATCH);
+  expect(noMatch).not.toContain(LAYERS_EMPTY);
+  expect(noMatch).toContain('class="hint"');
+  // 공백만 친 질의는 검색이 아니다(layersPanel의 query.trim()과 같은 규칙).
+  expect(layerTreeHtml([], { ...ctx, query: '   ' })).toContain(LAYERS_EMPTY);
+  // 맞힌 행이 있으면 두 문구 중 어느 것도 나오지 않는다(트리 그대로다).
+  const hit = layerTreeHtml([{ room: room('r1', '창고', 5.4), items: [sofa()], ducts: [] }], { ...ctx, query: '소파' });
+  expect(hit).toContain('layer-tree');
+  expect(hit).not.toContain(LAYERS_NO_MATCH);
 });

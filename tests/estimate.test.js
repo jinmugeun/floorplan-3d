@@ -229,11 +229,13 @@ test('CSV는 머리글 1행 + 데이터이고 모든 줄이 8열이다', () => {
   applyMaterial(a.store, { kind: 'floor', id: a.floor().rooms[0].id }, mat('wood-oak'));
   const rows = estimateRows(a.floor());
   const text = estimateCsvText(rows, { name: '강당중 조리실', date: new Date('2026-09-23T13:32:00') });
-  expect(text.startsWith('﻿')).toBe(true);   // BOM은 이스케이프로 적는다(M-13: 리터럴은 편집기에서 보이지 않는다)
+  expect(text.charCodeAt(0)).toBe(0xfeff);   // BOM. 리터럴로 적으면 편집기·도구가 지우는 순간 단정이 조용히 사라진다(리뷰 I-4 · M-13)
   const lines = text.slice(1).split('\n');
   expect(lines[0]).toBe(EST_COLUMNS.join(','));        // 1행이 머리글이다("견적서" 줄이 없다)
   expect(EST_COLUMNS[6]).toBe('단가(원)');
   expect(EST_COLUMNS[7]).toBe('금액(원)');
+  // 열 수를 쉼표로 세는 것은 이 표본에 따옴표로 감싼 칸이 없기 때문이다(리뷰 M-4): 쉼표 든
+  // 제품·프로젝트 이름이 들어오면 cell()이 올바르게 감싸므로 최소 파서가 필요해진다.
   const cols = lines.map(l => (l.match(/,/g) ?? []).length + 1);
   expect(new Set(cols)).toEqual(new Set([8]));         // 1열짜리 줄 0개
   expect(lines.at(-1)).toContain('강당중 조리실');
