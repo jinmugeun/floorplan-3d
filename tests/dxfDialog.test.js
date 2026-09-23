@@ -53,9 +53,15 @@ test('미리보기는 벽·방·끊긴 끝점을 같은 변환으로 그린다',
   expect(t.k).toBeCloseTo((560 - 20) / 6000, 9);
   expect(boundsOf({ walls: [{ a: [-100.5, -50.25], b: [200.5, 80.75], thickness: 200 }] })).toEqual([-100.5, -50.25, 200.5, 80.75]);
   expect(boundsOf({})).toBe(null);
-  // 캔버스는 스텁이다(jsdom에는 2D 컨텍스트가 없다).
+  // 캔버스는 스텁이다(jsdom에는 2D 컨텍스트가 없다). Proxy 대신 **기록하는 컨텍스트**를 쓴다 —
+  // 스타일이 평범한 속성이라 호출마다 그때의 색이 함께 남는다(Task 11 리뷰 Important: Proxy는
+  // strokeStyle·fillStyle 대입을 하나도 기록하지 않아 벽 색과 끊긴 끝점 색을 맞바꿔도 초록이었다).
   const calls = [];
-  const cv = { width: 560, height: 420, getContext: () => new Proxy({}, { get: (_t, k) => (...a) => calls.push([k, ...a]) }) };
+  const ctx = { strokeStyle: '', fillStyle: '', lineWidth: 0, globalAlpha: 1 };
+  for (const op of ['clearRect', 'beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'stroke']) {
+    ctx[op] = (...args) => calls.push({ op, args, strokeStyle: ctx.strokeStyle, fillStyle: ctx.fillStyle, lineWidth: ctx.lineWidth });
+  }
+  const cv = { width: 560, height: 420, getContext: () => ctx };
   const out = drawDxfPreview(cv, {
     trace: { segs: new Float32Array([-3000, -2000, 3000, -2000]), box: [-3000, -2000, 3000, 2000] },
     walls: [{ a: [-3000, -2000], b: [3000, -2000], thickness: 200 }],
@@ -64,8 +70,22 @@ test('미리보기는 벽·방·끊긴 끝점을 같은 변환으로 그린다',
     box: [-3000, -2000, 3000, 2000],
   });
   expect(out).not.toBe(null);
-  expect(calls.some(c => c[0] === 'fill')).toBe(true);
-  expect(calls.filter(c => c[0] === 'stroke').length).toBeGreaterThanOrEqual(2);   // 트레이스 + 끊긴 끝점
+  // 색은 §18.6이 글자로 정한 값이고, 무엇을 그 색으로 그리는지까지 못 박는다.
+  const traceStrokes = calls.filter(c => c.op === 'stroke' && c.strokeStyle === PREVIEW_COLORS.trace);
+  const roomFills = calls.filter(c => c.op === 'fill' && c.fillStyle === PREVIEW_COLORS.room[0]);
+  const wallFills = calls.filter(c => c.op === 'fill' && c.fillStyle === PREVIEW_COLORS.wall);
+  const endStrokes = calls.filter(c => c.op === 'stroke' && c.strokeStyle === PREVIEW_COLORS.openEnd);
+  expect([traceStrokes.length, roomFills.length, wallFills.length, endStrokes.length]).toEqual([1, 1, 1, 1]);
+  expect(endStrokes[0].lineWidth).toBe(2);
+  expect(calls.filter(c => c.op === 'stroke')).toHaveLength(2);                     // 트레이스 + 끊긴 끝점
+  // 차례도 못 박는다: 끊긴 끝점이 이 기능의 결론이므로 벽·방보다 **뒤에** 그려 덮이지 않는다.
+  const at = c => calls.indexOf(c);
+  expect(at(traceStrokes[0])).toBeLessThan(at(roomFills[0]));
+  expect(at(roomFills[0])).toBeLessThan(at(wallFills[0]));
+  expect(at(wallFills[0])).toBeLessThan(at(endStrokes[0]));
+  // 끊긴 끝점 ✚는 반지름 OPEN_END_R의 가로·세로 두 획이다(마지막 beginPath 뒤의 네 점).
+  const endMoves = calls.filter(c => c.op === 'moveTo' && c.strokeStyle === PREVIEW_COLORS.openEnd);
+  expect(endMoves.map(c => c.args[0])).toEqual([0.5 * out.k + out.ox - OPEN_END_R, 0.5 * out.k + out.ox]);
   expect(PREVIEW_COLORS).toMatchObject({ trace: '#dcdcdc', wall: '#475569', openEnd: '#dc2626' });
   expect(OPEN_END_R).toBe(6);
   expect(drawDxfPreview({ width: 10, height: 10, getContext: () => null }, {})).toBe(null);
