@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 import { activeFloor } from '../state/schema.js';
 import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPACITY } from './build.js';
-import { hiddenWallIds, cutawayMeshStyle, soloMeshVisible } from './cutaway.js';
+import { hiddenWallIds, applyCutawayTo, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
 import { cameraDistance, fitDistance, shotPosition, canReframeShot } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
@@ -210,22 +210,15 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     reattachPicker(); // 투영에서 모드 키로 빠져나온 경우 ui 구독이 먼저 떼어 둔 기즈모를 되살린다
     frameScene();
   }
+  // 카메라에서 입력(위치·고도)만 만들어 넘긴다: 메시 루프는 cutaway.js가 갖는다(§17.1 · 300줄 예산).
   function applyCutaway() {
     if (!group) return;
     const view = store.get().view;
     const p = camera.position, camMm = [p.x * 1000, p.z * 1000, p.y * 1000];
     const d = new THREE.Vector3().subVectors(p, controls.target);
     const elev = THREE.MathUtils.radToDeg(Math.asin(d.y / (d.length() || 1)));
-    const hidden = hiddenWallIds(activeFloor(store.get()), camMm, elev, view);
-    const seeThrough = !!view.v3?.wallTransparent;
     const baseOpacity = view.display === 'transparent' ? Math.min(view.wallOpacity ?? 1, TRANSPARENT_OPACITY.wall) : (view.wallOpacity ?? 1);
-    for (const m of group.children) {
-      const id = m.userData.wallId;
-      if (!id) continue;
-      const { visible, opacity } = cutawayMeshStyle(m.name, { isHidden: hidden.has(id), seeThrough, baseOpacity });
-      m.visible = visible;
-      if (opacity !== null && m.material) { m.material.opacity = opacity; m.material.transparent = opacity < 1; m.material.depthWrite = opacity >= 1; }
-    }
+    applyCutawayTo(group, { hidden: hiddenWallIds(activeFloor(store.get()), camMm, elev, view), seeThrough: !!view.v3?.wallTransparent, baseOpacity });
   }
   // 단일 공간 모드를 끄면 컷어웨이가 손대지 않는 바닥·천장도 다시 보이게 되돌린다.
   function applySolo() {

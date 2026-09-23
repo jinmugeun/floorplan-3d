@@ -33,8 +33,12 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     const ductGroup = roots.find(c => c.name === 'ducts');
     const ductHit = ductGroup ? ray.intersectObjects(ductGroup.children, false)[0] : null;
     const faceHit = ray.intersectObjects(roots.filter(c => FACE_NAMES.has(c.name) && c.visible), false)[0] ?? null;
-    // 아이템 → 덕트 → 면 순서(2D 선택 도구와 같다, 아키텍처 §11.3).
-    if (itemHit && (!faceHit || itemHit.distance <= faceHit.distance) && (!ductHit || itemHit.distance <= ductHit.distance)) return { kind: 'item', id: itemHit.object.userData.itemId };
+    // 아이템이 맞으면 **언제나 아이템**이다(§17.1(2) · 감사 §1의 11건). 거리로 다시 재면 안 된다:
+    // pick3d의 아이템 피커는 items 그룹만 레이캐스트하므로 광선이 아이템에 닿으면 무조건 그것을
+    // 고른다 → 거리 비교를 하는 이쪽이 벽·덕트를 골라 두 피커가 같은 클릭에 다른 답을 내고
+    // 나중 것이 이겼다. 대가: 후드 앞을 지나는 덕트는 그 지점에서 3D로 집히지 않는다(덕트는 2D ·
+    // 레이어 패널 · 덕트 선택 도구로 계속 집힌다). 덕트 대 면의 거리 비교는 그대로다.
+    if (itemHit) return { kind: 'item', id: itemHit.object.userData.itemId };
     if (ductHit && (!faceHit || ductHit.distance <= faceHit.distance)) {
       // 구간 메시는 segment를 들고 있지만 라이저는 연결 점, 댐퍼는 댐퍼 번호만 들고 있다(§12.5).
       const u = ductHit.object.userData;

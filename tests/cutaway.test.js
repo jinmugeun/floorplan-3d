@@ -1,7 +1,9 @@
 import { test, expect } from 'vitest';
 import { rectWalls } from '../src/geom/walls.js';
 import { detectRooms } from '../src/geom/rooms.js';
-import { hiddenWallIds, wallOwners, isExteriorWall, cutawayMeshStyle, soloMeshVisible } from '../src/view3d/cutaway.js';
+import { hiddenWallIds, wallOwners, isExteriorWall, cutawayMeshStyle, soloMeshVisible, applyCutawayTo, shotCutaway, CUTAWAY_EDGE_COS } from '../src/view3d/cutaway.js';
+import { sceneSignature } from '../src/view3d/build.js';
+import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 
 function floor() { const walls = rectWalls([0, 0], [4000, 3000], 200); return { walls, rooms: detectRooms(walls) }; }
 const top = f => f.walls.find(w => w.a[1] === 0 && w.b[1] === 0).id;
@@ -26,13 +28,30 @@ test('cutaway off shows all walls', () => {
   const f = floor();
   expect(hiddenWallIds(f, [-5000, 8000, 4000], 35, { cutaway: false }).size).toBe(0);
 });
-test('shared interior wall is never hidden', () => {
+// §17.1(감사 §1): 내벽도 카메라 쪽이면 지운다 — 그러지 않으면 그 뒤의 설비가 보이지도, 집히지도 않는다.
+// 내벽은 "바깥"을 정할 수 없으므로 **벽 법선의 양쪽**으로 판정한다(정면으로 보이면 숨긴다).
+test('카메라를 마주보는 내벽은 숨는다', () => {
   const a = rectWalls([0, 0], [4000, 3000], 200), b = rectWalls([4000, 0], [7000, 3000], 200);
   const shared = b.find(w => w.a[0] === 4000 && w.b[0] === 4000);
   const walls = [...a, ...b.filter(w => w !== shared)];
   const f = { walls, rooms: detectRooms(walls) };
   const mid = a.find(w => w.a[0] === 4000 && w.b[0] === 4000).id;
-  expect(hiddenWallIds(f, [9000, 9000, 3000], 35, view).has(mid)).toBe(false);
+  // 동쪽에서 보면 남북으로 뻗은 공유 벽을 정면으로 마주본다(법선이 동서다).
+  expect(hiddenWallIds(f, [20000, 1500, 3000], 35, view).has(mid)).toBe(true);
+  // 컷어웨이를 끄면 예전처럼 아무것도 숨지 않는다.
+  expect(hiddenWallIds(f, [20000, 1500, 3000], 35, { cutaway: false }).size).toBe(0);
+});
+
+// 안전장치 하나: 비스듬히 보이는 벽은 남긴다(도면의 골격이 다 사라지지 않게).
+test('CUTAWAY_EDGE_COS보다 비스듬한 내벽은 남는다', () => {
+  expect(CUTAWAY_EDGE_COS).toBe(0.2);
+  const f = twoRooms();                                     // 공유 벽은 x = 4000.5의 남북 벽(법선 ±x)
+  const mid = f.shared.id;
+  // 벽 중점에서 거의 북쪽(법선과 87° 어긋남 → |cos| ≈ 0.05): 남긴다.
+  const midPt = [(f.shared.a[0] + f.shared.b[0]) / 2, (f.shared.a[1] + f.shared.b[1]) / 2];
+  expect(hiddenWallIds(f, [midPt[0] + 500, midPt[1] - 10000, 3000], 35, view).has(mid)).toBe(false);
+  // 법선과 45° 어긋남(|cos| ≈ 0.707): 숨긴다.
+  expect(hiddenWallIds(f, [midPt[0] + 10000, midPt[1] - 10000, 3000], 35, view).has(mid)).toBe(true);
 });
 
 function twoRooms() { // 가운데 벽을 공유하는 방 2개, 소수 좌표
@@ -69,7 +88,8 @@ test('innerWalls off hides only the shared wall', () => {
 test('with both flags on, the cutaway rules are unchanged', () => {
   const f = twoRooms();
   const hid = hiddenWallIds(f, [-5000, 8000, 4000], 35, { cutaway: true, v3: { outerWalls: true, innerWalls: true } });
-  expect(hid.has(f.shared.id)).toBe(false);
+  // §17.1: 내벽도 카메라 쪽이면 숨는다(북서쪽에서 보면 공유 벽의 법선과 45°다).
+  expect(hid.has(f.shared.id)).toBe(true);
   expect(hid.size).toBeGreaterThan(0);
 });
 
@@ -119,4 +139,43 @@ test('영역 메시는 컷어웨이·단일 공간 모드에서 벽면과 같게
   expect(soloMeshVisible({ name: 'wallRegion', visible: true, userData: { wallId: 'w1', side: 'in' } }, room)).toBe(true);
   expect(soloMeshVisible({ name: 'wallRegion', visible: true, userData: { wallId: 'w2', side: 'in' } }, room)).toBe(false);
   expect(soloMeshVisible({ name: 'wallFace', visible: true, userData: { wallId: 'w1', roomId: 'r2' } }, room)).toBe(false);
+});
+
+// §17.1: 컷어웨이는 **메시의 visible·opacity만** 바꾼다 — 씬을 다시 짓게 만들지 않는다.
+test('applyCutawayTo는 벽 메시만, visible·opacity만 건드린다', () => {
+  const mk = (name, wallId) => ({ name, visible: true, userData: wallId ? { wallId } : {}, material: { opacity: 1, transparent: false, depthWrite: true } });
+  const group = { children: [mk('wall', 'w1'), mk('wallFoot', 'w1'), mk('wall', 'w2'), mk('floor', null), mk('label', null)] };
+  const n = applyCutawayTo(group, { hidden: new Set(['w1']), seeThrough: false, baseOpacity: 1 });
+  expect(n).toBe(3);                                       // 벽 메시 셋만 손댔다
+  expect(group.children[0].visible).toBe(false);           // 숨긴 벽 본체
+  expect(group.children[1].visible).toBe(true);            // 밑동 윤곽은 남는다(평면 구조가 읽힌다)
+  expect(group.children[2].visible).toBe(true);
+  expect(group.children[3].visible).toBe(true);            // 바닥은 건드리지 않는다
+  expect(group.children[4].visible).toBe(true);            // 라벨도 그대로
+  // 벽 투명화를 켜면 숨긴 벽이 반투명으로 남는다(재질만 바뀐다).
+  applyCutawayTo(group, { hidden: new Set(['w1']), seeThrough: true, baseOpacity: 1 });
+  expect(group.children[0].visible).toBe(true);
+  expect(group.children[0].material.opacity).toBe(0.25);
+  expect(group.children[0].material.transparent).toBe(true);
+  expect(applyCutawayTo(null, {})).toBe(0);                // 그룹이 없어도 던지지 않는다
+});
+
+// 카메라가 돌 때마다 씬을 다시 짓지 않는다: 서명에 카메라·컷어웨이 입력이 **없다**.
+test('sceneSignature에는 컷어웨이 입력이 없다', () => {
+  const p = createEmptyProject();
+  const before = sceneSignature(p);
+  p.view.cutaway = !p.view.cutaway;
+  expect(sceneSignature(p)).toBe(before);
+  activeFloor(p).walls = [{ id: 'w1', a: [0.5, 0.25], b: [4000.5, 0.25], thickness: 200, height: 2300 }];
+  expect(sceneSignature(p)).not.toBe(before);              // 도면이 바뀌면 다시 짓는다
+});
+
+// §17.4(2)가 쓰는 촬영용 판정: 천장 평면도와 "현재 카메라"는 컷어웨이가 없다.
+test('shotCutaway는 프리셋에 따라 촬영 카메라 기준의 숨길 벽을 준다', () => {
+  const f = floor();
+  expect(shotCutaway(f, [0, -20000, 1750], null, {})).toBeNull();      // 현재 카메라 렌더
+  expect(shotCutaway(f, [0, -20000, 1750], 'top', {})).toBeNull();     // 천장 평면도
+  const hid = shotCutaway(f, [2000, -20000, 1750], 'front', {});       // 남쪽에서 보는 정면도
+  expect(hid.has(top(f))).toBe(true);                                  // 앞쪽(북쪽) 벽이 사라진다
+  expect(hid.has(left(f))).toBe(false);                                // 옆벽은 비스듬해서 남는다
 });

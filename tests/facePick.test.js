@@ -332,7 +332,10 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     expect(a.ui.get().selection).toEqual({ type: 'duct', id: ductId, segment: 1, vertex: null });
   });
 
-  test('아이템과 덕트가 겹치면 카메라에 더 가까운 쪽이 이긴다', () => {
+  // §17.1(2) · 감사 §1: 아이템이 맞으면 **언제나 아이템**이다. 두 피커가 같은 클릭에 다른 답을
+  // 내면 나중 것이 이겨, 설비 39개 중 11개가 자기 자리를 클릭해도 벽(9)·덕트(2)에 먹혔다.
+  // 대가: 후드 앞을 지나는 덕트는 그 지점에서 3D로 집히지 않는다(2D·레이어 패널·덕트 선택 도구로 집는다).
+  test('아이템을 맞히면 벽·덕트가 더 가까워도 아이템이 이긴다', () => {
     const mkItem = y => {
       const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
       box.position.set(0, y, 0); box.name = 'item'; box.userData.itemId = 'i1';
@@ -346,11 +349,43 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     a.g.add(mkDuctGroup(ductIdA, 0, 3));
     expect(a.picker.hitAt(ev)).toEqual({ kind: 'item', id: 'i1' });
 
-    const b = setup({ mesh: 'floor' });                    // 덕트(y=4)가 아이템(y=3)보다 가깝다
+    const b = setup({ mesh: 'floor' });                    // 덕트(y=4)가 아이템(y=3)보다 **가깝다**
     const ductIdB = ductFixture(b.store);
     b.items.add(mkItem(3));
     b.g.add(mkDuctGroup(ductIdB, 0, 4));
-    expect(b.picker.hitAt(ev)).toEqual({ kind: 'duct', id: ductIdB, segment: 0 });
+    expect(b.picker.hitAt(ev)).toEqual({ kind: 'item', id: 'i1' });   // 그래도 아이템이다
+
+    // 벽 본체가 아이템보다 가까운 경우도 같다(감사가 센 9건이 이 모양이다).
+    const c = setup({ mesh: 'wall' });
+    c.items.add(mkItem(-3));                               // 벽 평면(y=0)보다 뒤(아래)에 있다
+    expect(c.picker.hitAt(ev)).toEqual({ kind: 'item', id: 'i1' });
+    c.click();
+    expect(c.ui.get().selection).toBeNull();               // 면 피커는 아이템을 고르지 않는다(아이템 피커가 맡는다)
+
+    // 아이템이 없으면 덕트 대 면의 거리 비교는 그대로다.
+    const d = setup({ mesh: 'floor' });
+    const ductIdD = ductFixture(d.store);
+    d.g.add(mkDuctGroup(ductIdD, 0, 3));
+    expect(d.picker.hitAt(ev)).toEqual({ kind: 'duct', id: ductIdD, segment: 0 });
+  });
+
+  // hitAt은 onUp·onMenu가 함께 쓴다: 컨텍스트 메뉴도 같은 답을 낸다(아이템 메뉴는 아이템 피커가 연다).
+  test('아이템 위 우클릭에서는 면 메뉴가 열리지 않는다', () => {
+    const a = setup({ mesh: 'wall' });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+    box.position.set(0, -3, 0); box.name = 'item'; box.userData.itemId = 'i7';
+    a.items.add(box);
+    const ev = a.rightClick();
+    expect(a.menu).toHaveLength(0);
+    expect(ev.defaultPrevented).toBe(false);               // 아이템 피커가 자기 메뉴를 연다
+  });
+
+  // 컷어웨이로 숨긴 벽은 후보에서 빠진다(§17.1이 픽률을 올리는 기계 자체다).
+  test('보이지 않는 벽 메시는 레이캐스트 후보가 아니다', () => {
+    const a = setup({ mesh: 'wall' });
+    expect(a.picker.hitAt({ clientX: 100, clientY: 100 })).not.toBeNull();
+    for (const m of a.g.children) if (m.userData?.wallId) m.visible = false;
+    expect(a.picker.hitAt({ clientX: 100, clientY: 100 })).toBeNull();
   });
 
   test('라이저·댐퍼 메시를 맞히면 인접 구간이 선택된다', () => {
