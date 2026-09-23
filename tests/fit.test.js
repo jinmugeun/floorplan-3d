@@ -170,9 +170,9 @@ test('shotPosition은 줌을 지키고 화면↔출력 종횡비 차이만 보�
 // 원근에서는 1/(r − dot(v,dir))이므로 상사변환이 아니다 → 사용자가 화면 맞추기보다 조금만 더 확대해 두면
 // (화면에는 도면이 **전부 들어와 있다**) 더 넓은 출력에서 잘렸다. 여기서는 식을 식으로 검산하지 않고
 // **결과 프레임의 점유를 직접 잰다**. 팬·종횡비·줌을 모두 소수로 준다.
-const shotCase = ({ elevation, azimuth, screenAspect, aspect, zoom = 1, off = [0, 0, 0] }) => {
-  const base = { extentMm: 33800, width: 33800, depth: 29600, height: 3500, fov: 60, elevation, azimuth, offsetMm: off.map(v => v * 1000) };
-  const dims = { extentMm: 33800, width: 33800, depth: 29600, height: 3500, fov: 60 };
+const shotCase = ({ elevation, azimuth, screenAspect, aspect, zoom = 1, off = [0, 0, 0], w = 33800, d = 29600, h = 3500 }) => {
+  const base = { extentMm: w, width: w, depth: d, height: h, fov: 60, elevation, azimuth, offsetMm: off.map(v => v * 1000) };
+  const dims = { extentMm: w, width: w, depth: d, height: h, fov: 60 };
   const center = { x: 1.5, y: 0, z: -2.25 };                  // bbox 기준점(가로·세로 중앙 · 바닥)
   const target = { x: center.x + off[0], y: center.y + off[1], z: center.z + off[2] };
   const fitScreen = fitDistance(dims.extentMm, { ...base, aspect: screenAspect });
@@ -234,4 +234,15 @@ test('shotPosition의 출력 프레임은 화면보다 나빠지지 않는다(�
   const e = shotCase({ elevation: 35, azimuth: 47, screenAspect: 1, aspect: 16 / 9, zoom: 3 });
   expect(e.out.fill).toBeCloseTo(e.wave1, 12);
   expect(e.radius).toBeGreaterThan(e.fit);                    // 사용자의 줌아웃을 끌어당기지 않는다
+  // (f) 리뷰 N-5: 작은 바닥(3.0×2.5 m)은 두 fit 거리가 모두 6 m 바닥에 걸려 **같아지고**, 옛 조기 반환
+  //     (out === screen)이 "보정할 것 없음"으로 잘못 읽었다. 넓은 뷰포트(2.0)에서 0.8 확대 = 화면에는 전부
+  //     들어와 있는데(0.99) 더 좁은 16:9 출력이 잘렸다(1.11). 종횡비로 판단하면 화면보다 나빠지지 않는다.
+  //     (이 파라미터에서는 두 fit 거리가 같아 옛 조기 반환이 걸리는 자리다: F(화면) === F(출력).)
+  const f = shotCase({ elevation: 15, azimuth: 47.5, screenAspect: 2.0, aspect: 16 / 9, zoom: 0.8, w: 3000.5, d: 2500.25, h: 2400 });
+  expect(f.fit).toBeCloseTo(fitDistance(3000.5, { extentMm: 3000.5, width: 3000.5, depth: 2500.25, height: 2400, fov: 60, elevation: 15, azimuth: 47.5, offsetMm: [0, 0, 0], aspect: 2.0 }), 12);
+  expect(f.out.fill).toBeLessThanOrEqual(Math.max(f.screen.fill, 1) + 1e-9);   // 화면보다 나빠지지 않는다
+  expect(f.radius).toBeLessThanOrEqual(f.fit + 1e-9);
+  // (g) 뷰포트가 16:9보다 넓은 큰 바닥(세로 구속 우연 일치)도 같은 규칙.
+  const g = shotCase({ elevation: 35, azimuth: 47, screenAspect: 2.2, aspect: 16 / 9, zoom: 0.9 });
+  expect(g.out.fill).toBeLessThanOrEqual(Math.max(g.screen.fill, 1) + 1e-9);
 });

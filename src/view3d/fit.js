@@ -157,7 +157,9 @@ export function shotPosition({
   const sa = Number(screenAspect) > 0 ? screenAspect : aspect;
   const out = fitDistance(extentMm, { ...base, aspect });
   const screen = fitDistance(extentMm, { ...base, aspect: sa });
-  if (!(screen > 0) || out === screen) return reframePosition(position, target, o.radius);
+  // 보정할 것이 없는지는 **종횡비**로 판단한다(리뷰 N-5): 두 fit 거리는 둘 다 세로 구속이거나 둘 다 6 m 바닥에
+  // 걸려 우연히 같아질 수 있고, 그때 확대해 둔 카메라는 가로 구속이라 더 좁은 출력에서 잘렸다(실측 0.99 → 1.11).
+  if (!(screen > 0) || sa === aspect) return reframePosition(position, target, o.radius);
   const ratio = (o.radius * out) / screen;
   const seen = occupancyOf({ ...base, aspect: sa, radius: o.radius });
   if (!(seen.front > 0)) return reframePosition(position, target, ratio);           // 카메라가 bbox 안 = 점유로 못 잰다
