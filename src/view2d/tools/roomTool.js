@@ -4,7 +4,7 @@ import { rectWalls, endpoints } from '../../geom/walls.js';
 import { snapPoint, tolMm } from '../../geom/snap.js';
 import { drawSnapMark } from '../snapMarks.js';
 import { fmtLen, parseLen, typedChar } from '../../util/units.js';
-import { TYPED_DIM_HINT } from '../../ui/messages.js';
+import { TYPED_DIM_HINT, DRAW_DIR_HINT } from '../../ui/messages.js';
 
 export const ROOM_TOOL_DEFAULTS = { thickness: 200, snap: true };
 
@@ -41,7 +41,17 @@ export function createRoomTool({ store, view = null, onDone = () => {}, opts: gi
     name: 'room', opts,
     // 단계 안내(§14.7). 배너는 shell의 renderBanner가 이 getter를 읽는다 — 도구는 상태만 바꾸고
     // view.requestRender()가 돌 때 onHint가 배너를 다시 그린다.
-    get hint() { return start ? `맞은편 모서리를 클릭 (2/2) · ${TYPED_DIM_HINT}` : '첫 모서리를 클릭 (1/2)'; },
+    // 한 변만 넣고 [Enter]를 누른 프레임은 다른 말을 한다(최종 리뷰 I-7 · Task 4 NEW-4 — wallTool과
+    // 같은 갈래): 그 [Enter]는 commit의 10 mm 가드에 걸려 타이핑만 지키고 방도 단계도 만들지 않는데,
+    // 배너가 "타이핑하고 [Enter]"라고만 말하고 있으면 왜 안 되는지가 어디에도 없었다. 부족한 것이
+    // 정확히 나머지 한 변이라 DRAW_DIR_HINT("…마우스로 방향을 정한 뒤 [Enter]")가 그대로 맞는다.
+    // 배너는 dimSig가 바뀔 때마다 다시 그려지므로 추가 배선이 없다.
+    get hint() {
+      if (!start || !cur) return '첫 모서리를 클릭 (1/2)';
+      const d = measured();
+      if ((typed.w || typed.h) && (Math.abs(d.end[0] - start[0]) < 10 || Math.abs(d.end[1] - start[1]) < 10)) return DRAW_DIR_HINT;
+      return `맞은편 모서리를 클릭 (2/2) · ${TYPED_DIM_HINT}`;
+    },
     onPointerDown(p) { const s = snap(p); if (!start) { start = s; cur = s; } else { cur = s; commit(typed.w || typed.h ? measured().end : s); } },
     onPointerMove(p) { cur = snap(p); },   // 첫 모서리 단계에서도 마커가 보이도록 start 가드를 두지 않는다(리뷰 I-2)
     onPointerUp() {},

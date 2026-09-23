@@ -3,7 +3,7 @@ import { detectRooms, ROOM_FLOOR_COLOR, ROOM_CEILING_COLOR } from '../geom/rooms
 import { materialById } from '../materials/catalog.js';
 import { normalizeEquipProps, hoodCmh } from '../vent/equipment.js';
 import { normalizeDuct } from './ductSchema.js';
-import { defaultFloorName } from './schemaFloors.js';
+import { defaultFloorName, isDefaultFloorName } from './schemaFloors.js';
 
 let counter = 0;
 export const SCHEMA_VERSION = 1;
@@ -24,7 +24,7 @@ export function uid(prefix = 'id') {
 }
 
 // 층 기본 이름의 정본은 잎 모듈 schemaFloors.js다(M-22 · 이 파일의 299줄 예산 — 계획 9 I-7).
-export { defaultFloorName };
+export { defaultFloorName, isDefaultFloorName };
 
 export function createFloor(name = 'Floor 1') {
   return { id: uid('f'), name, height: 2300, slab: 0, walls: [], rooms: [], items: [], ducts: [], guides: [], measures: [], groups: [] };
@@ -214,9 +214,14 @@ export function normalizeProject(p) {
   if (!floors.length) floors.push(createFloor());
   // 이름이 겹치면 뒤의 층을 "쓰이지 않는 가장 작은 Floor N"으로 바꾼다(M-22): normalizeFloor의 기본
   // 이름은 index + 1인데 다른 층이 이미 그 이름을 쓰고 있을 수 있다(층 바의 select에 같은 이름 둘).
+  // 바꾸는 것은 **앱이 스스로 지은 기본 이름**(Floor N)뿐이다(최종 리뷰 I-2): renameFloor는 중복을
+  // 막지 않으므로 사용자는 같은 이름의 층 둘을 만들 수 있는데, 저장했다 다시 열면 뒤의 층이 말없이
+  // Floor N으로 바뀌었다. 형식은 그대로여도 왕복이 사용자가 친 글자를 잃는다 — 그쪽은 그대로 둔다.
+  // 후보는 **전체 목록**에서 고른다(Task 12 리뷰 m-1): 이미 본 이름만 피하면 뒤에 오는 층의 정당한
+  // 이름을 빼앗아('Floor 2','Floor 2','Floor 1' → 둘째가 Floor 1) 연쇄로 번졌다.
   const seen = new Set();
   for (const f of floors) {
-    if (seen.has(f.name)) f.name = defaultFloorName([...seen].map(name => ({ name })));
+    if (seen.has(f.name) && isDefaultFloorName(f.name)) f.name = defaultFloorName(floors);
     seen.add(f.name);
   }
   const active = num(src.activeFloor, 0);

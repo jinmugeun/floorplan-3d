@@ -11,3 +11,8 @@ export function defaultFloorName(floors = []) {
   while (used.has(`Floor ${n}`)) n += 1;
   return `Floor ${n}`;
 }
+
+// 이 이름을 앱이 스스로 지었는가(= defaultFloorName이 낼 수 있는 모양인가). 중복 해소의 범위를
+// 이것으로 가른다(최종 리뷰 I-2): 사용자가 친 이름은 겹쳐도 건드리지 않는다 — 저장 → 불러오기
+// 왕복이 사용자가 친 글자를 말없이 바꾸면 "형식은 그대로인데 내용이 보존되지 않는" 것이 된다.
+export const isDefaultFloorName = name => /^Floor \d+$/.test(String(name ?? ''));

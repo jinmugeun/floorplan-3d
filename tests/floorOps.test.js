@@ -554,3 +554,31 @@ test('층 기본 이름은 언제나 유일하다(이름이 겹친 파일도)', 
   const after = store.get().floors.map(f => f.name);
   expect(new Set(after).size).toBe(after.length);
 });
+
+// 최종 리뷰 I-2: 위 규칙의 범위가 "모든 층 이름"이라 저장 → 불러오기 왕복이 사용자가 친 이름까지
+// 말없이 바꿨다(renameFloor는 중복을 막지 않으므로 같은 이름의 층 둘은 실제로 만들 수 있다).
+// 게다가 새 이름이 뒤에 오는 층의 정당한 이름을 빼앗아 연쇄로 번졌다(Task 12 리뷰 m-1).
+// 결정: 바꾸는 것은 **앱이 스스로 지은 기본 이름**(Floor N)뿐이다.
+test('저장 → 불러오기 왕복이 사용자가 친 층 이름을 바꾸지 않는다(리뷰 I-2)', async () => {
+  const { parseProject } = await import('../src/io/file.js');
+  const store = createStore(createEmptyProject());
+  addFloor(store, { copy: 'none' }); addFloor(store, { copy: 'none' });
+  renameFloor(store, 0, '주방'); renameFloor(store, 1, '주방');       // 중복도 막지 않는다(입구는 그대로)
+  renameFloor(store, 2, 'Floor 1');
+  expect(store.get().floors.map(f => f.name)).toEqual(['주방', '주방', 'Floor 1']);
+  // 실제 왕복: JSON.stringify(state) → parseProject(= migrate → normalizeProject)
+  const back = parseProject(JSON.stringify(store.get()));
+  expect(back.floors.map(f => f.name)).toEqual(['주방', '주방', 'Floor 1']);
+  // 한 번 더 열어도 흔들리지 않는다(정규화는 멱등이다).
+  expect(parseProject(JSON.stringify(back)).floors.map(f => f.name)).toEqual(['주방', '주방', 'Floor 1']);
+});
+
+test('기본 이름끼리 겹칠 때만 바꾸고, 뒤 층의 이름을 빼앗지 않는다(Task 12 리뷰 m-1)', () => {
+  // 예전에는 둘째가 'Floor 1'을 받아 세 번째(사용자가 지은 'Floor 1')까지 덩달아 바뀌었다.
+  const p = migrate({ name: 'x', floors: [{ name: 'Floor 2' }, { name: 'Floor 2' }, { name: 'Floor 1' }] });
+  expect(p.floors.map(f => f.name)).toEqual(['Floor 2', 'Floor 3', 'Floor 1']);
+  // 사용자 이름이 기본 이름과 겹치는 경우: 기본 이름 쪽만 비켜 준다.
+  const q = migrate({ name: 'x', floors: [{ name: '주방' }, { name: '주방' }, {}] });
+  expect(q.floors.map(f => f.name)).toEqual(['주방', '주방', 'Floor 3']);
+  expect(new Set(q.floors.filter(f => /^Floor \d+$/.test(f.name)).map(f => f.name)).size).toBe(1);
+});

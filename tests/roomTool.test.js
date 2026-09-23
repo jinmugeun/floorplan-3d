@@ -196,3 +196,35 @@ test('방 도구는 확정 여부를 돌려주고 칸이 타이핑 여부를 말
   expect(store.undo()).toBe(true);
   expect(activeFloor(store.get()).walls).toHaveLength(0);
 });
+
+// 최종 리뷰 I-7(Task 4 NEW-4): W만 넣고 [Enter]를 누르면 commit의 10 mm 가드에 걸려 아무 일도
+// 일어나지 않는데 배너가 한마디도 하지 않았다. 벽 도구는 같은 자리에서 DRAW_DIR_HINT를 낸다.
+test('한 변만 타이핑하면 배너가 방향을 요구한다(리뷰 I-7)', async () => {
+  const { DRAW_DIR_HINT, TYPED_DIM_HINT } = await import('../src/ui/messages.js');
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store });
+  expect(t.hint).toBe('첫 모서리를 클릭 (1/2)');           // 1단계는 그대로다
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([0.5, 0.25]);                            // 아직 방향이 없다(마우스가 제자리)
+  expect(t.hint).toBe(`맞은편 모서리를 클릭 (2/2) · ${TYPED_DIM_HINT}`);   // 타이핑 전에는 평소 문구
+  for (const k of ['3', '0', '0', '0']) t.onKey(key(k));   // W = 3000
+  expect(t.hint).toBe(DRAW_DIR_HINT);                      // H가 0이라 [Enter]가 아무 일도 못 한다
+  expect(t.commitDims()).toBe(false);
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  // H를 넣으면 돌아온다(마우스로 방향을 정해도 마찬가지다).
+  t.onKey(key('Tab'));
+  for (const k of ['2', '0', '0', '0']) t.onKey(key(k));
+  expect(t.hint).toBe(`맞은편 모서리를 클릭 (2/2) · ${TYPED_DIM_HINT}`);
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+  expect(t.hint).toBe('첫 모서리를 클릭 (1/2)');           // 확정하면 처음으로 돌아간다
+});
+
+test('마우스로만 그리는 프레임은 배너가 바뀌지 않는다(타이핑이 없으면 옛 문구)', async () => {
+  const { TYPED_DIM_HINT } = await import('../src/ui/messages.js');
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store });
+  t.onPointerDown([0, 0]);
+  t.onPointerMove([0, 0]);            // 두 변 모두 0이지만 친 글자가 없다
+  expect(t.hint).toBe(`맞은편 모서리를 클릭 (2/2) · ${TYPED_DIM_HINT}`);
+});
