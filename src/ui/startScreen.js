@@ -1,10 +1,11 @@
 import { allTemplateCards, deleteTemplate, renameTemplate, listTemplates, templateProject, BUILTIN_TEMPLATES } from '../templates/projectTemplates.js';
-import { projectShapes, mountPreviews, PREVIEW_PX } from './templatePreview.js';
+import { projectShapes, placeholderShapes, mountPreviews, PREVIEW_PX } from './templatePreview.js';
+import { buildSampleProject } from '../samples/gangdang.js';
 import { esc } from '../util/html.js';
 import { focusTrap } from './dialogBase.js';
 import { confirmDialog } from './confirmDialog.js';
 import { promptDialog } from './promptDialog.js';
-import { CONFIRM_TEMPLATE_DELETE, TEMPLATE_RENAME, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from './messages.js';
+import { CONFIRM_TEMPLATE_DELETE, TEMPLATE_RENAME, TEMPLATE_NAME_TAKEN, NAME_REQUIRED, RESTORE_CARD_TITLE, restoreCardDesc } from './messages.js';
 
 const CARDS = [
   { key: 'empty', title: '빈 프로젝트', desc: '빈 화면에서 방과 벽을 직접 그립니다.' },
@@ -15,11 +16,11 @@ const CARDS = [
 const HIDDEN = new Set(['builtin-empty', 'builtin-gangdang']);
 
 // 자동 저장본이 있으면 맨 앞 카드로 제안한다(브라우저 confirm 대신 — §12.5).
-const restoreCard = p => ({ key: 'restore', title: '이어서 작업', desc: `자동 저장된 "${p?.name ?? '프로젝트'}"을 불러옵니다.` });
+const restoreCard = (p, at) => ({ key: 'restore', title: RESTORE_CARD_TITLE, desc: restoreCardDesc(p?.name, at) });
 
 // 프로젝트가 비어 있을 때 띄우는 시작 오버레이.
-export function openStartScreen({ store, restored = null, onEmpty = () => {}, onUpload = () => {}, onSample = () => {}, onTemplate = () => {}, onRestore = () => {}, onClose = () => {} }) {
-  const cards = restored ? [restoreCard(restored), ...CARDS] : CARDS;
+export function openStartScreen({ store, restored = null, restoredAt = null, onEmpty = () => {}, onUpload = () => {}, onSample = () => {}, onTemplate = () => {}, onRestore = () => {}, onClose = () => {} }) {
+  const cards = restored ? [restoreCard(restored, restoredAt), ...CARDS] : CARDS;
   const root = document.createElement('div');
   root.id = 'startScreen';
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', '시작하기');
@@ -35,8 +36,19 @@ export function openStartScreen({ store, restored = null, onEmpty = () => {}, on
     : `<button type="button" class="start-card tpl" data-template="${esc(c.id)}">${previewTag(c.id)}<b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>`);
   // 카드 하나마다 그 템플릿의 프로젝트를 한 번 만들어 그린다(내장 원룸 + 저장한 템플릿 몇 장).
   // 실패하거나 도면이 비면 캔버스는 빈 채 남는다(mountPreviews가 null을 받으면 그린 것이 없다).
+  // 동작 카드 셋도 같은 틀의 그림을 갖는다(§17.12(1)): 샘플은 실제 도면, 나머지는 자리표시다.
+  // 샘플 프로젝트는 한 번만 만들어 돌려 쓴다(시작 화면을 열 때마다 짓지 않는다 — 40 ms급이지만
+  // 카드가 넷이고 다시 그리는 경로가 있다).
+  let sampleFloor = null;
   const shapesFor = id => {
     if (id === 'restore') return restored ? projectShapes(restored.floors?.[restored.activeFloor ?? 0]) : null;
+    if (id === 'sample') {
+      // §17.12(1)은 "buildSampleProject()의 **활성 층**"이라고 적었다. 지금 샘플은 층이 하나이고
+      // activeFloor도 0이라 결과는 같지만, 규칙을 그대로 적어 두면 층이 늘어도 유지된다(M-12).
+      try { const p = buildSampleProject(); sampleFloor ??= p.floors?.[p.activeFloor ?? 0] ?? null; return sampleFloor ? projectShapes(sampleFloor) : null; }
+      catch { return null; }
+    }
+    if (id === 'empty' || id === 'upload') return placeholderShapes(id);
     try { const p = templateProject(id); return p ? projectShapes(p.floors?.[p.activeFloor ?? 0]) : null; }
     catch { return null; }
   };
@@ -48,7 +60,7 @@ export function openStartScreen({ store, restored = null, onEmpty = () => {}, on
   };
   root.innerHTML = `<div class="start-card-row">
     <h1>주방 환기 3D 플래너</h1>
-    <div class="start-cards">${cards.map(c => `<button type="button" class="start-card${c.key === 'restore' ? ' restore' : ''}" data-start="${c.key}">${c.key === 'restore' ? previewTag('restore') : ''}<b>${esc(c.title)}</b><span>${esc(c.desc)}</span></button>`).join('')}</div>
+    <div class="start-cards">${cards.map(c => `<button type="button" class="start-card${c.key === 'restore' ? ' restore' : ''}" data-start="${c.key}">${previewTag(c.key)}<b>${esc(c.title)}</b><span>${esc(c.desc)}</span></button>`).join('')}</div>
     <h2 class="start-sub">템플릿</h2>
     <div class="start-cards" data-part="templates">${templatesHtml()}</div>
   </div>`;

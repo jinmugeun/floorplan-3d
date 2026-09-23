@@ -99,3 +99,27 @@ test('갤러리를 닫으면 열기 전 포커스로 돌아온다', () => {
   dlg.close();
   expect(document.activeElement).toBe(opener);
 });
+
+// §17.12(4): 현재 프로젝트의 렌더샷이 먼저 펼쳐지고 나머지는 <details> 한 줄로 접힌다.
+// 이 파일은 listShots를 모의로 쓴다(위 vi.mock) — 레코드를 직접 만들어 넘긴다.
+test('갤러리는 현재 프로젝트를 먼저 보여 주고 나머지는 접는다', async () => {
+  const shot = (id, name, project) => ({ id, name, project, dataUrl: `data:,${id}`, width: 1280, height: 720, savedAt: '2026-09-23T04:46:00.000Z' });
+  listShots.mockResolvedValue([shot('s1', '내 것', '강당중 조리실'), shot('s2', '남의 것', '다른 프로젝트'), shot('s3', '옛것', undefined)]);
+  openGalleryDialog({ project: '강당중 조리실' });
+  const root = document.querySelector('.modal.gallery');
+  await vi.waitFor(() => expect(root.querySelectorAll('[data-shot]')).toHaveLength(3));
+  const grid = root.querySelector('[data-part="grid"]');
+  expect(grid.querySelectorAll(':scope > .shot')).toHaveLength(1);    // 현재 프로젝트만 펼쳐진다
+  expect(grid.querySelector(':scope > .shot').textContent).toContain('내 것');
+  const det = root.querySelector('details');
+  expect(det).not.toBeNull();
+  expect(det.querySelector('summary').textContent).toContain('2장');
+  expect(det.textContent).toContain('남의 것');
+  expect(det.querySelector('summary').textContent).toContain('이전 렌더샷');   // project 없는 옛 레코드가 섞였다
+  // 프로젝트 이름을 넘기지 않으면 project가 빈 레코드가 "내 것" 쪽이 된다(옛 동작과 가깝다).
+  document.body.innerHTML = '';
+  openGalleryDialog({});
+  const root2 = document.querySelector('.modal.gallery');
+  await vi.waitFor(() => expect(root2.querySelectorAll('[data-shot]')).toHaveLength(3));
+  expect(root2.querySelector('[data-part="grid"]').querySelectorAll(':scope > .shot')).toHaveLength(1);
+});

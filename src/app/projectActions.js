@@ -3,7 +3,7 @@
 // 계획 6의 fileActions·dndActions와 같은 자리). 네 동작이 모두 §15.7의 dirty 판정을 쓰므로
 // 한 파일에 모이는 것이 자연스럽다.
 import { createEmptyProject } from '../state/schema.js';
-import { serializeProject, downloadText, filenameFor } from '../io/file.js';
+import { serializeProject, downloadText, filenameFor, loadAutosaveAt } from '../io/file.js';
 import { templateProject, saveTemplate, listTemplates, BUILTIN_TEMPLATES } from '../templates/projectTemplates.js';
 import { loadSample } from '../samples/gangdang.js';
 import { openStartScreen } from '../ui/startScreen.js';
@@ -21,9 +21,9 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
     openStartScreen({
       store,
       restored: restore,
+      restoredAt: loadAutosaveAt(),        // §17.12(2): 카드가 "언제 저장된 것인지"를 말한다
       onClose,
-      // 복원은 되돌릴 단계가 아니고, 복원한 상태는 자동 저장본과 같으므로 "자동 저장됨"이 사실이다
-      // (§15.7). 다만 표시 시각은 자동 저장 시각이 아니라 복원 시각이다 — 저장본에 시각이 없다.
+      // 복원은 되돌릴 단계가 아니고, 복원한 상태는 자동 저장본과 같으므로 "자동 저장됨"이 사실이다(§15.7).
       // 교체는 store.swap 하나로 한다(§17.3 · 리뷰 I-1): 기록하지 않고, 앞에 쌓인 단계도 함께 버리고,
       // 알림은 그 뒤에 한 번 — 그래야 그 알림으로 그리는 ↶/↷ 버튼이 곧바로 사실을 말한다.
       onRestore: () => { if (restore) { store.swap(restore); view.fit(); onProjectSwap(); markSaved('auto'); toast(RESTORED); } },

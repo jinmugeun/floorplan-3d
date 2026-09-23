@@ -33,9 +33,11 @@ const newId = () => `shot_${Date.now().toString(36)}${Math.random().toString(36)
 let lastMs = 0;
 const stamp = () => { const t = Math.max(Date.now(), lastMs + 1); lastMs = t; return new Date(t).toISOString(); };
 
-export async function addShot({ name = '', dataUrl = '', width = 0, height = 0 } = {}) {
+// project는 IndexedDB 레코드의 필드다(프로젝트 저장 형식이 아니다 — §17.12(4)).
+// 옛 레코드에는 없으므로 읽는 쪽이 빈 문자열을 "이전 렌더샷"으로 묶는다.
+export async function addShot({ name = '', dataUrl = '', width = 0, height = 0, project = '' } = {}) {
   if (!dataUrl) throw new Error('이미지가 없습니다');
-  const shot = { id: newId(), name: String(name).trim() || `렌더샷 ${new Date().toLocaleString('ko-KR')}`, dataUrl, width, height, savedAt: stamp() };
+  const shot = { id: newId(), name: String(name).trim() || `렌더샷 ${new Date().toLocaleString('ko-KR')}`, dataUrl, width, height, project: String(project ?? '').trim(), savedAt: stamp() };
   const db = await openDb();
   if (!db) { memory.push(shot); return shot; }
   await tx(db, 'readwrite', s => s.put(shot));

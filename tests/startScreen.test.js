@@ -3,6 +3,7 @@ import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { openStartScreen } from '../src/ui/startScreen.js';
+import { PREVIEW_PX } from '../src/ui/templatePreview.js';
 
 test('three cards route to their callbacks and the overlay closes', () => {
   localStorage.clear();                       // 사용자 템플릿이 카드 수에 끼어들지 않게
@@ -143,4 +144,29 @@ test('템플릿 카드에 96 px 축소 도면 캔버스가 있다(§16.12)', () 
   const canvas = document.querySelector('.start-card.tpl canvas[data-tpl]');
   expect(canvas).not.toBeNull();
   expect(canvas.width).toBe(96);
+});
+
+// §17.12(1) · 감사 §25: 동작 카드 3장에도 축소 그림이 붙어 카드 높이가 템플릿 카드와 같아진다.
+test('동작 카드 셋도 96 px 미리보기 캔버스를 갖는다', () => {
+  document.body.innerHTML = ''; localStorage.clear();
+  openStartScreen({ store: createStore(createEmptyProject()) });
+  for (const key of ['empty', 'upload', 'sample']) {
+    const c = document.querySelector(`[data-start="${key}"] canvas`);
+    expect(c, key).not.toBeNull();
+    expect(c.width).toBe(PREVIEW_PX);
+    expect(c.height).toBe(PREVIEW_PX);
+  }
+});
+
+// §17.12(2): 저장 시각은 카드 본문에 적힌다(복원한 뒤에야 상단 바에서 보이던 것 — 감사 §26).
+test('"이어서 작업" 카드가 저장 시각을 적는다', () => {
+  document.body.innerHTML = ''; localStorage.clear();
+  const p = createEmptyProject('강당중 조리실');
+  openStartScreen({ store: createStore(createEmptyProject()), restored: p, restoredAt: new Date('2026-09-23T13:32:00') });
+  const card = document.querySelector(`[data-start="restore"]`);
+  expect(card.textContent).toContain('이어서 작업');
+  expect(card.textContent).toContain('(13:32 저장)');
+  document.body.innerHTML = '';
+  openStartScreen({ store: createStore(createEmptyProject()), restored: p });
+  expect(document.querySelector(`[data-start="restore"]`).textContent).not.toContain('저장)');
 });

@@ -208,3 +208,12 @@ test('빈 상태 문구는 한 벌이고 EST_EMPTY와 글자까지 같다', asyn
   expect(EST_EMPTY_TITLE).toBe('배치된 제품·마감재·덕트가 없습니다.');
   expect(EST_EMPTY_TITLE).toBe(EST_EMPTY);          // 본문과 사유가 같은 글자다(M-4)
 });
+
+// §17.12(2): 문구는 messages.js 한 곳이다(시작 화면이 인라인으로 갖고 있던 자리).
+test('"이어서 작업" 카드 문구는 저장 시각을 0 채움으로 적는다', async () => {
+  const { RESTORE_CARD_TITLE, restoreCardDesc } = await import('../src/ui/messages.js');
+  expect(RESTORE_CARD_TITLE).toBe('이어서 작업');
+  expect(restoreCardDesc('강당중 조리실')).toBe('자동 저장된 "강당중 조리실"을 불러옵니다.');
+  expect(restoreCardDesc('강당중 조리실', new Date('2026-09-23T13:32:00'))).toBe('자동 저장된 "강당중 조리실"을 불러옵니다. (13:32 저장)');
+  expect(restoreCardDesc('x', new Date('2026-09-23T03:04:00'))).toContain('(03:04 저장)');
+});

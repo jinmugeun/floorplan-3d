@@ -86,12 +86,19 @@ describe('온보딩', () => {
     }
   });
 
-  test('빈 프로젝트에서는 첫 단계에 샘플 안내가 붙고, 도면이 있으면 붙지 않는다', () => {
+  // §17.12(3) · 감사 §43: 세 카드가 같은 문장으로 끝났다(화면에는 첫 장에만 보였지만 자리는 마지막이다).
+  // 숨긴 문구는 글자 자체를 비운다 — 프로브·스크린 리더가 읽지 않게.
+  test('빈 프로젝트에서는 마지막 단계에 샘플 안내가 붙고, 도면이 있으면 붙지 않는다', () => {
     openOnboarding({ store: createStore(createEmptyProject()) });
-    expect(card().querySelector('[data-part="extra"]').hidden).toBe(false);
-    expect(card().textContent).toContain('샘플');
+    const extra = () => card().querySelector('[data-part="extra"]');
+    expect(extra().hidden).toBe(true);   // 첫 장에는 없다(§17.12(3))
+    expect(extra().textContent).toBe('');
     btn('next').click();
-    expect(card().querySelector('[data-part="extra"]').hidden).toBe(true);
+    expect(extra().hidden).toBe(true);
+    btn('next').click();                                                    // 3장 중 마지막
+    expect(extra().hidden).toBe(false);
+    expect(extra().textContent).toContain('샘플 (강당중 조리실)');
+    expect(card().textContent).toContain('샘플');
     btn('skip').click();
 
     const store = createStore(createEmptyProject());

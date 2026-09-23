@@ -4,12 +4,14 @@ import { downloadDataUrl } from '../io/file.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
 import { confirmDialog } from './confirmDialog.js';
-import { GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, CONFIRM_SHOT_DELETE } from './messages.js';
+import { GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, CONFIRM_SHOT_DELETE, OTHER_SHOTS, OLD_SHOTS } from './messages.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
 
 let current = null;   // 열려 있는 인스턴스: 다시 열 때 DOM만 떼지 않고 트랩까지 해제한다(리뷰 Minor 1)
 
-export function openGalleryDialog({ onClose = () => {} } = {}) {
+// project: 지금 열린 프로젝트 이름. 그 렌더샷만 펼쳐 보이고 나머지는 <details> 한 줄로 접는다
+// (§17.12(4) · 감사 §45: 첫 사용자가 남의 이미지를 먼저 만났다).
+export function openGalleryDialog({ project = '', onClose = () => {} } = {}) {
   const prev = document.activeElement;   // 이번 opener는 앞 인스턴스를 닫은 뒤 reopenOpener가 정한다
   current?.close();                                      // 두 개를 띄우지 않는다
   document.querySelector('.modal.gallery')?.remove();    // 핸들이 없는 잔재도 떼어낸다
@@ -31,11 +33,21 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
       return;
     }
     // 캡션은 "이름 / 해상도 이름 · 저장 시각"이다(§16.9 · 감사 §11): 크기를 두 번 적지 않는다.
-    part('grid').innerHTML = shots.length ? shots.map(s => `<figure class="shot" data-shot="${esc(s.id)}">
+    const now = String(project ?? '').trim();
+    const mine = shots.filter(s => (s.project ?? '') === now);
+    const others = shots.filter(s => (s.project ?? '') !== now);
+    const card = s => `<figure class="shot" data-shot="${esc(s.id)}">
       <img src="${esc(s.dataUrl)}" alt="${esc(s.name)}">
-      <figcaption><b>${esc(s.name)}</b><span class="muted">${esc(shotCaption(s))}</span></figcaption>
+      <figcaption><b>${esc(s.name)}</b><span class="muted">${esc(shotCaption(s))}${s.project && s.project !== now ? ` · ${esc(s.project)}` : ''}</span></figcaption>
       <div class="row"><button type="button" name="down">내려받기</button><button type="button" name="del" class="danger">삭제</button></div>
-    </figure>`).join('') : '<p class="hint">저장된 렌더샷이 없습니다. 상단 바의 [렌더샷]으로 만들 수 있습니다.</p>';
+    </figure>`;
+    // project가 없는 옛 레코드는 "이전 렌더샷" 묶음이다(요약 줄에 그 이름이 보인다).
+    const groups = others.length
+      ? `<details><summary>${OTHER_SHOTS(others.length)}${others.some(s => !s.project) ? ` · ${OLD_SHOTS}` : ''}</summary><div class="shot-grid">${others.map(card).join('')}</div></details>`
+      : '';
+    part('grid').innerHTML = shots.length
+      ? `${mine.map(card).join('')}${groups}`
+      : '<p class="hint">저장된 렌더샷이 없습니다. 상단 바의 [렌더샷]으로 만들 수 있습니다.</p>';
   }
   let closed = false;
   const close = () => {

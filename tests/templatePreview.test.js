@@ -3,7 +3,7 @@
 import { describe, test, expect } from 'vitest';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
-import { previewBox, previewShapes, projectShapes, drawPreview, PREVIEW_PX } from '../src/ui/templatePreview.js';
+import { previewBox, previewShapes, projectShapes, drawPreview, placeholderShapes, PREVIEW_PX } from '../src/ui/templatePreview.js';
 
 const room = { points: [[0, 0], [4000.5, 0], [4000.5, 3000.25], [0, 3000.25]] };
 
@@ -96,4 +96,20 @@ test('방이 검출되면 walls는 비어 있다', () => {
     items: [],
   };
   expect(projectShapes(floor, { size: PREVIEW_PX, pad: 4 }).walls).toEqual([]);
+});
+
+// §17.12(1) · 감사 §25: 도면이 없는 카드(빈 프로젝트·도면 이미지 업로드)도 같은 그림 틀을 갖는다.
+// 새 그리기 코드를 만들지 않는다 — drawPreview가 받는 shape 배열로 만든다.
+test('placeholderShapes는 빈 격자와 사진 자리표시를 shape 배열로 준다', () => {
+  const grid = placeholderShapes('empty');
+  expect(grid.walls.length).toBeGreaterThan(4);
+  expect(grid.boxes).toEqual([]);
+  for (const [a, b] of grid.walls) for (const p of [a, b]) {
+    expect(p[0]).toBeGreaterThanOrEqual(0);
+    expect(p[0]).toBeLessThanOrEqual(PREVIEW_PX);
+  }
+  const up = placeholderShapes('upload');
+  expect(up.outline).toHaveLength(4);            // 사진 틀
+  expect(up.walls).toHaveLength(2);              // 대각선 둘
+  expect(placeholderShapes('없는종류').walls.length).toBeGreaterThan(0);   // 모르는 종류는 격자다
 });

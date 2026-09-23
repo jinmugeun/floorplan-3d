@@ -43,3 +43,13 @@ test('캡션은 해상도 이름과 저장 시각이다', () => {
   expect(shotCaption({ width: 3840, height: 2160, savedAt: new Date(2026, 8, 22, 9, 46).toISOString() })).toBe('4K · 09:46');
   expect(shotCaption({ width: 1280, height: 720, savedAt: '' })).toBe('HD');   // 시각을 모르면 크기만
 });
+
+// §17.12(4) · 감사 §45: 첫 사용자가 [갤러리]를 누르면 남의 프로젝트 렌더가 먼저 보였다.
+test('addShot은 프로젝트 이름을 함께 남긴다(옛 레코드는 빈 문자열)', async () => {
+  const a = await addShot({ name: 'A', dataUrl: 'data:,a', width: 10, height: 10, project: '강당중 조리실' });
+  expect(a.project).toBe('강당중 조리실');
+  const b = await addShot({ name: 'B', dataUrl: 'data:,b' });
+  expect(b.project).toBe('');
+  const list = await listShots();
+  expect(list.find(s => s.id === a.id).project).toBe('강당중 조리실');
+});

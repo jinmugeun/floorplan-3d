@@ -207,3 +207,19 @@ export const OUTPUT_EMPTY_TITLE = '도면에 그릴 것이 없습니다';
 // 레이어 패널의 두 버튼 사유(§17.11(3) · 감사 §46·§48). menuReason의 WHY_* 말투 그대로다.
 export const WHY_NOTHING_TO_SHOW = '숨긴 항목이 없음';
 export const WHY_NOTHING_TO_HIDE = '숨길 항목이 없음';
+
+// 검색어가 아무것도 맞히지 못했다는 말(리뷰 I-1). "이 층에는 없습니다"는 거짓이고,
+// 검색 중이라는 신호까지 사라져 왜 비었는지를 설명하지 못했다.
+export const LAYERS_NO_MATCH = '검색 결과가 없습니다';
+
+// 시작 화면의 "이어서 작업" 카드(§17.12(2) · 감사 §26). 시·분은 savedAt 표시와 같은 0 채움이다.
+export const RESTORE_CARD_TITLE = '이어서 작업';
+export const restoreCardDesc = (name, at = null) => {
+  const p = n => String(n).padStart(2, '0');
+  const when = at instanceof Date && !Number.isNaN(at.getTime()) ? ` (${p(at.getHours())}:${p(at.getMinutes())} 저장)` : '';
+  return `자동 저장된 "${name ?? '프로젝트'}"을 불러옵니다.${when}`;
+};
+
+// 갤러리 묶음(§17.12(4)).
+export const OTHER_SHOTS = n => `다른 프로젝트의 렌더샷 ${n}장`;
+export const OLD_SHOTS = '이전 렌더샷';

@@ -4,7 +4,7 @@ import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { serializeProject, parseProject, startAutosave, loadAutosave, filenameFor, capture2D, printBodyPx, PRINT_PX_PER_MM } from '../src/io/file.js';
+import { serializeProject, parseProject, startAutosave, loadAutosave, loadAutosaveAt, filenameFor, capture2D, printBodyPx, PRINT_PX_PER_MM } from '../src/io/file.js';
 
 test('serialize/parse round trip keeps walls and rooms', () => {
   const store = createStore(createEmptyProject('테스트'));
@@ -92,4 +92,21 @@ test('capture2D는 숫자 인자로는 예전처럼, 객체 인자로는 인쇄 
     expect(sizes[1].clientWidth).toBe(765);                                 // 글자 크기의 기준
     expect(sizes[1].width).toBe(1530);                                      // 비트맵만 2배(선명하게)
   } finally { spy.mockRestore(); }
+});
+
+// §17.12(2) · 감사 §26: "이어서 작업" 카드가 언제 저장된 것인지 말하지 않았다.
+// 본문 형식(kvp.autosave)은 그대로다 — **시각은 별도 키**다(저장 형식 무변경).
+test('자동 저장은 시각을 kvp.autosaveAt에 함께 남긴다', () => {
+  localStorage.clear();
+  const store = createStore(createEmptyProject());
+  expect(loadAutosaveAt()).toBeNull();
+  const auto = startAutosave(store, { intervalMs: 10 });
+  store.dispatch(d => { d.name = 'x'; });
+  auto.saveNow();
+  const at = loadAutosaveAt();
+  expect(at).toBeInstanceOf(Date);
+  expect(Math.abs(Date.now() - at.getTime())).toBeLessThan(5000);
+  auto.stop();
+  localStorage.setItem('kvp.autosaveAt', '엉터리');
+  expect(loadAutosaveAt()).toBeNull();           // 읽을 수 없는 값은 없는 것으로 본다
 });

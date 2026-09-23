@@ -42,7 +42,8 @@ export function createTopbar({ store, ui, shell, menu, view3d, actions = {} }) {
   ];
 
   on('btnRender', () => openRenderDialog({ store, view3d, onSaved: () => shell.toast(SHOT_SAVED) }));
-  on('btnGallery', () => openGalleryDialog({}));
+  // 감사 §45가 가리킨 진입점이 바로 이 버튼이다(§17.12(4)): 지금 프로젝트 이름을 넘겨야 남의 렌더가 접힌다.
+  on('btnGallery', () => openGalleryDialog({ project: store.get().name }));
   on('btnEstimate', () => openEstimateDialog({ store }));
   on('btnSpec', () => openSpecDialog({ store, ui, view3d }));
   on('btnNew', () => actions.newProject?.());

@@ -89,3 +89,13 @@ export function mountPreviews(root, shapesFor) {
     drawPreview(canvas, shapesFor(canvas.dataset.tpl));
   }
 }
+
+// 도면이 없는 시작 화면 카드의 축소 그림(§17.12(1) · 감사 §25): 빈 격자와 도면 사진 자리표시.
+// 새 그리기 코드를 만들지 않는다 — drawPreview가 받는 shape 배열로 만든다.
+export function placeholderShapes(kind, { size = PREVIEW_PX, pad = 8 } = {}) {
+  const a = pad, b = size - pad;
+  if (kind === 'upload') return { outline: [[a, a], [b, a], [b, b], [a, b]], rooms: [], walls: [[[a, a], [b, b]], [[a, b], [b, a]]], boxes: [] };
+  const step = (b - a) / 4, walls = [];
+  for (let i = 0; i <= 4; i++) { walls.push([[a + i * step, a], [a + i * step, b]]); walls.push([[a, a + i * step], [b, a + i * step]]); }
+  return { outline: [], rooms: [], walls, boxes: [] };
+}

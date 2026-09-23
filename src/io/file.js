@@ -13,9 +13,11 @@ export function filenameFor(state) {
   const d = new Date(), p = n => String(n).padStart(2, '0');
   return `${state.name || '프로젝트'}_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
 }
+// 저장 **시각**은 별도 키다(§17.12(2)): kvp.autosave의 본문 형식은 바꾸지 않는다(저장 형식 무변경).
+export const AUTOSAVE_AT_KEY = 'kvp.autosaveAt';
 export function startAutosave(store, { key = 'kvp.autosave', intervalMs = 300000, onSaved = () => {} } = {}) {
   let dirty = false;
-  const save = () => { if (!dirty) return; try { localStorage.setItem(key, serializeProject(store.get())); dirty = false; onSaved(new Date()); } catch (e) { console.warn('자동 저장 실패', e); } };
+  const save = () => { if (!dirty) return; try { localStorage.setItem(key, serializeProject(store.get())); localStorage.setItem(AUTOSAVE_AT_KEY, String(Date.now())); dirty = false; onSaved(new Date()); } catch (e) { console.warn('자동 저장 실패', e); } };
   const unsub = store.subscribe(() => { dirty = true; });
   const timer = setInterval(save, intervalMs);
   const onUnload = () => save(); window.addEventListener('beforeunload', onUnload);
@@ -24,6 +26,13 @@ export function startAutosave(store, { key = 'kvp.autosave', intervalMs = 300000
 export function loadAutosave(key = 'kvp.autosave') {
   try { const t = localStorage.getItem(key); return t ? parseProject(t) : null; } // localStorage 접근 자체가 막혀 있을 수도 있다
   catch { return null; }
+}
+// 자동 저장본의 시각. 없거나 읽을 수 없으면 null이다(카드가 시각 없이 뜬다).
+export function loadAutosaveAt(key = AUTOSAVE_AT_KEY) {
+  try {
+    const n = Number(localStorage.getItem(key));
+    return Number.isFinite(n) && n > 0 ? new Date(n) : null;
+  } catch { return null; }
 }
 // 배경 이미지가 있으면 캡처 전에 로드를 기다린다(실패해도 캡처는 진행).
 const waitForImage = src => new Promise(res => { const img = new Image(); img.onload = img.onerror = () => res(); img.src = src; });

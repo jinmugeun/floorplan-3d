@@ -70,7 +70,7 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
       // 이름에 크기를 넣지 않는다(§16.9 · 감사 §11): 갤러리 캡션이 해상도 이름과 시각을 따로 적는다.
       const name = `${store.get().name} ${RENDER_VIEWS.find(v => v[0] === st.view)?.[1] ?? ''}`.replace(/\s+/g, ' ').trim();
       try {
-        const shot = await addShot({ name, dataUrl: url, width: w, height: h });
+        const shot = await addShot({ name, dataUrl: url, width: w, height: h, project: store.get().name });
         part('msg').textContent = '갤러리에 저장했습니다. [내려받기]로 파일을 받을 수 있습니다.';
         onSaved(shot);
       } catch (e) { part('msg').textContent = `갤러리에 저장하지 못했습니다: ${e.message}`; }
@@ -84,7 +84,7 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   }
   root.addEventListener('click', ev => {
     if (ev.target.name === 'close') { close(); return; }
-    if (ev.target.name === 'gallery') { openGalleryDialog({}); return; }
+    if (ev.target.name === 'gallery') { openGalleryDialog({ project: store.get().name }); return; }
     if (ev.target.name === 'download' && last) { downloadDataUrl(last.filename, last.url); return; }
     if (ev.target.name === 'render') render();
   });

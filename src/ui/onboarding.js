@@ -3,6 +3,10 @@
 // localStorage의 "봤다" 한 칸뿐이다.
 export const ONBOARDING_KEY = 'kvp.onboarded';
 
+// 빈 도면에서만 마지막 장에 덧붙이는 권유(§17.12(3)). 문구가 마크업 안에 박혀 있으면 숨긴 장에서도
+// textContent로 읽혀 "세 장이 같은 문장"이 된다 — 상수로 두고 보일 때만 넣는다.
+export const ONBOARDING_SAMPLE_HINT = '빈 도면에서 시작하기 어렵다면 시작 화면의 "샘플 (강당중 조리실)"을 열어 보세요.';
+
 export const ONBOARDING_STEPS = [
   { title: '① 벽·방 그리기', body: '왼쪽 "도면 그리기"에서 [F] 방 그리기로 사각형을 끌거나, [L] 벽 그리기로 점을 찍어 도면을 만듭니다.' },
   { title: '② 제품·마감재 배치', body: '"제품" 탭에서 제품을 고른 뒤 캔버스를 클릭해 놓습니다. 마감재는 "마감재" 탭에서 고르고 3D에서 면을 클릭해 바릅니다.' },
@@ -25,7 +29,7 @@ export function openOnboarding({ store = null, onDone = () => {} } = {}) {
   root.innerHTML = `<div class="modal-card narrow" role="dialog" aria-modal="true" aria-label="시작 안내">
     <header><h2 data-part="title"></h2></header>
     <p class="modal-body" data-part="body"></p>
-    <p class="hint" data-part="extra" hidden>빈 도면에서 시작하기 어렵다면 시작 화면의 "샘플 (강당중 조리실)"을 열어 보세요.</p>
+    <p class="hint" data-part="extra" hidden></p>
     <div class="onb-dots" data-part="dots" aria-hidden="true"></div>
     <div class="toolbar"><button type="button" name="skip">건너뛰기</button><button type="button" name="next" class="primary"></button></div>
   </div>`;
@@ -37,7 +41,11 @@ export function openOnboarding({ store = null, onDone = () => {} } = {}) {
     const step = ONBOARDING_STEPS[i];
     q('[data-part="title"]').textContent = step.title;
     q('[data-part="body"]').textContent = step.body;
-    q('[data-part="extra"]').hidden = !(empty && i === 0);
+    // 안내를 다 읽은 뒤에 권하는 것이 자리다(§17.12(3) · 감사 §43). 숨을 때는 글자 자체를 비운다:
+    // hidden 요소의 textContent가 프로브·스크린 리더에 "세 장이 같은 문장"으로 잡혔다.
+    const show = empty && i === ONBOARDING_STEPS.length - 1;
+    q('[data-part="extra"]').hidden = !show;
+    q('[data-part="extra"]').textContent = show ? ONBOARDING_SAMPLE_HINT : '';
     q('[data-part="dots"]').textContent = ONBOARDING_STEPS.map((_, k) => (k === i ? '●' : '○')).join(' ');
     q('[name="next"]').textContent = i === ONBOARDING_STEPS.length - 1 ? '시작하기' : '다음';
     q('[name="next"]').focus();
