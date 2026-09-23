@@ -125,6 +125,27 @@ describe('마감재 상태 연산', () => {
     expect(activeFloor(s.get()).walls[0].regions.in).toEqual([]);
   });
 
+  // 전역 제약(빈 단계 금지 · 최종 리뷰 I-3d): 마감재 편집기를 열고 아무것도 고치지 않은 채
+  // [적용]하면 빈 되돌림 단계가 남았다. ductOps.put()이 이미 쓰는 규칙(정규화 결과 JSON 비교)과 같다.
+  test('setWallRegions는 고친 것이 없으면 dispatch하지 않는다(리뷰 I-3d)', () => {
+    const s = setup();
+    const w = activeFloor(s.get()).walls[0];
+    setWallRegions(s, w.id, 'in', [{ kind: 'band', z0: 0, z1: 1200.5, mat: mat('tile-white-300') }]);
+    // 편집기의 rows는 regionsOf가 돌려준 것(= id를 지닌 영역)의 사본이다(materialEditor.js:42).
+    const rows = regionsOf(activeFloor(s.get()), { kind: 'wall', id: w.id, side: 'in' }).map(r => ({ ...r }));
+    const before = s.get(), undoable = s.canUndo();
+    setWallRegions(s, w.id, 'in', rows);                    // 편집기를 열었다가 그대로 [적용]
+    expect(s.get()).toBe(before);
+    expect(s.canUndo()).toBe(undoable);
+    setWallRegions(s, w.id, 'in', []);                      // 실제로 지우는 것은 그대로 한 단계다
+    expect(s.get()).not.toBe(before);
+    const empty = s.get();
+    setWallRegions(s, w.id, 'in', []);                      // 이미 비어 있으면 무동작이다
+    expect(s.get()).toBe(empty);
+    setWallRegions(s, '없는벽', 'in', rows);
+    expect(s.get()).toBe(empty);
+  });
+
   test('assignmentOf와 faceArea(소수 좌표)', () => {
     const s = setup();
     const f = activeFloor(s.get());

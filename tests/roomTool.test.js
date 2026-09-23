@@ -143,3 +143,20 @@ test('방 도구의 치수 칸은 W·H 두 개이고 활성 칸이 표시된다(
   expect(t.commitDims()).toBe(true);
   expect(activeFloor(store.get()).walls).toHaveLength(4);
 });
+
+// 전역 제약(빈 단계 금지 · 최종 리뷰 I-3a): §16.6이 허용치를 화면 8 px로 바꿔 커서가 기존 끝점으로
+// 더 잘 끌려오므로 "기존 벽 위에 같은 사각형을 다시 확정"이 쉽게 일어난다. addWalls가 벽 전부를
+// 중복으로 버리면 dispatch도 없어야 한다.
+test('같은 사각형을 다시 확정해도 빈 되돌림 단계가 생기지 않는다', () => {
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store, onDone() {} });
+  t.onPointerDown([0.5, 0.25]); t.onPointerMove([4000.5, 3000.25]); t.onPointerDown([4000.5, 3000.25]);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+  const before = store.get(), undoable = store.canUndo();
+  const t2 = createRoomTool({ store, onDone() {} });
+  t2.onPointerDown([0.5, 0.25]); t2.onPointerMove([4000.5, 3000.25]);
+  expect(t2.commitDims()).toBe(true);                  // 칸 경로도 같은 구간을 확정한다
+  expect(store.get()).toBe(before);                    // 그러나 더한 것이 없으므로 dispatch는 없다
+  expect(store.canUndo()).toBe(undoable);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+});

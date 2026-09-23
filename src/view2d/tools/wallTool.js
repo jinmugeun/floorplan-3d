@@ -17,12 +17,15 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
   const last = () => points[points.length - 1] ?? null;
   const tol = () => tolMm(view?.camera?.scale);
   const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls).concat(points), guides: f.guides, walls: f.walls, anchor: last(), ortho: opts.ortho, snap: opts.snap, tol: tol() }); };
+  // 반환값은 "실제로 벽이 늘었다"다(최종 리뷰 I-3a): addWalls가 겹치는 벽을 버리면 dispatch도
+  // 없으므로 상태 동일성으로 판정한다. 그래야 호출자가 헛전진(points.push)을 하지 않는다.
   const addSegment = (a, b) => {
     if (dist(a, b) < 10) return false;
     let s = a, e = b;
     if (opts.reference !== 'center') { const n = mul(perp(norm(sub(b, a))), (opts.reference === 'inner' ? 1 : -1) * opts.thickness / 2); s = add(a, n); e = add(b, n); }
+    const before = store.get();
     addWalls(store, [makeWall({ a: s, b: e, thickness: opts.thickness })]);
-    return true;
+    return store.get() !== before;
   };
   const finish = () => { const had = points.length > 0; reset(); if (had) onDone(); return had; };
   return {

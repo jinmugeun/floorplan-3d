@@ -246,6 +246,26 @@ describe('템플릿 배치', () => {
     expect([...collidingIds(a.floor().items)]).toEqual([]);
   });
 
+  // 전역 제약(빈 단계 금지 · 최종 리뷰 I-3c): 지울 것도 놓을 것도 없는 [기존 제품 유지하고 추가]는
+  // 토스트가 "0개 배치"를 말하면서 되돌림 단계 하나를 남겼다. 자리를 못 얻은 벽 제품은 seatCopies
+  // 뒤에 떨어지므로 판정은 그 계산을 지나야 한다(made만 보면 1개인데 실제로 놓이는 것은 0개다).
+  test('놓을 것도 지울 것도 없으면 dispatch하지 않는다(리뷰 I-3c)', () => {
+    const a = setup(1600.5, 1200.25);
+    applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });
+    applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });   // 여기서 방이 포화된다
+    const before = a.store.get(), undoable = a.store.canUndo();
+    const r = applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });
+    expect(r.placed).toEqual([]);
+    expect(r.skipped).toBe(templateById('cook-basic').items.length);
+    expect(a.store.get()).toBe(before);                 // 상태가 교체되지 않았다
+    expect(a.store.canUndo()).toBe(undoable);
+    // 놓이는 것이 있으면 예전 그대로 한 단계다.
+    const big = setup();
+    const ok = applyRoomTemplate(big.store, big.room().id, 'cook-basic');
+    expect(ok.placed.length).toBeGreaterThan(0);
+    expect(big.store.canUndo()).toBe(true);
+  });
+
   test('itemsInRoom은 방 안 아이템과 그 방 벽에 붙은 아이템을 찾는다', () => {
     const a = setup();
     const inside = addItem(a.store, createItem(productById('sofa-3'), { pos: [3000.5, 2000.25] }));

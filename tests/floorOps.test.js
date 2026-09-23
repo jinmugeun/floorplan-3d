@@ -478,3 +478,36 @@ test('층을 더하거나 지운 단계의 undo/redo는 층 간 변경으로 세
   store.undo();
   expect(crossFloorName(deleted, store.get())).toBeNull();
 });
+
+// 전역 제약: 사용자 동작 하나 = undo 한 단계이고, **빈 단계는 만들지 않는다**(최종 리뷰 I-3).
+// 겹치는 벽은 addWalls가 이미 버리고 있었지만 dispatch는 무조건 돌아 상태만 갈리고 단계가 남았다.
+test('addWalls: 더할 벽이 하나도 없으면 dispatch하지 않는다(리뷰 I-3a)', () => {
+  const s = setup();
+  const walls = rectWalls([0, 0], [4000, 3000], 200);
+  const before = s.get(), undoable = s.canUndo();
+  addWalls(s, walls);                                  // 같은 사각형을 두 번
+  expect(s.get()).toBe(before);                        // 상태가 교체되지 않았다
+  expect(s.canUndo()).toBe(undoable);
+  expect(activeFloor(s.get()).walls).toHaveLength(4);
+  addWalls(s, []);
+  expect(s.get()).toBe(before);
+  // 일부만 겹치면 남은 것만 더한다(예전과 같다).
+  addWalls(s, [walls[0], makeWall({ a: [0, 3000], b: [0, 6000], thickness: 200 })]);
+  expect(activeFloor(s.get()).walls).toHaveLength(5);
+});
+
+test('renameFloor: 같은 이름으로 바꾸면 dispatch하지 않는다(리뷰 I-3b)', () => {
+  const s = setup();
+  addFloor(s, { name: '옥상', copy: 'none' });
+  const before = s.get(), undoable = s.canUndo();
+  renameFloor(s, 1, '옥상');                            // 대화상자가 미리 채워 준 이름 그대로 [변경]
+  expect(s.get()).toBe(before);
+  expect(s.canUndo()).toBe(undoable);
+  renameFloor(s, 1, '  옥상  ');                        // 공백만 다른 것도 같은 이름이다
+  expect(s.get()).toBe(before);
+  renameFloor(s, 1, '');                                // 빈 이름은 예전처럼 무시한다
+  expect(s.get()).toBe(before);
+  renameFloor(s, 1, '3층');
+  expect(s.get()).not.toBe(before);
+  expect(s.get().floors[1].name).toBe('3층');
+});

@@ -45,12 +45,17 @@ export function applyRoomWalls(store, roomId, assignment, opts = {}) {
 }
 
 // 마감재 편집기의 [적용]. 벽 길이·높이로 범위를 자르고 잘못된 영역은 버린다.
+// 정규화 결과가 지금 값과 같으면 dispatch하지 않는다(최종 리뷰 I-3d · ductOps.put()이 이미 쓰는
+// 규칙과 같다): 편집기를 열고 아무것도 고치지 않은 채 [적용]하면 빈 되돌림 단계가 남았다.
 export function setWallRegions(store, wallId, side, regions, opts = {}) {
+  const w0 = activeFloor(store.get()).walls.find(x => x.id === wallId);
+  if (!w0) return store.get();
+  const clean = (regions ?? []).map(r => normalizeRegion(r, { len: wallLength(w0), height: w0.height })).filter(Boolean);
+  if (JSON.stringify(clean) === JSON.stringify(w0.regions?.[sideKey(side)] ?? [])) return store.get();
   return store.dispatch(d => {
     const f = activeFloor(d);
     const w = f.walls.find(x => x.id === wallId);
     if (!w) return;
-    const clean = (regions ?? []).map(r => normalizeRegion(r, { len: wallLength(w), height: w.height })).filter(Boolean);
     w.regions = { in: [...(w.regions?.in ?? [])], out: [...(w.regions?.out ?? [])] };
     w.regions[sideKey(side)] = clean;
   }, opts);

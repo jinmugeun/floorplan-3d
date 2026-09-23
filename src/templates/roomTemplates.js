@@ -250,6 +250,19 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
   const kill = replace ? new Set(replaceableInRoom(f, room).map(it => it.id)) : new Set();
   const stats = { moved: 0, skipped: 0 };
   const made = placeTemplate(f, room, t, { avoid: mine.filter(it => !kill.has(it.id)), stats });
+  // 남겨 둔 문·창·기존 벽 제품과 같은 t에 앉지 않도록 seatCopies(freeT)를 지난다. id도 여기서 다시 매겨진다.
+  // dispatch **앞에서** 센다(최종 리뷰 I-3c): 자리를 못 얻은 벽 제품은 keep에서 떨어지므로,
+  // 실제로 놓이는 것이 하나도 없는지는 이 계산을 지나야 알 수 있다(made만 보면 알 수 없다 —
+  // 포화된 방에 [기존 제품 유지하고 추가]를 하면 made는 1개인데 keep은 0개다). seatCopies는
+  // ctx.items를 복사해 쓰므로 여기서 불러도 상태를 건드리지 않는다.
+  const seated = seatCopies(made.map(m => structuredClone(m)), { walls: f.walls, items: f.items.filter(i => !kill.has(i.id)) });
+  const keep = seated.filter((s, i) => !(made[i].attach === 'wall' && made[i].wallId && !s.wallId));
+  // 지울 것도 놓을 것도 없고 방 타입도 그대로면 dispatch하지 않는다: 모든 제품이 자리가 없어
+  // 건너뛰어진 [기존 제품 유지하고 추가]는 토스트가 "0개 배치"를 말하면서 되돌림 단계 하나를
+  // 남겼다 — 전역 제약(빈 단계 금지) 위반이다. 방 타입을 채우는 일은 빈 단계가 아니므로 그때는
+  // 그대로 지나간다(§14.9: 템플릿이 공간 타입의 기준이다).
+  const typing = (!room.type || room.type === 'none') && !!(t.roomType && t.roomType !== 'none');
+  if (!kill.size && !keep.length && !typing) return { placed: [], skipped: (t.items ?? []).length, moved: stats.moved };
   const placed = [];
   store.dispatch(d => {
     const g = activeFloor(d);
@@ -257,10 +270,7 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
       g.items = g.items.filter(i => !kill.has(i.id));
       g.groups = (g.groups ?? []).map(gr => ({ ...gr, itemIds: gr.itemIds.filter(x => !kill.has(x)) })).filter(gr => gr.itemIds.length > 1);
     }
-    // 남겨 둔 문·창·기존 벽 제품과 같은 t에 앉지 않도록 seatCopies(freeT)를 지난다. id도 여기서 다시 매겨진다.
-    const seated = seatCopies(made.map(m => structuredClone(m)), { walls: g.walls, items: g.items });
-    const keep = seated.filter((s, i) => !(made[i].attach === 'wall' && made[i].wallId && !s.wallId));
-    g.items.push(...keep);
+    g.items.push(...structuredClone(keep));
     placed.push(...keep.map(i => i.id));
     // 템플릿이 공간 타입의 기준이다(§14.9): 방에 타입이 없으면 템플릿의 roomType을 넣는다.
     const mineRoom = g.rooms.find(r => r.id === roomId);

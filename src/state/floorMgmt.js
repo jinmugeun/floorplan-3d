@@ -54,8 +54,13 @@ export function addFloor(store, { name = null, copy = 'none' } = {}, opts) {
 export function setActiveFloor(store, index) {
   return store.dispatch(d => { if (Number.isInteger(index) && index >= 0 && index < d.floors.length) d.activeFloor = index; }, { record: false });
 }
+// 이름이 그대로면 dispatch하지 않는다(최종 리뷰 I-3b): 층 대화상자는 현재 이름을 미리 채우고
+// 입력란을 전체 선택해 열므로 "층 이름 변경 → [변경]"만으로 빈 되돌림 단계가 쌓였다.
 export function renameFloor(store, index, name, opts) {
-  return store.dispatch(d => { const f = d.floors[index]; if (f && String(name).trim()) f.name = String(name).trim(); }, opts);
+  const next = String(name ?? '').trim();
+  const cur = store.get().floors[index];
+  if (!cur || !next || cur.name === next) return store.get();
+  return store.dispatch(d => { const f = d.floors[index]; if (f) f.name = next; }, opts);
 }
 export function updateFloor(store, index, patch, opts) {
   return store.dispatch(d => { const f = d.floors[index]; if (f) Object.assign(f, patch); }, opts);

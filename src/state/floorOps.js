@@ -22,11 +22,18 @@ export * from './ductOps.js';
 export function setWalls(store, walls, opts = {}) {
   return store.dispatch(d => { const f = activeFloor(d); f.walls = walls; reroom(f); reattach(f); }, opts);
 }
+// 겹치는 벽은 추가하지 않는다. 그래서 **하나도 더하지 못하는** 호출이 있고(같은 사각형을 두 번
+// 확정 · 기존 끝점으로 끌려온 커서에서 같은 구간을 다시 확정), 그때 dispatch를 돌리면 상태만
+// 갈리고 되돌림 단계가 하나 남는다 — 전역 제약 "한 동작 = 한 단계 · 빈 단계 금지" 위반이다
+// (최종 리뷰 I-3a). 먼저 걸러 내고 빈 목록이면 dispatch하지 않는다.
 export function addWalls(store, walls) {
+  const f0 = activeFloor(store.get());
+  const same = (w, x) => (eq(x.a, w.a) && eq(x.b, w.b)) || (eq(x.a, w.b) && eq(x.b, w.a));
+  const add = (walls ?? []).filter(w => !(f0?.walls ?? []).some(x => same(w, x)));
+  if (!add.length) return store.get();
   return store.dispatch(d => {
     const f = activeFloor(d);
-    const same = (w, x) => (eq(x.a, w.a) && eq(x.b, w.b)) || (eq(x.a, w.b) && eq(x.b, w.a));
-    for (const w of walls) if (!f.walls.some(x => same(w, x))) f.walls.push(w); // 겹치는 벽은 추가하지 않는다
+    f.walls.push(...add);
     reroom(f); reattach(f);
   });
 }
