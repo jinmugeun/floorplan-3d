@@ -69,15 +69,18 @@ test('도형 신호 셋만 키워드를 뒤집는다(해치·치수·문자)', (
 });
 
 test('꺼짐(62 < 0)과 동결(70 & 1)은 off이고 기본 체크에서 빠진다', () => {
-  const doc = docOf(layerRec('WAL', 3), layerRec('CEN', -1), layerRec('기존', 9, 1));
-  const rows = layerStats(doc, exOf({ segs: [seg('WAL', 900.5), seg('CEN', 900.5), seg('기존', 900.5)] }));
+  // BLO·목재·각재는 실파일에서 flags = 2(새 뷰포트 동결)다 — 비트 1만 동결이므로 기본 체크에 남아야 한다(Task 4 리뷰 I-1).
+  const doc = docOf(layerRec('WAL', 3), layerRec('CEN', -1), layerRec('기존', 9, 1), layerRec('BLO', 7, 2));
+  const rows = layerStats(doc, exOf({ segs: [seg('WAL', 900.5), seg('CEN', 900.5), seg('기존', 900.5), seg('BLO', 700.25)] }));
   const by = Object.fromEntries(rows.map(r => [r.name, r]));
   expect(by.CEN.off).toBe(true);
   expect(by.CEN.frozen).toBe(false);
   expect(by.기존.off).toBe(true);
   expect(by.기존.frozen).toBe(true);
   expect(by.WAL.off).toBe(false);
-  expect([...defaultChecked(rows)]).toEqual(['WAL']);
+  expect(by.BLO.frozen).toBe(false);
+  expect(by.BLO.off).toBe(false);
+  expect([...defaultChecked(rows)].sort()).toEqual(['BLO', 'WAL']);
 });
 
 test('기본 체크는 실파일에서 정확히 일곱 레이어다', () => {
