@@ -190,6 +190,11 @@ canvas.swatch { width: 48px; height: 48px; border-radius: 4px; border: 1px solid
 .est-total { font-weight: 600; margin: 0; } .est-foot .est-note { margin: 0; flex: 1 1 auto; }
 .modal.render img[data-part="preview"] { width: 100%; max-height: 40vh; object-fit: contain; background: #f4f6f8; border: 1px solid var(--line); margin: 8px 0; }
 .shot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; max-height: 64vh; overflow: auto; }
+/* 갤러리의 "다른 프로젝트" 묶음(Task 12 리뷰 I-1): <details>는 .shot-grid의 자동 배치 아이템 하나라
+   폭이 220 px 한 칸으로 줄고 요약 줄이 그 안에서 접혔다. 격자 한 줄을 통째로 쓰게 하고, 펼친 안쪽
+   격자는 바깥 스크롤러 안의 중첩 스크롤러가 되지 않도록 높이 제한을 푼다. */
+.shot-grid > details { grid-column: 1 / -1; }
+.shot-grid > details .shot-grid { max-height: none; overflow: visible; }
 .shot { margin: 0; border: 1px solid var(--line); border-radius: 6px; padding: 8px; } .shot img { width: 100%; display: block; border-radius: 4px; background: #f4f6f8; }
 .shot figcaption { display: flex; flex-direction: column; font-size: 12px; margin: 4px 0; } .shot .row { display: flex; gap: 6px; } .shot button:not(.primary):not(.danger) { padding: 4px 8px; font-size: 12px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font-family: inherit; margin: 0; }
 .spec-sections { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }

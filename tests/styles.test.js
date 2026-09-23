@@ -237,3 +237,16 @@ test('ruleBody는 없는 선택자에서 실패하고, 새 규칙 셋을 확인�
   expect(ruleBody('.hint-on')).toMatch(/outline:/);
   expect(ruleBody('.layer-head')).toMatch(/display:\s*grid/);
 });
+
+// Task 12 리뷰 I-1: 갤러리의 "다른 프로젝트" <details>는 .shot-grid(220 px 자동 배치 격자)의
+// 아이템 하나라 폭이 한 칸으로 줄고, 펼치면 안쪽 격자가 중첩 스크롤러가 됐다. 감사 §45가
+// 고치라고 한 바로 그 화면이다. 테스트는 DOM 구조만 보므로 규칙을 글자로 못 박는다.
+test('갤러리 묶음은 격자 한 줄을 통째로 쓰고 중첩 스크롤러가 되지 않는다(Task 12 리뷰 I-1)', () => {
+  expect(ruleBody('.shot-grid > details')).toMatch(/grid-column:\s*1 \/ -1/);
+  const inner = ruleBody('.shot-grid > details .shot-grid');
+  expect(inner).toMatch(/max-height:\s*none/);
+  expect(inner).toMatch(/overflow:\s*visible/);
+  // 이겨야 하는 상대가 실제로 높이를 제한하는 규칙이라는 것도 함께 못 박는다.
+  expect(ruleBody('.shot-grid')).toMatch(/max-height:\s*64vh/);
+  expect(ruleBody('.shot-grid')).toMatch(/overflow:\s*auto/);
+});

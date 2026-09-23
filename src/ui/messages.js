@@ -146,6 +146,7 @@ export const CROSS_FLOOR_REDO = name => `다른 층(${name})의 변경을 다시
 export const WHY_LOCKED_DUCT = '잠긴 덕트';
 export const WHY_NO_MATERIAL = '바른 마감재가 없음';
 export const WHY_NO_ROOM = '이 벽이 속한 방이 없음';
+export const WHY_NO_WALL = '이 방에 벽이 없음';
 export const WHY_NO_SEGMENT = '구간을 고르지 않음';
 export const WHY_NO_VERTEX = '꼭짓점을 고르지 않음';
 export const WHY_NO_CONNECTION = '연결된 설비가 없음';

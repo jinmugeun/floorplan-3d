@@ -12,7 +12,7 @@ import { applyRoomWalls, explicitAssignmentOf } from '../state/materialOps.js';
 // 방 삭제는 ui/ 안의 roomActions에서 가져온다: ui/는 view2d/·view3d/·app/을 import하지 않는다(아키텍처 §9).
 import { removeRoom } from './roomActions.js';
 import { toast } from './toast.js';
-import { WALL_DELETE_RESULT, ROOMS_GONE, CURVED_WALL_TITLE, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_ACTION } from './messages.js';
+import { WALL_DELETE_RESULT, ROOMS_GONE, CURVED_WALL_TITLE, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_WALL, WHY_NO_ACTION } from './messages.js';
 // 사유 하나가 disabled와 title을 함께 만든다(리뷰 I-3): 세 메뉴가 같은 헬퍼를 쓴다.
 import { why } from './menuReason.js';
 
@@ -57,6 +57,7 @@ export function roomMenuItems({ store, ui, roomId, in3d = false, actions = {} })
   if (!f.rooms.some(x => x.id === roomId)) return null;
   const target = { kind: 'floor', id: roomId };
   const mat = explicitAssignmentOf(f, target);
+  const firstWall = f.rooms.find(x => x.id === roomId)?.wallIds?.[0] ?? null;
   return [
     { label: '템플릿 적용하기', ...why(actions.applyTemplate ? null : WHY_NO_ACTION), onSelect: () => actions.applyTemplate?.(roomId) },
     // M-10: Ctrl+C는 아이템 복사 전용이다(keymap.js의 itemCombo). 없는 단축키를 표기하지 않는다.
@@ -64,8 +65,11 @@ export function roomMenuItems({ store, ui, roomId, in3d = false, actions = {} })
     copyItem(ui, mat),
     { label: '재질 교체', ...why(actions.replaceMaterial ? null : WHY_NO_ACTION), onSelect: () => actions.replaceMaterial?.(target) },
     // §17.12 이월(감사 §12): 편집기가 벽 속성 패널과 3D 벽 메뉴에서만 열렸다. 방에서 여는 길을 준다
-    // (방의 벽 하나를 골라 연다 — 편집기의 대상은 벽 한 면이다).
-    { label: '마감재 편집기', ...why(actions.openEditor ? null : WHY_NO_ACTION), onSelect: () => actions.openEditor?.(f.rooms.find(x => x.id === roomId)?.wallIds?.[0] ?? null, 'in') },
+    // (방의 벽 하나를 골라 연다 — 편집기의 대상은 벽 한 면이다). 벽이 없는 방은 사유로 끈다(§16.5 ·
+    // Task 12 리뷰 I-2): main.js의 openEditor가 `if (wallId)`로 조용히 삼켜 "켜져 있는데 눌러도
+    // 아무 일이 없는" 항목이었다. detectRooms는 그런 방을 만들지 않지만 normalizeRoom이 wallIds를
+    // []로 강제하므로 손으로 고친/깨진 저장 파일에서 도달할 수 있다.
+    { label: '마감재 편집기', ...why(!actions.openEditor ? WHY_NO_ACTION : !firstWall ? WHY_NO_WALL : null), onSelect: () => actions.openEditor?.(firstWall, 'in') },
     { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: roomId }, soloRoom: roomId }) },
     'sep',
     // 확인 뒤 재확인(방이 그 사이 사라졌는지)까지 removeRoom이 한다 — 삭제 도구·선택 삭제와 같은 자리다.

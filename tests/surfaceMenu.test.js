@@ -7,7 +7,7 @@ import { addWalls } from '../src/state/floorOps.js';
 import { applyMaterial } from '../src/state/materialOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { wallMenuItems, roomMenuItems } from '../src/ui/surfaceMenu.js';
-import { CURVED_WALL_TITLE } from '../src/ui/messages.js';
+import { CURVED_WALL_TITLE, WHY_NO_WALL } from '../src/ui/messages.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 
 const fakeView = { camera: { scale: 0.1 }, fit: () => {} };
@@ -241,4 +241,27 @@ test('방 메뉴에 "마감재 편집기"가 있고 actions가 없으면 사유�
   const dead = off.find(x => x !== 'sep' && x.label === '마감재 편집기');
   expect(dead.disabled).toBe(true);
   expect(dead.title).toBe('이 화면에서 쓸 수 없음');
+});
+
+// Task 12 리뷰 I-2: 방에 벽이 없으면 항목이 켜진 채 아무 일도 하지 않았다(main.js의 openEditor가
+// `if (wallId)`로 조용히 삼킨다). detectRooms는 그런 방을 만들지 않지만 normalizeRoom이 wallIds를
+// []로 강제하므로 손으로 고친/깨진 저장 파일에서 도달할 수 있다 — §16.5는 "못 쓰면 사유로 끈다"다.
+test('벽 없는 방에서는 "마감재 편집기"가 사유와 함께 꺼진다(Task 12 리뷰 I-2)', () => {
+  const a = setup();
+  a.store.dispatch(d => { d.floors[0].rooms[0].wallIds = []; }, { record: false });
+  const items = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: { openEditor: () => {} } });
+  const item = items.find(x => x !== 'sep' && x.label === '마감재 편집기');
+  expect(item.disabled).toBe(true);
+  expect(item.title).toBe(WHY_NO_WALL);
+  // 누를 수 없으니 부르지도 않는다 — 사유는 "이 화면에서 쓸 수 없음"이 아니라 "이 방에 벽이 없음"이다.
+  expect(item.title).not.toBe('이 화면에서 쓸 수 없음');
+  // 벽이 돌아오면 다시 켜지고 첫 벽을 넘긴다.
+  const wallIds = activeFloor(a.store.get()).walls.slice(0, 2).map(w => w.id);
+  a.store.dispatch(d => { d.floors[0].rooms[0].wallIds = wallIds; }, { record: false });
+  let got = null;
+  const live = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: { openEditor: (id, side) => { got = [id, side]; } } })
+    .find(x => x !== 'sep' && x.label === '마감재 편집기');
+  expect(live.disabled).toBe(false);
+  live.onSelect();
+  expect(got).toEqual([wallIds[0], 'in']);
 });
