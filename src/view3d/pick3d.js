@@ -137,6 +137,9 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   tintGizmo(gizmo);                      // 첫 렌더 전에 칠한다(§13.6)
   gizmo.enabled = false;
   let current = null, pending = null;   // pending: 기즈모 드래그 중의 미리보기 패치(store에는 드래그가 끝날 때 한 번만 쓴다)
+  // 드래그가 살아 있는가. gizmo.dragging을 그대로 보지 않는다: 취소([Esc]·Ctrl+Z) 뒤에도 손은
+  // 아직 버튼을 누르고 있어 three의 dragging은 참으로 남는다 — 우리 쪽 "이 드래그는 끝났다"다.
+  let dragging = false;
 
   const pointFrom = ev => {
     const r = renderer.domElement.getBoundingClientRect();
@@ -175,10 +178,15 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
   renderer.domElement.addEventListener('pointerdown', onDown);
   renderer.domElement.addEventListener('pointerup', onUp);
   renderer.domElement.addEventListener('contextmenu', onMenu);
+  window.addEventListener('keydown', onKey, true);   // 캡처: keymap보다 먼저 본다(destroy에서 해제한다)
 
   gizmo.addEventListener('dragging-changed', e => {
     controls.enabled = !e.value;
-    if (e.value) { dragLatch.arm(); pending = null; store.beginTransaction(); return; }
+    if (e.value) { dragging = true; dragLatch.arm(); pending = null; store.beginTransaction(); return; }
+    // 취소된 드래그는 트랜잭션도 미리보기도 이미 닫혔다(onKey): 놓는 순간 아무것도 쓰지 않는다.
+    // 프록시만 아이템 자리로 되맞춘다 — 취소 뒤에도 three는 프록시를 계속 끌고 다녔다.
+    if (!dragging) { pending = null; attach(current ? { type: 'item', id: current } : null); return; }
+    dragging = false;
     // 드래그당 dispatch는 이 하나다(§15.2의 프리뷰 계약 · 리뷰 I-4). 10 mm마다 쓰면 sceneSignature가
     // 바뀌어 층 전체를 다시 짓는다(감사 §29의 480 ms/프레임). 트랜잭션 안이므로 record: false이고
     // endTransaction이 그것을 되돌리기 한 단계로 닫는다 — 움직이지 않았으면 빈 단계도 남지 않는다.
@@ -187,7 +195,7 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
     store.endTransaction();
   });
   gizmo.addEventListener('objectChange', () => {
-    if (!current) return;
+    if (!current || !dragging) return;   // 취소 뒤의 움직임은 미리보기에도 pending에도 닿지 않는다
     const it = activeFloor(store.get()).items.find(x => x.id === current);
     if (!it) return;
     const patch = gizmoPatch(proxy, it);
@@ -211,6 +219,21 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
     requestRender();
   }
   function detach() { current = null; gizmo.detach(); gizmo.enabled = false; requestRender(); }
+  // [Esc]·Ctrl+Z는 축 드래그의 취소다(bodyDrag.js의 onKey와 같은 규칙 — Task 7 재리뷰 OPEN-1):
+  // 트랜잭션을 되돌리고 메시를 모델 값으로 돌린다 → 되돌리기 단계가 남지 않는다. 키를 캡처에서
+  // 소비하는 이유도 같다: keymap(window, 버블)이 이어서 선택을 비우거나 **한 단계 더** 되돌리면
+  // 취소 한 번이 두 일을 한다. 예전에는 [Esc]가 선택만 풀고 pointerup이 그대로 커밋했다.
+  function onKey(ev) {
+    if (!dragging || !(ev.key === 'Escape' || ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'))) return;
+    dragging = false;                    // 남은 objectChange와 놓는 순간의 dragging-changed를 막는다
+    gizmo.reset?.();                     // 프록시를 드래그 시작 자리로(실제 드래그 중일 때만 동작한다)
+    pending = null;
+    const it = current ? activeFloor(store.get()).items.find(x => x.id === current) : null;
+    if (it) previewItemMesh(itemMeshOf(getGroup(), current), it);   // 미리보기를 모델 값으로 되돌린다
+    store.cancelTransaction();
+    ev.stopPropagation(); ev.preventDefault();
+    requestRender();
+  }
 
   return {
     attach, detach,
@@ -226,6 +249,7 @@ export function createItemPicker({ renderer, getCamera, controls, scene, store, 
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
       renderer.domElement.removeEventListener('contextmenu', onMenu);
+      window.removeEventListener('keydown', onKey, true);
       disposeGizmo(gizmo, scene);
       scene.remove(proxy);
     },

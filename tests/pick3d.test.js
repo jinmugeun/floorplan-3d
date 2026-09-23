@@ -380,6 +380,46 @@ describe('기즈모 드래그의 프리뷰 계약 (리뷰 I-4)', () => {
     expect(a.item().pos).toEqual(before.floors[0].items[0].pos);   // 한 번에 원위치(한 단계)
   });
 
+  // Task 7 재리뷰 OPEN-1: 축 드래그에는 취소가 없었다 — [[Esc]]는 선택만 풀고 pointerup이 그대로
+  // 커밋했고, 드래그 중 Ctrl+Z는 빈 트랜잭션을 닫아 마지막 갱신이 **열린 트랜잭션 없이** 새어 나갔다.
+  // bodyDrag.js의 onKey와 같은 규칙으로 되돌린다: 단계가 남지 않고 자리도 제자리다.
+  test('축 드래그 중 [Esc]는 취소다(단계 없음 · 미리보기 원위치 · 놓아도 커밋 없음)', () => {
+    const a = setupGizmoDrag();
+    const before = a.store.get(), canUndo = a.store.canUndo(), home = a.mesh.position.x, n = a.count();
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: true });
+    const proxy = a.gizmo.object;
+    proxy.position.x = 1.3; a.gizmo.dispatchEvent({ type: 'objectChange' });
+    expect(a.mesh.position.x).toBeCloseTo(1.3, 6);
+    const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    window.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);              // 키는 여기서 먹는다(keymap이 선택까지 비우지 않게)
+    expect(a.mesh.position.x).toBeCloseTo(home, 6);      // 미리보기가 모델 값으로 돌아온다
+    proxy.position.x = 1.9; a.gizmo.dispatchEvent({ type: 'objectChange' });   // 취소 뒤의 움직임은 무시된다
+    expect(a.mesh.position.x).toBeCloseTo(home, 6);
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: false });
+    expect(n.n).toBe(0);
+    expect(a.store.get()).toBe(before);
+    expect(a.store.canUndo()).toBe(canUndo);
+    expect(a.item().pos).toEqual(before.floors[0].items[0].pos);
+  });
+
+  // 드래그 중 Ctrl+Z도 취소다(2D·몸체 드래그와 같은 규칙): 한 번의 키가 두 일을 하지 않는다.
+  test('축 드래그 중 Ctrl+Z는 취소다 — 열린 트랜잭션 없는 갱신이 새지 않는다', () => {
+    const a = setupGizmoDrag();
+    const before = a.store.get(), canUndo = a.store.canUndo(), n = a.count();
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: true });
+    const proxy = a.gizmo.object;
+    proxy.position.x = 1.4; a.gizmo.dispatchEvent({ type: 'objectChange' });
+    const ev = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);              // keymap의 되돌리기가 이어서 한 단계 더 먹지 않는다
+    a.gizmo.dispatchEvent({ type: 'dragging-changed', value: false });
+    expect(n.n).toBe(0);
+    expect(a.store.get()).toBe(before);
+    expect(a.store.canUndo()).toBe(canUndo);
+    expect(a.item().pos).toEqual(before.floors[0].items[0].pos);
+  });
+
   test('축을 잡았다 그대로 놓으면 dispatch도 빈 단계도 없다', () => {
     const a = setupGizmoDrag();
     const before = a.store.get(), canUndo = a.store.canUndo(), n = a.count();
