@@ -140,7 +140,10 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     figure { margin: 0; flex: 1 1 45%; }
     /* 입면도 절(그림 여러 장)은 한 줄 한 장이다(§17.4(2)): 두 장씩 놓으면 본문 폭의 절반이 되어
        배율이 0.25로 떨어진다. */
-    .figs.elev figure { flex: 1 1 100%; }
+    /* 입면도 절은 한 줄에 그림 하나 · 그림이 쪽 경계에서 잘리지 않게(재리뷰 N-3: 천장 평면도가 두 쪽으로 갈렸다).
+       flex 항목의 break-inside는 Chromium 인쇄에서 믿을 수 없어 block으로 둔다. */
+    .figs.elev { display: block; }
+    .figs.elev figure { flex: 1 1 100%; margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; }
     figure img { width: 100%; border: 1px solid #c8ccd2; }
     /* 바닥선·천장선과 층고 치수선(§17.4(2) 개정 · 감사 §37): 그림 위에 겹치고 자리는 인라인 style이
        준다(elevationFrame). 배경색은 인쇄에서 꺼질 수 있으므로 선과 글자만으로 읽히게 둔다. */

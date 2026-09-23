@@ -202,7 +202,7 @@ describe('시방서 HTML', () => {
   test('입면도 절만 한 줄 한 장이다', () => {
     const html = specHtml({ project: project(), images: { front: 'data:,f', back: 'data:,b' }, options: {} });
     expect(html).toContain('<div class="figs elev">');
-    expect(html).toContain('.figs.elev figure { flex: 1 1 100%; }');
+    expect(html).toContain('.figs.elev figure { flex: 1 1 100%; margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; }');
   });
 });
 
@@ -288,4 +288,12 @@ test('쪽 상자의 본문 높이는 용지·방향에서 나온다(리뷰 I-3)'
   expect(css({ paper: 'A4', landscape: true })).toContain('min-height: 186mm');   // 210 − 24
   expect(css({ paper: 'A3' })).toContain('min-height: 396mm');                    // 420 − 24
   expect(css({ paper: 'A4' })).toContain('.page-foot { position: absolute;');     // 꼬리는 바닥에 선다
+});
+
+// 재리뷰 N-3: 입면도 그림은 쪽 경계에서 잘리지 않는다(천장 평면도가 두 쪽으로 갈려 1쪽에 쪽 번호가 빠졌다).
+test('입면도 그림은 block 한 줄 배치이고 쪽 안에서 끊기지 않는다', () => {
+  const p = createEmptyProject();
+  const html = specHtml({ project: p, floorIndex: 0, images: {}, options: { sections: { elevations: true } } });
+  expect(html).toMatch(/.figs.elev { display: block; }/);
+  expect(html).toMatch(/.figs.elev figure {[^}]*break-inside: avoid;[^}]*page-break-inside: avoid;/);
 });
