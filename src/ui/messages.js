@@ -245,3 +245,22 @@ export const DXF_NO_WALLS = '벽으로 보이는 평행선을 찾지 못했습�
 export const DXF_TOO_BIG = '도면이 너무 큽니다. CAD에서 PURGE로 미사용 블록을 지운 뒤 다시 시도해 주세요';
 // 코드 → 문장. 대화상자의 `.error` 줄이 이 맵만 본다(워커가 보낸 message는 개발자용이다).
 export const DXF_ERRORS = { 'not-dxf': DXF_NOT_DXF, binary: DXF_BINARY, dwg: DXF_IS_DWG, 'no-walls': DXF_NO_WALLS, oom: DXF_TOO_BIG };
+
+// 검토 대화상자(§18.6). 오류 다섯은 Task 1이 이미 올렸고 여기는 알림·진행·머리줄·수치다.
+// DXF_OPEN_ENDS·DXF_OPEN_ENDS_VIEW 둘은 배너(§18.10)가 먼저 올려 두었으므로 여기서 다시 내보내지 않는다.
+export const DXF_MANY_SHEETS = '도면 좌표 범위가 너무 넓습니다 — 가장 큰 도면 한 장만 가져옵니다';
+export const DXF_UNITS_GUESS = '도면에 단위가 없어 mm로 봅니다. 다르면 위에서 바꿔 주세요';
+export const DXF_LAYERS_GUESSED = '벽 레이어를 찾지 못해 도형으로 추정했습니다. 체크를 확인해 주세요';
+export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
+export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
+export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;
+export const DXF_NUMS = (walls, rooms, areaM2) => `벽 ${walls} · 방 ${rooms} · 면적 ${areaM2} m²`;
+export const DXF_HEAD = (title, wM, hM, unit, insunits, ver) => `${title} · ${wM} m × ${hM} m · ${unit} (INSUNITS=${insunits}) · ${ver}`;
+// 진행 막대 4단계. phase → 단계 매핑도 여기 한 곳이다(워커가 보내는 phase 이름이 정본이다).
+export const DXF_STEP_READ = '파일 읽는 중';
+export const DXF_STEP_PARSE = n => `도면 해석 중 (블록 ${n}개)`;
+export const DXF_STEP_WALLS = '벽 찾는 중';
+export const DXF_STEP_ROOMS = '방 만드는 중';
+export const DXF_PHASE_STEP = { decode: 1, parse: 2, explode: 2, walls: 3, rooms: 4, trace: 4 };
+export const DXF_BADGE_OFF = '꺼진 레이어';
+export const DXF_BADGE_HATCH = '해치(벽 채움)';

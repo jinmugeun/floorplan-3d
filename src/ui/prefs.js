@@ -32,3 +32,28 @@ export function labelDensity() {
 export function setLabelDensity(v) {
   try { localStorage.setItem(LABEL_DENSITY_KEY, DENSITIES.has(v) ? v : 'auto'); } catch { /* 저장 불가 */ }
 }
+
+// DXF 가져오기의 로컬 설정 둘(§18.6). 프로젝트 파일에는 남지 않는다 — 저장 형식 무변경이
+// 이 기능의 전제다(stickyTools·labelDensity와 같은 자리).
+export const DXF_TRACE_KEY = 'kvp.dxfTrace';
+export function dxfTrace() {
+  try { return localStorage.getItem(DXF_TRACE_KEY) !== '0'; } catch { return true; }   // 기본 켜짐
+}
+export function setDxfTrace(on) {
+  try { localStorage.setItem(DXF_TRACE_KEY, on ? '1' : '0'); } catch { /* 저장 불가 */ }
+}
+
+// 층고는 도면에 없다(§18.8). 3500은 강당중 조리실의 실적값이고, 사람이 고친 값을 기억한다.
+export const DXF_HEIGHT_KEY = 'kvp.dxfHeight';
+export const DXF_HEIGHT_RANGE = [2000, 8000];
+export function dxfHeight() {
+  try {
+    const n = Number(localStorage.getItem(DXF_HEIGHT_KEY));
+    return Number.isFinite(n) && n >= DXF_HEIGHT_RANGE[0] && n <= DXF_HEIGHT_RANGE[1] ? n : 3500;
+  } catch { return 3500; }
+}
+export function setDxfHeight(mm) {
+  const n = Number(mm);
+  if (!Number.isFinite(n) || n < DXF_HEIGHT_RANGE[0] || n > DXF_HEIGHT_RANGE[1]) return;
+  try { localStorage.setItem(DXF_HEIGHT_KEY, String(Math.round(n))); } catch { /* 저장 불가 */ }
+}

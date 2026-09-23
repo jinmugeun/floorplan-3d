@@ -239,3 +239,21 @@ test('DXF 오류 문구는 §18.6이 적은 글자 그대로다', async () => {
   expect(m.DXF_TOO_BIG).toBe('도면이 너무 큽니다. CAD에서 PURGE로 미사용 블록을 지운 뒤 다시 시도해 주세요');
   expect(Object.keys(m.DXF_ERRORS).sort()).toEqual(['binary', 'dwg', 'no-walls', 'not-dxf', 'oom']);
 });
+
+// §18.6의 알림·진행 4단계·배지. 워커가 보내는 phase 이름과 매핑이 어긋나면 막대가 멈춘 것처럼 보인다.
+test('DXF 알림·진행 문구는 §18.6이 적은 글자 그대로다', async () => {
+  const m = await import('../src/ui/messages.js');
+  expect(m.DXF_MANY_SHEETS).toBe('도면 좌표 범위가 너무 넓습니다 — 가장 큰 도면 한 장만 가져옵니다');
+  expect(m.DXF_UNITS_GUESS).toBe('도면에 단위가 없어 mm로 봅니다. 다르면 위에서 바꿔 주세요');
+  expect(m.DXF_LAYERS_GUESSED).toBe('벽 레이어를 찾지 못해 도형으로 추정했습니다. 체크를 확인해 주세요');
+  expect(m.DXF_TRACE_SKIPPED).toBe('원 도면이 너무 커서 배경으로 남기지 않았습니다');
+  expect(m.DXF_IMPORTED(213, 52)).toBe('벽 213개 · 방 52개를 가져왔습니다');
+  expect(m.DXF_OPEN_ENDS(53)).toBe('벽이 이어지지 않은 곳이 53군데 있습니다');
+  expect(m.DXF_OPEN_END_COUNT(53)).toBe('⚠ 끊긴 끝점 53개');
+  expect(m.DXF_NUMS(213, 52, '249.7')).toBe('벽 213 · 방 52 · 면적 249.7 m²');
+  expect(m.DXF_HEAD('경산 사동중', '44.0', '25.9', 'mm', 4, 'AC1032')).toBe('경산 사동중 · 44.0 m × 25.9 m · mm (INSUNITS=4) · AC1032');
+  expect([m.DXF_STEP_READ, m.DXF_STEP_PARSE(1009), m.DXF_STEP_WALLS, m.DXF_STEP_ROOMS])
+    .toEqual(['파일 읽는 중', '도면 해석 중 (블록 1009개)', '벽 찾는 중', '방 만드는 중']);
+  expect(m.DXF_PHASE_STEP).toEqual({ decode: 1, parse: 2, explode: 2, walls: 3, rooms: 4, trace: 4 });
+  expect([m.DXF_BADGE_OFF, m.DXF_BADGE_HATCH]).toEqual(['꺼진 레이어', '해치(벽 채움)']);
+});
