@@ -4,13 +4,20 @@
 // 버튼은 다시 만들지 않고 **노드째로 옮긴다** — main.js·shell.js가 id로 걸어 둔
 // 리스너가 그대로 살아 있어야 한다(HTML을 다시 그리면 전부 끊긴다).
 //
-// 접기는 **단계**로 나뉘고, 단계 표는 ui/bottomTiers.js가 갖고 **현재 모드**가 고른다(§17.2):
+// 접기는 **단계**로 나뉘고, 단계 표는 ui/bottomTiers.js가 갖는다(§17.2):
 //   2D  1 = 3D 전용 묶음(카메라·햇빛·캡처·2D 투영·기즈모)   2 = 도면 잠금   3 = 단위(mm / ft·in)
 //   3D  1 = 도면 잠금                                       2 = 단위        3 = 3D 전용 묶음
-// 마크업의 data-overflow 값은 2D 기준 기본값으로 남고(shellHtml), retier()가 sync마다 다시 매긴다 —
+// **어느 표를 쓸지는 폭이 정한다**(§17.2 개정 · 리뷰 I-1): 두 순서로 각각 접어 보고 넘침이 가시는
+// 단계에서 **바에 더 많은 묶음이 남는** 쪽을 쓴다(같으면 현재 모드의 순서가 이긴다).
+// 모드 순서만 따르면 캔버스 672 px(창 1366)·3D에서 잠금 60 + 단위 118로는 1024 → 672를 만들지 못해
+// 3단계까지 가 여섯 묶음이 **전부** 사라졌다. 같은 폭에서 2D 순서는 1단계(3D 묶음 385)만으로 572를
+// 만들어 잠금·단위가 바에 남는다 — 3D 컨트롤은 어느 쪽이든 팝오버 안이므로 순수한 이득이다.
+// 캔버스 897~1024 px에서는 모드 순서가 이긴다(3D 묶음 넷과 단위가 남고 잠금만 접힌다).
+// 마크업의 data-overflow는 **선택자로만** 쓴다(값은 2D 기준 기본값으로 남을 뿐 여기서 읽지 않는다) —
 // "3D 모드인데 3D 컨트롤부터 사라진다"가 사라진다(감사 §3·§32).
-// 1100 px에서는 1단계 + 꼬리 라벨 아이콘화만으로도 133 px이 남아, sticky 꼬리가 늘 보여야 하는
-// 단위 묶음을 94 px 덮었다(리뷰 I-1). §15.4는 "1366·1100 모두 겹침 0"을 요구하므로, 꼬리가
+// 캔버스 506 px(창 1100)에서는 어느 순서로 가든 세 단계를 다 접어야 넘침이 가신다(둘 다 394 ≤ 506).
+// 1단계 + 꼬리 라벨 아이콘화만으로는 133 px이 남아 sticky 꼬리가 늘 보여야 하는 단위 묶음을
+// 94 px 덮었다(리뷰 I-1). §15.4는 "1366·1100 모두 겹침 0"을 요구하므로, 꼬리가
 // sticky로 붙기 **전에** 다음 단계를 접는다.
 // 그래도 넘치면(더 접을 것이 없으면) 꼬리를 sticky로 붙여 접힌 기능에 두 번의 클릭이 늘 닿게 한다.
 
@@ -37,11 +44,11 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
   // nextElementSibling이 아직 팝오버 안이면 insertBefore가 자리를 잃는다.
   // 접히는 묶음은 바의 직속 자식이다(shellHtml의 마크업 규칙 — 꼬리 안의 묶음은 접지 않는다).
   const order = [...bar.children];
-  const segs = order.filter(el => el.hasAttribute?.('data-overflow'))
-    .map(el => ({ el, tier: Math.max(1, Number(el.getAttribute('data-overflow')) || 1), count: 0 }));
-  // 단계는 sync마다 현재 모드로 다시 매긴다(§17.2). data-overflow의 값은 2D 기준 기본값으로 남는다.
+  // data-overflow는 **선택자**로만 쓴다: 값은 읽지 않는다(마크업의 숫자를 고쳐도 동작이 바뀌지
+  // 않는다 — 진실의 원천은 ui/bottomTiers.js 하나다). 단계는 아래 retier()가 sync마다 매긴다.
+  const segs = order.filter(el => el.hasAttribute?.('data-overflow')).map(el => ({ el, tier: 1, count: 0 }));
   const modeKey = () => (getMode() === '2d' ? '2d' : '3d');
-  const retier = () => { for (const s of segs) s.tier = tierOf(s.el.id, modeKey()); };
+  const retier = key => { for (const s of segs) s.tier = tierOf(s.el.id, key); };
   const maxTier = () => segs.reduce((m, s) => Math.max(m, s.tier), 0);
   const ctl = el => [...el.querySelectorAll('button, select, input')];
   // 접기 판정에 영향을 주는 컨트롤 목록은 **한 번만** 모은다: 노드가 바 ↔ 팝오버를 오가므로
@@ -94,24 +101,44 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
     btn.hidden = tier === 0 || segs.reduce((n, s) => n + (s.tier <= tier ? s.count : 0), 0) === 0;
     if (btn.hidden) closeMore();
   }
+  // 한 순서로 **실제로 접어 본다**: 넘침이 가시는 첫 단계까지 올리고 "그때 바에 남는 묶음 수"를
+  // 돌려준다. 묶음 폭은 DOM에 달린 값이라 계산이 아니라 측정으로만 알 수 있다(measure는 바에
+  // 남아 있는 것만 더한다). 압축(kbd 숨김 · 꼬리 라벨 아이콘화 · 더보기 버튼 등장)이 **끝난 뒤에**
+  // 다시 재는 것이 핵심이다 — syncMoreBtn() 다음에 size()를 부르는 이유다.
+  function settle(key) {
+    setTier(0);                                                     // 후보마다 다 펼친 같은 자리에서 출발한다
+    retier(key);
+    setTier(1);
+    syncMoreBtn();
+    let m = size();
+    while (tier < maxTier() && m.scrollWidth > m.clientWidth) { setTier(tier + 1); syncMoreBtn(); m = size(); }
+    return { key, kept: segs.reduce((n, s) => n + (s.tier > tier && s.count > 0 ? 1 : 0), 0) };
+  }
   function sync() {
     const now = signature();
     // 보이는 컨트롤 집합이 바뀌면(2D↔3D 모드 전환, 속성 버튼) "펼쳤을 때 필요한 폭"을 다시 잰다:
     // 3D에서 접힌 채 2D로 가면 필요한 폭이 줄어드는데도 3D 시절 fullWidth 탓에 계속 접혀 있었다.
     // #bottomMore는 position: fixed라 되돌려도 #layout 기하가 바뀌지 않아 리사이즈 재진입이 없다.
     if (now !== sig) { sig = now; if (tier) { setTier(0); fullWidth = 0; } }
-    retier();                                                       // 모드가 정한 단계로 다시 매긴다(§17.2)
     syncSegs();                                                     // 측정 전에 묶음을 드러낸다/감춘다
     const { scrollWidth, clientWidth } = size();
     if (!tier) fullWidth = Math.max(scrollWidth, clientWidth);      // 펼친 상태에서만 "필요한 폭"을 잰다
-    // 판정은 늘 1단계부터 다시 셈한다 — 폭이 늘면 3단계에서 곧바로 1단계로 돌아온다(래칫이 없다).
-    setTier(compactNext({ compact: tier > 0, scrollWidth, clientWidth, fullWidth, hysteresis }) ? 1 : 0);
-    syncMoreBtn();
-    // 압축(kbd 숨김 · 꼬리 라벨 아이콘화 · 더보기 버튼 등장)이 **끝난 뒤에** 넘침을 다시 잰다.
-    // 그래도 넘치면 꼬리를 sticky로 붙이기 전에 다음 단계를 접는다: sticky 꼬리는 불투명해서
-    // 늘 보이는 묶음을 덮으므로(감사 §24 · 리뷰 I-1) "더 접을 것이 없다"가 붙이기의 전제다.
-    let m = size();
-    while (tier > 0 && tier < maxTier() && m.scrollWidth > m.clientWidth) { setTier(tier + 1); syncMoreBtn(); m = size(); }
+    const mk = modeKey();
+    // 판정은 늘 처음부터 다시 셈한다 — 폭이 늘면 3단계에서 곧바로 펼쳐진다(래칫이 없다).
+    if (!compactNext({ compact: tier > 0, scrollWidth, clientWidth, fullWidth, hysteresis })) {
+      retier(mk); setTier(0); syncMoreBtn();
+      bar.classList.remove('tail-sticky');                          // 펼친 상태에서는 넘침이 없다 → 꼬리를 떼어 낸다
+      return;
+    }
+    // 두 순서를 다 접어 보고 **바에 더 많이 남기는** 쪽을 쓴다(§17.2 개정 · 리뷰 I-1).
+    // 2D 순서를 먼저 재고 모드 순서를 나중에 재는 것은 같을 때 모드 순서가 이기기 때문이다:
+    // 흔한 쪽이 이미 적용된 채로 끝나 다시 접는 일이 없다.
+    const alt = mk === '2d' ? null : settle('2d');
+    const own = settle(mk);
+    if (alt && alt.kept > own.kept) settle('2d');
+    // 더 접을 것이 없는데도 넘치면 꼬리를 sticky로 붙인다: sticky 꼬리는 불투명해서 늘 보이는
+    // 묶음을 덮으므로(감사 §24 · 리뷰 I-1) "더 접을 것이 없다"가 붙이기의 전제다.
+    const m = size();
     bar.classList.toggle('tail-sticky', m.scrollWidth > m.clientWidth);
   }
   const onBtn = () => {
@@ -126,6 +153,13 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
   // 열려 있는 동안 [Esc]는 닫고 [Tab]은 안에서 돈다("보기"·"도움말" 팝오버와 같은 두 함수를 쓴다).
   const onKey = ev => {
     if (!more.classList.contains('open')) return;
+    // 포커스가 팝오버 **안**일 때만 관여한다(dialogBase.focusTrap과 같은 가드 — 리뷰 C-1).
+    // 이 리스너는 셸을 만들 때 등록되므로 나중에 열리는 대화상자의 캡처 리스너보다 먼저 돈다:
+    // 가드가 없으면 팝오버 안에서 키보드로 연 대화상자([B] 배경 · [Ctrl+,] 설정)의 [Tab]을 먼저
+    // 가로채 포커스를 팝오버로 끌어오고, 그 뒤에 도는 focusTrap은 "내 것이 아니다"로 보고 물러난다
+    // → 대화상자를 키보드로 쓸 수 없었다. 팝오버는 자기 안을 다시 그리지 않고 노드를 옮길 뿐이라
+    // (그때는 closeMore가 먼저 돈다) focusTrap이 쓰는 "포커스가 body일 때도 내 것" 예외는 필요 없다.
+    if (!more.contains(document.activeElement)) return;
     if (ev.key === 'Escape') { ev.stopPropagation(); closeMore(); return; }
     if (ev.key === 'Tab') { ev.stopPropagation(); trapTab(ev, focusables(more)); }
   };

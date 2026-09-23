@@ -74,9 +74,11 @@ export function shellHtml({ name = '' } = {}) {
       <div class="seg"><button data-mode="2d" class="on" title="2D 도면 [1]" aria-pressed="true">2D</button><button data-mode="plan" title="평면 뷰어 [2]" aria-pressed="false">평면 <kbd>2</kbd></button><button data-mode="iso" title="ISO 3D [3]" aria-pressed="false">3D <kbd>3</kbd></button><button data-mode="fp" title="1인칭 [4]" aria-pressed="false">1인칭 <kbd>4</kbd></button></div>
       <div class="seg"><button id="btnView" data-popover="view" title="보기 옵션 — 격자·라벨·컷어웨이" aria-expanded="false">보기</button></div>
       <div class="seg" id="seg3d" data-overflow="1"><button id="btnCam" data-popover="cam" title="카메라 설정 — 고도·방위·시야각" aria-expanded="false" hidden>카메라 설정</button><button id="btnSun" data-popover="sun" title="햇빛 — 시각·방위" aria-expanded="false" hidden>햇빛</button></div>
-      <!-- data-overflow의 값은 접기 단계다(bottomBar.js): 1 = 3D 전용, 2 = 도면 잠금, 3 = 단위.
+      <!-- data-overflow는 "접히는 묶음"을 고르는 **선택자**다. 여기 남은 값은 2D 기준 기본값일 뿐
+           bottomBar.js가 읽지 않는다 — 실제 접기 단계는 ui/bottomTiers.js의 모드별 표를 bottomBar.js의
+           retier()가 sync마다 매긴다(§17.2). 이 숫자를 고쳐도 접는 순서는 바뀌지 않는다.
            1100 px에서는 1단계 + 꼬리 라벨 아이콘화로도 133 px이 남아 sticky 꼬리가 단위 묶음을
-           94 px 덮었다(리뷰 I-1) — 꼬리가 붙기 전에 2·3단계를 접는 것이 "겹침 0"의 조건이다. -->
+           94 px 덮었다(리뷰 I-1) — 꼬리가 붙기 전에 다음 단계를 접는 것이 "겹침 0"의 조건이다. -->
       <div class="seg" id="segLock" data-overflow="2"><button id="btnLock" title="도면 잠금 — 벽·방을 실수로 옮기지 않게" aria-pressed="false">도면 잠금</button></div>
       <!-- 상단 바와 같은 동작(data-action="capture")이므로 같은 표기다(§16.8 · 감사 §34). -->
       <div class="seg" id="segCapture" data-overflow="1"><button data-action="capture" title="화면 캡처">캡처</button></div>

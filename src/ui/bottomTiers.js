@@ -4,6 +4,9 @@
 // 3D: 도면 잠금이 먼저, 단위, 3D 묶음이 마지막. §14.3의 "모드·보기·줌은 늘 보인다"는 그대로이고
 //     "단위는 늘 보인다"는 3D에서 2단계로 좁아진다 — 3D 화면에서는 mm/ft·in보다 카메라·기즈모가
 //     먼저라는 것이 §17.2의 결정이다.
+// **표를 고르는 것은 모드가 아니라 폭이다**(§17.2 개정 · 리뷰 I-1): bottomBar의 sync()가 두 순서를
+// 다 접어 보고 넘침이 가시는 단계에서 바에 더 많은 묶음이 남는 쪽을 쓴다(같으면 모드 순서가 이긴다).
+// 모드 순서가 좁은 폭에서 더 많이 숨기는 경우(캔버스 672 px·3D)가 있기 때문이다 — 표 자체는 그대로다.
 export const BOTTOM_TIERS = {
   '2d': { seg3d: 1, segCapture: 1, segPreset: 1, segGizmo: 1, segLock: 2, unitSeg: 3 },
   '3d': { segLock: 1, unitSeg: 2, seg3d: 3, segCapture: 3, segPreset: 3, segGizmo: 3 },

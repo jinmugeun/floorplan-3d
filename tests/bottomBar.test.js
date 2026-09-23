@@ -5,7 +5,7 @@ import { test, expect } from 'vitest';
 import { createBottomBar, compactNext, BOTTOM_HYSTERESIS } from '../src/ui/bottomBar.js';
 import { shellHtml } from '../src/ui/shellHtml.js';
 import { BOTTOM_TIERS, tierOf } from '../src/ui/bottomTiers.js';
-import { focusables } from '../src/ui/dialogBase.js';
+import { focusables, focusTrap } from '../src/ui/dialogBase.js';
 
 function setup(sizes = { scrollWidth: 900, clientWidth: 900 }, opts = {}) {
   document.body.innerHTML = shellHtml({ name: '테스트' });
@@ -142,10 +142,18 @@ test('더보기를 열면 포커스가 팝오버 안으로 들어가고 [Esc]로
 //      2단계 = +단위 118 → 779                             3단계 = +3D 전용 385 → 394
 // 마지막 단계 합은 두 모드가 394로 같다(결국 같은 여섯 묶음을 접는다) — 다른 것은 **가는 길**이다.
 // segCapture는 두 모드 모두 3D 전용 묶음과 함께 움직이므로 위 합은 라벨 길이와 무관하다.
-// 아래 테스트의 clientWidth가 집는 단계:
-//   672(1366 px · 3D): 1024 > 672 → 1단계 897 > 672 → 2단계 779 > 672 → 3단계 394 ≤ 672에서 멈춘다
-//   506(1100 px · 3D): 1024 > 506 → 1단계 897 > 506 → 2단계 779 > 506 → 3단계 394 ≤ 506에서 멈춘다
-//   900(3D): 1024 > 900 → 1단계, 897 ≤ 900에서 멈춘다   900(2D): 1024 > 900 → 1단계, 572 ≤ 900에서 멈춘다
+// §17.2 개정(리뷰 I-1): 어느 순서를 쓸지는 **두 순서를 다 접어 보고** 정한다 — 넘침이 가시는 단계에서
+// 바에 남는 묶음(비어 있지 않은 것)이 더 많은 쪽이 이기고, **같으면 현재 모드의 순서**가 이긴다.
+// 아래 테스트의 clientWidth마다 두 후보의 산술(괄호 안이 그 단계에서 바에 남는 묶음 수):
+//   672(1366 px · 3D) 3D 순서: 1024 > 672 → 1단계 897 > 672 → 2단계 779 > 672 → 3단계 394 ≤ 672 (0)
+//                     2D 순서: 1단계 572 ≤ 672 (2 = segLock · unitSeg)  → 2 > 0이라 **2D 순서**를 쓴다.
+//                     3D 묶음은 어느 쪽이든 팝오버 안이므로 잠금·단위가 남는 만큼이 순이득이다.
+//   506(1100 px · 3D) 3D 순서: 3단계 394 ≤ 506 (0)   2D 순서: 572 > 506 → 512 > 506 → 394 ≤ 506 (0)
+//                     → 0 = 0 동점이라 **모드 순서**(3D 3단계)가 이긴다.
+//   900(3D)  3D 순서: 1단계 897 ≤ 900 (5 = unitSeg · seg3d · segCapture · segPreset · segGizmo)
+//            2D 순서: 1단계 572 ≤ 900 (2)   → 5 > 2라 **모드 순서**가 이긴다(672에서와 정반대다).
+//   900(2D)  모드가 2D면 후보가 하나다 → 2D 1단계 572 ≤ 900, 잠금·단위가 남는다.
+//   1088 = fullWidth(1024) + 히스테리시스(64) → 아예 접지 않는다(펼침 경계).
 // 달라지는 것은 fullWidth(0단계 합)뿐이라, 히스테리시스 경계를 쓰는 래칫 테스트만 1079 → 1024다.
 const STUB = { seg3d: 132, segLock: 60, segCapture: 41, segPreset: 150, segGizmo: 62, unitSeg: 118 };
 function widthStub(bottom, viewport) {
@@ -180,16 +188,19 @@ function setupMode(clientWidth, mode = '3d') {
   return { bar, bottom, viewport, state, inMore };
 }
 
-// §17.2: 3D에서는 도면 잠금·단위가 먼저 접히고 3D 묶음이 마지막이다. 672 px에서는 세 단계가
-// 모두 필요하다(잠금 60 + 단위 118로는 1024 → 672를 만들 수 없다) — 그래도 순서는 지켜진다:
-// 3D 컨트롤은 **마지막으로** 접히고, 늘 보이는 것(모드·보기·줌·더보기)은 그대로다.
-test('1366 px(3D): 잠금 · 단위 · 3D 묶음 순서로 접혀 압축 뒤 넘침이 0이다', () => {
+// §17.2 개정(리뷰 I-1): 3D의 순서는 잠금 → 단위 → 3D 묶음이지만, 672 px에서는 그 길로 가면 세 단계가
+// 모두 필요해(잠금 60 + 단위 118로는 1024 → 672를 만들 수 없다) 여섯 묶음이 **전부** 사라진다.
+// 같은 폭에서 2D 순서는 1단계(3D 묶음 385)만으로 572를 만들어 잠금·단위를 바에 남긴다 → 그쪽을 쓴다.
+// 3D 컨트롤은 두 길 모두 팝오버 안이므로 이 선택은 잃는 것 없이 두 묶음을 되찾는다.
+test('1366 px(3D): 더 많이 남기는 2D 순서 1단계를 골라 잠금·단위가 바에 남는다', () => {
   const { bar, bottom, measure } = setup3d(672);
-  expect(bar.tier()).toBe(3);
+  expect(bar.tier()).toBe(1);
   const after = measure();
-  expect(after.scrollWidth).toBeLessThanOrEqual(after.clientWidth);
-  expect(bottom.classList.contains('tail-sticky')).toBe(false);
-  for (const id of ['#btnLock', '#unitSeg', '#btnSun', '#btnGizmoMode']) expect(document.querySelector(id).closest('#bottomMore')).not.toBeNull();
+  expect(after.scrollWidth).toBeLessThanOrEqual(after.clientWidth);   // 압축 뒤 넘침 0
+  expect(bottom.classList.contains('tail-sticky')).toBe(false);       // → 꼬리가 아예 붙지 않는다
+  // 접히는 것은 3D 전용 묶음 넷뿐이다(옛 규칙은 여기에 잠금·단위까지 얹었다).
+  for (const id of ['#btnSun', '#btnGizmoMode', '#viewPreset']) expect(document.querySelector(id).closest('#bottomMore')).not.toBeNull();
+  for (const id of ['#btnLock', '#unitSeg']) expect(bottom.contains(document.querySelector(id))).toBe(true);
   for (const id of ['#btnFit', '#btnBottomMore', '#btnZoomIn']) expect(bottom.contains(document.querySelector(id))).toBe(true);
   bar.destroy();
 });
@@ -290,10 +301,13 @@ test('tierOf는 모드별 표를 그대로 읽는다', () => {
 });
 
 // 1단계만으로 넘침이 사라지는 폭(900)에서 두 모드가 정반대로 접는다.
+// §17.2 개정의 후보 비교가 여기서는 모드 순서를 고른다: 3D 순서 1단계가 다섯 묶음을 남기고(897 ≤ 900)
+// 2D 순서 1단계는 두 묶음만 남긴다(572) → 5 > 2. 672 px에서 뒤집히는 것과 정확히 대조된다.
 test('3D의 1단계는 도면 잠금이고, 2D의 1단계는 3D 묶음이다', () => {
   const a = setupMode(900, 'iso');
   expect(a.bar.tier()).toBe(1);
   expect(a.inMore('#segLock')).toBe(true);
+  expect(a.inMore('#segCapture')).toBe(false);     // 3D 묶음은 통째로 바에 남는다(모드 순서가 이겼다)
   expect(a.inMore('#seg3d')).toBe(false);          // 3D 컨트롤은 3D에서 마지막까지 남는다
   expect(a.inMore('#segGizmo')).toBe(false);
   expect(a.inMore('#unitSeg')).toBe(false);
@@ -387,7 +401,33 @@ test('숨은 컨트롤은 트랩 목록에 들어가지 않는다', () => {
   document.querySelector('#btnBottomMore').click();
   const list = focusables(more);
   expect(list.length).toBeGreaterThan(0);
-  expect(list.every(el => !el.hidden && !el.closest('[hidden]'))).toBe(true);
+  // 걸러낼 것이 실제로 있는지 **먼저** 확인한다: 팝오버 안에 숨은 버튼이 하나도 없으면
+  // "목록에 숨은 것이 없다"는 focusables의 정의를 되풀이할 뿐 아무것도 보증하지 않는다(리뷰 M-4).
+  const hidden = [...more.querySelectorAll('button')].filter(b => b.hidden || b.closest('[hidden]'));
+  expect(hidden.length).toBeGreaterThan(0);                  // 2D에서 숨은 카메라·햇빛·기즈모 버튼
+  for (const b of hidden) expect(list).not.toContain(b);
   expect(list).toContain(document.activeElement);            // 연 순간의 포커스도 그 목록의 첫 요소다
+  bar.destroy();
+});
+
+// 리뷰 C-1: 팝오버가 열린 채 대화상자가 뜨면(팝오버 안에서 [B] 배경 · [Ctrl+,] 설정을 누르는 길이
+// 열려 있다) [Tab]의 주인은 대화상자다. bottomBar의 캡처 리스너가 먼저 등록돼 있어 가드가 없으면
+// 포커스를 팝오버로 끌어오고, 뒤이어 도는 focusTrap은 "내 것이 아니다"로 보고 물러났다.
+test('팝오버 위에 대화상자가 뜨면 [Tab]은 대화상자 안에서 돈다', () => {
+  const { bar, size, more } = setup();
+  size.scrollWidth = 1100; size.clientWidth = 900;
+  bar.sync();
+  document.querySelector('#btnBottomMore').click();
+  expect(more.contains(document.activeElement)).toBe(true);
+  const modal = document.createElement('div');
+  modal.innerHTML = '<button id="m1">하나</button><button id="m2">둘</button>';
+  document.body.appendChild(modal);
+  const trap = focusTrap(modal);                             // 대화상자들이 쓰는 그 함수다(dialogBase)
+  expect(modal.contains(document.activeElement)).toBe(true);
+  for (let i = 0; i < 3; i++) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+  expect(modal.contains(document.activeElement)).toBe(true); // 팝오버로 새지 않는다
+  expect(document.activeElement.id).toBe('m2');              // 두 버튼 사이를 돈다(m1 → m2 → m1 → m2)
+  expect(more.classList.contains('open')).toBe(true);        // 팝오버는 뒤에 그대로 열려 있다
+  trap.destroy();
   bar.destroy();
 });
