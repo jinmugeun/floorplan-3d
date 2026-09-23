@@ -4,9 +4,10 @@ import { activeFloor } from '../state/schema.js';
 import { updateItem } from '../state/floorOps.js';
 import { DEG, RAD, normDeg } from '../geom/items.js';
 import { itemMenuItems } from '../ui/itemMenu.js';
-// 입면 프레이밍의 정본은 인쇄물 쪽에 있다(io/specSheet.js): 시방서가 그리는 바닥선·천장선이
-// 이 카메라와 같은 값을 써야 자리가 맞는다. view3d → io는 내려가는 방향이다(view3d → ui와 같다).
-import { elevationFrame } from '../io/specSheet.js';
+// 입면 프레이밍의 정본은 geom/elevation.js 한 곳이다(리뷰 M-7): 시방서가 그리는 바닥선·천장선이
+// 이 카메라와 같은 값을 써야 자리가 맞는다. 인쇄물 포매터(io/specSheet.js)가 아니라 geom/에 두어
+// 3D 카메라가 카탈로그·풍량까지 딸린 모듈에 의존하지 않는다(view3d → geom은 이미 여는 방향이다).
+import { elevationFrame } from '../geom/elevation.js';
 
 // three 오브젝트(m, y = 위) → 아이템 필드(mm, z = 밑면 높이, rot = 화면 시계 방향 각도)
 // rot은 정수 도로 반올림한다: 15° 스냅의 부동소수 오차가 문서에 남지 않게.

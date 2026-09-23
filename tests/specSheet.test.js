@@ -5,7 +5,8 @@ import { addWalls, addItem, updateRoom } from '../src/state/floorOps.js';
 import { applyMaterial } from '../src/state/materialOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { specHtml, SPEC_SECTIONS, PAPER, AIRFLOW_TITLES, CMH, elevationFrame, planExtent } from '../src/io/specSheet.js';
+import { specHtml, SPEC_SECTIONS, PAPER, AIRFLOW_TITLES, CMH, DERIVED_MAT_TAG } from '../src/io/specSheet.js';
+import { elevationFrame, planExtent } from '../src/geom/elevation.js';   // M-7: 프레임 규칙은 geom/에 산다
 import { roomAirflow } from '../src/vent/airflow.js';
 import { estimateRows } from '../src/io/estimate.js';
 import { setItemFlag } from '../src/state/itemOps.js';
@@ -129,6 +130,37 @@ describe('시방서 HTML', () => {
     const bareRooms = specHtml({ project: bare.get(), images: {}, options: {} }).split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
     expect(bareRooms).toContain('오크 원목마루');            // floorMaterial 'wood-oak'
     expect(bareRooms).not.toContain('<td>-</td>');
+  });
+
+  // 리뷰 O-1(§17.4(1) 개정): 같은 도면에서 뽑은 두 산출물이 다른 말을 했다 — 시방서는 벽 네 면을
+  // "무광 화이트 페인트"로 인쇄하고 견적서는 그 면적을 0 m²로 셌다(편집 화면은 '미지정'으로 그린다).
+  // 이제 레거시·별칭에서 **유도된** 이름에는 (기본값)이 붙어, 읽는 사람이 고른 값과 구분한다.
+  test('유도된 마감재 이름에는 (기본값)이 붙고 명시 지정은 그대로다', () => {
+    expect(DERIVED_MAT_TAG).toBe('(기본값)');
+    const p = project();
+    const html = specHtml({ project: p, images: {}, options: {} });
+    const rooms = html.split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
+    const walls = html.split('<h2>벽 목록</h2>')[1].split('<h2>')[0];
+    // 명시 지정(applyMaterial로 바른 칸)은 꼬리가 없다.
+    expect(rooms).toContain('<td>화이트 타일 300</td>');                       // 바닥 floorMat
+    expect(walls).toContain('<td>브러시 스테인리스</td>');                      // 첫 벽 matIn
+    // 샘플과 같은 레거시 벽(makeWall이 넣는 material 'paint-white')은 유도값이다 — 안·밖 둘 다.
+    expect(walls).toContain('<td>무광 화이트 페인트 (기본값)</td>');
+    expect(walls).not.toContain('<td>무광 화이트 페인트</td>');
+    expect(rooms).toContain('<td>무광 화이트 페인트 (기본값)</td>');            // 천장 ceilingMaterial
+    // 별칭 경로('wood' → wood-oak)도 유도값이다(§17.4(1)의 LEGACY_MATERIAL).
+    const bare = createStore(createEmptyProject('레거시 도면'));
+    addWalls(bare, rectWalls([0, 0], [4000.5, 3000.25], 200));
+    const bareRooms = specHtml({ project: bare.get(), images: {}, options: {} }).split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
+    expect(bareRooms).toContain('<td>오크 원목마루 (기본값)</td>');
+    // 감사 §38은 그대로다: 꼬리를 붙여도 빈 칸(-)은 0개다.
+    expect(bareRooms).not.toContain('<td>-</td>');
+    // 유도값 칸을 실제로 바르면 꼬리가 사라진다(견적서가 그 면적을 세기 시작하는 바로 그 순간이다).
+    const f = activeFloor(bare.get());
+    applyMaterial(bare, { kind: 'floor', id: f.rooms[0].id }, { id: 'tile-white-300', offset: [0, 0], angle: 0 });
+    const after = specHtml({ project: bare.get(), images: {}, options: {} }).split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
+    expect(after).toContain('<td>화이트 타일 300</td>');
+    expect(after).not.toContain('오크 원목마루');
   });
 
   // §17.4(2)(3) · 감사 §37·§41: 입면도만 캡션을 갖고 층고를 그림 밖에 적는다(렌더에 글자를 그리지 않는다).

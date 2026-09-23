@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { elevationFrame } from '../src/io/specSheet.js';
+import { elevationFrame } from '../src/geom/elevation.js';   // M-7: 프레임 규칙은 geom/에 산다(io/가 아니다)
 import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch, tintGizmo, gizmoTintFor, itemMeshOf, previewItemMesh, GIZMO_COLORS } from '../src/view3d/pick3d.js';
 import { createItem, createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { createStore } from '../src/state/store.js';

@@ -1,6 +1,7 @@
 // 시방서 대화상자: 용지·구역 옵션을 고르고, 도면 이미지를 만들어 인쇄하거나 HTML로 내려받는다.
 import { specHtml, SPEC_SECTIONS, PAPER } from '../io/specSheet.js';
 import { activeFloor, floorIsEmpty } from '../state/schema.js';
+import { elevationAspect, planExtent } from '../geom/elevation.js';   // 그림 비율의 정본(리뷰 M-7·M-9)
 import { capture2D, downloadText, filenameFor, printBodyPx } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
@@ -67,9 +68,12 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
     if (sections.plan) { try { images.plan = await capture2D(store, ui, { cssWidth: printBodyPx(paper, landscape), ratio: 2 }); } catch { failed += 1; } }
     if (sections.elevations) {
       // 평면도와 같은 배율 규칙(§17.4(2)): 논리 폭은 본문 폭, 비트맵은 그 2배다. A4 세로에서
-      // 폭 1530 px → 본문 765 px = 배율 0.5. 높이는 16:9를 지킨다(직교 프리셋의 절두체 비율).
+      // 폭 1530 px → 본문 765 px = 배율 0.5. 높이는 **내용 비율**이 정한다(§17.4(2) 개정 · 리뷰
+      // 재검토): 16:9로 고정하면 20 m 도면이 그림의 27%만 채우고 나머지가 빈 종이였다. 시방서의
+      // 바닥선·천장선도 같은 elevationAspect를 쓰므로 선과 사진이 같은 프레임을 본다.
+      const f = activeFloor(store.get());
       const width = printBodyPx(paper, landscape) * 2;
-      const height = Math.round((width * 9) / 16);
+      const height = Math.round(width / elevationAspect({ extent: planExtent(f.walls), height: f.height ?? 0 }));
       for (const preset of ELEV) {
         try { images[preset] = view3d.renderImage({ width, height, preset }); } catch { failed += 1; }
       }

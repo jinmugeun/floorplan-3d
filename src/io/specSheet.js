@@ -5,11 +5,12 @@
 // 서로 다른 수량을 말한다(견적서 수량은 줄었는데 시방서 제품 목록만 그대로 남는 식이다).
 import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
-import { wallLength, endpoints } from '../geom/walls.js';
+import { wallLength } from '../geom/walls.js';
+import { elevationFrame, planExtent } from '../geom/elevation.js';   // 입면 프레임의 정본(리뷰 M-7)
 import { fmtLen, fmtArea } from '../util/units.js';
 import { roomAirflow, systemAirflow, UNPLACED_ROOM } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // src/io/ → src/ui/ import는 계층 역전이다(아키텍처 §9)
-import { assignmentOf } from '../state/materialOps.js';   // io/ → state/는 열려 있는 방향이다(roomTypes와 같다)
+import { assignmentOf, explicitAssignmentOf } from '../state/materialOps.js';   // io/ → state/는 열려 있는 방향이다(roomTypes와 같다)
 import { esc } from '../util/html.js';
 import { pageGroups, pageFootHtml, pageCss } from './specPages.js';
 
@@ -22,40 +23,17 @@ const FLOW_LABELS = { supply: '급기', exhaust: '배기', mixed: '급·배기' 
 export const AIRFLOW_TITLES = { room: '실별 풍량', system: '계통별 풍량' };
 export const CMH = '(CMH)';
 
-// 입면도 프레이밍(§17.4(2) 개정 · 리뷰 I-3 · 감사 §37). 세로 절두체를 **평면 크기**에서 뽑던
-// 규칙은 층고 3.5 m 건물을 23 m 높이 화면 안의 15%짜리 회색 띠로 만들었다. 세로는 건물 높이로
-// 잡고, 그 비율로는 도면 폭이 들어가지 않을 때만 들어갈 만큼만 넓힌다 — 입면도는 벽 전체가
-// 보여야 도면이므로 잘라 내지 않는다. 카메라(view3d/pick3d.js의 orthoViewParams)와 인쇄물의
-// 바닥선·천장선이 **같은 값**을 써야 하므로 규칙은 여기 한 곳이다(view3d → io는 내려가는 방향이다).
-// 단위: extent·height는 mm, half*·centerY는 m(three 좌표), *Frac은 그림 위에서 잰 0..1 비율.
-export const ELEV_ASPECT = 16 / 9;    // §17.4(2)가 못 박은 입면도 비트맵 비율(specDialog와 같은 수)
-export const ELEV_MARGIN = 1.15;      // 건물 둘레의 여백(기존 직교 프레임과 같은 값)
-export const ELEV_MIN_EXTENT = 2000;  // 아주 작은 도면도 최소 크기를 갖는다(기존 규칙 그대로)
-export function elevationFrame({ extent = 6000, height = 2300, aspect = ELEV_ASPECT, margin = ELEV_MARGIN } = {}) {
-  const a = Math.max(Number(aspect) || 0, 0.01);
-  const h = Math.max(Number(height) || 0, 0) / 1000;
-  const halfWNeed = (Math.max(Number(extent) || 0, ELEV_MIN_EXTENT) * margin) / 2000;
-  const halfH = Math.max((h * margin) / 2, halfWNeed / a);
-  const centerY = h / 2;
-  return {
-    halfH, halfW: halfH * a, centerY,
-    fill: h / (2 * halfH),                                    // 그림 높이에서 건물이 차지하는 비율
-    ceilFrac: (centerY + halfH - h) / (2 * halfH),
-    floorFrac: (centerY + halfH) / (2 * halfH),
-  };
-}
-// 도면의 가로·세로 중 큰 쪽(mm). view3d의 bounds()와 같은 계산이라 카메라와 자리가 어긋나지 않는다.
-export function planExtent(walls) {
-  const pts = endpoints(walls ?? []);
-  if (!pts.length) return 8000;                               // 벽이 없는 층의 기본값도 bounds()와 같다
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-}
-
 const typeLabel = t => ROOM_TYPES.find(([v]) => v === t)?.[1] ?? '미지정';
-// 마감재 조회의 정본은 assignmentOf 한 함수다(§17.4(1)): 레거시 문자열 필드까지 같은 답을 읽는다.
+// 인쇄물의 마감재 이름은 보고용 조회(assignmentOf)에서 온다 — 레거시 문자열·별칭까지 읽어 칸이
+// `-`로 비지 않는다(감사 §38). 다만 그렇게 **유도된** 이름은 사용자가 고른 값이 아니다: 같은 면을
+// 견적서는 0 m²로 세고 속성 패널은 '미지정'으로 그린다(리뷰 O-1). 그래서 유도값에는 꼬리를 붙여
+// 읽는 사람이 "고른 것"과 "기본값"을 구분하게 한다(§17.4(1) 개정 — 두 문서가 같은 말을 한다).
+export const DERIVED_MAT_TAG = '(기본값)';
 const matName = a => (a?.id ? materialById(a.id)?.name ?? a.id : '-');
-const matOf = (f, target) => matName(assignmentOf(f, target));
+const matOf = (f, target) => {
+  const name = matName(assignmentOf(f, target));
+  return name === '-' || explicitAssignmentOf(f, target) ? name : `${name} ${DERIVED_MAT_TAG}`;
+};
 // rowAttr(i)는 그 행의 <tr> 속성이다(미배치 행의 경고색에만 쓴다).
 const table = (head, rows, rowAttr = () => '') => `<table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
     <tbody>${rows.length ? rows.map((r, i) => `<tr${rowAttr(i)}>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${head.length}">항목이 없습니다.</td></tr>`}</tbody></table>`;
@@ -102,6 +80,8 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   const img = (src, label, caption = '') => (src ? `<figure><img src="${esc(src)}" alt="${esc(label)}">${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>` : '');
   // 바닥선·천장선과 층고 치수선을 그림 **위에** 겹쳐 그린다(§17.4(2) 개정 · 리뷰 I-3 · 감사 §37):
   // 렌더에 글자를 굽지 않는 규칙은 그대로고, 선의 자리는 촬영 카메라와 같은 elevationFrame이 준다.
+  // 비율을 넘기지 않는다: 그림의 비율이 곧 내용 비율이고(§17.4(2) 개정), specDialog가 비트맵 높이를
+  // 같은 값으로 잡으므로 선과 사진이 같은 프레임을 본다.
   // 천장 평면도(top)는 위에서 내려다본 그림이라 바닥선·천장선이 없다.
   const fr = elevationFrame({ extent: planExtent(f.walls), height: f.height ?? 0 });
   const pct = n => `${(n * 100).toFixed(2)}%`;
