@@ -1000,3 +1000,71 @@ test('옵션 바의 치수 칸이 도구와 이어진다', () => {
   shell.refreshTool();
   expect(root.querySelector('#optionDims [name="dim:len"]').value).toBe('5000');
 });
+
+// 그리는 도구를 흉내 낸 스텁: 확정하면 버퍼가 비고 실측이 0에서 다시 시작한다(벽 도구와 같은 모양).
+// 세 회귀 테스트(C-1·I-5·치수 칸 안내)가 이 하나로 셸의 배선만 본다 — 도구 쪽 계약은 wallTool.test.js가 본다.
+function dimStub() {
+  const s = { typed: '', measured: 3000, committed: [], cancelled: 0 };
+  s.tool = {
+    name: 'wall', opts: { thickness: 200 }, hint: '다음 점을 클릭',
+    dims: () => ({ fields: [{ key: 'len', text: s.typed || String(s.measured), mm: s.measured, active: true }] }),
+    dimSig: () => `len:${s.typed || String(s.measured)}:1`,
+    setDim(k, v) { s.typed = v; return true; },
+    commitDims() { s.committed.push(s.typed); s.typed = ''; s.measured = 0; return true; },
+    cancel() { s.cancelled += 1; },
+  };
+  return s;
+}
+
+// 리뷰 C-1: [Enter] 확정 뒤에도 포커스가 칸에 남아(셸이 preventDefault를 한다) syncDimBar가 그 칸을
+// 건너뛰므로 낡은 글자가 남았다 → 이어 타이핑한 숫자가 뒤에 붙어 45003000(45 m 벽)이 놓였다.
+test('확정한 치수 칸은 모델 값으로 되맞고 이어 타이핑이 덮어쓴다(리뷰 C-1)', () => {
+  const { shell, root } = mountShell();
+  const s = dimStub();
+  shell.setOptionBar(s.tool);
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  const selected = vi.spyOn(el, 'select');
+  el.focus();
+  el.value = '4500'; el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(s.committed).toEqual(['4500']);
+  expect(el.value).toBe('0');                       // 낡은 4500이 남지 않는다(모델 = 빈 버퍼 + 마우스 실측)
+  expect(selected).toHaveBeenCalled();              // 브라우저의 이어 타이핑이 값을 갈아치운다
+  // select() 뒤의 타이핑은 칸을 덮어쓴다 — 그 값이 곧 두 번째 확정 값이다(45003000이 아니다).
+  el.value = '3000'; el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(s.committed).toEqual(['4500', '3000']);
+});
+
+// 리뷰 I-5: 칸의 [Esc]가 글자만 되돌리고 도구 버퍼는 그대로여서, 다음 프레임의 syncDimBar가 그
+// 버퍼를 다시 써 넣었다(되돌림이 없던 일이 됐다). 도구를 취소하지는 않는다(§16.7).
+test('치수 칸의 [Esc]는 글자와 도구 버퍼를 함께 되돌린다(리뷰 I-5)', () => {
+  const { shell, root } = mountShell();
+  const s = dimStub();
+  shell.setOptionBar(s.tool);
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  el.focus();
+  el.value = '4500'; el.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(s.typed).toBe('4500');
+  const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  el.dispatchEvent(ev);
+  expect(s.typed).toBe('');                         // 도구 버퍼도 함께 비워진다
+  expect(el.value).toBe('3000');                    // 마우스 실측으로 복귀한다
+  expect(ev.defaultPrevented).toBe(true);           // keymap의 revertField가 한 번 더 돌지 않는다
+  expect(s.cancelled).toBe(0);                      // 그리던 도구는 취소되지 않는다
+  expect(document.activeElement).not.toBe(el);      // 칸에서 나온다(캔버스로 돌아갈 수 있다)
+});
+
+// 리뷰 I-2·I-7: 범위는 도구를 함께 보고(덕트 단면 h는 3000), 잘림은 조용히 일어나지 않는다.
+test('옵션 바에서 잘린 값은 칸에 되돌아오고 안내가 뜬다(리뷰 I-2·I-7)', () => {
+  const { shell, root } = mountShell();
+  const tool = { name: 'duct', opts: { w: 500, h: 300, z: 2900 } };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionBar input[name="h"]');
+  expect(el.max).toBe('3000');                      // 상태 계층의 DUCT_RANGE와 같은 한계를 약속한다
+  el.value = '5000';
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(tool.opts.h).toBe(3000);                   // normalizeDuct가 조용히 줄이기 전에 칸에서 잘린다
+  expect(el.value).toBe('3000');
+  expect([...document.querySelectorAll('.toast')].map(t => t.textContent)).toContain('최대 3000 mm까지');
+});

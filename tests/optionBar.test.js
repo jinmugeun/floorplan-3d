@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect } from 'vitest';
-import { optionBarHtml, applyOptionInput, dimBarHtml, dimBarSignature, syncDimBar, OPTION_LABELS, OPTION_TITLES, OPTION_RANGE, DIM_LABELS, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
+import { optionBarHtml, applyOptionInput, dimBarHtml, dimBarSignature, syncDimBar, OPTION_LABELS, OPTION_TITLES, OPTION_RANGE, rangeOf, DIM_LABELS, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
+import { DUCT_RANGE } from '../src/state/ductSchema.js';
 import { fmtLen } from '../src/util/units.js';
 
 describe('옵션 바 HTML', () => {
@@ -168,5 +169,66 @@ describe('옵션 바의 치수 칸(§16.7)', () => {
     const el = { name: 'thickness', type: 'number', value: '99999', checked: false, dataset: {} };
     expect(applyOptionInput(tool, el, 'mm')).toBe(true);
     expect(tool.opts.thickness).toBe(1000);                   // 범위로 자른다
+  });
+});
+
+// 리뷰 I-1·I-2·I-7: 칸은 모델과 같은 말을 한다 — 잘린 값은 칸에도 되돌아오고, 빈 칸은 값을 바꾸지
+// 않고, 범위는 도구를 함께 본다(덕트 단면은 상태 계층의 DUCT_RANGE 한 벌뿐이다).
+describe('옵션 바의 범위·되돌림 계약', () => {
+  const el = (patch = {}) => ({ name: 'thickness', type: 'number', value: '150', checked: false, dataset: {}, ...patch });
+
+  test('범위로 잘린 값은 칸에도 되돌아오고 안내를 부른다(리뷰 I-1·I-2)', () => {
+    const tool = { name: 'wall', opts: { thickness: 200 } };
+    const cuts = [];
+    const e = el({ value: '99999' });
+    expect(applyOptionInput(tool, e, 'mm', { onClamp: (v, i) => cuts.push([v, i.max]) })).toBe(true);
+    expect(tool.opts.thickness).toBe(1000);
+    expect(e.value).toBe('1000');            // 칸의 글자가 모델과 어긋난 채 남지 않는다(옵션 바는 다시 그려지지 않는다)
+    expect(cuts).toEqual([[1000, 1000]]);    // 조용히 잘리지 않는다(속성 패널과 같은 계약)
+  });
+
+  test('빈 칸·숫자가 아닌 입력은 값을 바꾸지 않고 칸을 모델 값으로 되돌린다(리뷰 I-2·M-3)', () => {
+    const tool = { name: 'wall', opts: { thickness: 200 } };
+    const empty = el({ value: '   ' });
+    expect(applyOptionInput(tool, empty, 'mm')).toBe(false);
+    expect(tool.opts.thickness).toBe(200);   // 예전에는 Number('') === 0이 min으로 잘려 2 mm 벽이 됐다
+    expect(empty.value).toBe('200');
+    const nan = el({ value: 'abc' });
+    expect(applyOptionInput(tool, nan, 'mm')).toBe(false);
+    expect(tool.opts.thickness).toBe(200);   // NaN이 opts에 들어가지 않는다
+    expect(nan.value).toBe('200');
+  });
+
+  test('덕트 단면 범위는 상태 계층의 DUCT_RANGE를 그대로 쓴다(리뷰 I-7)', () => {
+    expect(rangeOf({ name: 'duct' }, 'h')).toEqual(DUCT_RANGE.h);
+    expect(rangeOf({ name: 'column-square' }, 'h')).toEqual(OPTION_RANGE.h);   // 기둥 높이는 층고(8000)까지 간다
+    expect(rangeOf(null, 'nope')).toEqual([]);
+    expect(optionBarHtml({ name: 'duct', opts: { h: 300 } }, { units: 'mm' })).toContain('max="3000"');
+    expect(optionBarHtml({ name: 'column-square', opts: { h: 2300 } }, { units: 'mm' })).toContain('max="8000"');
+    const tool = { name: 'duct', opts: { w: 500, h: 300, z: 2900 } };
+    const cuts = [];
+    const e = el({ name: 'h', value: '5000' });
+    expect(applyOptionInput(tool, e, 'mm', { onClamp: v => cuts.push(v) })).toBe(true);
+    expect(tool.opts.h).toBe(3000);          // normalizeDuct가 조용히 줄이기 전에 칸에서 잘린다
+    expect(e.value).toBe('3000');
+    expect(cuts).toEqual([3000]);
+  });
+
+  test('ft·in 칸도 잘린 값을 그 표기로 되돌린다(리뷰 I-1)', () => {
+    const tool = { name: 'wall', opts: { thickness: 200 } };
+    const cuts = [];
+    const e = el({ type: 'text', value: '100"', dataset: { len: '1', min: '2', max: '1000', mm: '200' } });
+    expect(applyOptionInput(tool, e, 'ftin', { onClamp: v => cuts.push(v) })).toBe(true);
+    expect(tool.opts.thickness).toBe(1000);
+    expect(e.value).toBe(fmtLen(1000, 'ftin'));
+    expect(e.dataset.mm).toBe('1000');       // 다음 "고치지 않았다" 판정의 기준값도 함께 간다
+    expect(cuts).toEqual([1000]);
+  });
+
+  test('ft·in 치수 칸에는 모델 값이 data-mm으로 실린다(리뷰 I-4)', () => {
+    const guide = { name: 'guide', opts: {}, dims: () => ({ fields: [{ key: 'pos', text: `4'`, mm: 1219, active: true }] }) };
+    const html = dimBarHtml(guide, { units: 'ftin' });
+    expect(html).toContain('data-mm="1219"');
+    expect(html).toContain('좌표 (ft·in)');
   });
 });

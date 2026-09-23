@@ -1,14 +1,14 @@
 import { activeFloor } from '../state/schema.js';
 import { toast } from './toast.js';
-import { createPopover } from './popover.js';
-import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
+import { createShellPopovers } from './shellPopovers.js';
 import { optionBarHtml, applyOptionInput, syncDimBar } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
 import { trackFields, isDuplicateCommit } from './fieldUtils.js';
 import { shellHtml } from './shellHtml.js';
 import { createBottomBar } from './bottomBar.js';
 import { createBanner } from './banner.js';
-import { helpHtml } from './helpPopover.js';
+import { CLAMP_MAX, CLAMP_MIN } from './messages.js';
+import { fmtLen } from '../util/units.js';
 
 // 기즈모 모드 토글은 3D 궤도 뷰에서 기즈모가 실제로 붙는 아이템 하나를 골랐을 때만 쓸 일이 있다.
 // 1인칭·2D 투영(ortho)에는 기즈모가 없고, 벽 부착·잠긴 아이템에도 붙지 않으므로 버튼도 숨긴다.
@@ -77,8 +77,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   }
   relayout();
   // 팝오버는 한 번에 하나만 열린다: 더보기를 열면 셸 팝오버(보기·카메라·햇빛·도움말)를 닫는다.
-  // pop은 아래에서 만들지만 이 콜백은 클릭 때 비로소 돌아 TDZ에 걸리지 않는다.
-  bottom = createBottomBar(root, { onOpen: () => pop.close() });
+  // pops는 아래에서 만들지만 이 콜백은 클릭 때 비로소 돌아 TDZ에 걸리지 않는다.
+  bottom = createBottomBar(root, { onOpen: () => pops.close() });
   const resizeWatch = createResizeWatch(layout, relayout);
   q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; userOpen.right = true; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; syncBottom(true); onMinimapResize(); });
   const splitters = [
@@ -141,58 +141,10 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
 
   // 입력 칸의 [Esc] 되돌리기는 "포커스 시점 값"이 필요하다(§15.9): 앱 전체에 한 번만 건다.
   const fieldTrack = trackFields(root);
-  const pop = createPopover(root);
-  let popKind = null;
-  // 도움말은 현재 화면에 맞는 규칙을 보여 준다: 덕트 도구가 켜져 있으면 덕트, 아니면 2D/3D.
-  const popHtml = kind => {
-    const v = store.get().view;
-    if (kind === 'view') return viewPopoverHtml(v, ui.get().mode === '2d' ? '2d' : '3d');
-    if (kind === 'cam') return cameraPopoverHtml(v);
-    if (kind === 'sun') return sunPopoverHtml(v);
-    if (kind === 'help') return helpHtml(ui.get().tool === 'duct' ? 'duct' : ui.get().mode === '2d' ? '2d' : '3d');
-    return '';
-  };
-  // 접힌 하단 바의 버튼(카메라·햇빛)은 더보기 팝오버 안에 있다. 그 팝오버를 닫으면 버튼이
-  // display: none이 되어 rect가 0이 되므로(팝오버가 좌상단으로 튄다) 늘 보이는 "더보기 ▾"를
-  // 앵커로 삼는다 — 팝오버는 접힌 바에서도 버튼 근처에 뜬다.
-  const anchorFor = el => (el?.closest?.('#bottomMore') ? q('#btnBottomMore') : el);
-  // 팝오버 버튼은 눌린 상태가 아니라 "열려 있는지"를 알린다(§14.10).
-  const syncPopButtons = () => root.querySelectorAll('[data-popover]').forEach(b => b.setAttribute('aria-expanded', String(pop.isOpen() && popKind === b.dataset.popover)));
-  const popHandlers = { onChange: applyViewChange, onInput: applyViewChange, onClick: onPopoverClick, onClose: () => { popKind = null; syncPopButtons(); } };
-  function openPopover(kind, anchor) {
-    const at = anchorFor(anchor);
-    bottom?.closeMore();                 // 팝오버는 한 번에 하나만 열린다
-    if (pop.isOpen() && popKind === kind) { pop.close(); popKind = null; syncPopButtons(); return; }
-    popKind = kind;
-    pop.open(at, popHtml(kind), popHandlers);
-    syncPopButtons();
-  }
-  function refreshPopover() { if (pop.isOpen() && popKind) pop.open(anchorFor(root.querySelector(`[data-popover="${popKind}"]`)), popHtml(popKind), popHandlers); }
-  const setPath = (o, path, v) => { const ks = path.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = t[k]; t[ks.at(-1)] = v; };
-  // 보기 옵션은 되돌릴 단계가 아니다(record: false).
-  function applyViewChange(ev) {
-    const el = ev.target;
-    if (!el || (!el.dataset.v2 && !el.dataset.v3 && !el.dataset.view)) return;
-    const value = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value;
-    store.dispatch(d => {
-      if (el.dataset.v2) d.view.v2[el.dataset.v2] = value;
-      else if (el.dataset.v3) d.view.v3[el.dataset.v3] = value;
-      else setPath(d.view, el.dataset.view, value);
-    }, { record: false });
-    const out = el.parentElement?.querySelector('output'); if (out) out.textContent = `${el.value}${out.dataset.suffix ?? ''}`;
-  }
-  function onPopoverClick(ev) {
-    // 도움말 팝오버의 "단축키 표 열기": 닫고 설정의 단축키 탭을 연다(같은 내용을 두 곳에 적지 않는다).
-    if (ev.target?.dataset?.help === 'keymap') { pop.close(); onOpenKeymap(); return; }
-    const spec = ev.target?.dataset?.preset;
-    if (!spec) return;
-    const [key, value] = spec.split(':');
-    store.dispatch(d => { setPath(d.view, key, Number(value)); }, { record: false });
-    refreshPopover(); // 슬라이더 위치를 새 값으로 다시 그린다
-  }
-  // [?] 버튼도 다른 팝오버 버튼([보기]/[카메라 설정]/[햇빛])과 같은 data-popover 경로를 타므로
-  // openPopover의 "이미 열려 있으면 닫는다" 규칙을 그대로 물려받아 두 번째 클릭에 닫힌다.
-  root.querySelectorAll('[data-popover]').forEach(b => b.addEventListener('click', () => openPopover(b.dataset.popover, b)));
+  // 팝오버(보기·카메라·햇빛·도움말) 배선은 ui/shellPopovers.js 한 곳에 있다(리뷰 I-8 — 300줄 규칙은
+  // "커지기 전에 나눈다"였다: 예산에 닿아 설명 주석을 깎던 자리를 덩어리째 옮겼다). 셸은 상태만
+  // 묻고(kind()·isOpen()) 화면이 바뀔 때 닫거나 다시 그리게 한다.
+  const pops = createShellPopovers(root, { store, ui, onOpenKeymap, onOpen: () => bottom?.closeMore() });
 
   let currentTool = null;
   // 옵션 바는 캔버스 위에 뜬 팝업이 아니라 캔버스 위쪽 행이다(§12.1): 옵션이 없으면 행이 접히고(hidden),
@@ -215,11 +167,14 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   function setOptionBar(tool) { currentTool = tool; renderOptions(); renderBanner(); }
   // 치수 칸의 이름은 dim:<key>다(도구 옵션과 섞이지 않게 — applyOptionInput은 opts에 없는 이름을 받지 않는다).
   const dimKey = el => (typeof el?.name === 'string' && el.name.startsWith('dim:') ? el.name.slice(4) : null);
+  // 범위로 잘린 값은 조용히 바뀌지 않는다(리뷰 I-2): 속성 패널과 같은 문구로 알린다(§14.10).
+  // ft·in 칸은 그 표기로 말한다(m-6: "최대 8000 mm까지"가 ft·in 화면에 뜨던 자리).
+  const clampToast = el => (v, { max }) => toast((v === max ? CLAMP_MAX : CLAMP_MIN)(el.dataset?.len ? fmtLen(v, 'ftin') : v, el.dataset?.len ? '' : 'mm'));
   // [Enter] 확정의 합성 change 뒤 blur가 내는 네이티브 change는 삼킨다(§16.1).
   els.optionBar.addEventListener('change', ev => {
     if (isDuplicateCommit(ev.target)) return;
     if (dimKey(ev.target)) return;                    // 치수 칸은 input에서 이미 반영했다
-    applyOptionInput(currentTool, ev.target, units());
+    applyOptionInput(currentTool, ev.target, units(), { onClamp: clampToast(ev.target) });
   });
   // 치수 칸은 타이핑마다 도구 버퍼에 들어가고(캔버스 프리뷰가 그 값으로 따라온다), 포커스가 옮겨 간
   // 칸이 곧 활성 칸이다(캔버스의 [Tab]과 같은 상태를 가리킨다 — §16.7).
@@ -233,12 +188,33 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     // 한글 입력 조합 중의 Enter는 "글자 확정"이지 "반영"이 아니다(keymap.js:107과 같은 방어).
     // 조합 중에 반영하면 아직 완성되지 않은 값이 들어가고, 이어지는 확정 Enter가 또 한 번 돈다.
     if (ev.isComposing || ev.keyCode === 229) return;
+    const dk = dimKey(ev.target);
+    // 치수 칸의 [Esc]는 글자와 도구 버퍼를 **함께** 되돌린다(리뷰 I-5): keymap의 revertField는 글자만
+    // 되돌려, 다음 프레임의 syncDimBar가 그대로 남은 버퍼를 다시 써 넣었다(되돌림이 없던 일이 됐다).
+    // 빈 버퍼 = 마우스 실측으로 복귀 = 이 칸의 "없던 일"이다. 도구는 취소하지 않는다(§16.7).
+    if (ev.key === 'Escape' && dk) {
+      ev.preventDefault();                            // keymap의 revertField가 한 번 더 돌지 않게 한다
+      currentTool?.setDim?.(dk, '');
+      ev.target.blur();                               // 포커스가 없어야 syncDims가 이 칸을 다시 채운다
+      syncDims(); onToolChange();
+      return;
+    }
     if (ev.key !== 'Enter' || ev.target?.tagName !== 'INPUT' || !ev.target.name) return;
     if (ev.target.type === 'checkbox') return;
     ev.preventDefault();
     // 치수 칸의 [Enter]는 도구의 확정이다(벽을 놓고 다음 점으로 — §16.7). 옵션 값이 아니다.
-    const k = dimKey(ev.target);
-    if (k) { if (currentTool?.commitDims?.()) onToolChange(); return; }
+    if (dk) {
+      if (currentTool?.commitDims?.()) {
+        // 확정한 칸은 모델 값으로 되맞춘다(리뷰 C-1): 셸이 preventDefault를 했으므로 blur가 없어
+        // 포커스가 칸에 남고, syncDimBar는 포커스 칸을 건너뛴다 → 낡은 글자(4500)가 남아 다음
+        // 타이핑이 이어 붙었다(45003000 = 45 m 벽). select()로 이어 타이핑이 덮어쓰게 한다.
+        const f = currentTool.dims?.()?.fields.find(x => x.key === dk);
+        ev.target.value = f ? f.text : '';
+        ev.target.select?.();
+        syncDims(); onToolChange();
+      }
+      return;
+    }
     ev.target.dispatchEvent(new Event('change', { bubbles: true }));
   });
 
@@ -258,10 +234,10 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     const isIso = s.mode === 'iso';   // 평면 뷰어·1인칭에는 궤도 카메라·햇빛 조절이 뜻이 없다
     q('#btnCam').hidden = !isIso; q('#btnSun').hidden = !isIso;
     syncGizmoVisible(s);
-    if (!isIso && (popKind === 'cam' || popKind === 'sun')) pop.close();
+    if (!isIso && (pops.kind() === 'cam' || pops.kind() === 'sun')) pops.close();
     syncBottom();                          // 3D 전용 버튼이 늘거나 줄면 접기 판정을 다시 한다
     renderBanner(s);
-    if (pop.isOpen() && popKind === 'view') refreshPopover();
+    if (pops.isOpen() && pops.kind() === 'view') pops.refresh();
     strip.hidden = !store.get().background || s.mode !== '2d'; // 모드가 바뀌면 이미지 세팅 스트립도 따라간다
   })];
   let lastUnits = null;
@@ -288,10 +264,10 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     syncGizmoVisible(); syncBottom();
   };
   unsubs.push(store.subscribe(syncTop)); syncTop(store.get()); // 시작 시에도 버튼 상태를 맞춘다
-  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pop, refreshPopover, refreshBanner: () => renderBanner(),
+  return { els, setOptionBar, showPanel, setOrtho, toast, popover: pops.pop, refreshPopover: pops.refresh, refreshBanner: () => renderBanner(),
     // 도구 상태가 바뀌었다: 배너 문구와 치수 칸을 함께 맞춘다(§16.7 — view2d의 onHint가 부른다).
     refreshTool() { renderBanner(); syncDims(); },
     // 셸을 버리면 구독·관찰자·document 리스너까지 함께 뗀다: 남아 있으면 스토어가 바뀔 때
     // syncTop이 사라진 #btnUndo에서 던진다(m-8).
-    destroy() { unsubs.forEach(u => u?.()); banner.destroy(); bottom?.destroy(); pop.destroy(); miniRo?.disconnect(); resizeWatch.destroy(); fieldTrack.destroy(); splitters.forEach(s => s.destroy()); } };
+    destroy() { unsubs.forEach(u => u?.()); banner.destroy(); bottom?.destroy(); pops.destroy(); miniRo?.disconnect(); resizeWatch.destroy(); fieldTrack.destroy(); splitters.forEach(s => s.destroy()); } };
 }

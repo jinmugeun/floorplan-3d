@@ -68,7 +68,17 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
     dimSig() { const d = this.dims(); return d ? d.fields.map(f => `${f.key}:${f.text}:1`).join('|') : ''; },
     setDim(key, text) { if (key !== 'len' || !last()) return false; typed = String(text ?? ''); return true; },
     focusDim() {},                                    // 칸이 하나뿐이라 옮길 자리가 없다
-    commitDims() { return this.onKey({ key: 'Enter', preventDefault() {} }); },
+    // 리뷰 I-6: 손대지 않은 칸의 [Enter]는 **칸에 보이는 길이로 한 구간을 확정**한다(체인을 끝내지
+    // 않는다). 배너가 "길이를 타이핑하고 [Enter]"라고 말하고 칸에 3000이 적혀 있는 화면에서, 같은
+    // 키가 프리뷰 구간을 버리고 그리기를 끝내면 보이는 값과 결과가 어긋난다. 캔버스 [Enter]의
+    // "완료"는 그대로다 — 이 경로는 옵션 바 칸에서만 온다. 보이는 값을 typed에 문자열로 싣지 않고
+    // 프리뷰 구간을 그대로 놓는다: 스냅된 끝점과 ft·in 왕복 오차를 함께 피한다.
+    commitDims() {
+      if (typed !== '') return this.onKey({ key: 'Enter', preventDefault() {} });
+      if (!last() || !cursor || !addSegment(last(), cursor)) return false;
+      points.push(cursor);
+      return true;
+    },
     draw(ctx, view) {
       for (const g of guides) { const [w, h] = [ctx.canvas.clientWidth || ctx.canvas.width, ctx.canvas.clientHeight || ctx.canvas.height]; ctx.strokeStyle = view.COLORS.guide; ctx.setLineDash([6, 4]); ctx.beginPath(); if (g.type === 'v') { const x = view.toScreen([g.x, 0])[0]; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = view.toScreen([0, g.y])[1]; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
       if (!last() || !cursor) { if (cursor) { const s = view.toScreen(cursor); ctx.beginPath(); ctx.arc(s[0], s[1], 5, 0, Math.PI * 2); ctx.strokeStyle = view.COLORS.wallSel; ctx.stroke(); drawSnapMark(ctx, view, this.getSnap()); } return; }

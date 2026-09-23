@@ -167,3 +167,38 @@ test('벽 도구의 치수 칸은 길이 하나이고 타이핑·확정이 캔�
   expect(Math.round(Math.hypot(w[0].b[0] - w[0].a[0], w[0].b[1] - w[0].a[1]))).toBe(4500);
   expect(t.setDim('nope', '1')).toBe(false);
 });
+
+// 리뷰 I-6: 손대지 않은 칸의 [Enter]는 **칸에 보이는 길이로 한 구간을 확정**한다. 예전에는 typed가
+// 비어 있어 onKey의 else 갈래(finish)로 빠져, 3000이 적힌 화면에서 프리뷰 구간을 버리고 그리기가 끝났다.
+test('손대지 않은 치수 칸의 [Enter]는 보이는 길이로 확정한다(리뷰 I-6)', () => {
+  const store = createStore(createEmptyProject());
+  let done = 0;
+  const t = createWallTool({ store, onDone: () => done++ });
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([3000.5, 0.25]);
+  expect(t.dims().fields[0].text).toBe('3000');      // 칸에 보이는 값
+  const before = store.get();
+  expect(t.commitDims()).toBe(true);
+  const w = activeFloor(store.get()).walls;
+  expect(w).toHaveLength(1);
+  expect(Math.round(Math.hypot(w[0].b[0] - w[0].a[0], w[0].b[1] - w[0].a[1]))).toBe(3000);
+  expect(done).toBe(0);                              // 체인은 끝나지 않는다(다음 점을 이어 그린다)
+  expect(t.getPreview().points).toHaveLength(2);
+  expect(store.undo()).toBe(true);                   // 한 동작 = 한 되돌림 단계
+  expect(store.get()).toEqual(before);
+  // 프리뷰가 없으면(길이 0) 아무 일도 하지 않는다 — 빈 벽도, 빈 단계도 만들지 않는다.
+  t.onPointerMove([3000.5, 0.25]);
+  expect(t.commitDims()).toBe(false);
+});
+
+// 캔버스의 [Enter]는 여전히 "완료"다(§16.7): 칸 경로(commitDims)만 위처럼 갈라진다.
+test('캔버스의 [Enter]는 버퍼가 비어 있으면 그리기를 끝낸다', () => {
+  const store = createStore(createEmptyProject());
+  let done = 0;
+  const t = createWallTool({ store, onDone: () => done++ });
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([3000.5, 0.25]);
+  expect(t.onKey(key('Enter'))).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(done).toBe(1);
+});

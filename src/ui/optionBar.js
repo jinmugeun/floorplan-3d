@@ -3,6 +3,7 @@
 // shell.js가 300줄을 넘지 않게 그리기·읽기 규칙을 여기로 나눴다(아키텍처 §9).
 import { esc } from '../util/html.js';
 import { fmtLen } from '../util/units.js';
+import { DUCT_RANGE } from '../state/ductSchema.js';
 import { readLen, STEP, minAttr } from './fieldUtils.js';
 
 // 옵션 바에 찍는 짧은 라벨. 한 줄에 다 들어가야 한다(도구가 옵션 여섯 개를 낼 수 있다).
@@ -20,9 +21,14 @@ export const LEN_OPTS = new Set(['thickness', 'w', 'd', 'h', 'z', 'sill']);
 export const unitLabel = units => (units === 'ftin' ? 'ft·in' : 'mm');
 
 // 옵션 숫자 칸의 범위(계획 7 이월 M-1 · §16.7). step은 단위 규칙(mm 10 · ft·in 1/8")을 그대로 쓴다.
-// h는 **덕트 단면 높이와 기둥 높이**가 같은 이름을 쓰므로 둘을 덮는 상한(층고 8000)을 준다 —
-// 더 좁은 쪽(덕트 3000)은 상태 계층(normalizeDuct)이 클램프한다. 여기 값은 화살표·검증의 편의다.
+// 벽·방·구조물의 공통 범위다: h는 기둥 높이(층고 8000)를 덮는다.
 export const OPTION_RANGE = { thickness: [2, 1000], w: [50, 3000], d: [50, 3000], h: [50, 8000], z: [0, 8000], sill: [0, 3000] };
+// 범위는 **도구별**로 본다(리뷰 I-7): 키 하나에 범위 하나로는 풀리지 않는다 — 덕트 단면 h는 3000이
+// 한계인데(normalizeDuct가 모든 덕트 쓰기에서 클램프한다) 기둥 h는 층고까지 간다. 옵션 바가 8000을
+// 약속하면 타이핑한 5000이 검증도 안내도 통과했다가 상태 계층에서 조용히 3000으로 줄었다.
+// 덕트 숫자는 상태 계층의 DUCT_RANGE를 그대로 import한다(ductPanel과 같은 방향): 표를 복제하지 않는다.
+const TOOL_RANGE = { duct: { w: DUCT_RANGE.w, h: DUCT_RANGE.h, z: DUCT_RANGE.z } };
+export const rangeOf = (tool, k) => TOOL_RANGE[tool?.name]?.[k] ?? OPTION_RANGE[k] ?? [];
 
 // 그리는 동안 뜨는 치수 칸(§16.7 · 감사 §43). 예전에는 캔버스 위 11 px 라벨 `3000|`뿐이라
 // "타이핑할 수 있다"는 사실 자체가 보이지 않았다.
@@ -43,9 +49,9 @@ export function optionBarHtml(tool, { units = 'mm' } = {}) {
     const title = OPTION_TITLES[k] ? ` title="${esc(OPTION_TITLES[k])}"` : '';
     if (typeof v === 'boolean') return `<label${title}><input type="checkbox" name="${k}"${v ? ' checked' : ''}> ${label}</label>`;
     if (typeof v === 'number') {
-      // 범위는 OPTION_RANGE 한 곳이다(M-1). data-mm은 이 칸을 그릴 때의 값이다(§16.1): ft·in 표기는
-      // 파싱과 왕복하지 않으므로 readLen이 "고치지 않았다"를 이 값으로 판정한다(리뷰 I-3).
-      const [min, max] = OPTION_RANGE[k] ?? [];
+      // 범위는 rangeOf 한 곳이다(M-1 · I-7: 도구를 함께 본다). data-mm은 이 칸을 그릴 때의 값이다(§16.1):
+      // ft·in 표기는 파싱과 왕복하지 않으므로 readLen이 "고치지 않았다"를 이 값으로 판정한다(리뷰 I-3).
+      const [min, max] = rangeOf(tool, k);
       // ft·in 길이 칸은 텍스트다(step 속성이 뜻이 없다): 간격·범위는 data-*에 싣는다(속성 패널과 같은 규칙).
       if (LEN_OPTS.has(k) && units === 'ftin') return `<label${title}>${label} <input type="text" name="${k}" data-len="1" data-step="${STEP.ftin}"${min === undefined ? '' : ` data-min="${min}" data-max="${max}"`} data-mm="${v}" value="${esc(fmtLen(v, 'ftin'))}"></label>`;
       const range = min === undefined ? '' : ` ${minAttr(min, STEP.mm)} max="${max}"`;
@@ -64,37 +70,62 @@ export function optionBarHtml(tool, { units = 'mm' } = {}) {
 // 않으므로 undo 단계는 애초에 없지만, [Enter] 확정의 합성 change + blur의 네이티브 change가
 // 같은 경로를 두 번 돌던 자리다(shell.js의 keydown 주석이 "멱등하므로 결과는 같다"고 적어 둔
 // 자리를 계약으로 바꾼다 — 치수 칸(Task 8)이 여기에 얹히면 멱등성만으로는 부족하다).
-export function applyOptionInput(tool, el, units = 'mm') {
+// onClamp(잘린 값, { min, max, raw }): 범위로 잘렸을 때 부르는 쪽이 알린다(§14.10 — 속성 패널의
+// numValue/readLen과 같은 계약이다). 잘렸으면 표시도 함께 되돌린다(리뷰 I-1): 옵션 바는 도구가
+// 바뀔 때까지 다시 그려지지 않으므로, 고치지 않으면 칸의 글자가 모델과 영구히 어긋난 채 남았다.
+export function applyOptionInput(tool, el, units = 'mm', { onClamp = null } = {}) {
   const k = el?.name;
   if (!tool?.opts || !k || !(k in tool.opts)) return false;
-  // 범위는 OPTION_RANGE 한 곳이다(M-1): 타이핑한 값도 화살표와 같은 한계를 지킨다.
-  const clamp = v => { const [min, max] = OPTION_RANGE[k] ?? []; return min === undefined || !Number.isFinite(v) ? v : Math.min(max, Math.max(min, v)); };
+  const [min, max] = rangeOf(tool, k);
+  // 범위 밖이면 잘라 주고 알린다. 비유한수는 통과시키지 않고 부르는 쪽이 "변경 없음"으로 처리한다(M-3).
+  const clamp = v => { const out = min === undefined ? v : Math.min(max, Math.max(min, v)); if (out !== v) onClamp?.(out, { min, max, raw: v }); return out; };
   if (el.dataset?.len) {
     // 속성 패널의 길이 칸과 같은 함수로 읽는다: "글자를 고치지 않았다"(data-mm의 표시값과 같다)를
     // 한 곳에서만 판정하려고 readLen을 쓴다(리뷰 I-3 — ft·in 무편집 [Enter]가 값을 밀던 자리).
-    const mm = readLen(el, units);
-    if (mm === null) { el.value = fmtLen(tool.opts[k], 'ftin'); return false; }
-    const next = clamp(mm);
+    // readLen은 data-min/max로 이미 한 번 자른다 → 그 자름도 안내가 따라붙게 콜백을 넘긴다.
+    let cut = false;
+    const mm = readLen(el, units, { onClamp: (v, info) => { cut = true; onClamp?.(v, info); } });
+    if (mm === null) { setLen(el, tool.opts[k], units); return false; }
+    const next = cut ? mm : clamp(mm);
+    if (next !== mm || cut) setLen(el, next, units);       // 잘린 값이 칸에 남지 않게(I-1)
     if (next === tool.opts[k]) return false;
     tool.opts[k] = next;
     return true;
   }
-  const raw = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
-  const next = el.type === 'number' ? clamp(raw) : raw;
+  if (el.type === 'number') {
+    // 빈 칸·숫자가 아닌 입력은 값을 바꾸지 않고 칸을 모델 값으로 되돌린다(리뷰 I-2 — 속성 패널의
+    // numValue가 null을 돌려주고 부르는 쪽이 다시 그리는 그 규칙이다). 예전에는 Number('') === 0이
+    // min으로 잘려 벽 두께가 말없이 2 mm가 됐다.
+    const raw = Number(String(el.value).trim());
+    if (String(el.value).trim() === '' || !Number.isFinite(raw)) { el.value = String(tool.opts[k]); return false; }
+    const next = clamp(raw);
+    if (next !== raw) el.value = String(next);             // 잘린 값이 칸에 남지 않게(I-1)
+    if (next === tool.opts[k]) return false;
+    tool.opts[k] = next;
+    return true;
+  }
+  const next = el.type === 'checkbox' ? el.checked : el.value;
   if (next === tool.opts[k]) return false;
   tool.opts[k] = next;
   return true;
 }
+// ft·in 길이 칸의 표시를 모델 값으로 되맞춘다(data-mm까지: 다음 "고치지 않았다" 판정의 기준값이다).
+function setLen(el, mm, units) {
+  el.value = fmtLen(mm, units);
+  if (el.dataset) el.dataset.mm = String(mm);
+}
 
-// 치수 칸 한 덩어리. 값은 도구가 이미 단위에 맞춰 문자열로 준다(tool.dims().fields[].text).
-export function dimBarHtml(tool, { units = 'mm' } = {}) {
-  const fields = tool?.dims?.()?.fields ?? [];
+// 치수 칸 한 덩어리. 값은 도구가 이미 단위에 맞춰 문자열로 준다(tool.dims().fields[].text) —
+// 보조선 좌표까지 그렇다(리뷰 I-4: 라벨만 ft·in이고 값은 mm 정수였다). data-mm은 그릴 때의 모델
+// 값이다: ft·in 표기는 파싱과 왕복하지 않으므로 "글자를 고쳤는가"의 기준이 된다(§16.1).
+export const dimBarHtml = (tool, { units = 'mm' } = {}) => dimFieldsHtml(tool?.dims?.()?.fields ?? [], units);
+function dimFieldsHtml(fields, units) {
   if (!fields.length) return '';
   return fields.map(f => {
     const label = `${DIM_LABELS[f.key] ?? f.key} (${unitLabel(units)})`;
     const title = DIM_TITLES[f.key] ? ` title="${esc(DIM_TITLES[f.key])}"` : '';
     const input = units === 'ftin'
-      ? `<input type="text" name="dim:${f.key}" data-len="1" data-step="${STEP.ftin}" value="${esc(f.text)}">`
+      ? `<input type="text" name="dim:${f.key}" data-len="1" data-step="${STEP.ftin}" data-mm="${f.mm}" value="${esc(f.text)}">`
       : `<input type="number" name="dim:${f.key}" step="${STEP.mm}" value="${esc(f.text)}">`;
     return `<label class="dim${f.active ? ' on' : ''}"${title}>${label} ${input}</label>`;
   }).join('');
@@ -108,9 +139,11 @@ export const dimBarSignature = tool => (tool?.dims?.()?.fields ?? []).map(f => f
 export function syncDimBar(root, tool, { units = 'mm' } = {}) {
   const host = root?.querySelector?.('#optionDims');
   if (!host) return false;
-  const sig = dimBarSignature(tool);
-  if (host.dataset.sig !== sig) { host.dataset.sig = sig; host.innerHTML = dimBarHtml(tool, { units }); }
-  for (const f of tool?.dims?.()?.fields ?? []) {
+  // dims()는 그리는 동안 매 프레임 돈다(parseLen·객체 할당) → 한 번만 부르고 돌려 쓴다(M-1).
+  const fields = tool?.dims?.()?.fields ?? [];
+  const sig = fields.map(f => f.key).join(',');
+  if (host.dataset.sig !== sig) { host.dataset.sig = sig; host.innerHTML = dimFieldsHtml(fields, units); }
+  for (const f of fields) {
     const el = host.querySelector(`[name="dim:${f.key}"]`);
     if (!el) continue;
     el.parentElement?.classList.toggle('on', !!f.active);

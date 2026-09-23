@@ -106,3 +106,54 @@ test('보조선 도구의 치수 칸은 좌표 하나다(§16.7)', () => {
   expect(t.commitDims()).toBe(true);
   expect(activeFloor(store.get()).guides[0].pos).toBe(1500);
 });
+
+// 리뷰 I-3: 보조선을 놓기 전에도 칸이 뜨는데 [Enter]가 아무 일도 하지 않는 죽은 입구였다.
+// 이제 그 좌표에 보조선을 놓는다(한 동작 = 한 되돌림 단계).
+test('보조선을 놓기 전에 좌표를 타이핑하면 그 자리에 놓인다(리뷰 I-3)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  t.onPointerMove([800.5, 0.25]);                    // 칸은 커서 좌표를 보여 준다
+  expect(t.dims().fields[0].text).toBe('801');
+  expect(t.setDim('pos', '1500')).toBe(true);
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).guides).toEqual([{ id: expect.any(String), type: 'v', pos: 1500 }]);
+  expect(store.undo()).toBe(true);
+  expect(activeFloor(store.get()).guides).toEqual([]);   // 빈 단계가 아니라 그 한 단계다
+});
+
+test('놓기 전에 확정한 좌표가 이미 있는 보조선과 겹치면 겹쳐 놓지 않는다(리뷰 I-3·N-1)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  t.setDim('pos', '1500'); t.commitDims();
+  const before = store.get();
+  const t2 = createGuideTool({ store, view: fakeView });
+  t2.setDim('pos', '1500');
+  expect(t2.commitDims()).toBe(true);
+  expect(store.get()).toBe(before);                  // dispatch 없음 = 되돌림 단계가 쌓이지 않는다
+  expect(activeFloor(store.get()).guides).toHaveLength(1);
+  t2.setDim('pos', '1800');                          // 집어 둔 그 보조선을 이어서 옮긴다
+  t2.commitDims();
+  expect(activeFloor(store.get()).guides.map(g => g.pos)).toEqual([1800]);
+});
+
+// 리뷰 I-4: 라벨은 `좌표 (ft·in)`인데 값만 mm 정수였고, 그 라벨을 믿고 넣은 `4'`는 NaN으로 사라졌다.
+test('보조선 좌표 칸은 현재 단위로 말하고 읽는다(리뷰 I-4)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  t.onPointerDown([1219.5, 0.25]);
+  expect(t.dims().fields[0].text).toBe('1220');      // mm 모드: 정수 mm 그대로
+  store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+  expect(t.dims().fields[0].text).toBe(`4' 0"`);     // 1220 mm → fmtLen의 ft·in 표기(라벨과 같은 말을 한다)
+  t.setDim('pos', `4'`);
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).guides[0].pos).toBe(1219);   // 4피트 = 1219.2 mm → 반올림
+  // ft·in 화면에서는 `'`·`"`도 타이핑할 수 있는 글자다(캔버스 입구도 같은 규칙).
+  for (const c of `5'`) expect(t.onKey(key(c))).toBe(true);
+  expect(t.onKey(key('Enter'))).toBe(true);
+  expect(activeFloor(store.get()).guides[0].pos).toBe(1524);
+  // 읽을 수 없는 입력은 버린다(값은 그대로).
+  for (const c of '엉') t.onKey(key(c));
+  t.setDim('pos', '엉터리');
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).guides[0].pos).toBe(1524);
+});
