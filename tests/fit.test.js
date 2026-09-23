@@ -238,9 +238,14 @@ test('shotPosition의 출력 프레임은 화면보다 나빠지지 않는다(�
   //     (out === screen)이 "보정할 것 없음"으로 잘못 읽었다. 넓은 뷰포트(2.0)에서 0.8 확대 = 화면에는 전부
   //     들어와 있는데(0.99) 더 좁은 16:9 출력이 잘렸다(1.11). 종횡비로 판단하면 화면보다 나빠지지 않는다.
   //     (이 파라미터에서는 두 fit 거리가 같아 옛 조기 반환이 걸리는 자리다: F(화면) === F(출력).)
-  const f = shotCase({ elevation: 15, azimuth: 47.5, screenAspect: 2.0, aspect: 16 / 9, zoom: 0.8, w: 3000.5, d: 2500.25, h: 2400 });
-  expect(f.fit).toBeCloseTo(fitDistance(3000.5, { extentMm: 3000.5, width: 3000.5, depth: 2500.25, height: 2400, fov: 60, elevation: 15, azimuth: 47.5, offsetMm: [0, 0, 0], aspect: 2.0 }), 12);
-  expect(f.out.fill).toBeLessThanOrEqual(Math.max(f.screen.fill, 1) + 1e-9);   // 화면보다 나빠지지 않는다
+  //     재리뷰 3의 케이스 A(팬 없음 · F가 6 m 바닥이 아닌 7.07 m): 6.0×5.0×2.4 m, 고도 45°, 뷰포트 2.2, 0.85 확대 →
+  //     화면 0.9865(전부 프레임 안) → 옛 규칙 1.1472(잘림) → 새 규칙 0.9865.
+  const f = shotCase({ elevation: 45, azimuth: 0, screenAspect: 2.2, aspect: 16 / 9, zoom: 0.85, w: 6000, d: 5000, h: 2400 });
+  expect(f.fit).toBeCloseTo(fitDistance(6000, { extentMm: 6000, width: 6000, depth: 5000, height: 2400, fov: 60, elevation: 45, azimuth: 0, offsetMm: [0, 0, 0], aspect: 2.2 }), 12);   // F(화면) === F(출력)
+  expect(f.screen.fill).toBeLessThan(1);                      // 화면에는 전부 들어와 있다
+  expect(f.wave1).toBeGreaterThan(1);                          // 옛 조기 반환(= 순수 비율)은 잘랐다
+  expect(f.out.fill).toBeLessThanOrEqual(f.screen.fill + 1e-9);
+  expect(f.out.fill).toBeLessThanOrEqual(1);
   expect(f.radius).toBeLessThanOrEqual(f.fit + 1e-9);
   // (g) 뷰포트가 16:9보다 넓은 큰 바닥(세로 구속 우연 일치)도 같은 규칙.
   const g = shotCase({ elevation: 35, azimuth: 47, screenAspect: 2.2, aspect: 16 / 9, zoom: 0.9 });
