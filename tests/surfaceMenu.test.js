@@ -36,11 +36,12 @@ describe('벽·방 공용 메뉴', () => {
     expect(wallMenuItems({ store: a.store, ui: a.ui, wallId: '없음' })).toBeNull();
   });
 
+  // N-1: 메뉴는 편집 표면이라 **작성 상태**(explicitAssignmentOf)를 본다 — makeWall이 지금도 넣는
+  // 레거시 material('paint-white')은 "아직 고르지 않은 면"이므로 픽스처를 비울 필요가 없다.
+  // 레거시로 켜지면 한 번의 [방 전체 적용]이 고른 적 없는 값을 방의 모든 벽에 굳힌다(리뷰 I-2).
   test('재질이 없으면 마감재 복사·방 전체 적용은 꺼져 있다', () => {
     const a = setup();
-    // §17.4(1): makeWall이 지금도 넣는 레거시 material('paint-white')을 지워야 "재질이 없는" 벽이 된다
-    // (조회가 레거시 문자열로 떨어지므로, 그것까지 없어야 메뉴가 꺼진다).
-    a.store.dispatch(d => { activeFloor(d).walls.find(w => w.id === a.wallId).material = null; }, { record: false });
+    expect(a.floor().walls.find(w => w.id === a.wallId).material).toBe('paint-white');  // 레거시는 그대로 있다
     let items = wallMenuItems({ store: a.store, ui: a.ui, wallId: a.wallId, roomId: a.roomId, side: 'in' });
     expect(pick(items, '마감재 복사').disabled).toBe(true);
     expect(pick(items, '마감재 방 전체 벽에 적용').disabled).toBe(true);
@@ -209,14 +210,21 @@ test('비활성 항목에는 모두 사유(title)가 있다', () => {
   expect(missing).toEqual([]);
 });
 
+// N-1: detectRooms가 지금도 넣는 레거시 floorMaterial('wood-oak')은 **고른 값이 아니다** —
+// 픽스처를 비우지 않아도 방 메뉴의 [마감재 복사]는 꺼져 있고, 실제로 바르면 켜진다.
 test('마감재가 없으면 "마감재 복사"가 사유와 함께 비활성이다', () => {
   const a = setup();
-  // §17.4(1): detectRooms가 지금도 넣는 레거시 floorMaterial을 지워야 "바른 마감재가 없는" 방이 된다.
-  a.store.dispatch(d => { activeFloor(d).rooms.find(r => r.id === a.roomId).floorMaterial = null; }, { record: false });
+  expect(a.floor().rooms.find(r => r.id === a.roomId).floorMaterial).toBe('wood-oak');  // 레거시는 그대로 있다
   const items = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: a.actions });
   const copy = pick(items, '마감재 복사');
   expect(copy.disabled).toBe(true);
   expect(copy.title).toBe('바른 마감재가 없음');
   // 화면에서 쓸 수 없는 항목은 같은 한 마디를 쓴다.
   expect(pick(items, '템플릿 적용하기').title).toBe('이 화면에서 쓸 수 없음');
+  // 바른 뒤에는 켜지고 그 값을 집는다(두 상태를 같은 테스트가 본다).
+  applyMaterial(a.store, { kind: 'floor', id: a.roomId }, mat('tile-white-300'));
+  const after = pick(roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: a.actions }), '마감재 복사');
+  expect(after.disabled).toBe(false);
+  after.onSelect();
+  expect(a.ui.get().matPick.assignment).toEqual(mat('tile-white-300'));
 });

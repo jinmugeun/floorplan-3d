@@ -3,7 +3,12 @@
 // main.js가 넘기는 actions가 한다. actions에 없는 항목은 꺼 둔다(빈 메뉴 항목을 만들지 않는다).
 import { activeFloor } from '../state/schema.js';
 import { deleteWall, duplicateRoom } from '../state/floorOps.js';
-import { applyRoomWalls, assignmentOf } from '../state/materialOps.js';
+// 메뉴는 **편집 표면**이다(리뷰 N-1 · §17.4(1)): 조회는 작성용 explicitAssignmentOf를 쓴다.
+// assignmentOf(보고용)를 쓰면 makeWall·detectRooms가 지금도 넣는 레거시 문자열이 "고른 마감재"로
+// 읽혀, 속성 패널이 '미지정'이라고 그리는 면에서 [마감재 복사]·[마감재 방 전체 벽에 적용]이
+// 켜진다 — 한 번 누르면 고른 적 없는 값이 방의 모든 벽에 굳어 견적 총액이 0에서 뛴다(리뷰 I-2가
+// 마감재 행에서 막은 바로 그 굳히기다).
+import { applyRoomWalls, explicitAssignmentOf } from '../state/materialOps.js';
 // 방 삭제는 ui/ 안의 roomActions에서 가져온다: ui/는 view2d/·view3d/·app/을 import하지 않는다(아키텍처 §9).
 import { removeRoom } from './roomActions.js';
 import { toast } from './toast.js';
@@ -20,7 +25,7 @@ export function wallMenuItems({ store, ui, wallId, roomId = null, side = 'in', i
   const f = activeFloor(store.get());
   if (!f.walls.some(x => x.id === wallId)) return null;
   const target = { kind: 'wall', id: wallId, side: side === 'out' ? 'out' : 'in' };
-  const mat = assignmentOf(f, target);
+  const mat = explicitAssignmentOf(f, target);
   const room = roomId ?? f.rooms.find(r => r.wallIds.includes(wallId))?.id ?? null;
   const items = [
     { label: '벽 나누기', onSelect: () => ui.set({ selection: { type: 'wall', id: wallId }, splitWall: true }) },
@@ -51,7 +56,7 @@ export function roomMenuItems({ store, ui, roomId, in3d = false, actions = {} })
   const f = activeFloor(store.get());
   if (!f.rooms.some(x => x.id === roomId)) return null;
   const target = { kind: 'floor', id: roomId };
-  const mat = assignmentOf(f, target);
+  const mat = explicitAssignmentOf(f, target);
   return [
     { label: '템플릿 적용하기', ...why(actions.applyTemplate ? null : WHY_NO_ACTION), onSelect: () => actions.applyTemplate?.(roomId) },
     // M-10: Ctrl+C는 아이템 복사 전용이다(keymap.js의 itemCombo). 없는 단축키를 표기하지 않는다.
