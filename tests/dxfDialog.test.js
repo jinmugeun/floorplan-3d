@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 // §18.6의 검토 대화상자. 워커는 가짜를 주입하고(node에서 진짜 워커를 띄우지 않는다),
 // 캔버스는 tests/view2d.test.js의 Proxy 스텁 관례를 그대로 쓴다(jsdom에는 캔버스가 없다).
-import { test, expect } from 'vitest';
+import { test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { openDxfDialog } from '../src/ui/dxfDialog.js';
+import { DXF_ERRORS, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
+import { DXF_HEIGHT_KEY, DXF_TRACE_KEY } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH } from '../src/ui/messages.js';
@@ -89,4 +92,187 @@ test('미리보기는 벽·방·끊긴 끝점을 같은 변환으로 그린다',
   expect(PREVIEW_COLORS).toMatchObject({ trace: '#dcdcdc', wall: '#475569', openEnd: '#dc2626' });
   expect(OPEN_END_R).toBe(6);
   expect(drawDxfPreview({ width: 10, height: 10, getContext: () => null }, {})).toBe(null);
+});
+
+// 가짜 워커: 같은 프로토콜을 흉내 내고 무엇이 오갔는지 기록한다.
+class FakeWorker {
+  constructor() { this.posted = []; this.terminated = 0; FakeWorker.last = this; }
+  postMessage(msg) { this.posted.push(msg); }
+  terminate() { this.terminated++; }
+  emit(data) { this.onmessage?.({ data }); }
+}
+const SUMMARY = {
+  ver: 'AC1032', codepage: 'ANSI_949', encoding: 'utf-8', insunits: 4, unitScale: 1, unitsGuessed: false,
+  layers: ROWS, checked: [...wallOnly(ROWS)], blocks: 1009, blocksUsed: 174, entities: 2631,
+  segs: 70230, arcs: 8463, texts: 1100, others: [], skipped: [],
+  title: '경산 사동중', size: [43974, 25935], manySheets: false, ms: { decode: 65, parse: 864, explode: 42 },
+};
+const EXTRACTED = {
+  type: 'extracted',
+  project: { version: 1, name: '경산 사동중', background: null, floors: [{ walls: [{ a: [-100.5, -50.25], b: [200.5, -50.25], thickness: 200 }], rooms: [], items: [] }] },
+  stats: { walls: 213, rooms: 52, areaM2: 249.7, openEnds: [[0.5, 0.25], [10.5, 20.25]], thickness: [[100, 70], [200, 26], [95, 23], [250, 19], [500, 15]], unmatchedNames: [], items: 128, size: [43974, 25935], guessed: false, guessedLayers: [], hist: [], ms: { walls: 112, rooms: 169, trace: 40 } },
+  trace: { segs: new Float32Array([-100.5, -50.25, 200.5, -50.25]), box: [-100.5, -50.25, 200.5, -50.25] },
+};
+const fileOf = (name = '평면도.dxf') => ({ name, arrayBuffer: async () => new ArrayBuffer(16) });
+const stubCanvas = root => {
+  const cv = root.querySelector('[name="preview"]');
+  cv.getContext = () => new Proxy({}, { get: () => () => {} });
+};
+// 타이머는 가짜(디바운스를 직접 돌린다)지만 대기는 **마이크로태스크**로 푼다 —
+// setTimeout(0)을 쓰면 가짜 타이머 아래에서 영원히 깨지 않는다.
+const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+
+beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); });
+afterEach(() => { vi.useRealTimers(); document.body.innerHTML = ''; });
+
+function open(opts = {}) {
+  const w = new FakeWorker();
+  const api = openDxfDialog({ workerFactory: () => w, ...opts });
+  const root = document.getElementById('dxfDialog');
+  stubCanvas(root);
+  return { w, api, root, q: n => root.querySelector(`[name="${n}"]`) };
+}
+
+test('열면 포커스가 파일 칸이고 [Tab]이 대화상자 안에서만 돈다', () => {
+  const { root } = open();
+  expect(document.activeElement).toBe(root.querySelector('[name="file"]'));
+  const inside = () => root.contains(document.activeElement);
+  for (let i = 0; i < 12; i++) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(inside()).toBe(true);
+  }
+});
+
+test('[Esc]는 워커를 terminate하고 취소를 알린다', async () => {
+  const onCancel = vi.fn();
+  const { w, root } = open({ onCancel, file: fileOf() });
+  await flush();                                   // 파일을 읽고 워커가 만들어진 뒤
+  root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(w.terminated).toBe(1);
+  expect(onCancel).toHaveBeenCalledTimes(1);
+  expect(document.getElementById('dxfDialog')).toBe(null);
+});
+
+test('진행 막대는 phase를 네 단계 라벨로 옮긴다', async () => {
+  const { w, root, q } = open({ file: fileOf() });
+  await flush();
+  expect(q('step').textContent).toBe(DXF_STEP_READ);
+  w.emit({ type: 'progress', phase: 'parse', pct: 0.3, blocks: 1009 });
+  expect(q('step').textContent).toBe(DXF_STEP_PARSE(1009));
+  w.emit({ type: 'progress', phase: 'explode', pct: 0.9, blocks: 1009 });
+  expect(q('step').textContent).toBe(DXF_STEP_PARSE(1009));
+  w.emit({ type: 'progress', phase: 'walls', pct: 0, blocks: 1009 });
+  expect(q('step').textContent).toBe(DXF_STEP_WALLS);
+  w.emit({ type: 'progress', phase: 'trace', pct: 0, blocks: 1009 });
+  expect(q('step').textContent).toBe(DXF_STEP_ROOMS);
+  expect(q('progress').hidden).toBe(false);
+});
+
+test('머리줄·레이어 행 수·하단 수치·두께 분포가 채워진다', async () => {
+  const { w, root, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  expect(q('head').textContent).toBe('경산 사동중 · 44.0 m × 25.9 m · mm (INSUNITS=4) · AC1032');
+  expect(root.querySelectorAll('input[name="layer"]')).toHaveLength(ROWS.length);
+  expect([...root.querySelectorAll('input[name="layer"]')].filter(b => b.checked)).toHaveLength(7);
+  w.emit(EXTRACTED);
+  await flush();
+  expect(q('nums').textContent).toBe(DXF_NUMS(213, 52, '249.7'));
+  expect(q('warn').textContent).toBe(DXF_OPEN_END_COUNT(2));
+  expect(q('warn').hidden).toBe(false);
+  expect(q('hist').textContent).toBe('100 mm×70 · 200 mm×26 · 95 mm×23 · 250 mm×19');
+  expect(q('import').disabled).toBe(false);
+  expect(q('progress').hidden).toBe(true);
+});
+
+// 사전 검토 C-5: 앞 요청이 아직 돌고 있으면 새 요청은 **큐에 하나만** 남고 응답 직후 나간다.
+test('[벽 후보만]·[전체]·[자동 판정 되돌리기]와 250 ms 디바운스(마지막 요청이 이긴다)', async () => {
+  const { w, root, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  const extracts = () => w.posted.filter(m => m.type === 'extract');
+  expect(extracts()).toHaveLength(1);
+  q('all').click();
+  expect([...root.querySelectorAll('input[name="layer"]')].filter(b => b.checked)).toHaveLength(11);
+  // 세 번 바꿔도 250 ms 뒤 한 번만 간다.
+  const boxes = [...root.querySelectorAll('input[name="layer"]')];
+  for (const b of boxes.slice(0, 3)) { b.checked = false; b.dispatchEvent(new Event('change', { bubbles: true })); }
+  expect(extracts()).toHaveLength(1);
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(extracts()).toHaveLength(2);
+  // 앞 요청(extract #2)의 응답이 아직 오지 않았다 — 그 사이의 요청은 **보내지 않고 큐에 둔다**.
+  q('wallOnly').click();
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(extracts()).toHaveLength(2);
+  q('auto').click();
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(extracts()).toHaveLength(2);
+  // 응답이 오면 **가장 최근 것 하나만** 나간다(중간의 [벽 후보만]은 superseded로 사라진다).
+  w.emit(EXTRACTED);
+  await flush();
+  expect(extracts()).toHaveLength(3);
+  expect(extracts()[2].opts.layers.sort()).toEqual([...SUMMARY.checked].sort());
+});
+
+test('오류 코드 다섯이 §18.6의 문구를 그대로 띄운다', async () => {
+  for (const code of ['not-dxf', 'binary', 'dwg', 'no-walls', 'oom']) {
+    const { w, q } = open({ file: fileOf() });
+    await flush();
+    w.emit({ type: 'error', code, message: code });
+    await flush();
+    expect(q('error').textContent).toBe(DXF_ERRORS[code]);
+    expect(q('error').hidden).toBe(false);
+    expect(q('import').disabled).toBe(true);
+    document.body.innerHTML = '';
+  }
+});
+
+test('[가져오기]는 onImported를 한 번 부르고 트레이스를 배경으로 붙인다', async () => {
+  const onImported = vi.fn(async () => true);
+  const { w, q, root } = open({ file: fileOf(), onImported });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  q('height').value = '3200';
+  q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250);
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  expect(w.posted.filter(m => m.type === 'extract').at(-1).opts).toMatchObject({ height: 3200, thickness: 200, scale: 1 });
+  q('import').click();
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  const { project, stats } = onImported.mock.calls[0][0];
+  expect(stats.walls).toBe(213);
+  expect(project.background).toBe(null);          // 캔버스 스텁이 toDataURL을 주지 않으면 배경은 없다
+  expect(localStorage.getItem(DXF_HEIGHT_KEY)).toBe('3200');
+  expect(localStorage.getItem(DXF_TRACE_KEY)).toBe('1');
+  expect(document.getElementById('dxfDialog')).toBe(null);
+  expect(w.terminated).toBe(1);
+});
+
+test('트레이스가 한도를 넘으면 배경 없이 알리고, onImported가 false면 닫지 않는다', async () => {
+  const toast = vi.fn();
+  const onImported = vi.fn(async () => false);
+  const { w, q } = open({ file: fileOf(), onImported, toast });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  q('import').click();
+  await flush();
+  expect(toast).toHaveBeenCalledWith(DXF_TRACE_SKIPPED);
+  expect(document.getElementById('dxfDialog')).not.toBe(null);   // 취소했으므로 열린 채다
+  expect(onImported).toHaveBeenCalledTimes(1);
 });
