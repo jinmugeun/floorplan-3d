@@ -20,7 +20,13 @@ export function createDxfClient({ workerFactory = defaultWorkerFactory } = {}) {
     const q = queued; queued = null;
     onProgress = q.opts?.onProgress ?? (() => {});
     pending = { resolve: q.resolve, reject: q.reject };
-    ensure().postMessage(q.msg, q.transfer ?? []);
+    // postMessage는 던질 수 있다(이미 transfer돼 detach된 ArrayBuffer 등 — 호출자 버그다).
+    // 감싸지 않으면 pending이 세워진 채 영원히 남아 **이후 모든 요청이 큐에서 나가지 못하고**,
+    // onmessage 안에서 던진 경우에는 그 프로미스가 settle조차 되지 않는다(Task 10 리뷰 F3).
+    // 코드는 'oom': §18.6이 동결한 DXF_ERRORS에 일반 코드 칸이 없고, 대화상자의 폴백
+    // (DXF_ERRORS[code] ?? DXF_ERRORS.oom)이 어떤 새 코드도 결국 같은 문장으로 옮긴다.
+    try { ensure().postMessage(q.msg, q.transfer ?? []); }
+    catch (e) { settle(p => p.reject(fail('oom', String(e?.message ?? e)))); pump(); }
   };
   const ensure = () => {
     if (worker) return worker;
@@ -32,7 +38,18 @@ export function createDxfClient({ workerFactory = defaultWorkerFactory } = {}) {
       else settle(p => p.resolve(m));
       pump();
     };
-    worker.onerror = e => settle(p => p.reject(fail('oom', e?.message)));
+    // 워커가 통째로 죽으면(대개 OOM) 클라이언트가 **그 사실을 기억한다**(Task 10 리뷰 F2).
+    // 죽은 참조를 들고 있으면 다음 요청의 postMessage가 조용히 버려져 진행 막대가 "벽 찾는 중"에서
+    // 영원히 멈춘다 — 참조를 버려 alive()를 false로 만들고, 큐에 남은 요청도 같은 오류로 거절한다.
+    // (그 뒤 새 요청은 상태 없는 새 워커를 만들고, extract라면 not-dxf로 정직하게 실패한다.)
+    worker.onerror = e => {
+      const err = fail('oom', e?.message);
+      const dead = worker; worker = null;
+      try { dead?.terminate(); } catch { /* 이미 죽었으면 그만이다 */ }
+      const q = queued; queued = null;
+      settle(p => p.reject(err));
+      q?.reject(err);
+    };
     return worker;
   };
   const send = (msg, transfer, opts) => new Promise((resolve, reject) => {

@@ -112,6 +112,68 @@ test('앞 요청이 도는 중에 온 요청은 큐에 들어가고 마지막 �
   await expect(c).resolves.toBeTruthy();
 });
 
+// Task 10 리뷰 F1: 재파싱이 실패하면 워커는 **앞 도면을 잊어야 한다**. node에는 self가 없으므로
+// 가짜 self를 심은 뒤에 워커 파일을 import한다(모듈 최상위에서 self.onmessage에 대입한다).
+test('재파싱이 실패하면 워커가 앞 도면을 잊고 뒤따르는 extract가 not-dxf로 떨어진다', async () => {
+  const posts = [];
+  const had = 'self' in globalThis, prev = globalThis.self;
+  globalThis.self = { postMessage: (m, transfer) => posts.push({ m, transfer }), onmessage: null };
+  try {
+    await import('../src/io/dxf/worker.js');
+    const handle = data => { posts.length = 0; globalThis.self.onmessage({ data }); return posts.at(-1).m; };
+    const dxf = readFileSync(fileURLToPath(new URL('./fixtures/plan-1f-corner.dxf', import.meta.url)));
+    const parsed = handle({ type: 'parse', buf: dxf, fileName: 'A.dxf' });
+    expect(parsed.type).toBe('parsed');
+    const opts = { layers: parsed.summary.checked, trace: false };
+    // 앞 도면으로는 추출이 실제로 된다 — 아래의 not-dxf가 "원래 안 되는 것"이 아님을 못 박는다.
+    expect(handle({ type: 'extract', opts }).type).toBe('extracted');
+    const dwg = new Uint8Array(32);                       // 'AC1032' + 0x00 = DWG 시그니처
+    [...'AC1032'].forEach((c, i) => { dwg[i] = c.charCodeAt(0); });
+    expect(handle({ type: 'parse', buf: dwg, fileName: 'B.dwg' })).toMatchObject({ type: 'error', code: 'dwg' });
+    // 핵심: 실패한 뒤의 extract는 **앞 도면의 프로젝트가 아니라** 오류로 답한다.
+    expect(handle({ type: 'extract', opts })).toMatchObject({ type: 'error', code: 'not-dxf' });
+  } finally {
+    if (had) globalThis.self = prev; else delete globalThis.self;
+  }
+});
+
+// Task 10 리뷰 F2: 워커가 죽으면 그 사실을 기억한다 — 안 그러면 다음 재추출이 "벽 찾는 중"에서 영원히 멈춘다.
+test('워커가 죽으면 대기 중 요청과 큐가 함께 거절되고 죽은 워커를 버린다', async () => {
+  const { w, client } = setup();
+  const p = client.parse(new ArrayBuffer(4));
+  w.emit({ type: 'parsed', summary: {} });
+  await p;
+  const running = client.extract({ layers: ['WAL'] });        // 워커에 가 있는 것
+  const waiting = client.extract({ layers: ['WAL', 'FIN'] }); // 큐에 남은 것
+  w.onerror({ message: 'out of memory' });
+  await expect(running).rejects.toMatchObject({ code: 'oom' });
+  await expect(waiting).rejects.toMatchObject({ code: 'oom' });   // 영영 settle되지 않으면 안 된다
+  expect(client.alive()).toBe(false);
+  expect(w.terminated).toBe(1);
+});
+
+// Task 10 리뷰 F3: postMessage가 던져도(detach된 ArrayBuffer 등) pending이 남아 교착되면 안 된다.
+test('postMessage가 던지면 그 요청만 거절되고 다음 요청은 그대로 나간다', async () => {
+  const { w, client } = setup();
+  let boom = false;
+  const real = w.postMessage.bind(w);
+  w.postMessage = (msg, transfer) => {
+    if (boom) { boom = false; throw new Error('ArrayBuffer at index 0 is already detached'); }
+    real(msg, transfer);
+  };
+  const buf = new ArrayBuffer(4);
+  const p1 = client.parse(buf);
+  boom = true;
+  const p2 = client.parse(buf);                 // 큐에 들어갔다가 onmessage 안에서 나가며 던진다
+  w.emit({ type: 'parsed', summary: {} });
+  await expect(p1).resolves.toEqual({});
+  await expect(p2).rejects.toMatchObject({ code: 'oom' });   // code 없는 DOMException이면 안 된다
+  const p3 = client.extract({ layers: ['WAL'] });            // 교착되지 않는다
+  expect(w.posted.at(-1).msg).toEqual({ type: 'extract', opts: { layers: ['WAL'] } });
+  w.emit({ type: 'extracted', project: {}, stats: {}, trace: null });
+  await expect(p3).resolves.toBeTruthy();
+});
+
 // 전역 제약: 워커와 그 import 사슬은 DOM·ui를 건드리지 않는다.
 test('worker.js는 DOM·ui를 import하지 않고 Worker를 최상위에서 만들지 않는다', () => {
   const src = readFileSync(fileURLToPath(new URL('../src/io/dxf/worker.js', import.meta.url)), 'utf8');

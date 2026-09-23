@@ -20,6 +20,10 @@ const progress = (phase, pct) => post({ type: 'progress', phase, pct, blocks: do
 const inBox = (p, b) => !b || (p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1);
 
 function doParse(buf, fileName) {
+  // 앞 파일의 전개 결과를 **맨 먼저** 비운다(Task 10 리뷰 F1). 이 줄이 없으면 재파싱이 실패했을 때
+  // (A.dxf 성공 → B.dwg 거절) 앞 도면의 ex·meta가 살아남아, 뒤따르는 extract가 !ex 검사를 통과해
+  // **앞 도면의 프로젝트를 조용히 돌려준다**. 비워 두면 그 extract가 정직하게 not-dxf로 떨어진다.
+  doc = ex = rows = meta = null;
   progress('decode', 0);
   const t0 = performance.now();
   const { txt, ver, codepage, encoding } = decodeDxf(buf);
