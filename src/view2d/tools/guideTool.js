@@ -30,7 +30,9 @@ export function createGuideTool({ store, view, opts: given = null }) {
   // 집기만 한다 — dispatch가 없으니 빈 되돌림 단계도 생기지 않는다.
   const setPos = pos => {
     const f = activeFloor(store.get());
-    const same = f.guides.find(g => g.type === opts.direction && g.pos === pos);
+    // pos는 정수다(호출자가 Math.round한다): 좌표 칸으로 1500.5를 넣어 둔 보조선은 g.pos === pos를
+    // 빠져나가 0.5 mm 옆에 하나가 더 놓였다(리뷰 M-13). 같은 반올림 자리에서 판정한다.
+    const same = f.guides.find(g => g.type === opts.direction && Math.round(g.pos) === pos);
     if (same) { lastId = same.id; return; }
     if (lastId && f.guides.some(g => g.id === lastId)) { store.dispatch(d => { const g = activeFloor(d).guides.find(x => x.id === lastId); if (g) g.pos = pos; }); return; }
     const g = { id: uid('g'), type: opts.direction, pos };
@@ -55,7 +57,14 @@ export function createGuideTool({ store, view, opts: given = null }) {
     dimSig() { const d = this.dims(); return d ? `pos:${d.fields[0].text}:1` : ''; },
     setDim(key, text) { if (key !== 'pos') return false; typed = String(text ?? ''); return true; },
     focusDim() {},
-    commitDims() { return this.onKey({ key: 'Enter', preventDefault() {} }); },
+    // 손대지 않은 칸의 [Enter]는 **칸에 보이는 좌표로 확정한다**(최종 리뷰 I-4): 벽·방 칸이 지키는
+    // 컨트롤러 결정을 같은 UI의 이 칸만 어기고 있었다 — typed가 비면 onKey가 false를 돌려주고
+    // 셸이 아무것도 하지 않아, 늘 좌표가 적혀 있는 칸이 §16.5가 없애기로 한 죽은 입구가 됐다.
+    // setPos가 같은 축·같은 좌표의 보조선을 이미 집어 가므로 빈 되돌림 단계도 생기지 않는다.
+    commitDims() {
+      if (typed === '') { const d = this.dims(); if (!d) return false; setPos(d.fields[0].mm); return true; }
+      return this.onKey({ key: 'Enter', preventDefault() {} });
+    },
     onPointerDown(p0) {
       // 지우기는 스냅 **전** 원좌표로 판정한다(리뷰 C-1): 스냅이 먼저 붙으면 거리가 0이 되어 히트 영역이
       // 6 px에서 허용치(최대 확대에서 화면 40 px)로 커져, 보조선을 하나 더 놓으려던 클릭이 기존 것을 지운다.

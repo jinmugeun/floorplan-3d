@@ -157,3 +157,48 @@ test('보조선 좌표 칸은 현재 단위로 말하고 읽는다(리뷰 I-4)',
   expect(t.commitDims()).toBe(true);
   expect(activeFloor(store.get()).guides[0].pos).toBe(1524);
 });
+
+// 최종 리뷰 I-4: 옵션 바의 `좌표 (mm)` 칸에는 커서(또는 방금 놓은 보조선)의 좌표가 늘 적혀 있다.
+// 그 칸에서 글자를 고치지 않고 [Enter]를 누르면 예전에는 false가 나 셸이 아무것도 하지 않았다
+// (벽·방 칸은 프리뷰를 확정한다 — 같은 UI의 두 칸이 다른 계약을 갖고 있었다).
+test('손대지 않은 좌표 칸의 [Enter]가 보이는 좌표에 보조선을 놓는다(리뷰 I-4)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  expect(t.commitDims()).toBe(false);                 // 커서도 없으면 확정할 값이 없다
+  t.onPointerMove([1500.5, 800.25]);                  // 커서만 움직였다(아직 놓지 않았다)
+  expect(t.dims().fields[0].text).toBe('1501');
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).guides).toEqual([{ id: expect.any(String), type: 'v', pos: 1501 }]);
+  store.undo();
+  expect(activeFloor(store.get()).guides).toHaveLength(0);   // 한 단계다(빈 단계가 아니다)
+});
+
+test('같은 자리에서 다시 확정하면 빈 되돌림 단계가 생기지 않는다(리뷰 I-4·M-13)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  t.onPointerMove([1500.5, 0.25]);
+  t.commitDims();
+  const before = store.get(), undoable = store.canUndo();
+  expect(t.commitDims()).toBe(true);                  // 칸은 같은 값을 보여 준다
+  expect(store.get()).toBe(before);
+  expect(store.canUndo()).toBe(undoable);
+  expect(activeFloor(store.get()).guides).toHaveLength(1);
+});
+
+// M-13: 소수 좌표 보조선은 중복 가드(g.pos === pos)를 빠져나가 0.5 mm 옆에 하나가 더 놓였다.
+test('소수 좌표 보조선 옆을 클릭해도 하나로 남는다(리뷰 M-13)', () => {
+  const store = createStore(createEmptyProject());
+  store.dispatch(d => { activeFloor(d).guides.push({ id: 'g0', type: 'v', pos: 1500.5 }); }, { record: false });
+  const t = createGuideTool({ store, view: fakeView });
+  t.onPointerDown([1500.4, 900.25]);
+  expect(activeFloor(store.get()).guides).toHaveLength(0);   // 6 px 안이면 예전처럼 지운다
+  store.undo();
+  expect(activeFloor(store.get()).guides).toHaveLength(1);
+  const t2 = createGuideTool({ store, view: fakeView });
+  t2.onPointerMove([1500.4, 900.25]);
+  const at = store.get();
+  expect(t2.commitDims()).toBe(true);                 // 같은 반올림 자리 → 집기만 한다
+  expect(store.get()).toBe(at);
+  expect(activeFloor(store.get()).guides).toHaveLength(1);
+  expect(activeFloor(store.get()).guides[0].pos).toBe(1500.5);   // 원래 소수 좌표가 그대로다
+});
