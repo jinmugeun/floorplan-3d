@@ -5,6 +5,9 @@ import { ductMenuItems } from '../ui/ductMenu.js';
 import { activeFloor } from '../state/schema.js';
 import { ductById } from '../state/ductOps.js';
 import { segmentForMeshData } from '../geom/ducts.js';
+import { toast } from '../ui/toast.js';
+import { materialById } from '../materials/catalog.js';
+import { MATERIAL_APPLIED } from '../ui/messages.js';
 
 // 레이캐스트로 고를 수 있는 면 메시 이름(build.js가 붙인다).
 export const FACE_NAMES = new Set(['wall', 'wallFace', 'wallRegion', 'floor', 'ceiling', 'wallTop']);
@@ -69,7 +72,11 @@ export function createFacePicker({ renderer, getCamera, scene, getGroup, store, 
     const pick = ui.get().matPick;
     const hit = hitAt(ev, { skipItems: !!pick });
     if (pick) {
-      if (hit && hit.kind !== 'item' && hit.kind !== 'duct') { applyMaterial(store, targetOf(hit), pick.assignment); requestRender(); }
+      if (hit && hit.kind !== 'item' && hit.kind !== 'duct') {
+        applyMaterial(store, targetOf(hit), pick.assignment);
+        toast(MATERIAL_APPLIED(materialById(pick.assignment?.id)?.name ?? pick.assignment?.id ?? ''));
+        requestRender();
+      }
       return;                                    // 적용 모드는 Esc까지 계속된다(덕트에는 재질을 바르지 않는다)
     }
     if (!hit || hit.kind === 'item') return;      // 아이템은 아이템 피커가 이미 골랐다

@@ -18,7 +18,7 @@ export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {})
 
 // onToolChange: 옵션 바의 치수 칸이 도구 상태를 바꿨다(§16.7). 배선이 캔버스를 다시 그리게 한다 —
 // ui/는 view2d/를 import하지 않으므로(아키텍처 §9) 셸이 직접 requestRender를 부를 수는 없다.
-export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {}, onToolChange = () => {}, onPanelShow = () => {}, onLabelDensity = () => {} }) {
+export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {}, onToolChange = () => {}, onPanelShow = () => {}, onLabelDensity = () => {}, onFirstRoom = () => {} }) {
   root.innerHTML = shellHtml({ name: store.get().name });
   const q = s => root.querySelector(s);
   const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials'), airflow: q('#airflow') };
@@ -167,8 +167,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   };
   // 배너(문구 우선순위·드래그 중 행 고정)는 ui/banner.js 한 곳에 있다: 이 파일이 300줄 규칙에 닿아
   // "더하기 전에 나눈다"대로 덩어리째 옮겼다. 셸은 구독에서 render()만 부른다.
-  const banner = createBanner({ store, ui, el: els.banner, stack: q('#canvasStack'), tool: () => currentTool, onExitFp });
-  const renderBanner = s => banner.render(s);
+  const banner = createBanner({ store, ui, el: els.banner, stack: q('#canvasStack'), tool: () => currentTool, onExitFp, onFirstRoom });
+  // 배너가 가리키는 [방 그리기]를 좌측 패널에서도 강조한다(§17.12(5)): 첫 방이 생기면 같은 자리에서 꺼진다.
+  const renderBanner = (s = ui.get()) => { banner.render(s); root.querySelector('[data-tool="room"]')?.classList.toggle('hint-on', !!s.firstRoomHint && !(activeFloor(store.get())?.rooms?.length)); };
   function setOptionBar(tool) { currentTool = tool; renderOptions(); renderBanner(); }
   // 치수 칸의 이름은 dim:<key>다(도구 옵션과 섞이지 않게 — applyOptionInput은 opts에 없는 이름을 받지 않는다).
   const dimKey = el => (typeof el?.name === 'string' && el.name.startsWith('dim:') ? el.name.slice(4) : null);

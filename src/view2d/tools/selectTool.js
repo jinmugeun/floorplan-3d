@@ -12,7 +12,8 @@ import { LABEL_BG } from '../ducts2d.js';
 import { itemMenuItems } from '../../ui/itemMenu.js';
 import { wallMenuItems, roomMenuItems } from '../../ui/surfaceMenu.js';
 import { pickAt } from './pick.js';
-import { MATERIAL_BOTH_SIDES, SPLIT_REGIONS_RESET } from '../../ui/messages.js';
+import { MATERIAL_BOTH_SIDES, SPLIT_REGIONS_RESET, MATERIAL_APPLIED } from '../../ui/messages.js';
+import { materialById } from '../../materials/catalog.js';
 
 const boxOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 const inBox = (p, [x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
@@ -48,7 +49,10 @@ export function createSelectTool({ store, ui, view, onLocked = () => {}, itemAct
           return;
         }
         const hitR = f.rooms.find(x => pointInPolygon(p, x.points));
-        if (hitR) applyMaterial(store, { kind: 'floor', id: hitR.id }, pick.assignment);
+        if (hitR) {
+          applyMaterial(store, { kind: 'floor', id: hitR.id }, pick.assignment);
+          toast(MATERIAL_APPLIED(materialById(pick.assignment?.id)?.name ?? pick.assignment?.id ?? ''));   // §17.12 이월
+        }
         return;                       // 빈 곳 클릭은 아무 일도 하지 않는다
       }
       if (ui.get().splitWall) {

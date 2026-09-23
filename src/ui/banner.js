@@ -14,7 +14,7 @@ const exitSolo = '<button type="button" id="btnExitSolo">도면 전체 보기</b
 const exitFp = `<button type="button" id="btnExitFp">${FP_EXIT}</button>`;
 
 // el = #banner, stack = #canvasStack(드래그 감지), tool = 지금 켜진 도구를 돌려주는 함수.
-export function createBanner({ store, ui, el, stack = null, tool = () => null, onExitFp = () => {} }) {
+export function createBanner({ store, ui, el, stack = null, tool = () => null, onExitFp = () => {}, onFirstRoom = () => {} }) {
   // 캔버스 위에서 포인터를 누르고 있는 동안을 "드래그 중"으로 본다(아래 주석 참고).
   let dragging = false, pending = false, last = null;
   // 충돌은 드래그 밖에서도 알린다(§14.8). 계산은 memoCollisions의 캐시를 그대로 쓰므로(아이템 배열
@@ -57,7 +57,8 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
     }
     // 온보딩을 닫은 뒤의 첫 방 유도(§16.12 · 감사 §47). 방이 없는 동안만 보이고, 첫 방이 생기면
     // app/firstRoomFit.js의 래치가 플래그를 끈다 — 그래서 새로 더한 빈 층에서 되살아나지 않는다.
-    if (s.firstRoomHint && !(activeFloor(store.get())?.rooms?.length)) return `<span class="hint">${esc(FIRST_ROOM_HINT)}</span>`;
+    // §17.12(5) · 감사 §47: 가리키는 곳을 누를 수 있게 한다(§16.5가 만든 hint 버튼 경로 그대로).
+    if (s.firstRoomHint && !(activeFloor(store.get())?.rooms?.length)) return `<button type="button" class="hint" data-action="firstRoom">${esc(FIRST_ROOM_HINT)}</button>`;
     return '';
   }
   function render(s = ui.get()) {
@@ -85,7 +86,11 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
   // window에서 받아야 한다(놓친 pointerup 하나가 배너를 영구히 얼린다 — capture 단계로 확실히 받는다).
   const onUp = () => { if (!dragging) return; dragging = false; if (pending) { pending = false; render(); } };
   // 안내 문구를 누르면 도구가 스스로 취소한다(배치 도구의 "메시지를 누르면 취소").
-  const onClick = ev => { if (ev.target.dataset.action === 'hintCancel') tool()?.onHintClick?.(); };
+  const onClick = ev => {
+    const a = ev.target.dataset.action;
+    if (a === 'hintCancel') tool()?.onHintClick?.();
+    else if (a === 'firstRoom') onFirstRoom();
+  };
   stack?.addEventListener('pointerdown', onDown);
   for (const t of DRAG_END_EVENTS) globalThis.addEventListener?.(t, onUp, true);
   el.addEventListener('click', onClick);

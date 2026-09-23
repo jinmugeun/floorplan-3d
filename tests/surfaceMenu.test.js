@@ -81,7 +81,8 @@ describe('벽·방 공용 메뉴', () => {
   test('방 메뉴 항목과 단일 공간 모드·방 복사·삭제 확인', async () => {
     const a = setup({ applyTemplate: vi.fn() });
     const items = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId });
-    expect(labels(items)).toEqual(['템플릿 적용하기', '방 복사', '마감재 복사', '재질 교체', '단일 공간 모드', '삭제']);
+    // '마감재 편집기'는 §17.12 이월(감사 §12)이 더한 항목이다 — 방에서도 편집기를 열 수 있어야 한다.
+    expect(labels(items)).toEqual(['템플릿 적용하기', '방 복사', '마감재 복사', '재질 교체', '마감재 편집기', '단일 공간 모드', '삭제']);
     expect(pick(items, '방 복사').shortcut).toBeUndefined(); // M-10: Ctrl+C는 아이템 복사 전용이다
     pick(items, '단일 공간 모드').onSelect();
     expect(a.ui.get().soloRoom).toBe(a.roomId);
@@ -227,4 +228,17 @@ test('마감재가 없으면 "마감재 복사"가 사유와 함께 비활성이
   expect(after.disabled).toBe(false);
   after.onSelect();
   expect(a.ui.get().matPick.assignment).toEqual(mat('tile-white-300'));
+});
+
+// §17.12 이월(감사 §12): 마감재 편집기를 방에서 열 수 없었다(벽 속성 패널과 3D 벽 메뉴에서만).
+test('방 메뉴에 "마감재 편집기"가 있고 actions가 없으면 사유로 꺼진다', () => {
+  const a = setup();                                     // 이 파일의 기존 setup(방 하나)
+  const on = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: { openEditor: () => {} } });
+  const item = on.find(x => x !== 'sep' && x.label === '마감재 편집기');
+  expect(item).toBeTruthy();
+  expect(item.disabled).toBe(false);
+  const off = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: {} });
+  const dead = off.find(x => x !== 'sep' && x.label === '마감재 편집기');
+  expect(dead.disabled).toBe(true);
+  expect(dead.title).toBe('이 화면에서 쓸 수 없음');
 });

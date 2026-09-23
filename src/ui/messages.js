@@ -223,3 +223,9 @@ export const restoreCardDesc = (name, at = null) => {
 // 갤러리 묶음(§17.12(4)).
 export const OTHER_SHOTS = n => `다른 프로젝트의 렌더샷 ${n}장`;
 export const OLD_SHOTS = '이전 렌더샷';
+
+// 마감재 적용 피드백(§17.12 이월 · 감사 §11). 2D·3D 두 경로가 같은 문구를 쓴다.
+export const MATERIAL_APPLIED = name => `"${name}"을 발랐습니다`;
+// 경로 배열을 못 쓰는 두 이유(계획 8 이월 M-5: ui/itemMenu.js에 있던 것을 문구 한 곳으로 옮긴다).
+export const PATH_2D_HINT = '2D에서 사용';
+export const PATH_FP_HINT = '1인칭 위치를 먼저 찍거나 [Esc]로 취소해주세요';

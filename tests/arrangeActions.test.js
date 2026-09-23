@@ -7,7 +7,7 @@ import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createArrangeActions, PATH_TOOL, spacingDefault } from '../src/app/arrangeActions.js';
-import { PATH_FP_HINT } from '../src/ui/itemMenu.js';
+import { PATH_FP_HINT } from '../src/ui/messages.js';
 
 const fakeView = { camera: { scale: 0.1 }, requestRender: () => {} };
 function setup(productId = 'dining-6') {

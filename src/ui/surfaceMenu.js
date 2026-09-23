@@ -63,6 +63,9 @@ export function roomMenuItems({ store, ui, roomId, in3d = false, actions = {} })
     { label: '방 복사', onSelect: () => duplicateRoom(store, roomId) },
     copyItem(ui, mat),
     { label: '재질 교체', ...why(actions.replaceMaterial ? null : WHY_NO_ACTION), onSelect: () => actions.replaceMaterial?.(target) },
+    // §17.12 이월(감사 §12): 편집기가 벽 속성 패널과 3D 벽 메뉴에서만 열렸다. 방에서 여는 길을 준다
+    // (방의 벽 하나를 골라 연다 — 편집기의 대상은 벽 한 면이다).
+    { label: '마감재 편집기', ...why(actions.openEditor ? null : WHY_NO_ACTION), onSelect: () => actions.openEditor?.(f.rooms.find(x => x.id === roomId)?.wallIds?.[0] ?? null, 'in') },
     { label: '단일 공간 모드', onSelect: () => ui.set({ selection: { type: 'room', id: roomId }, soloRoom: roomId }) },
     'sep',
     // 확인 뒤 재확인(방이 그 사이 사라졌는지)까지 removeRoom이 한다 — 삭제 도구·선택 삭제와 같은 자리다.

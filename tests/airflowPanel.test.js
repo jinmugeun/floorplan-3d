@@ -98,3 +98,22 @@ describe('풍량 패널', () => {
     expect(el.querySelector('output[name="nowRatio"]').textContent).toBe('0.0%');
   });
 });
+
+// §17.12 이월(감사 §19): "값이 없다"와 "값이 0이다"를 가른다 — 설계값이 없는 방을 붉게 칠하지 않는다.
+// 이 파일의 setup()은 설계값이 있는 방을 만든다(EA 5000 · SA 4000) → 없는 방을 따로 만든다.
+test('설계값이 없는 방은 "설계 -"로 찍고 붉게 칠하지 않는다', () => {
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, rectWalls([0.5, 0.25], [6000.5, 5000.25], 200));
+  const room = activeFloor(store.get()).rooms[0].id;
+  updateRoom(store, room, { name: '비가열조리실' });                       // design은 0이 기본이다
+  addItem(store, createItem(productById('hood-box'), { pos: [2000.5, 2000.25], props: { type: 'hood', no: 1, faceVelocity: 0.7, system: 'F-4' } }));
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  createAirflowPanel(el, { store, ui });
+  expect(el.innerHTML).toContain('설계 -');
+  expect(el.innerHTML).not.toContain('설계 0');
+  expect(el.querySelectorAll('td.warn')).toHaveLength(0);                 // 견줄 값이 없으면 붉게 칠하지 않는다
+  // 설계값이 있는 방은 예전 그대로다(기존 setup의 방).
+  const a = setup();
+  expect(a.el.innerHTML).toContain('설계 5,000');
+});

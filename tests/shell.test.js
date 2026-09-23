@@ -1273,3 +1273,18 @@ test('라벨 밀도 select는 kvp에 남기고 onLabelDensity를 부른다', asy
   expect(JSON.stringify(store.get())).toBe(before);       // 프로젝트는 한 글자도 바뀌지 않는다
   localStorage.clear();                                   // 뒤에 붙는 테스트에 '끔'을 물려주지 않는다(M-5)
 });
+
+// §17.12(5) · 감사 §47: 배너가 가리키는 [F]를 누를 수 없었고, 패널의 시각적 첫 항목은 "벽 그리기"다.
+test('첫 방 힌트는 누를 수 있고 방 그리기 버튼을 강조한다', () => {
+  const picked = [];
+  const { root, ui } = mountShell({ onFirstRoom: () => picked.push('room') });
+  ui.set({ firstRoomHint: true });
+  const hint = root.querySelector('#banner button.hint');
+  expect(hint).not.toBeNull();
+  expect(hint.textContent).toContain('방 그리기');
+  expect(root.querySelector('[data-tool="room"]').classList.contains('hint-on')).toBe(true);
+  hint.click();
+  expect(picked).toEqual(['room']);
+  ui.set({ firstRoomHint: false });
+  expect(root.querySelector('[data-tool="room"]').classList.contains('hint-on')).toBe(false);
+});

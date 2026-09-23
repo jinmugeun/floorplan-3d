@@ -13,7 +13,9 @@ const pct = v => (v === null ? '-' : `${v.toFixed(1)}%`);
 const KIND_LABELS = { supply: '급기', exhaust: '배기', mixed: '급·배기' };
 // 설계와 5% 이상 벌어진 칸만 붉게 표시한다(설계가 0이면 견줄 대상이 없다).
 const warn = off => (off !== null && Math.abs(off) >= AIRFLOW_TOL ? ' class="warn"' : '');
-// 실측값 + 그 아래 설계값. '미배치' 줄(roomId null)은 견줄 설계값이 없어 '-'로 찍는다.
+// 실측값 + 그 아래 설계값. '미배치' 줄(roomId null)과 **설계값을 넣지 않은 방**은 '-'로 찍는다
+// (§17.12 이월 · 감사 §19: "값이 없다"와 "값이 0이다"는 다르다 — 견줄 값이 없으면 off도 null이라
+// warn이 붙지 않는다).
 const cell = (now, design, off, hasDesign) => `<td${warn(off)}>${cmh(now)}<br><small class="muted">설계 ${hasDesign ? cmh(design) : '-'}</small></td>`;
 
 export function createAirflowPanel(container, { store, ui }) {
@@ -23,7 +25,7 @@ export function createAirflowPanel(container, { store, ui }) {
     container.innerHTML = `
       <h3>${AIRFLOW_TITLES.room} ${CMH}</h3>
       <div class="air-wrap"><table class="est-table air-table"><thead><tr><th>공간</th><th>EA</th><th>SA</th><th>급기율</th></tr></thead>
-      <tbody>${rows.length ? rows.map(r => `<tr${r.roomId === null ? '' : ` data-room="${esc(r.roomId)}"`}><td>${esc(r.name)}</td>${cell(r.EA, r.design.EA, r.offEA, r.roomId !== null)}${cell(r.SA, r.design.SA, r.offSA, r.roomId !== null)}<td>${pct(r.ratio)}</td></tr>`).join('')
+      <tbody>${rows.length ? rows.map(r => `<tr${r.roomId === null ? '' : ` data-room="${esc(r.roomId)}"`}><td>${esc(r.name)}</td>${cell(r.EA, r.design.EA, r.offEA, r.roomId !== null && (r.design.EA > 0 || r.design.SA > 0))}${cell(r.SA, r.design.SA, r.offSA, r.roomId !== null && (r.design.EA > 0 || r.design.SA > 0))}<td>${pct(r.ratio)}</td></tr>`).join('')
         : '<tr><td colspan="4">배치된 설비가 없습니다.</td></tr>'}</tbody></table></div>
       <h3>${AIRFLOW_TITLES.system} ${CMH}</h3>
       <div class="air-wrap"><table class="est-table air-table"><thead><tr><th>계통</th><th>구분</th><th>EA</th><th>SA</th><th>설비</th></tr></thead>

@@ -5,9 +5,8 @@
 import { itemsOf, arrayCopy } from '../state/floorOps.js';
 import { MAX_PLACEMENTS, pathPlacementCount } from '../geom/arrange.js';
 import { openArrayDialog, MIN_SPACING, MAX_COUNT } from '../ui/itemDialogs.js';
-import { PATH_2D_HINT, PATH_FP_HINT } from '../ui/itemMenu.js';
 import { createPathArrayTool } from '../view2d/tools/pathArrayTool.js';
-import { ARRAY_MULTI_WARN, ARRAY_TOO_MANY, COPIED_N } from '../ui/messages.js';
+import { ARRAY_MULTI_WARN, ARRAY_TOO_MANY, COPIED_N, PATH_2D_HINT, PATH_FP_HINT } from '../ui/messages.js';
 
 export const PATH_TOOL = 'pathArray';
 export { MAX_PLACEMENTS, MIN_SPACING };

@@ -264,3 +264,6 @@ button.primary, .primary { background: var(--accent); color: var(--on-accent); b
 .layer-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-bottom: 6px; }
 .layer-head input[name="q"] { min-width: 0; }
 #panel.narrow .layer-code { display: none; }
+/* 배너의 첫 방 힌트가 가리키는 [방 그리기] 버튼을 같은 동안 강조한다(§17.12(5) · 감사 §47):
+   말로 가리키기만 하면 좌측 패널의 시각적 첫 항목("벽 그리기")과 어긋나 보인다. */
+.hint-on { outline: 2px solid var(--accent); outline-offset: -2px; }

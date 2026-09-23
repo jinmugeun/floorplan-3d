@@ -1,12 +1,8 @@
 import { activeFloor } from '../state/schema.js';
 import { ductLinksOf } from '../state/ductOps.js';
-import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY } from './messages.js';
+import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, PATH_2D_HINT, PATH_FP_HINT } from './messages.js';
 // 사유 하나가 disabled와 title을 함께 만든다(리뷰 I-3): 세 메뉴가 같은 헬퍼를 쓴다.
 import { why } from './menuReason.js';
-
-// 경로 배열을 못 쓰는 두 이유. 문구는 메뉴 title과 단축키 토스트(app/arrangeActions.js)가 나눠 쓴다(M-10).
-export const PATH_2D_HINT = '2D에서 사용';
-export const PATH_FP_HINT = '1인칭 위치를 먼저 찍거나 [Esc]로 취소해주세요';
 
 // 2A의 contextMenu가 먹는 배열을 만든다. 실제 동작은 main.js가 넘기는 itemActions가 한다.
 export function itemMenuItems({ store, ui, ids, itemActions = {} }) {

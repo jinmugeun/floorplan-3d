@@ -71,7 +71,9 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   // 풍량 집계(명세 §11.3). 설비도 덕트도 없는 층에서는 빈 표가 되고, table()이 "항목이 없습니다"를 찍는다.
   const cmh = n => Number(n || 0).toLocaleString('ko-KR');
   const air = roomAirflow(f).filter(r => r.EA || r.SA || r.design.EA || r.design.SA);
-  const airRows = air.map(r => [esc(r.name), cmh(r.EA), cmh(r.SA), cmh(r.design.EA), cmh(r.design.SA), r.ratio === null ? '-' : `${r.ratio.toFixed(1)}%`]);
+  // 설계값이 없는 방은 '-'다(§17.12 이월 · 감사 §19): "값이 없다"와 "값이 0이다"는 다르다.
+  const design = r => (r.design.EA > 0 || r.design.SA > 0);
+  const airRows = air.map(r => [esc(r.name), cmh(r.EA), cmh(r.SA), design(r) ? cmh(r.design.EA) : '-', design(r) ? cmh(r.design.SA) : '-', r.ratio === null ? '-' : `${r.ratio.toFixed(1)}%`]);
   // '미배치'는 어느 방에도 들지 않은 설비다(roomId === null): 인쇄물에서도 눈에 걸려야 한다(§16.2).
   const airAttr = i => (air[i]?.roomId === null || air[i]?.name === UNPLACED_ROOM ? ' class="warn"' : '');
   const sysRows = systemAirflow(f).map(x => [esc(x.system), FLOW_LABELS[x.kind], cmh(x.EA), cmh(x.SA), x.itemIds.length]);

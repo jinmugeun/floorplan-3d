@@ -458,3 +458,13 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     expect(a.picker.hitAt({ clientX: 100, clientY: 100 })).toEqual({ kind: 'item', id: 'i9' });
   });
 });
+
+// §17.12 이월(감사 §11): 면에 재질을 발라도 피드백이 0이었다(2D에서는 무늬가 거의 안 바뀐다).
+test('재질을 바르면 무엇을 발랐는지 알린다', async () => {
+  const { MATERIAL_APPLIED } = await import('../src/ui/messages.js');
+  const { materialById } = await import('../src/materials/catalog.js');
+  const a = setup({ mesh: 'wall' });
+  a.ui.set({ matPick: { assignment: mat('brick-red') } });
+  a.click();
+  expect(document.body.textContent).toContain(MATERIAL_APPLIED(materialById('brick-red').name));
+});
