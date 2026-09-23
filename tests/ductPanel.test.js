@@ -133,8 +133,8 @@ describe('덕트 패널', () => {
     // 구간 버튼: 시작 → 끝 좌표(mm 정수)와 길이
     expect(html).toContain('title="2000, 1500 → 8001, 1500 · 6001"');
     expect(html).toContain('title="8001, 1500 → 8001, 6000 · 4500"');
-    // 이름 없는 입력이 0개다 — 단정 범위는 **댐퍼 목록**이다(§16.5의 "title 누락 0"에 남아 있던
-    // 구멍이 그 여섯 칸이다). 단면 W/H/Z 세 칸은 `lenField → num()`으로 만들어져 title이 없지만
+    // 이름 없는 입력이 0개다 — 단정 범위는 **댐퍼 목록**이다(§16.5의 "title 누락 0"은 버튼만
+    // 훑으므로 이 여섯 칸은 그 절이 다루지 않던 자리다). 단면 W/H/Z 세 칸은 `lenField → num()`으로 만들어져 title이 없지만
     // `field()`가 낸 `<label><span>단면 너비 W</span>…`이 화면에 보이므로 §16.5를 이미 만족한다
     // (`lenField`에 title 인자가 없어 그 셋에 붙일 수도 없다 — 패널 전체로 단정하면 늘 실패한다).
     const el = document.createElement('div');

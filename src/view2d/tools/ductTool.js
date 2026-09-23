@@ -18,8 +18,10 @@ export const DUCT_TOOL_DEFAULTS = { kind: 'exhaust', w: 500, h: 300, z: 2900, sy
 // document 없이 돌아야 한다.
 export function createDuctTool({ store, ui, view, opts: given = null, onDone = () => {}, toast = () => {} }) {
   const opts = given ?? { ...DUCT_TOOL_DEFAULTS };
-  // 계통 칸은 직전 값을 기억한다(§17.9(1) · 감사 §15): 빈 칸으로 그려 풍량 표에 "미지정" 줄이
-  // 생기던 자리다. 사용자가 이미 고쳐 둔 값(세션 동안 유지되는 도구 옵션)은 이긴다.
+  // 계통 칸은 마지막으로 완성한 덕트의 계통을 기억한다(§17.9(1) 개정 · 리뷰 I-2): 빈 칸으로 그려
+  // 풍량 표에 "미지정" 줄이 생기던 자리다. 기억이 단일 출처다 — 세션 내내 같은 객체인 도구 옵션
+  // (main.js의 toolOpts.duct)이 비어 있으면 늘 기억에서 다시 읽으므로, 일부러 비운 계통은 기억도
+  // 비어 있어 되채워지지 않는다. 사용자가 이미 고쳐 둔(비어 있지 않은) 값은 이긴다.
   if (!String(opts.system ?? '').trim()) opts.system = lastDuctSystem();
   // hit은 커서 옆 마커가 읽는 스냅 종류다(§16.6). snapped(설비 id)와는 다른 것이다 —
   // snapped는 노란 고리(설비에 붙는 중)를, hit은 ■△┆⋯⊾ 마커(무엇에 물렸나)를 그린다.
@@ -55,10 +57,15 @@ export function createDuctTool({ store, ui, view, opts: given = null, onDone = (
     const d = id ? ductById(activeFloor(store.get()), id) : null;
     if (d) {
       toast(DUCT_DRAWN(d.segments.length, Math.round(ductLength(d) / 100) / 10));
-      // 계통은 완성할 때만 기억한다([Esc]로 버린 값은 남기지 않는다).
-      if (system) setLastDuctSystem(system);
-      else toast(DUCT_NO_SYSTEM);   // 막지는 않는다 — 계통 없는 덕트도 정당한 상태다
+      // 기억은 마지막으로 **완성한** 덕트의 계통이다 — 빈 값도 포함한다(§17.9(1) 개정 · 리뷰 I-2).
+      // 완성할 때만 적으므로 [Esc]로 버린 값은 남지 않고, 일부러 비운 계통은 빈 채로 기억되어
+      // 다음 활성화에서 조용히 되채워지지 않는다. 경고는 별개 가지다(막지는 않는다 — 계통 없는
+      // 덕트도 정당한 상태다).
+      setLastDuctSystem(system);
+      if (!system) toast(DUCT_NO_SYSTEM);
     }
+    // d가 null인 경로는 사실상 도달 불가다(points 2개 이상을 이미 확인했다 — normalizeDuct가
+    // 거부하려면 좌표가 유한하지 않아야 한다). 그래서 방어 토스트를 두지 않는다(리뷰 M-7).
     reset();
     if (id) ui.set({ selection: { type: 'duct', id, segment: null, vertex: null } });
     onDone();

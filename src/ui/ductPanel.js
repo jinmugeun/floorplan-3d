@@ -15,16 +15,19 @@ import { DAMPER_ADDED, DAMPER_DELETED, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE } fr
 const segIndex = sel => (Number.isInteger(sel?.segment) ? sel.segment : 0);
 // 구간 버튼의 마우스 툴팁(§17.9(5) · 감사 §18): 어느 구간이 도면의 어디인지 누르지 않고 안다.
 const ptText = p => `${Math.round(p[0])}, ${Math.round(p[1])}`;
-const segTitle = (d, k, units) => `${ptText(d.points[k])} → ${ptText(d.points[k + 1])} · ${fmtLen(Math.round(segmentLength(d, k)), units)}`;
+// 길이 글자는 호출자가 한 번 계산해 넘긴다(툴팁과 옆 스팬이 갈라질 여지도, 두 번 셈할 일도 없다).
+const segTitle = (d, k, lenTxt) => `${ptText(d.points[k])} → ${ptText(d.points[k + 1])} · ${lenTxt}`;
 
 export function ductPanelHtml(floor, sel, { units = 'mm', showUnit = false } = {}) {
   const d = sel?.type === 'duct' ? ductById(floor, sel.id) : null;
   if (!d) return '';
   const i = Math.min(segIndex(sel), d.segments.length - 1);
   const seg = d.segments[i];
-  const segRows = d.segments.map((s, k) =>
-    `<li class="${k === i ? 'on' : ''}"><button type="button" name="ductSeg" data-i="${k}" title="${esc(segTitle(d, k, units))}">${k + 1}구간</button>`
-    + `<span class="muted">${Math.round(s.w)}×${Math.round(s.h)} · ${esc(fmtLen(Math.round(segmentLength(d, k)), units))}</span></li>`).join('');
+  const segRows = d.segments.map((s, k) => {
+    const lenTxt = fmtLen(Math.round(segmentLength(d, k)), units);
+    return `<li class="${k === i ? 'on' : ''}"><button type="button" name="ductSeg" data-i="${k}" title="${esc(segTitle(d, k, lenTxt))}">${k + 1}구간</button>`
+      + `<span class="muted">${Math.round(s.w)}×${Math.round(s.h)} · ${esc(lenTxt)}</span></li>`;
+  }).join('');
   // 댐퍼 줄: 종류 토글 + 크기 두 칸(명세 DT-06의 "크기 입력", 아키텍처 §11.6의 "종류·크기·삭제") + 삭제.
   // 위치는 "몇 구간 몇 %"만으로는 도면에서 찾기 어렵다(감사 §20): 구간 시작에서의 거리도 적는다.
   // 단위는 같은 패널의 구간 줄과 같은 fmtLen을 쓴다 — 원시 mm를 찍으면 ft·in 모드에서 틀린다.

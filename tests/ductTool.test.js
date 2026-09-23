@@ -146,8 +146,9 @@ describe('단축키 T', () => {
     expect(toasts[0]).toBe('덕트 1구간 · 총 3 m');
   });
 
-  // 완성할 때만 기억한다: 그리다 [Esc]로 버린 계통은 남기지 않는다.
-  test('[Esc]로 버린 덕트는 아무것도 알리지 않고 기억하지도 않는다', () => {
+  // 완성할 때만 기억한다: 그리다 [Esc]로 버린 계통은 남기지 않는다 — 기억(localStorage)에 대한
+  // 단정은 jsdom인 tests/prefs.test.js가 진다(이 파일은 node 환경이라 localStorage가 없다).
+  test('[Esc]로 버린 덕트는 아무것도 알리지 않는다', () => {
     const { t, toasts, floor } = setup({ system: 'EA-9' });
     t.onPointerDown([500.5, 500.25]);
     t.onPointerDown([3500.5, 500.25]);
