@@ -275,3 +275,7 @@ function normalizeView(v, defView = DEFAULT_VIEW) {
 export function activeFloor(p) {
   return p.floors[p.activeFloor ?? 0];
 }
+
+// 산출물 대화상자(견적서·시방서·렌더샷)가 함께 쓰는 빈 도면 판정(§17.11(1)).
+// app/topbar.js의 projectIsEmpty를 쓰지 않는 이유는 불변식이다: ui/는 app/을 import하지 않는다.
+export const floorIsEmpty = f => !(f?.walls?.length || f?.rooms?.length || f?.items?.length || f?.ducts?.length);

@@ -18,6 +18,11 @@ export const ALL_HIDE = '모두 숨기기';
 export const BTN_TITLES = { hide: '숨김', show: '보이기', lock: '잠금', unlock: '잠금 해제', rename: '이름 변경' };
 // 숨김 필터를 끄면 행 자체가 사라져 되살릴 길이 없었다(감사 §26): 그 사실과 되돌릴 버튼을 남긴다.
 export const HIDDEN_LINE = n => `숨긴 항목 ${n}개 — 숨긴 항목 보기`;
+// 빈 도면에서도 패널이 말을 한다(§17.11(3) · 감사 §46). 풍량 패널의 빈 상태 문구와 같은 자리다.
+export const LAYERS_EMPTY = '이 층에는 제품·덕트가 없습니다';
+// 두 버튼의 마우스 툴팁(감사 §48 — §16.5의 "패널 버튼 title 누락 0"에 남아 있던 구멍이다).
+export const ALL_SHOW_TITLE = '숨긴 제품·덕트를 모두 보이게';
+export const ALL_HIDE_TITLE = '제품·덕트를 모두 숨기기';
 
 // 같은 이름·코드 제품이 나란히 있으면 무엇이 무엇인지 알 수 없다(감사 §23). 설비는 자기 번호·심벌이
 // 있고(equipLabel: 후드 ①, 디퓨저 심벌, 팬 번호, 환기캡 Ø), 그 밖의 제품은 트리 안 순번을 준다.
@@ -113,5 +118,7 @@ export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidde
       <summary><span class="layer-room-name">${title}</span><span class="muted">${count}</span></summary>
       <ul>${rows}${hiddenLine}</ul></details></li>`;
   };
+  // 제품도 덕트도 없으면 트리 대신 한 줄로 말한다(빈 방 헤더만 늘어놓지 않는다).
+  if (!buckets.some(b => b.items.length || b.ducts.length)) return `<p class="hint">${LAYERS_EMPTY}</p>`;
   return `<ul class="layer-tree">${buckets.map(node).join('')}</ul>`;
 }

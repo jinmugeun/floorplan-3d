@@ -8,7 +8,7 @@ import { productById } from '../src/products/catalog.js';
 import { materialById } from '../src/materials/catalog.js';
 import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2 } from '../src/io/estimate.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
-import { estimateLines, estimateCsvText, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE } from '../src/io/estimateTable.js';
+import { estimateLines, estimateCsvText, csvFooter, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE } from '../src/io/estimateTable.js';
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -117,8 +117,8 @@ describe('견적서 계산', () => {
     applyMaterial(a.store, { kind: 'floor', id: a.floor().rooms[0].id }, mat('wood-oak'));
     const csv = estimateCsv(estimateRows(a.floor()));
     expect(csv.charCodeAt(0)).toBe(0xfeff);
-    const lines = csv.split('\n');
-    expect(lines[1]).toBe('구분,이름,코드,규격,수량,단위,단가,금액');   // §16.2: 단위 칸이 늘었다
+    const lines = csv.slice(1).split('\n');                               // BOM을 뗀 뒤 센다(1행이 머리글이다)
+    expect(lines[0]).toBe('구분,이름,코드,규격,수량,단위,단가(원),금액(원)');   // §17.11(5): 1행이 머리글이고 통화는 열 이름에
     expect(csv).toContain('제품,3인 소파,SF-3P,2100×900×800,1,개,890000,890000');
     expect(csv).toContain('마감재,오크 원목마루');
     expect(lines.at(-2).startsWith('합계')).toBe(true);   // 마지막 줄은 단가 주석이다(§16.2)
@@ -201,15 +201,15 @@ test('견적 행은 수량 × 단가 = 금액이고 덕트 단면은 규격 칸�
   for (const l of lines) expect(Math.abs(l.qty * l.unitPrice - l.total)).toBeLessThanOrEqual(1);
 });
 
-test('CSV는 §16.2가 정한 여덟 열과 단가 주석을 갖는다', () => {
-  expect(EST_COLUMNS).toEqual(['구분', '이름', '코드', '규격', '수량', '단위', '단가', '금액']);
-  expect(EST_TABLE_COLUMNS).toEqual(['구분', '이름', '코드', '규격', '길이', '수량', '단위', '단가', '금액']);
+test('CSV는 머리글 1행 + 8열이고 꼬리도 8열이다(§17.11)', () => {
+  expect(EST_COLUMNS).toEqual(['구분', '이름', '코드', '규격', '수량', '단위', '단가(원)', '금액(원)']);
+  expect(EST_TABLE_COLUMNS).toEqual(['구분', '이름', '코드', '규격', '길이', '수량', '단위', '단가(원)', '금액(원)']);
   const rows = estimateRows({ walls: [], rooms: [], items: [createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] })] });
   const csv = estimateCsvText(rows);
-  const lines = csv.split('\n');
+  const lines = csv.slice(1).split('\n');                 // BOM을 뗀 뒤 센다(1행이 머리글이다)
   expect(csv.charCodeAt(0)).toBe(0xfeff);                 // 엑셀 한글(소스는 `\ufeff` 이스케이프다 — 리뷰 M-1)
-  expect(lines[1]).toBe('구분,이름,코드,규격,수량,단위,단가,금액');
-  expect(lines[2]).toBe('제품,3인 소파,SF-3P,2100×900×800,1,개,890000,890000');
+  expect(lines[0]).toBe('구분,이름,코드,규격,수량,단위,단가(원),금액(원)');
+  expect(lines[1]).toBe('제품,3인 소파,SF-3P,2100×900×800,1,개,890000,890000');
   // 합계는 **금액 칸**에 들어간다(§16.2: 받은 사람이 검산할 수 있는 CSV). 쉼표 개수를 눈으로
   // 세는 대신 열 개수로 확인한다 — 옛 7열 CSV에서는 쉼표 6개가 맞았고, 8열이 되면서 하나 늘었다.
   const total = lines.at(-2).split(',');
@@ -217,6 +217,33 @@ test('CSV는 §16.2가 정한 여덟 열과 단가 주석을 갖는다', () => {
   expect(total[0]).toBe('합계');
   expect(total.at(-1)).toBe(String(rows.total));           // 마지막 = 금액 열
   expect(total.slice(1, -1).every(c => c === '')).toBe(true);
-  expect(lines.at(-1)).toBe(PRICE_NOTE);                       // 마지막 줄이 단가 출처다
+  expect(lines.at(-1)).toContain(PRICE_NOTE);                  // 마지막 줄이 단가 출처 + 프로젝트·작성일이다
+  expect(lines.at(-1).split(',')).toHaveLength(EST_COLUMNS.length);   // 꼬리도 8열이다(§17.11(5))
   expect(PRICE_NOTE).toBe('단가는 예시 값(2026-09 기준)');
+});
+
+// §17.11(5) · 감사 §42: 29줄 중 1열짜리 줄이 2개라 엑셀에서 자동 필터·피벗이 한 번에 걸리지 않았다.
+test('CSV는 머리글 1행 + 데이터이고 모든 줄이 8열이다', () => {
+  const a = setup();                                   // 이 파일의 기존 헬퍼(빈 방 하나)
+  addItem(a.store, createItem(productById('sofa-3'), { pos: [2000.5, 1500.25] }));
+  applyMaterial(a.store, { kind: 'floor', id: a.floor().rooms[0].id }, mat('wood-oak'));
+  const rows = estimateRows(a.floor());
+  const text = estimateCsvText(rows, { name: '강당중 조리실', date: new Date('2026-09-23T13:32:00') });
+  expect(text.startsWith('﻿')).toBe(true);   // BOM은 이스케이프로 적는다(M-13: 리터럴은 편집기에서 보이지 않는다)
+  const lines = text.slice(1).split('\n');
+  expect(lines[0]).toBe(EST_COLUMNS.join(','));        // 1행이 머리글이다("견적서" 줄이 없다)
+  expect(EST_COLUMNS[6]).toBe('단가(원)');
+  expect(EST_COLUMNS[7]).toBe('금액(원)');
+  const cols = lines.map(l => (l.match(/,/g) ?? []).length + 1);
+  expect(new Set(cols)).toEqual(new Set([8]));         // 1열짜리 줄 0개
+  expect(lines.at(-1)).toContain('강당중 조리실');
+  expect(lines.at(-1)).toContain('2026-09-23');
+  expect(lines.at(-1)).toContain('단가는 예시 값(2026-09 기준)');
+  expect(lines.at(-1).endsWith(',,,,,,,')).toBe(true); // 꼬리 주석도 8열이다
+});
+
+test('꼬리 한 줄에 프로젝트·작성일·단가 주석이 모두 든다', () => {
+  const s = csvFooter({ name: '테스트 현장', date: new Date('2026-01-02T03:04:00') });
+  expect(s).toBe('단가는 예시 값(2026-09 기준) · 프로젝트: 테스트 현장 · 작성일: 2026-01-02');
+  expect(csvFooter({})).toContain('프로젝트: ');       // 이름이 없어도 칸은 남는다
 });

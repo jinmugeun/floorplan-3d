@@ -196,3 +196,15 @@ test('방향 안내 문구는 §17.8이 적은 글자 그대로다', () => {
   expect(DRAW_DIR_HINT).toBe('길이를 넣었습니다 — 마우스로 방향을 정한 뒤 [Enter]');
   expect(DRAW_DIR_HINT.match(/\[Enter\]/g)).toHaveLength(1);
 });
+
+// §17.11(1)(3)(4) · 감사 §50: 같은 사실을 두 곳에서 다른 글자로 말하던 자리를 닫는다.
+// (문구는 동적 import로 읽는다 — 이 파일의 import 줄은 여러 태스크가 함께 고치는 자리다.)
+test('빈 상태 문구는 한 벌이고 EST_EMPTY와 글자까지 같다', async () => {
+  const { EST_EMPTY } = await import('../src/io/estimateTable.js');
+  const { OUTPUT_EMPTY_TITLE, WHY_NOTHING_TO_SHOW, WHY_NOTHING_TO_HIDE, EST_EMPTY_TITLE } = await import('../src/ui/messages.js');
+  expect(OUTPUT_EMPTY_TITLE).toBe('도면에 그릴 것이 없습니다');
+  expect(WHY_NOTHING_TO_SHOW).toBe('숨긴 항목이 없음');
+  expect(WHY_NOTHING_TO_HIDE).toBe('숨길 항목이 없음');
+  expect(EST_EMPTY_TITLE).toBe('배치된 제품·마감재·덕트가 없습니다.');
+  expect(EST_EMPTY_TITLE).toBe(EST_EMPTY);          // 본문과 사유가 같은 글자다(M-4)
+});

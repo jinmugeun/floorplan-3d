@@ -428,3 +428,22 @@ describe('레이어 패널', () => {
     expect(activeFloor(store.get()).items.every(i => !i.hidden)).toBe(true);
   });
 });
+
+// §17.11(3) · 감사 §48: 두 버튼에 title이 없었고, 아무것도 없는데 [모두 숨기기]가 활성이었다.
+test('[모두 보이기]·[모두 숨기기]는 대상이 0이면 비활성이고 사유를 말한다', async () => {
+  const { ALL_SHOW_TITLE, ALL_HIDE_TITLE } = await import('../src/ui/layersTree.js');
+  const { WHY_NOTHING_TO_SHOW, WHY_NOTHING_TO_HIDE } = await import('../src/ui/messages.js');
+  const { el, store } = setup();                       // 제품 2개(숨긴 것 0개)
+  const show = () => el.querySelector('[name="showAll"]');
+  const hide = () => el.querySelector('[name="hideAll"]');
+  expect(hide().disabled).toBe(false);
+  expect(hide().title).toBe(ALL_HIDE_TITLE);
+  expect(show().disabled).toBe(true);                   // 숨긴 것이 없다
+  expect(show().title).toBe(WHY_NOTHING_TO_SHOW);
+  hide().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(show().disabled).toBe(false);
+  expect(show().title).toBe(ALL_SHOW_TITLE);
+  expect(hide().disabled).toBe(true);
+  expect(hide().title).toBe(WHY_NOTHING_TO_HIDE);
+  expect(store.canUndo()).toBe(true);
+});

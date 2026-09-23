@@ -3,7 +3,7 @@
 import { describe, test, expect } from 'vitest';
 import { createItem } from '../src/state/schema.js';
 import { productById, fmtSize } from '../src/products/catalog.js';
-import { layerTreeHtml, itemTag, HIDDEN_LINE, BTN_TITLES, ALL_SHOW, ALL_HIDE, layerRowTitle } from '../src/ui/layersTree.js';
+import { layerTreeHtml, itemTag, HIDDEN_LINE, BTN_TITLES, ALL_SHOW, ALL_HIDE, layerRowTitle, LAYERS_EMPTY, ALL_SHOW_TITLE, ALL_HIDE_TITLE } from '../src/ui/layersTree.js';
 
 const hood = no => createItem(productById('hood-box'), { pos: [1000.5, 1000.25], props: { no } });
 const sofa = () => createItem(productById('sofa-3'), { pos: [2000.5, 2000.25] });
@@ -102,4 +102,16 @@ test('꼬리표 번호가 숨김 필터에 흔들리지 않는다(리뷰 M-6)', 
     { room: room('r2', '부식창고', 5.4), items: [c], ducts: [] },
   ], { ...ctx, showHidden: false });
   expect(tags(split)).toEqual(['#1', '#3']);
+});
+
+// §17.11(3) · 감사 §46: 빈 도면의 레이어 패널이 아무 말도 하지 않았다(풍량 패널은 빈 상태 문구 3종).
+test('버킷이 비면 빈 상태 문구를 그린다', () => {
+  expect(LAYERS_EMPTY).toBe('이 층에는 제품·덕트가 없습니다');
+  expect(ALL_SHOW_TITLE).toBe('숨긴 제품·덕트를 모두 보이게');
+  expect(ALL_HIDE_TITLE).toBe('제품·덕트를 모두 숨기기');
+  expect(layerTreeHtml([], ctx)).toContain(LAYERS_EMPTY);
+  expect(layerTreeHtml([], ctx)).toContain('class="hint"');
+  // 방은 있는데 제품·덕트가 하나도 없는 층도 빈 상태다(헤더만 남은 트리를 보여 주지 않는다).
+  expect(layerTreeHtml([{ room: room('r1', '창고', 5.4), items: [], ducts: [] }], ctx)).toContain(LAYERS_EMPTY);
+  expect(layerTreeHtml([{ room: room('r1', '창고', 5.4), items: [sofa()], ducts: [] }], ctx)).not.toContain(LAYERS_EMPTY);
 });

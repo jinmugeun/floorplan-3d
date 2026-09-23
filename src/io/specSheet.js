@@ -11,6 +11,7 @@ import { roomAirflow, systemAirflow, UNPLACED_ROOM } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // src/io/ → src/ui/ import는 계층 역전이다(아키텍처 §9)
 import { assignmentOf } from '../state/materialOps.js';   // io/ → state/는 열려 있는 방향이다(roomTypes와 같다)
 import { esc } from '../util/html.js';
+import { pageGroups, pageFootHtml, pageCss } from './specPages.js';
 
 export const SPEC_SECTIONS = [['plan', '평면도'], ['elevations', '입면도'], ['products', '제품 목록'], ['rooms', '공간 목록'], ['walls', '벽 목록'], ['airflow', '풍량 집계'], ['notes', '비고']];
 export const PAPER = { A4: [210, 297], A3: [297, 420] };
@@ -116,10 +117,33 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     ${cell('도면번호', sheet.number)}${cell('작성자', sheet.author)}${cell('현장', sheet.site)}
   </tr></tbody></table>`;
 
+  // 절을 먼저 만들고 쪽 블록으로 묶는다(§17.11(6)). 제목·메타·제목 블록은 첫 블록 머리에 남는다.
+  const parts = {
+    plan: on('plan') && images.plan ? `<h2>평면도</h2><div class="figs">${img(images.plan, '평면도')}</div>` : '',
+    elevations: on('elevations') && elevFigs ? `<h2>입면도</h2><div class="figs elev">${elevFigs}</div>` : '',
+    products: on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H, mm)', '수량'], productRows)}` : '',
+    rooms: on('rooms') ? `<h2>공간 목록</h2>${table(['공간', '타입', '면적', `높이(${uLabel})`, '바닥 마감', '천장 마감'], roomRows)}` : '',
+    walls: on('walls') ? `<h2>벽 목록</h2>${table(['기호', `길이(${uLabel})`, `두께(${uLabel})`, `높이(${uLabel})`, '내벽 마감', '외벽 마감'], wallRows)}` : '',
+    airflow: on('airflow') ? `<h2>풍량 집계</h2>
+      <h3>${AIRFLOW_TITLES.room} ${CMH}</h3>${table(['공간', 'EA', 'SA', '설계 EA', '설계 SA', '급기율'], airRows, airAttr)}
+      <h3>${AIRFLOW_TITLES.system} ${CMH}</h3>${table(['계통', '구분', 'EA', 'SA', '설비 수'], sysRows)}` : '',
+    notes: on('notes') && String(notes).trim() ? `<h2>비고</h2><pre class="notes">${esc(notes)}</pre>` : '',
+  };
+  const dateText = new Date().toLocaleDateString('ko-KR');
+  const head = `<h1>${esc(project.name || '프로젝트')} 시방서</h1>
+  <p class="meta">${esc(f.name || 'Floor 1')} · 층 높이 ${len(f.height ?? 0)} ${esc(uLabel)} · 작성 ${esc(dateText)}</p>
+  ${sheetHead}`;
+  const foot = { name: project.name || '프로젝트', date: dateText };
+  const groups = pageGroups(parts);
+  const body = (groups.length ? groups : [{ keys: [], html: '' }])
+    .map((g, i) => `<section class="page">${i === 0 ? head : ''}${g.html}${pageFootHtml(i + 1, Math.max(1, groups.length), foot)}</section>`)
+    .join('');
+
   return `<style>
-    /* 쪽 번호는 인쇄 페이지의 여백 상자에서 센다(§16.11). 이 규칙을 무시하는 브라우저에서는
-       브라우저 자신의 인쇄 머리글·바닥글이 쪽 번호를 맡는다 — 사람 확인 항목이다. */
-    @page { size: ${size}; margin: 12mm; @bottom-right { content: "쪽 " counter(page) " / " counter(pages); font-size: 10px; color: #5b6775; } }
+    /* 쪽 번호는 본문 블록의 꼬리가 찍는다(§17.11(6) · 감사 §39): Chromium이 @page의 여백 상자를
+       무시한다는 것이 page.pdf() 실측으로 확인됐다. 용지 크기·여백만 여기 남는다. */
+    @page { size: ${size}; margin: 12mm; }
+    ${pageCss()}
     .title-block { width: 100%; border-collapse: collapse; margin: 4px 0 10px; font-size: 11px; }
     .title-block td { border: 1px solid #c8ccd2; padding: 3px 6px; }
     .title-block b { color: #5b6775; font-weight: 600; margin-right: 4px; }
@@ -146,16 +170,5 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     .meta { font-size: 12px; color: #5b6775; }
     pre.notes { white-space: pre-wrap; font: inherit; border: 1px solid #c8ccd2; padding: 8px; min-height: 40px; }
   </style>
-  <h1>${esc(project.name || '프로젝트')} 시방서</h1>
-  <p class="meta">${esc(f.name || 'Floor 1')} · 층 높이 ${len(f.height ?? 0)} ${esc(uLabel)} · 작성 ${esc(new Date().toLocaleDateString('ko-KR'))}</p>
-  ${sheetHead}
-  ${on('plan') && images.plan ? `<h2>평면도</h2><div class="figs">${img(images.plan, '평면도')}</div>` : ''}
-  ${on('elevations') && elevFigs ? `<h2>입면도</h2><div class="figs elev">${elevFigs}</div>` : ''}
-  ${on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H, mm)', '수량'], productRows)}` : ''}
-  ${on('rooms') ? `<h2>공간 목록</h2>${table(['공간', '타입', '면적', `높이(${uLabel})`, '바닥 마감', '천장 마감'], roomRows)}` : ''}
-  ${on('walls') ? `<h2>벽 목록</h2>${table(['기호', `길이(${uLabel})`, `두께(${uLabel})`, `높이(${uLabel})`, '내벽 마감', '외벽 마감'], wallRows)}` : ''}
-  ${on('airflow') ? `<h2>풍량 집계</h2>
-    <h3>${AIRFLOW_TITLES.room} ${CMH}</h3>${table(['공간', 'EA', 'SA', '설계 EA', '설계 SA', '급기율'], airRows, airAttr)}
-    <h3>${AIRFLOW_TITLES.system} ${CMH}</h3>${table(['계통', '구분', 'EA', 'SA', '설비 수'], sysRows)}` : ''}
-  ${on('notes') && String(notes).trim() ? `<h2>비고</h2><pre class="notes">${esc(notes)}</pre>` : ''}`;
+  ${body}`;
 }

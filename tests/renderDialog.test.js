@@ -2,6 +2,8 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject } from '../src/state/schema.js';
+import { addWalls } from '../src/state/floorOps.js';
+import { rectWalls } from '../src/geom/walls.js';
 import { openRenderDialog, RENDER_SIZES, RENDER_VIEWS } from '../src/ui/renderDialog.js';
 import { openGalleryDialog } from '../src/ui/galleryDialog.js';
 import { listShots, clearShots, addShot } from '../src/io/gallery.js';
@@ -113,4 +115,37 @@ test('렌더 전에는 내려받기가 숨어 있고 렌더 뒤에 내려받기�
   expect(document.querySelector('.modal.gallery')).toBeTruthy();
   document.querySelector('.modal.gallery')?.remove();
   dlg.close();
+});
+
+// §17.11(1): 시방서와 같은 규칙이다. 이 파일의 기존 테스트는 빈 프로젝트로 여는데 버튼을
+// dispatchEvent로 눌러(사용자 클릭이 아니라) 렌더가 계속 돈다 — 그 테스트들은 그대로 통과한다.
+test('빈 도면에서는 [렌더]·[갤러리 열기]가 비활성이고 사유가 붙는다', async () => {
+  const { OUTPUT_EMPTY_TITLE } = await import('../src/ui/messages.js');
+  openRenderDialog({ store: createStore(createEmptyProject()), view3d: fakeView3d() });
+  const root = document.querySelector('.modal.render');
+  for (const n of ['render', 'gallery']) {
+    const b = root.querySelector(`[name="${n}"]`);
+    expect(b.disabled, n).toBe(true);
+    expect(b.title, n).toBe(OUTPUT_EMPTY_TITLE);
+  }
+  expect(root.querySelector('[name="close"]').disabled).toBe(false);
+  // 렌더가 한 번 돌아도 잠금과 사유가 남는다(finally가 같은 판정을 다시 쓴다 — 사전 검토 I-3).
+  // 비활성 버튼에도 dispatchEvent는 그대로 도달하므로 이 경로를 실제로 지날 수 있다.
+  root.querySelector('[name="render"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 0));          // render()의 async finally까지 흘려 보낸다
+  expect(root.querySelector('[name="render"]').disabled).toBe(true);
+  expect(root.querySelector('[name="render"]').title).toBe(OUTPUT_EMPTY_TITLE);
+  // 도면이 있으면 활성이고 사유 title도 없다.
+  document.body.innerHTML = '';
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  openRenderDialog({ store, view3d: fakeView3d() });
+  expect(document.querySelector('.modal.render [name="render"]').disabled).toBe(false);
+  expect(document.querySelector('.modal.render [name="render"]').hasAttribute('title')).toBe(false);
+});
+
+// §17.11(2) · 감사 §29: 렌더샷만 첫 포커스가 [렌더]라 습관적인 [Enter]가 곧바로 렌더를 돌렸다.
+test('첫 포커스는 다른 모달 넷과 같은 [name="close"]다', () => {
+  openRenderDialog({ store: createStore(createEmptyProject()), view3d: fakeView3d() });
+  expect(document.activeElement.name).toBe('close');
 });

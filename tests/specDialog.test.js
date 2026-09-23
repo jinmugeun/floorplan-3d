@@ -111,3 +111,21 @@ describe('시방서 대화상자', () => {
     }
   });
 });
+
+// §17.11(1) · 감사 §44: 빈 도면에서도 [HTML 내려받기]·[미리보기/인쇄]가 활성이었다.
+// 이 파일의 setup()은 벽을 채워 열므로(비어 있지 않다) 빈 프로젝트로 직접 연다.
+test('빈 도면에서는 실행 버튼이 비활성이고 사유가 붙는다([닫기]는 살아 있다)', async () => {
+  const { OUTPUT_EMPTY_TITLE } = await import('../src/ui/messages.js');
+  openSpecDialog({ store: createStore(createEmptyProject('빈 도면')), ui: createUiState(), view3d: { renderImage: () => 'data:,' } });
+  const root = document.querySelector('.modal.spec');
+  for (const n of ['download', 'print']) {
+    const b = root.querySelector(`[name="${n}"]`);
+    expect(b.disabled, n).toBe(true);
+    expect(b.title, n).toBe(OUTPUT_EMPTY_TITLE);
+  }
+  expect(root.querySelector('[name="close"]').disabled).toBe(false);
+  // 도면이 있으면 그대로 활성이다(기존 경로 회귀 방어).
+  document.body.innerHTML = '';
+  const a = setup();
+  expect(a.root.querySelector('[name="print"]').disabled).toBe(false);
+});

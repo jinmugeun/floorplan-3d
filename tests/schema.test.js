@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { migrate, normalizeProject, activeFloor, createEmptyProject, SCHEMA_VERSION, DEFAULT_SETTINGS } from '../src/state/schema.js';
+import { migrate, normalizeProject, activeFloor, createEmptyProject, floorIsEmpty, SCHEMA_VERSION, DEFAULT_SETTINGS } from '../src/state/schema.js';
 import { rectWalls } from '../src/geom/walls.js';
 
 describe('normalizeProject / migrate', () => {
@@ -120,4 +120,15 @@ test('로드할 때 조리기구의 상단 후드 참조를 정리한다', () =>
   expect(items.find(i => i.id === 'a1').props.hoodId).toBe('h1');          // 살아 있는 후드는 그대로
   expect(items.find(i => i.id === 'a2').props.hoodId).toBeNull();          // 없는 아이템
   expect(items.find(i => i.id === 'a3').props.hoodId).toBeNull();          // 후드가 아닌 아이템
+});
+
+// §17.11(1): 산출물 세 대화상자가 같은 판정을 쓴다(ui/는 app/topbar.js를 import하지 않는다).
+test('floorIsEmpty는 벽·방·제품·덕트가 모두 없을 때만 true다', () => {
+  const p = createEmptyProject();
+  expect(floorIsEmpty(activeFloor(p))).toBe(true);
+  expect(floorIsEmpty(undefined)).toBe(true);
+  expect(floorIsEmpty({ walls: [], rooms: [], items: [], ducts: [] })).toBe(true);
+  expect(floorIsEmpty({ walls: [{ id: 'w1' }], rooms: [], items: [], ducts: [] })).toBe(false);
+  expect(floorIsEmpty({ walls: [], rooms: [], items: [{ id: 'i1' }], ducts: [] })).toBe(false);
+  expect(floorIsEmpty({ walls: [], rooms: [], items: [], ducts: [{ id: 'd1' }] })).toBe(false);
 });

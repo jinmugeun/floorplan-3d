@@ -203,9 +203,11 @@ test('머리글에 도면번호·작성자·현장·쪽 칸이 있다', () => {
   expect(html).toContain('홍길동');
   expect(html).toContain('현장');
   expect(html).toContain('강당중학교');
-  // 쪽 번호는 인쇄 페이지 여백 상자에서 센다(브라우저가 지원하면 자동, 아니면 브라우저 머리글이 맡는다).
-  expect(html).toContain('@bottom-right');
-  expect(html).toContain('counter(page)');
+  // §17.11(6): Chromium이 @page의 여백 상자를 무시한다는 것이 실측으로 확인됐다(감사 §39) →
+  // 쪽 꼬리를 본문 블록에 직접 찍는다.
+  expect(html).not.toContain('@bottom-right');
+  expect(html).not.toContain('counter(page)');
+  expect(html).toContain('class="page-foot"');
   // 값이 없으면 칸은 빈칸으로 남는다(칸 자체는 있어야 손으로 적을 수 있다).
   const blank = specHtml({ project: project(), options: {} });
   expect(blank).toContain('도면번호');
@@ -227,4 +229,21 @@ test('빈 절은 인쇄에서 빠진다(§16.11 · 감사 §8)', () => {
   const onlyPlan = specHtml({ project: project(), images: { plan: 'data:image/png;base64,P' }, options: {} });
   expect(onlyPlan).toContain('<h2>평면도</h2>');
   expect(onlyPlan).not.toContain('<h2>입면도</h2>');
+});
+
+// §17.11(6): 블록 수 = 내용 있는 절 묶음 수, 블록마다 꼬리 하나.
+test('본문은 쪽 블록으로 나뉘고 블록마다 꼬리가 하나씩 붙는다', () => {
+  const p = project();
+  const html = specHtml({ project: p, images: { plan: 'data:,plan' }, options: {} });
+  const pages = html.match(/<section class="page">/g) ?? [];
+  const feet = html.match(/class="page-foot"/g) ?? [];
+  expect(pages.length).toBeGreaterThanOrEqual(2);       // 평면도 / 제품·공간 / 벽·풍량 …
+  expect(feet).toHaveLength(pages.length);
+  expect(html).toContain(`쪽 ${pages.length} / ${pages.length}`);
+  expect(html).toContain('쪽 1 /');
+  expect(html).toContain(p.name);                       // 꼬리에 프로젝트 이름
+  // 제목·메타·제목 블록은 첫 블록 머리에 남는다.
+  const first = html.split('<section class="page">')[1];
+  expect(first).toContain('<h1>');
+  expect(first).toContain('title-block');
 });

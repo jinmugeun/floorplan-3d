@@ -118,7 +118,9 @@ export const SPEC_FAIL = msg => `시방서를 만들지 못했습니다: ${msg}`
 
 // 견적서 빈 상태(§16.2 · 감사 §5): 빈 CSV·빈 인쇄가 나가지 않게 버튼을 끄고 사유를 말한다.
 // 본문 문구(EST_EMPTY)는 io/estimateTable.js에 있다(표 안의 글이라 io 계층에서 만든다).
-export const EST_EMPTY_TITLE = '배치된 제품·마감재·덕트가 없습니다';
+// io/estimateTable.js의 EST_EMPTY와 **글자까지 같다**(§17.11(4) · 감사 §50 — 마침표가 달랐다).
+// messages.js는 잎 모듈로 남긴다(io/를 import하지 않는다): 같음은 tests/messages.test.js가 지킨다.
+export const EST_EMPTY_TITLE = '배치된 제품·마감재·덕트가 없습니다.';
 
 // 레이어 일괄 표시(§16.3 · 감사 §20·§25): 39 + 10개가 조용히 사라지던 자리다.
 // 0인 쪽은 문구에서 뺀다("덕트 0개를 숨겼습니다"는 없는 일을 말한다). 둘 다 있으면
@@ -199,3 +201,9 @@ export const MATERIAL_PICK_FIRST = '먼저 마감재를 고르세요 — 지정�
 // 그 [Enter]는 타이핑을 지키며 아무것도 놓지 않는데(리뷰 C-1의 가드), 배너는 여전히 "길이를
 // 타이핑하고 [Enter] 확정"이라고 말해 왜 안 되는지가 어디에도 없었다 — 그 프레임만 사실을 말한다.
 export const DRAW_DIR_HINT = '길이를 넣었습니다 — 마우스로 방향을 정한 뒤 [Enter]';
+
+// 시방서·렌더샷이 함께 쓰는 빈 도면 사유(§17.11(1) · 감사 §44).
+export const OUTPUT_EMPTY_TITLE = '도면에 그릴 것이 없습니다';
+// 레이어 패널의 두 버튼 사유(§17.11(3) · 감사 §46·§48). menuReason의 WHY_* 말투 그대로다.
+export const WHY_NOTHING_TO_SHOW = '숨긴 항목이 없음';
+export const WHY_NOTHING_TO_HIDE = '숨길 항목이 없음';

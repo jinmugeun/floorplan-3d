@@ -66,7 +66,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
   root.addEventListener('click', ev => {
     const name = ev.target.name;
     if (name === 'close' || name === 'closeFoot') { close(); return; }   // 머리글 ✕ · 푸터 [닫기]
-    if (name === 'csv') { downloadText(filenameFor(store.get()).replace(/\.json$/, '-견적서.csv'), estimateCsv(rows)); return; }
+    if (name === 'csv') { downloadText(filenameFor(store.get()).replace(/\.json$/, '-견적서.csv'), estimateCsv(rows, { name: store.get().name, date: new Date() })); return; }
     if (name === 'print') {
       const ok = printHtml(`<h1>${esc(store.get().name)} 견적서</h1>${tableHtml(rows)}<p>합계 ${won(rows.total)}</p><p>${PRICE_NOTE}</p>
         <style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:6px;text-align:left}</style>`, { title: '견적서' });

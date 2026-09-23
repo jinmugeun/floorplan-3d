@@ -4,7 +4,8 @@ import { addShot } from '../io/gallery.js';
 import { downloadDataUrl, filenameFor } from '../io/file.js';
 import { openGalleryDialog } from './galleryDialog.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
-import { SHOT_BUSY } from './messages.js';
+import { SHOT_BUSY, OUTPUT_EMPTY_TITLE } from './messages.js';
+import { activeFloor, floorIsEmpty } from '../state/schema.js';
 
 export const RENDER_SIZES = [[1280, 720], [1920, 1080], [3840, 2160]];
 export const RENDER_VIEWS = [['', '현재 카메라'], ['front', '정면'], ['back', '배면'], ['left', '좌측'], ['right', '우측'], ['top', '평면']];
@@ -46,6 +47,16 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   // 다운로드 2개가 생겼다. 규칙은 specDialog의 run()과 같다.
   let busy = false;
   const buttons = () => [...root.querySelectorAll('[name="render"], [name="download"], [name="gallery"]')];
+  // 빈 도면에서는 만들 것이 없다(§17.11(1) · 감사 §44 — 견적서만 갖고 있던 규칙이다).
+  // 한 번만 칠하면 안 된다: render()의 finally가 buttons()를 전부 disabled = false로 되살리므로
+  // 렌더가 한 번 돈 뒤에는 잠금과 사유 title이 사라진다(사전 검토 I-3). 판정을 함수로 두고
+  // **열 때와 finally에서 함께** 부른다. [닫기]는 buttons()에 없으므로 늘 살아 있다.
+  const empty = () => floorIsEmpty(activeFloor(store.get()));
+  const syncEmpty = () => buttons().forEach(b => {
+    b.disabled = empty();
+    if (empty()) b.title = OUTPUT_EMPTY_TITLE; else b.removeAttribute('title');
+  });
+  syncEmpty();
   async function render() {
     if (busy) { part('msg').textContent = SHOT_BUSY; return; }
     busy = true;
@@ -68,7 +79,7 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
       root.querySelector('[name="download"]').hidden = false;
     } finally {
       busy = false;
-      buttons().forEach(b => { b.disabled = false; });
+      syncEmpty();   // 빈 도면이면 다시 잠근다(같은 판정 한 곳 — 사전 검토 I-3)
     }
   }
   root.addEventListener('click', ev => {
@@ -79,7 +90,9 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   });
   root.addEventListener('change', ev => { if (ev.target.name in st) st[ev.target.name] = ev.target.value; });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } });
-  const trap = focusTrap(root, { focus: '[name="render"]', opener: reopenOpener(prev) });   // §15.10
+  // 첫 포커스는 모달 다섯이 같다(§17.11(2) · 감사 §29): [렌더]에 들어가면 습관적인 [Enter]가
+  // 곧바로 렌더를 돌린다(되돌릴 수 없는 부작용 — 갤러리에 항목이 쌓인다).
+  const trap = focusTrap(root, { focus: '[name="close"]', opener: reopenOpener(prev) });   // §15.10
   current = self;
   return self;
 }

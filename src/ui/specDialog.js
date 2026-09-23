@@ -1,9 +1,10 @@
 // 시방서 대화상자: 용지·구역 옵션을 고르고, 도면 이미지를 만들어 인쇄하거나 HTML로 내려받는다.
 import { specHtml, SPEC_SECTIONS, PAPER } from '../io/specSheet.js';
+import { activeFloor, floorIsEmpty } from '../state/schema.js';
 import { capture2D, downloadText, filenameFor, printBodyPx } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
-import { POPUP_BLOCKED, SPEC_IMAGES_FAIL, SPEC_FAIL } from './messages.js';
+import { POPUP_BLOCKED, SPEC_IMAGES_FAIL, SPEC_FAIL, OUTPUT_EMPTY_TITLE } from './messages.js';
 import { esc } from '../util/html.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
 
@@ -38,6 +39,9 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
 
   const part = n => root.querySelector(`[data-part="${n}"]`);
   const buttons = [...root.querySelectorAll('[name="download"], [name="print"]')];
+  // 빈 도면에서는 만들 것이 없다(§17.11(1) · 감사 §44 — 견적서만 갖고 있던 규칙이다).
+  // [닫기]는 늘 살아 있다.
+  if (floorIsEmpty(activeFloor(store.get()))) buttons.forEach(b => { b.disabled = true; b.title = OUTPUT_EMPTY_TITLE; });
   const close = () => { root.remove(); trap.destroy(); if (current === self) current = null; onClose(); };
   const self = { close };
 

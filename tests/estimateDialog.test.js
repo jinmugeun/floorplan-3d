@@ -102,7 +102,7 @@ describe('견적서 대화상자', () => {
   test('덕트·마감재 행은 수량·단위 칸을 쓰고 열 제목이 아홉 개다', () => {
     const a = setup();
     const head = [...a.root.querySelectorAll('.est-table thead th')].map(th => th.textContent);
-    expect(head).toEqual(['구분', '이름', '코드', '규격', '길이', '수량', '단위', '단가', '금액']);
+    expect(head).toEqual(['구분', '이름', '코드', '규격', '길이', '수량', '단위', '단가(원)', '금액(원)']);
     const cells = [...a.root.querySelectorAll('.est-table tbody tr td')].map(td => td.textContent);
     expect(cells).toEqual(['제품', '3인 소파', 'SF-3P', '2100×900×800', '', '1', '개', '890,000원', '890,000원']);
   });
@@ -115,7 +115,7 @@ describe('견적서 대화상자', () => {
     for (const name of ['csv', 'print']) {
       const b = root.querySelector(`[name="${name}"]`);
       expect(b.disabled).toBe(true);
-      expect(b.title).toBe('배치된 제품·마감재·덕트가 없습니다');
+      expect(b.title).toBe('배치된 제품·마감재·덕트가 없습니다.');   // §17.11(4): 마침표까지 EST_EMPTY와 같다
     }
     // 빈 상태에서도 **푸터 닫기**는 살아 있고 실제로 닫는다(리뷰 I-2: 예전 단정은 머리글 ✕를 집어
     // 푸터 닫기가 잘못 비활성화되어도 통과했다).

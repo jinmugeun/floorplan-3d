@@ -1,16 +1,19 @@
 import { activeFloor } from '../state/schema.js';
 import { roomAt } from '../vent/airflow.js';
 import { setItemFlag, updateItem, setDuctFlag } from '../state/floorOps.js';
-import { layerTreeHtml, bucketOpen, ALL_SHOW, ALL_HIDE } from './layersTree.js';
+import { layerTreeHtml, bucketOpen, ALL_SHOW, ALL_HIDE, ALL_SHOW_TITLE, ALL_HIDE_TITLE } from './layersTree.js';
 import { layersHeaderHtml, filterBuckets, rowCount, autoCollapsed, collapseLabel } from './layersHeader.js';
 import { toast } from './toast.js';
-import { LAYERS_HIDDEN, LAYERS_SHOWN } from './messages.js';
+import { LAYERS_HIDDEN, LAYERS_SHOWN, WHY_NOTHING_TO_SHOW, WHY_NOTHING_TO_HIDE } from './messages.js';
 
 // 덕트는 첫 점이 든 방에 묶는다. 폴리라인은 여러 방을 지날 수 있어 기준이 하나 필요하다.
 // 방 판정은 맨손 pointInPolygon이 아니라 roomAt(vent/airflow.js)을 쓴다: 방 폴리곤은 벽 **중심선**이라
 // 벽에 붙은 후드·벽팬의 중심이 경계 위에 놓인다 → 두 곳이 다르게 판정하면 같은 후드가 풍량 표에는
 // 그 방에 세어지면서 레이어 트리에서는 '미지정'으로 빠지는 어긋남이 생긴다.
 export const ductRoomId = (floor, duct) => roomAt(duct.points[0], floor.rooms, floor.walls)?.id ?? null;
+
+// 대상이 0이면 누를 수 없고, 그 이유를 title로 말한다(menuReason의 why()와 같은 말투다).
+const allBtn = (name, label, title, why, on) => `<button type="button" name="${name}" title="${on ? title : why}"${on ? '' : ' disabled'}>${label}</button>`;
 
 export function createLayersPanel(container, { store, ui }) {
   let renaming = null;
@@ -54,7 +57,7 @@ export function createLayersPanel(container, { store, ui }) {
     const all = buckets();
     const visible = filterBuckets(all, query);
     const collapse = autoCollapsed(rowCount(all));
-    return { visible, collapse, anyOpen: visible.some(b => bucketOpen(b, openState, collapse)) };
+    return { all, visible, collapse, anyOpen: visible.some(b => bucketOpen(b, openState, collapse)) };
   }
   // 트리만 그린다(머리 한 줄은 그대로 둔다 — 리뷰 I-2). 행이 새로 만들어지는 자리가 여기
   // 하나뿐이므로 스크롤 게이트도 같이 산다.
@@ -89,9 +92,13 @@ export function createLayersPanel(container, { store, ui }) {
     // `!!q0`가 앞에 있어야 한다: 둘 다 null인 문서에서는 첫 렌더가 검색 칸으로 포커스를 훔쳤다(리뷰 M-2).
     const q0 = container.querySelector('[name="q"]');
     const searching = !!q0 && q0 === container.ownerDocument?.activeElement;
+    // 바뀔 대상이 0이면 비활성 + 사유다(§17.11(3)): 빈 단계 금지 규칙과 같은 뿌리다 — hideAll이
+    // 세는 것과 **같은 식**으로 센다(숨김 필터로 화면에서 빠진 행도 대상이다).
+    const canShow = v.all.some(b => [...b.items, ...b.ducts].some(x => x.hidden));
+    const canHide = v.all.some(b => [...b.items, ...b.ducts].some(x => !x.hidden));
     // "모두 보기" 체크박스(상태 거울 + 파괴적 스위치)를 두 동작으로 가른다(§16.3 · 감사 §20).
     container.innerHTML = `
-      <div class="row layer-actions"><button type="button" name="showAll">${ALL_SHOW}</button><button type="button" name="hideAll">${ALL_HIDE}</button></div>
+      <div class="row layer-actions">${allBtn('showAll', ALL_SHOW, ALL_SHOW_TITLE, WHY_NOTHING_TO_SHOW, canShow)}${allBtn('hideAll', ALL_HIDE, ALL_HIDE_TITLE, WHY_NOTHING_TO_HIDE, canHide)}</div>
       ${layersHeaderHtml({ query, anyOpen: v.anyOpen })}
       <label class="check"><input type="checkbox" name="showHidden" ${showHidden() ? 'checked' : ''}> 숨긴 항목 보기</label>
       <div class="layer-tree-box"></div>`;
