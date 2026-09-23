@@ -68,4 +68,16 @@ describe('시방서 대화상자', () => {
     a.root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(document.querySelector('.modal.spec')).toBeNull();
   });
+
+  // §16.11: 세 칸이 시방서 머리글로 들어가고, 평면도는 인쇄 배율로 캡처한다.
+  test('도면번호·작성자·현장 칸이 시방서에 실린다', async () => {
+    const a = setup();                                   // 이 파일의 setup()(15행) — { store, view3d, calls, dlg, root }
+    a.root.querySelector('[name="sheetNumber"]').value = 'M-106';
+    a.root.querySelector('[name="sheetAuthor"]').value = '홍길동';
+    a.root.querySelector('[name="sheetSite"]').value = '강당중학교';
+    a.root.querySelector('[name="download"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => expect(globalThis.__down?.[1]).toContain('M-106'));
+    expect(globalThis.__down[1]).toContain('홍길동');
+    expect(globalThis.__down[1]).toContain('강당중학교');
+  });
 });

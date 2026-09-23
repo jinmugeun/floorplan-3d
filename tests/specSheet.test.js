@@ -129,3 +129,36 @@ test('풍량 두 표에 제목과 (CMH)가 붙고 미배치 행은 경고색이�
   expect(html).toContain('<tr class="warn"><td>미배치</td>');    // 어느 방에도 들지 않은 설비(감사 §6)
   expect(html).toContain('규격(W×D×H, mm)');                     // 한 문서 안 단위 표기를 한 갈래로
 });
+
+// §16.11(감사 §8): 쪽 번호·도면번호·작성자/현장 칸이 없었다.
+test('머리글에 도면번호·작성자·현장·쪽 칸이 있다', () => {
+  const html = specHtml({ project: project(), options: { sheet: { number: 'M-106', author: '홍길동', site: '강당중학교' } } });
+  expect(html).toContain('도면번호');
+  expect(html).toContain('M-106');
+  expect(html).toContain('작성자');
+  expect(html).toContain('홍길동');
+  expect(html).toContain('현장');
+  expect(html).toContain('강당중학교');
+  // 쪽 번호는 인쇄 페이지 여백 상자에서 센다(브라우저가 지원하면 자동, 아니면 브라우저 머리글이 맡는다).
+  expect(html).toContain('@bottom-right');
+  expect(html).toContain('counter(page)');
+  // 값이 없으면 칸은 빈칸으로 남는다(칸 자체는 있어야 손으로 적을 수 있다).
+  const blank = specHtml({ project: project(), options: {} });
+  expect(blank).toContain('도면번호');
+});
+
+test('빈 절은 인쇄에서 빠진다(§16.11 · 감사 §8)', () => {
+  // 비고를 비우면 빈 <pre> 상자를 찍지 않는다.
+  const noNotes = specHtml({ project: project(), options: { notes: '   ' } });
+  expect(noNotes).not.toContain('<pre class="notes"');
+  expect(noNotes).not.toContain('비고');
+  // 이미지가 없으면 그 절 자체를 빼고 "이미지가 없습니다."도 찍지 않는다.
+  const noImg = specHtml({ project: project(), images: {}, options: {} });
+  expect(noImg).not.toContain('이미지가 없습니다');
+  expect(noImg).not.toContain('평면도');
+  expect(noImg).not.toContain('입면도');
+  // 이미지가 있으면 그 절만 남는다.
+  const onlyPlan = specHtml({ project: project(), images: { plan: 'data:image/png;base64,P' }, options: {} });
+  expect(onlyPlan).toContain('평면도');
+  expect(onlyPlan).not.toContain('입면도');
+});

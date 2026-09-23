@@ -1,6 +1,6 @@
 // 시방서 대화상자: 용지·구역 옵션을 고르고, 도면 이미지를 만들어 인쇄하거나 HTML로 내려받는다.
 import { specHtml, SPEC_SECTIONS, PAPER } from '../io/specSheet.js';
-import { capture2D, downloadText, filenameFor } from '../io/file.js';
+import { capture2D, downloadText, filenameFor, printBodyPx } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
 import { POPUP_BLOCKED, SPEC_IMAGES_FAIL, SPEC_FAIL } from './messages.js';
@@ -24,6 +24,12 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
       <label class="check"><input type="checkbox" name="landscape"> 가로 방향</label>
     </div>
     <div class="spec-sections">${SPEC_SECTIONS.map(([k, l]) => `<label class="check"><input type="checkbox" data-section="${k}" checked> ${esc(l)}</label>`).join('')}</div>
+    <!-- 제목 블록 칸(§16.11 · 감사 §8): 인쇄물이 도면으로 읽히려면 이 셋이 있어야 한다. -->
+    <div class="row">
+      <label class="field"><span>도면번호</span><input type="text" name="sheetNumber" placeholder="M-106"></label>
+      <label class="field"><span>작성자</span><input type="text" name="sheetAuthor"></label>
+      <label class="field"><span>현장</span><input type="text" name="sheetSite"></label>
+    </div>
     <label class="field"><span>비고</span><textarea name="notes" rows="3" placeholder="현장 주의 사항을 적습니다"></textarea></label>
     <p class="hint" data-part="msg"></p>
     <div class="toolbar"><button type="button" name="download">HTML 내려받기</button><button type="button" name="print" class="primary">미리보기/인쇄</button></div>
@@ -41,13 +47,20 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
     landscape: root.querySelector('[name="landscape"]').checked,
     sections: Object.fromEntries(SPEC_SECTIONS.map(([k]) => [k, root.querySelector(`[data-section="${k}"]`).checked])),
     notes: root.querySelector('[name="notes"]').value,
+    sheet: {
+      number: root.querySelector('[name="sheetNumber"]').value,
+      author: root.querySelector('[name="sheetAuthor"]').value,
+      site: root.querySelector('[name="sheetSite"]').value,
+    },
   });
 
   // 평면도는 2D 캡처, 입면도는 3D 직교 렌더로 만든다. 실패한 이미지는 그 자리를 비우고 알리기만 한다.
-  async function buildImages(sections) {
+  // 평면도는 **인쇄 배율**로 캡처한다(§16.11 · 감사 §7): 논리 폭을 용지 본문 폭으로 두어 치수·공간
+  // 이름이 인쇄물에서도 12 px로 읽히게 하고, 비트맵만 2배로 키워 선명하게 만든다.
+  async function buildImages(sections, { paper = 'A4', landscape = false } = {}) {
     const images = {};
     let failed = 0;
-    if (sections.plan) { try { images.plan = await capture2D(store, ui); } catch { failed += 1; } }
+    if (sections.plan) { try { images.plan = await capture2D(store, ui, { cssWidth: printBodyPx(paper, landscape), ratio: 2 }); } catch { failed += 1; } }
     if (sections.elevations) {
       for (const preset of ELEV) {
         try { images[preset] = view3d.renderImage({ width: 1600, height: 900, preset }); } catch { failed += 1; }
@@ -60,7 +73,7 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
   async function html() {
     part('msg').textContent = '도면 이미지를 만들고 있습니다…';
     const options = readOptions();
-    const images = await buildImages(options.sections);
+    const images = await buildImages(options.sections, { paper: options.paper, landscape: options.landscape });
     part('msg').textContent = '';
     const p = store.get();
     return specHtml({ project: p, floorIndex: p.activeFloor ?? 0, images, options });

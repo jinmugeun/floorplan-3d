@@ -27,7 +27,7 @@ const table = (head, rows, rowAttr = () => '') => `<table><thead><tr>${head.map(
     <tbody>${rows.length ? rows.map((r, i) => `<tr${rowAttr(i)}>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${head.length}">항목이 없습니다.</td></tr>`}</tbody></table>`;
 
 export function specHtml({ project, floorIndex = 0, images = {}, options = {} }) {
-  const { paper = 'A4', landscape = false, sections = {}, notes = '' } = options;
+  const { paper = 'A4', landscape = false, sections = {}, notes = '', sheet = {} } = options;
   const [pw, ph] = PAPER[paper] ?? PAPER.A4;                       // 모르는 용지는 A4로 떨어뜨린다
   const size = landscape ? `${ph}mm ${pw}mm` : `${pw}mm ${ph}mm`;
   const f = project.floors?.[floorIndex] ?? project.floors?.[0] ?? { walls: [], rooms: [], items: [] };
@@ -65,10 +65,19 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   const sysRows = systemAirflow(f).map(x => [esc(x.system), FLOW_LABELS[x.kind], cmh(x.EA), cmh(x.SA), x.itemIds.length]);
   const img = (src, label) => (src ? `<figure><img src="${esc(src)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>` : '');
   const elevFigs = ELEVATIONS.map(([k, l]) => img(images[k], l)).join('');
-  const noImage = '<p class="meta">이미지가 없습니다.</p>';
+  // 제목 블록(§16.11 · 감사 §8): 값이 없어도 칸은 남는다 — 인쇄물에 손으로 적을 자리다.
+  const cell = (label, v) => `<td><b>${esc(label)}</b> ${esc(String(v ?? '').trim())}</td>`;
+  const sheetHead = `<table class="title-block"><tbody><tr>
+    ${cell('도면번호', sheet.number)}${cell('작성자', sheet.author)}${cell('현장', sheet.site)}
+  </tr></tbody></table>`;
 
   return `<style>
-    @page { size: ${size}; margin: 12mm; }
+    /* 쪽 번호는 인쇄 페이지의 여백 상자에서 센다(§16.11). 이 규칙을 무시하는 브라우저에서는
+       브라우저 자신의 인쇄 머리글·바닥글이 쪽 번호를 맡는다 — 사람 확인 항목이다. */
+    @page { size: ${size}; margin: 12mm; @bottom-right { content: "쪽 " counter(page) " / " counter(pages); font-size: 10px; color: #5b6775; } }
+    .title-block { width: 100%; border-collapse: collapse; margin: 4px 0 10px; font-size: 11px; }
+    .title-block td { border: 1px solid #c8ccd2; padding: 3px 6px; }
+    .title-block b { color: #5b6775; font-weight: 600; margin-right: 4px; }
     body { font-family: "IBM Plex Sans KR", sans-serif; color: #1b2430; }
     h1 { font-size: 20px; margin: 0 0 4px; }
     h2 { font-size: 14px; margin: 18px 0 6px; border-bottom: 1px solid #1b2430; page-break-after: avoid; }
@@ -85,13 +94,14 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   </style>
   <h1>${esc(project.name || '프로젝트')} 시방서</h1>
   <p class="meta">${esc(f.name || 'Floor 1')} · 층 높이 ${len(f.height ?? 0)} ${esc(uLabel)} · 작성 ${esc(new Date().toLocaleDateString('ko-KR'))}</p>
-  ${on('plan') ? `<h2>평면도</h2><div class="figs">${img(images.plan, '평면도') || noImage}</div>` : ''}
-  ${on('elevations') ? `<h2>입면도</h2><div class="figs">${elevFigs || noImage}</div>` : ''}
+  ${sheetHead}
+  ${on('plan') && images.plan ? `<h2>평면도</h2><div class="figs">${img(images.plan, '평면도')}</div>` : ''}
+  ${on('elevations') && elevFigs ? `<h2>입면도</h2><div class="figs">${elevFigs}</div>` : ''}
   ${on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H, mm)', '수량'], productRows)}` : ''}
   ${on('rooms') ? `<h2>공간 목록</h2>${table(['공간', '타입', '면적', `높이(${uLabel})`, '바닥 마감', '천장 마감'], roomRows)}` : ''}
   ${on('walls') ? `<h2>벽 목록</h2>${table(['기호', `길이(${uLabel})`, `두께(${uLabel})`, `높이(${uLabel})`, '내벽 마감', '외벽 마감'], wallRows)}` : ''}
   ${on('airflow') ? `<h2>풍량 집계</h2>
     <h3>${AIRFLOW_TITLES.room} ${CMH}</h3>${table(['공간', 'EA', 'SA', '설계 EA', '설계 SA', '급기율'], airRows, airAttr)}
     <h3>${AIRFLOW_TITLES.system} ${CMH}</h3>${table(['계통', '구분', 'EA', 'SA', '설비 수'], sysRows)}` : ''}
-  ${on('notes') ? `<h2>비고</h2><pre class="notes">${esc(notes)}</pre>` : ''}`;
+  ${on('notes') && String(notes).trim() ? `<h2>비고</h2><pre class="notes">${esc(notes)}</pre>` : ''}`;
 }

@@ -33,7 +33,8 @@ export function drawEmptyGuide(ctx, v, floor, state, { toolName = null } = {}) {
   return true;
 }
 
-export function createView2D(canvas, store, ui, { readonly = false, labels = true, overlay = null, onPick = null, menu = null, onCameraChange = null, onDragOver = null, onDrop = null, onDragLeave = null, onHint = () => {} } = {}) {
+// dpr: 비트맵 배율을 강제한다(§16.11의 인쇄 배율 캡처). 주지 않으면 화면처럼 devicePixelRatio를 쓴다.
+export function createView2D(canvas, store, ui, { readonly = false, labels = true, overlay = null, onPick = null, menu = null, onCameraChange = null, onDragOver = null, onDrop = null, onDragLeave = null, onHint = () => {}, dpr: dprOpt = null } = {}) {
   const ctx = canvas.getContext('2d');
   const camera = { cx: 4000, cy: 3000, scale: 0.08 };
   let tool = null, dirty = true, raf = 0, panning = null, dpr = 1, picking = false, lastHint = null, lastDimSig = null;
@@ -102,7 +103,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
   }
   function render() {
     raf = 0; if (!dirty) return; dirty = false;
-    dpr = window.devicePixelRatio || 1; const [w, h] = size();
+    dpr = dprOpt ?? (window.devicePixelRatio || 1); const [w, h] = size();
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     const state = store.get(), f = activeFloor(state), sel = ui.get().selection;
