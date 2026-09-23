@@ -186,16 +186,15 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // 칸이 곧 활성 칸이다(캔버스의 [Tab]과 같은 상태를 가리킨다 — §16.7).
   els.optionBar.addEventListener('input', ev => { const k = dimKey(ev.target); if (!k) return; if (currentTool?.setDim?.(k, ev.target.value)) onToolChange(); });
   els.optionBar.addEventListener('focusin', ev => { const k = dimKey(ev.target); if (k) { currentTool?.focusDim?.(k); syncDims(); onToolChange(); } });
-  // 다음 점을 클릭하는 순간 포커스를 캔버스 쪽으로 돌려준다(§17.8(2) · 감사 §57): 치수 칸이 키를
-  // 계속 먹으면 캔버스의 숫자·[Enter]·[Esc] 경로가 죽는다. 캡처 단계라 도구의 pointerdown보다
-  // 먼저 돈다. **왼쪽 버튼만** 본다(리뷰 M-1): 오른쪽 클릭(맥락 메뉴)·가운데 드래그(패닝)는
-  // §17.8(2)가 말한 "다음 점을 클릭"이 아니다. 클릭 프레임은 실측이 0이라 autoFocusDim의 래치가
-  // 닫히고, 마우스가 다시 움직여 확정할 값이 생기면 그때 칸이 포커스를 되찾는다(§17.8(1)).
-  // 속성 패널에서 타이핑하던 값도 같은 자리에서 확정한다(Task 3 재리뷰 N-1): 이 뒤에 도는 도구의
-  // pointerdown이 선택을 먼저 비우고, 브라우저가 mousedown의 포커스 정리에서 뒤늦게 내는 change는
-  // 빈 선택에 닿아 아무 데도 적용되지 않았다(계획 8부터). 누르는 순간 확정해 **아직 살아 있는**
-  // 선택에 적용한다 — 치수 칸은 위에서 이미 걸러 냈으므로 두 번 확정되지 않는다.
-  els.canvas2d.addEventListener('pointerdown', ev => { if (ev.button) return; const a = document.activeElement; if (dimKey(a)) { a.blur(); return; } commitFocusedIn(els.props); }, true);
+  // 다음 점을 클릭하는 순간 포커스를 캔버스 쪽으로 돌려준다(§17.8(2) · 감사 §57): 치수 칸이 키를 계속 먹으면 캔버스의 숫자·[Enter]·[Esc] 경로가 죽는다. **왼쪽 버튼만** 본다(리뷰 M-1): 오른쪽 클릭(맥락 메뉴)·가운데 드래그(패닝)는 §17.8(2)가 말한 "다음 점을 클릭"이 아니다. 클릭 프레임은 실측이 0이라 autoFocusDim의 래치가 닫히고, 마우스가 다시 움직여 확정할 값이 생기면 그때 칸이 포커스를 되찾는다 (§17.8(1)). 속성 패널에서 타이핑하던 값도 같은 자리에서 확정한다(Task 3 재리뷰 N-1): 이 뒤에 도는 도구의 pointerdown이 선택을 먼저 비우고, 브라우저가 mousedown의 포커스 정리에서 뒤늦게 내는 change는 빈 선택에 닿아 아무 데도 적용되지 않았다(계획 8부터). 치수 칸은 위에서 이미 걸러 냈으므로 두 번 확정되지 않는다.
+  // 리스너는 **document 캡처**다(최종 리뷰 I-4): 캔버스 자신에 달면 이벤트의 target이 곧 그 요소라 AT_TARGET 단계에서 캡처 플래그가 순서를 정하지 않고 **등록 순서**가 정한다 — 지금 맞는 이유가 오직 main.js가 createShell을 createView2D보다 먼저 부르기 때문이었다. 옮긴 만큼 destroy()가 반드시 뗀다(m-1).
+  // 확정한 뒤에는 되돌아온 포커스를 한 번 blur한다(최종 리뷰 I-1): commitFocusedIn의 합성 change가 propsPanel의 rerender 갈래 (1)을 태워 같은 칸이 포커스를 되찾는데, 선택을 비우지 않는 도구(벽·방·덕트·보조선·측정·배치)에서는 그대로 남아 이어지는 숫자·[Enter]·[Esc]를 속성 칸이 먹었다. 여기는 그 갈래가 **동기적으로 다 돈 뒤**라 activeElement가 새 노드다.
+  const onCanvasDown = ev => {
+    if (ev.button || ev.target !== els.canvas2d) return;
+    if (dimKey(document.activeElement)) { document.activeElement.blur(); return; }   // 치수 칸은 확정하지 않고 비켜 준다(위 input 리스너가 이미 도구 버퍼에 넣었다)
+    if (commitFocusedIn(els.props)) document.activeElement?.blur?.();
+  };
+  document.addEventListener('pointerdown', onCanvasDown, true);
   // 길이 입력은 change뿐 아니라 [Enter]로도 반영한다(값을 고치고 Enter만 누르면 그대로였다 — §12.5).
   // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다). 뒤이어 오는
   // 네이티브 change는 isDuplicateCommit이 한 번 삼킨다(§16.1). select는 INPUT이 아니라 애초에 걸리지
@@ -294,5 +293,5 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     refreshTool() { renderBanner(); syncDims(); },
     // 셸을 버리면 구독·관찰자·document 리스너까지 함께 뗀다: 남아 있으면 스토어가 바뀔 때
     // syncTop이 사라진 #btnUndo에서 던진다(m-8).
-    destroy() { unsubs.forEach(u => u?.()); banner.destroy(); bottom?.destroy(); pops.destroy(); miniRo?.disconnect(); resizeWatch.destroy(); fieldTrack.destroy(); splitters.forEach(s => s.destroy()); } };
+    destroy() { unsubs.forEach(u => u?.()); document.removeEventListener('pointerdown', onCanvasDown, true); banner.destroy(); bottom?.destroy(); pops.destroy(); miniRo?.disconnect(); resizeWatch.destroy(); fieldTrack.destroy(); splitters.forEach(s => s.destroy()); } };
 }

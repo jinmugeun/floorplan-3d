@@ -920,3 +920,64 @@ test('칸에 값을 치고 2D 캔버스를 누르면 살아 있는 선택에 확
   expect(store.canUndo()).toBe(canUndo);                      // 되돌리기 단계는 딱 하나였다
   root.remove();
 });
+
+// 최종 리뷰 I-1(신규 · 교차: Task 3 크로스픽스 × Task 4 §17.8(2)): 위 테스트가 통과한 이유는
+// 선택 도구가 pointerdown에서 선택을 비워 패널이 통째로 비었기 때문이다. **선택을 건드리지 않는
+// 도구**(벽·방·덕트·보조선·측정·배치)에서는 commitFocusedIn의 합성 change가 rerender 갈래 (1)을
+// 태워 같은 칸이 포커스를 되찾았다 — 그다음 숫자·[Enter]·[Esc]가 전부 속성 칸으로 들어갔다.
+test('선택을 비우지 않는 도구로 캔버스를 눌러도 포커스는 패널 밖이다(리뷰 I-1)', async () => {
+  const { createShell } = await import('../src/ui/shell.js');
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const shell = createShell(root, { store, ui });
+  const props = root.querySelector('#props'), canvas = root.querySelector('#c2d');
+  createPropsPanel(props, store, ui);
+  // 벽 도구를 쓰는 중이다: 위 테스트와 달리 캔버스 pointerdown이 선택을 건드리지 않는다.
+  const id = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id } });
+  const th = props.querySelector('[name="thickness"]');
+  th.focus();
+  th.value = '240';
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(240);   // 값은 그대로 확정된다
+  // 포커스는 <body>다 — keymap의 INPUT 가드가 열려 숫자·[Enter]·[Esc]가 도구로 간다(§17.8(2)).
+  expect(props.contains(document.activeElement)).toBe(false);
+  expect(document.activeElement).toBe(document.body);
+  shell.destroy(); root.remove();
+});
+
+// 최종 리뷰 I-4 · m-1: 리스너가 캔버스 자신에 달려 있어 AT_TARGET 단계의 **등록 순서**에 기댔다.
+// document 캡처로 옮겼으므로 (a) 뒤에 등록된 캔버스 리스너보다도 먼저 돌고 (b) destroy()가 뗀다.
+test('캔버스 확정 리스너는 document 캡처이고 destroy()가 뗀다(리뷰 I-4·m-1)', async () => {
+  const { createShell } = await import('../src/ui/shell.js');
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const shell = createShell(root, { store, ui });
+  const props = root.querySelector('#props'), canvas = root.querySelector('#c2d');
+  createPropsPanel(props, store, ui);
+  const id = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id } });
+  // 캔버스에 **먼저** 등록한 리스너보다도 먼저 돈다(예전에는 등록 순서가 이겨 값이 사라졌다).
+  canvas.addEventListener('pointerdown', () => ui.set({ selection: null }), true);
+  props.querySelector('[name="thickness"]').focus();
+  props.querySelector('[name="thickness"]').value = '250';
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(250);
+  // 캔버스 밖(document의 다른 요소)을 누른 것은 이 리스너가 보지 않는다.
+  ui.set({ selection: { type: 'wall', id } });
+  props.querySelector('[name="thickness"]').focus();
+  props.querySelector('[name="thickness"]').value = '260';
+  document.body.dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(250);
+  // destroy() 뒤에는 죽은 셸의 document 리스너가 남지 않는다(jsdom에서 셸을 여러 번 만드는 테스트).
+  const th = props.querySelector('[name="thickness"]');
+  th.focus(); th.value = '270';
+  shell.destroy();
+  canvas.dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(250);
+  root.remove();
+});
