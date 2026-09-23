@@ -90,9 +90,11 @@ export function buildProject(raw, {
     floors: [{ ...createFloor('1F'), height, slab: 0, walls, rooms, items }],
   });
   const floor = project.floors[0];
+  // 키는 geom/rooms.js의 nodeKey와 같은 반올림이다 — normalizeWalls의 T 분할이 소수 좌표를 만들어
+  // 정확한 float 키로는 방 엔진이 이미 이어 붙인 점이 끊긴 끝점으로 보고된다(Task 7 리뷰 F1: 실파일 53 중 22가 허상).
   const deg = new Map();
   for (const w of floor.walls) for (const p of [w.a, w.b]) {
-    const k = `${p[0]},${p[1]}`;
+    const k = `${Math.round(p[0])},${Math.round(p[1])}`;
     const d = deg.get(k) ?? { n: 0, p };
     d.n++; deg.set(k, d);
   }

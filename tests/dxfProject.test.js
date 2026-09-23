@@ -100,6 +100,23 @@ test('normalizeWalls로 T자를 쪼갠 뒤에 고립 덩어리를 버린다', ()
   expect(stats.thickness).toEqual([[200, 6]]);
 });
 
+// Task 7 리뷰 F1: 끊긴 끝점 키는 geom/rooms.js와 같은 반올림이어야 한다. 살짝 기운 벽에 T로 닿은 가지는
+// normalizeWalls가 분할점을 소수 좌표로 만들어, 정확한 float 키로는 방 엔진이 이어 붙인 점이 끊긴 끝으로 보고됐다.
+test('T 분할의 소수 좌표는 끊긴 끝점이 아니다(반올림 키)', () => {
+  // 앱 좌표는 정수로 반올림되므로 기울기는 반올림 뒤에도 남을 만큼(6 m에 1 mm) 준다.
+  // 가지가 닿는 분할점은 y = 1999.6(소수) · 가지 끝은 y = 2000 → 정확한 float 키면 서로 다른 점이다.
+  const tilted = [
+    { a: [100.5, 200.25], b: [6100.5, 201.25], thickness: 200 },   // 위쪽 벽이 1 mm 기울었다
+    { a: [6100.5, 201.25], b: [6100.5, 4200.25], thickness: 200 },
+    { a: [6100.5, 4200.25], b: [100.5, 4200.25], thickness: 200 },
+    { a: [100.5, 4200.25], b: [100.5, 200.25], thickness: 200 },
+    { a: [2500.5, 200.25], b: [2500.5, 1500.75], thickness: 200 },  // 위쪽 벽에 T로 닿는 가지
+  ];
+  const { stats } = buildProject(tilted);
+  expect(stats.rooms).toBe(1);
+  expect(stats.openEnds).toHaveLength(1);                          // 가지의 자유로운 끝 하나뿐(정확한 float 키면 2가 된다)
+});
+
 test('단위 배율은 좌표와 두께에 함께 곱해진다', () => {
   const { project, stats } = buildProject(rect(0, 0, 100, 50, 4), { scale: 25.4, height: 3500 });
   const floor = project.floors[0];
