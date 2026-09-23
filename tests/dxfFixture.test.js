@@ -4,7 +4,7 @@ import { test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { decodeDxf } from '../src/io/dxf/decode.js';
-import { parseDxf } from '../src/io/dxf/parse.js';
+import { parseDxf, headerNum } from '../src/io/dxf/parse.js';
 import { explode } from '../src/io/dxf/explode.js';
 import { layerStats, defaultChecked, roleLayers } from '../src/io/dxf/classify.js';
 import { extractWalls } from '../src/io/dxf/walls.js';
@@ -17,7 +17,8 @@ const raw = readFileSync(path('plan-1f-corner.dxf'));
 const expected = JSON.parse(readFileSync(path('plan-1f-corner.expected.json'), 'utf8'));
 
 // 한 번만 돌리고 모든 테스트가 나눠 쓴다(파싱 시간을 재는 테스트는 자기 계측을 따로 한다).
-const doc = parseDxf(decodeDxf(raw).txt);
+const dec = decodeDxf(raw);
+const doc = parseDxf(dec.txt);
 const ex = explode(doc, { arcSteps: 12 });
 const rows = layerStats(doc, ex);
 const checked = defaultChecked(rows);
@@ -30,6 +31,12 @@ const built = buildProject(extracted.walls, { height: 3500, texts: ex.texts, fil
 test('픽스처는 저장소에 들어갈 크기다', () => {
   expect(raw.length).toBeLessThanOrEqual(200 * 1024);
   expect(readFileSync(path('plan-1f-corner.expected.json')).length).toBeLessThanOrEqual(2 * 1024);
+});
+
+// Task 8 리뷰 I-1: 헤더 스냅숏도 읽는다 — 인코딩 규칙(AC1021 경계)이 뒤집히면 여기서 잡힌다.
+test('헤더(버전·코드페이지·인코딩·단위)가 기대값과 같다', () => {
+  expect({ ver: dec.ver, codepage: dec.codepage, encoding: dec.encoding, insunits: headerNum(doc.header, '$INSUNITS', 70, 0) }).toEqual(expected.header);
+  expect(expected.header.insunits).toBe(4);   // 이 도면은 mm다(§18.5)
 });
 
 test('디코딩·파싱이 300 ms 안에 끝나고 미참조 블록의 엔티티는 0개다', () => {
@@ -71,7 +78,7 @@ test('벽 추출 결과가 기대값과 같고 최소 보증을 넘는다', () =
   expect(stats.rooms).toBeGreaterThanOrEqual(2);
   expect(extracted.guessed).toBe(false);
   // 사전 검토 C-2: 문 자리는 원호가 아니라 면선 쌍의 틈이 알려 준다(Task 9가 이것을 앉힌다).
-  expect(extracted.gaps.length).toBeGreaterThanOrEqual(10);
+  expect(extracted.gaps.length).toBeGreaterThanOrEqual(8);   // 하한은 여유를 둔다(실측 10 · Task 8 리뷰 I-2)
   expect(extracted.gaps.every(g => g.width >= 600 && g.width <= 1500)).toBe(true);
 });
 

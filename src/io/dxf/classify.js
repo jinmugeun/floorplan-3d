@@ -74,7 +74,7 @@ export function layerStats(doc, ex) {
   // 도형이 하나도 없는 정의는 행이 아니다(사전 검토 I-4): 실파일의 레이어 정의 101개 중
   // 도형이 실린 것은 45개뿐이고, 빈 정의 56줄을 체크리스트에 늘어놓으면 §18.6의 수치가 무의미해진다.
   return out.filter(r => r.segs || r.arcs || r.circles || r.texts || r.dims || r.inserts)
-    .sort((a, b) => b.segs - a.segs || a.name.localeCompare(b.name));
+    .sort((a, b) => b.segs - a.segs || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));   // 코드포인트 비교 — localeCompare는 실행 로캘에 따라 순서가 달라 CI(en-US-POSIX)와 ko-KR이 어긋난다(Task 8 리뷰 C-1)
 }
 
 // 기본 체크 = 벽 역할 · 켜짐 · 선분 > 0. 실파일에서 정확히 일곱 개가 켜진다.
