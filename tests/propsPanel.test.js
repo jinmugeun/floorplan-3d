@@ -12,6 +12,7 @@ import { getKeepRatio, setKeepRatio } from '../src/ui/propsApply.js';
 import { applyMaterial, assignmentOf } from '../src/state/materialOps.js';
 import { fmtLen } from '../src/util/units.js';
 import { nextFocusName } from '../src/ui/fieldUtils.js';
+import { createKeyHandler } from '../src/ui/keymap.js';
 
 // 소수 좌표 도면 하나에 패널을 붙인다(기존 테스트들이 인라인으로 되풀이하던 모양 그대로).
 function setupPanel() {
@@ -810,6 +811,7 @@ test('[Tab]으로 확정하면 포커스가 다음 칸으로 간다', () => {
   expect(after).not.toBeNull();
   th.focus();
   th.value = '220';
+  th.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));   // 진짜 [Tab]만 다음 칸을 연다(리뷰 C-2)
   th.blur();                                                  // 실브라우저의 [Tab]: blur 뒤에 change가 온다
   th.dispatchEvent(new Event('change', { bubbles: true }));
   expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(220);
@@ -821,4 +823,34 @@ test('[Tab]으로 확정하면 포커스가 다음 칸으로 간다', () => {
   th2.value = '230';
   th2.dispatchEvent(new Event('change', { bubbles: true }));
   expect(document.activeElement.name).toBe('thickness');
+});
+
+// 리뷰 C-2: "캔버스 클릭으로 확정"도 change 순간의 activeElement가 <body>라 [Tab]으로 오인됐다.
+// 포커스가 속성 패널의 다음 칸에 앉으면 keymap.js의 INPUT 가드가 Esc·Enter만 통과시키고
+// 도구 전환 키·Delete·Ctrl+Z를 전부 삼킨다 — 다음 클릭까지 앱이 키에 반응하지 않는 것처럼 보였다.
+test('캔버스 클릭으로 확정하면 포커스를 패널로 되끌어오지 않는다(단축키가 산다)', () => {
+  const { store, ui, el } = setupPanel();
+  const id = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id } });
+  const canvas = document.createElement('canvas');      // 2D 캔버스에는 tabindex가 없다 → 포커스를 받지 못한다
+  document.body.appendChild(canvas);
+  const th = el.querySelector('[name="thickness"]');
+  th.focus();
+  th.value = '220';
+  canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));   // [Tab] 키는 없다
+  th.blur();                                            // 포커스를 받을 수 없는 곳을 클릭 → <body>
+  th.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(220);   // 값은 확정된다
+  expect(el.contains(document.activeElement)).toBe(false);               // 되끌어오지 않는다
+  expect(document.activeElement.tagName).toBe('BODY');
+  // 그래서 keymap의 INPUT 가드에 걸리지 않는다: 도구 전환 키가 그대로 산다.
+  const calls = [];
+  const view = { tool: null, requestRender: () => {} };
+  const h = createKeyHandler({ store, ui, view, setTool: n => calls.push(n), setMode: () => {}, openBackground: () => {}, deleteSelection: () => {} });
+  const ev = new KeyboardEvent('keydown', { key: 'l', bubbles: true });
+  document.activeElement.dispatchEvent(ev);
+  expect(['INPUT', 'SELECT', 'TEXTAREA']).not.toContain(ev.target.tagName);   // keymap.js의 가드
+  h(ev);
+  expect(calls).toEqual(['wall']);
+  canvas.remove();
 });

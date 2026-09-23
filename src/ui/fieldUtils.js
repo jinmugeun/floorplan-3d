@@ -123,10 +123,25 @@ export function trackFields(root) {
 // 받을 수 없는 요소는 건너뛴다. el이 이미 DOM에서 떨어졌으면(재렌더 뒤) 같은 name의 새 노드를
 // 기준으로 삼는다 — 속성 패널은 innerHTML을 통째로 갈아 치우므로 두 순간이 모두 필요하다.
 export function nextFocusName(root, el) {
-  const list = focusables(root);
+  // 닫힌 <details> 안의 칸은 브라우저가 탭 순서에서 빼고 focus()도 무동작이다(리뷰 M-1):
+  // 그 이름을 돌려주면 포커스가 <body>에 남아 §30이 고치려던 자리로 되돌아간다.
+  const list = focusables(root).filter(x => !x.closest?.('details:not([open])'));
   let at = list.indexOf(el);
   if (at < 0 && el?.name) at = list.findIndex(x => x.name === el.name);
   if (at < 0) return null;
   for (let i = at + 1; i < list.length; i++) if (list[i].name) return list[i].name;
   return null;
+}
+
+// change 하나만으로는 "[Tab]으로 확정"과 "포커스를 받을 수 없는 곳(캔버스)을 클릭해 확정"이
+// 구분되지 않는다 — 실측상 둘 다 change 순간의 activeElement가 <body>다(리뷰 C-2). 실제 [Tab]
+// 키를 캡처로 받아 같은 태스크 동안만 참으로 둔다: 키 하나가 확정 하나를 연다(take()가 곧 비운다).
+export function tabWatcher(root) {
+  let on = false;
+  const down = ev => { if (ev.key === 'Tab') { on = true; setTimeout(() => { on = false; }, 0); } };
+  root.addEventListener('keydown', down, true);
+  return {
+    take() { const was = on; on = false; return was; },
+    destroy() { root.removeEventListener('keydown', down, true); },
+  };
 }

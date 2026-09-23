@@ -2,7 +2,7 @@
 // §15.9: 입력 중 [Esc]로 되돌리고 [Enter]로 확정한다. 숫자 칸은 단위별 step을 갖고,
 // 소수 step(면풍속 0.05)은 값에 부동소수 먼지를 남기지 않는다(감사 §5 · §21).
 import { test, expect } from 'vitest';
-import { STEP, INCH_MM, stepMm, roundToStep, isTextField, numValue, readLen, lenField, rememberFieldValue, revertField, commitField, isDuplicateCommit, trackFields, nextFocusName } from '../src/ui/fieldUtils.js';
+import { STEP, INCH_MM, stepMm, roundToStep, isTextField, numValue, readLen, lenField, rememberFieldValue, revertField, commitField, isDuplicateCommit, trackFields, nextFocusName, tabWatcher } from '../src/ui/fieldUtils.js';
 import { fmtLen } from '../src/util/units.js';
 
 const inputOf = html => { const d = document.createElement('div'); document.body.appendChild(d); d.innerHTML = html; return d.querySelector('input'); };
@@ -214,4 +214,35 @@ test('nextFocusName은 다음 name 있는 포커스 가능 요소를 준다', ()
   d.innerHTML = d.innerHTML;
   expect(old.isConnected).toBe(false);
   expect(nextFocusName(d, old)).toBe('c');
+});
+
+// 리뷰 M-1: focusables()는 hidden 속성만 거른다 → 닫힌 <details> 안의 칸 이름이 돌아올 수 있었다.
+// 실측상 닫힌 details 안 요소의 focus()는 무동작이라 포커스가 <body>에 남는다(§30 그대로).
+test('nextFocusName은 닫힌 <details> 안의 칸을 건너뛴다', () => {
+  const d = document.createElement('div');
+  document.body.appendChild(d);
+  d.innerHTML = '<input name="a"><details><input name="closed"></details><details open><input name="b"></details>';
+  expect(nextFocusName(d, d.querySelector('[name="a"]'))).toBe('b');
+  d.querySelector('details').open = true;
+  expect(nextFocusName(d, d.querySelector('[name="a"]'))).toBe('closed');
+});
+
+// 리뷰 C-2: change 하나로는 [Tab] 확정과 "포커스를 받을 수 없는 곳 클릭" 확정이 구분되지 않는다
+// (둘 다 그 순간 activeElement가 <body>다). 실제 키를 캡처해 두고 한 번만 쓴다.
+test('tabWatcher는 [Tab] 키가 있었을 때만 한 번 참이다', () => {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const w = tabWatcher(root);
+  expect(w.take()).toBe(false);                       // 키가 없으면 거짓(마우스 확정)
+  const input = document.createElement('input');
+  root.appendChild(input);
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  expect(w.take()).toBe(true);
+  expect(w.take()).toBe(false);                       // 키 하나가 확정 하나를 연다
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+  expect(w.take()).toBe(false);
+  w.destroy();
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  expect(w.take()).toBe(false);
+  root.remove();
 });

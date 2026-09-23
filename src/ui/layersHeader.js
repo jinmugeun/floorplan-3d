@@ -26,7 +26,8 @@ export const matchLayer = (text, query) => {
 
 // 행 하나가 검색에 걸리는 글자: 제품은 이름 + 코드 + 규격, 덕트는 급배기 + 계통.
 // (트리 행에 실제로 보이는 것과 같은 글자다 — 보이지 않는 필드로 걸리면 결과가 설명되지 않는다.)
-const itemText = it => `${it.name || productById(it.productId)?.name || '제품'} ${it.code || productById(it.productId)?.code || ''} ${fmtSize(it.size)}`;
+// (규격은 제품이 있을 때만 붙인다 — 트리 행의 `p ? fmtSize(it.size) : ''`와 같은 규칙이다 · 리뷰 M-3.)
+const itemText = it => { const p = productById(it.productId); return `${it.name || p?.name || '제품'} ${it.code || p?.code || ''} ${p ? fmtSize(it.size) : ''}`; };
 const ductText = d => `덕트 ${d.kind === 'supply' ? '급기' : '배기'} ${d.system ?? ''}`;
 
 // 검색은 **행만** 거른다. 남는 행이 없는 방 노드는 그리지 않는다(빈 헤더가 결과를 가리지 않게).
@@ -37,9 +38,13 @@ export function filterBuckets(buckets = [], query = '') {
     .filter(b => b.items.length || b.ducts.length);
 }
 
+// 접기 버튼의 라벨은 곧 다음 동작이다. 트리만 다시 그리는 길(검색 타이핑 · 리뷰 I-2)에서도
+// 같은 말을 써야 하므로 한 자리에 둔다.
+export const collapseLabel = anyOpen => (anyOpen ? COLLAPSE_ALL : EXPAND_ALL);
+
 // 검색은 ui.set도 store.dispatch도 하지 않는다(패널 지역 상태 — openState와 같은 자리).
 export const layersHeaderHtml = ({ query = '', anyOpen = true } = {}) => {
-  const label = anyOpen ? COLLAPSE_ALL : EXPAND_ALL;
+  const label = collapseLabel(anyOpen);
   return `<div class="row layer-head">
       <input type="search" name="q" value="${esc(query)}" placeholder="${LAYER_SEARCH_PH}" aria-label="레이어 검색">
       <button type="button" name="collapseAll" title="${label}">${label}</button></div>`;

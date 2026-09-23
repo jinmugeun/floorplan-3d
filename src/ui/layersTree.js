@@ -42,7 +42,9 @@ function itemRow(it, { tag, selected, renaming }) {
   const size = p ? fmtSize(it.size) : '';
   const body = renaming
     ? `<input type="text" data-name="${esc(it.id)}" value="${esc(nameOf(it))}" aria-label="${BTN_TITLES.rename}">`
-    : `<button type="button" class="layer-name" data-select="${esc(it.id)}" title="${esc(layerRowTitle(nameOf(it), code, size))}">${esc(nameOf(it))}${tag ? ` <span class="layer-tag">${esc(tag)}</span>` : ''}</button>`;
+    // 툴팁에도 꼬리표(후드 ① · #2)를 넣는다(리뷰 M-4): 같은 이름이 여럿일 때 툴팁만으로는
+    // 두 행을 구별할 수 없어 꼬리표가 하려던 일(§23)을 못 했다.
+    : `<button type="button" class="layer-name" data-select="${esc(it.id)}" title="${esc(layerRowTitle(`${nameOf(it)}${tag ? ` ${tag}` : ''}`, code, size))}">${esc(nameOf(it))}${tag ? ` <span class="layer-tag">${esc(tag)}</span>` : ''}</button>`;
   const btn = (attr, on) => `<button type="button" ${attr}="${esc(it.id)}" class="${on ? 'on' : 'off'}" title="${BTN_TITLES[on ? 'show' : 'hide']}" aria-label="${BTN_TITLES[on ? 'show' : 'hide']}">${on ? '🚫' : '👁'}</button>`;
   const lock = `<button type="button" data-lock="${esc(it.id)}" class="${it.locked ? 'on' : 'off'}" title="${BTN_TITLES[it.locked ? 'unlock' : 'lock']}" aria-label="${BTN_TITLES[it.locked ? 'unlock' : 'lock']}">${it.locked ? '🔒' : '🔓'}</button>`;
   return `<li class="layer-item${selected ? ' on' : ''}${it.hidden ? ' off' : ''}"${selected ? ' data-sel="1"' : ''} data-id="${esc(it.id)}">

@@ -326,6 +326,105 @@ describe('레이어 패널', () => {
       panel.reveal();
       expect(seen).toHaveLength(1);
       expect(seen[0].classList.contains('on')).toBe(true);
+      expect(seen[0].closest('details').open).toBe(true);     // 닫힌 방 안이면 스크롤이 무동작이다(리뷰 M-6)
     } finally { Element.prototype.scrollIntoView = before; }
+  });
+
+  // 리뷰 C-1: 자동 접힘(행 31개 이상)이 이 태스크의 감사 항목을 무력화했다 — 닫힌 <details> 안의
+  // 행에는 scrollIntoView가 아무 일도 하지 않아(실측: scrollTop 0 그대로) 선택 강조조차 보이지
+  // 않았다. 강당중 샘플이 49행이라 **대표 도면에서 늘** 이 경우다.
+  test('49행 도면: 선택 스크롤과 reveal()이 자동 접힌 방을 먼저 편다(리뷰 C-1)', () => {
+    const seen = [];
+    const before = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () { seen.push(this); };
+    try {
+      const { store, ui, el, panel, inRoom } = setup();
+      for (let i = 0; i < 47; i++) addItem(store, createItem(productById('chair-dining'), { pos: [500 + i * 10, 600] }));
+      expect(activeFloor(store.get()).items).toHaveLength(49);          // 강당중 샘플과 같은 크기(문턱 30 초과)
+      const row = () => el.querySelector(`.layer-item[data-id="${inRoom}"]`);
+      expect(row().closest('details').open).toBe(false);                // 자동 접힘: 방이 닫힌 채 열린다
+      // ① 플랜 8의 선택 스크롤
+      seen.length = 0;
+      ui.set({ selection: { type: 'item', id: inRoom } });
+      expect(row().closest('details').open).toBe(true);
+      expect(seen).toHaveLength(1);
+      expect(seen[0].dataset.id).toBe(inRoom);
+      // ② 레일 탭으로 패널을 여는 길(reveal). 다시 접어 두고 부른다.
+      click(el, '[name="collapseAll"]');
+      expect(row().closest('details').open).toBe(false);
+      seen.length = 0;
+      panel.reveal();
+      expect(row().closest('details').open).toBe(true);
+      expect(seen).toHaveLength(1);
+      expect(seen[0].classList.contains('on')).toBe(true);
+    } finally { Element.prototype.scrollIntoView = before; }
+  });
+
+  // 리뷰 I-1: 라벨(anyOpen)은 걸러진 방으로, 동작은 전체 방으로 재던 자리 — 검색 중에 버튼이
+  // 죽은 클릭이 되고(누른 표시가 화면에 없다) 화면에 없는 방은 말없이 접혔다.
+  test('검색 중 [방 모두 펴기]는 라벨과 같은 집합(보이는 방)에만 적용된다(리뷰 I-1)', () => {
+    const { el } = setup();
+    const btn = () => el.querySelector('[name="collapseAll"]');
+    const q = el.querySelector('[name="q"]');
+    click(el, '[name="collapseAll"]');                                  // 모두 접는다
+    expect(btn().textContent).toBe(EXPAND_ALL);
+    const kitchen = el.querySelector('details[data-room]:not([data-room="none"])');
+    const kitchenId = kitchen.dataset.room;
+    kitchen.open = true; kitchen.dispatchEvent(new Event('toggle'));    // 검색 결과 **밖**의 방만 펴 둔다
+    q.value = '의자';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(el.querySelectorAll('details[data-room]')).toHaveLength(1);  // 보이는 방은 '미지정' 하나
+    expect(btn().textContent).toBe(EXPAND_ALL);
+    click(el, '[name="collapseAll"]');
+    expect(el.querySelector('details[data-room="none"]').open).toBe(true);   // 죽은 클릭이 아니다
+    expect(btn().textContent).toBe(COLLAPSE_ALL);                       // 라벨도 따라간다
+    q.value = '';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(el.querySelector(`details[data-room="${kitchenId}"]`).open).toBe(true);   // 안 보이던 방은 그대로
+  });
+
+  // 리뷰 I-2: 키 입력마다 container.innerHTML을 갈면 포커스 중인 검색 입력 **노드 자체**가
+  // 교체되어 한글 조합이 끊긴다(`후드`가 `ㅎㅜㄷㅡ`로 남는다). 머리 한 줄은 두고 트리만 그린다.
+  test('검색 타이핑은 트리만 다시 그리고 IME 조합 중에는 거르지 않는다(리뷰 I-2)', () => {
+    const { el } = setup();
+    const q = el.querySelector('[name="q"]');
+    q.focus();
+    const composing = new Event('input', { bubbles: true });
+    Object.defineProperty(composing, 'isComposing', { value: true });
+    q.value = 'ㅇ';
+    q.dispatchEvent(composing);
+    expect(el.querySelectorAll('.layer-item')).toHaveLength(2);         // 조합 중에는 트리를 건드리지 않는다
+    q.value = '의자';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(el.querySelector('[name="q"]')).toBe(q);                     // 같은 입력 노드 그대로(조합이 살아남는다)
+    expect(document.activeElement).toBe(q);
+    expect(el.querySelectorAll('.layer-item')).toHaveLength(1);
+    // 조합이 끝나면 compositionend가 한 번 맞춰 준다(그 뒤 input이 늦거나 없는 브라우저 대비).
+    q.value = '소파';
+    q.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+    expect(el.querySelector('[name="q"]')).toBe(q);
+    expect([...el.querySelectorAll('.layer-item')][0].textContent).toContain('소파');
+  });
+
+  // 리뷰 I-3: 검색으로 3행만 보이는 화면에서 [모두 숨기기]가 46행까지 숨기면 파괴적 동작의
+  // 범위를 화면이 설명하지 못한다(되돌리기로 복구는 되지만 결과를 볼 길이 없다).
+  test('검색 중 [모두 숨기기]는 보이는 행에만 적용되고 토스트도 그 수를 센다(리뷰 I-3)', () => {
+    const { store, el, inRoom, outside } = setup();
+    // 스토어가 바뀌면 머리 한 줄까지 다시 그려지므로(구독 render) 검색 칸은 그때그때 다시 찾는다.
+    const type = text => { const q = el.querySelector('[name="q"]'); q.value = text; q.dispatchEvent(new Event('input', { bubbles: true })); };
+    type('의자');                                                       // '식탁 의자'(미지정) 한 행만 보인다
+    expect(el.querySelectorAll('.layer-item')).toHaveLength(1);
+    click(el, '[name="hideAll"]');
+    expect(item(store, outside).hidden).toBe(true);
+    expect(item(store, inRoom).hidden).toBeFalsy();                     // 걸러진 행은 건드리지 않는다
+    expect(document.body.textContent).toContain(LAYERS_HIDDEN(1, 0));
+    store.undo();                                                      // 한 단계다
+    expect(item(store, outside).hidden).toBeFalsy();
+    // 질의가 비면 예전 그대로 층 전체다.
+    type('');
+    click(el, '[name="hideAll"]');
+    expect(activeFloor(store.get()).items.every(i => i.hidden)).toBe(true);
+    store.undo();
+    expect(activeFloor(store.get()).items.every(i => !i.hidden)).toBe(true);
   });
 });

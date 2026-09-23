@@ -11,7 +11,7 @@ import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField, ventRowsClick } from './equipRows.js';
 import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
-import { field, num, numValue, lenField, readLen, withUnit, colorField, isDuplicateCommit, nextFocusName } from './fieldUtils.js';
+import { field, num, numValue, lenField, readLen, withUnit, colorField, isDuplicateCommit, nextFocusName, tabWatcher } from './fieldUtils.js';
 import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
@@ -170,15 +170,20 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   // 판정은 change가 **들어온 순간**의 포커스(focusAtChange)로 한다: 적용이 dispatch를 내면 store
   // 구독이 먼저 돌아 이미 다시 그려진 뒤라 지금의 activeElement로는 세 경우가 구분되지 않는다.
   let focusAtChange = null;
+  // 갈래 (2)는 **진짜 [Tab]**에만 열린다(리뷰 C-2): 캔버스(#c2d에는 tabindex가 없다)를 클릭해
+  // 확정해도 activeElement는 <body>라 예전 조건으로는 [Tab]과 구분되지 않았고, 포커스가 패널의
+  // 다음 칸에 앉으면 keymap의 INPUT 가드가 도구·Delete·Ctrl+Z까지 삼켰다.
+  const tabs = tabWatcher(container);
   const rerender = el => {
     const was = focusAtChange; focusAtChange = null;
+    const tabbed = tabs.take();
     // (1) 그 칸에 포커스가 있었다(클램프 화살표 연타·[Enter] 확정): 제자리로 돌려준다.
     if (el?.name && was === el) ui.set({ focusField: el.name });
-    // (2) [Tab]·blur로 확정했다(브라우저는 change를 blur 뒤에 낸다 → <body>다): 다음 칸으로
+    // (2) [Tab]으로 확정했다(브라우저는 change를 blur 뒤에 낸다 → <body>다): 다음 칸으로
     //     옮겨 준다. 다음 칸이 없으면 제자리다.
-    else if (el?.name && (!was || was === container.ownerDocument?.body))
+    else if (el?.name && tabbed && (!was || was === container.ownerDocument?.body))
       ui.set({ focusField: nextFocusName(container, el) ?? el.name });
-    // (3) 포커스가 이미 패널 밖으로 갔다: 글자만 되맞추고 되끌어오지 않는다(§16.1의 계약).
+    // (3) 포커스가 패널 밖으로 갔거나 마우스로 확정했다: 글자만 되맞추고 되끌어오지 않는다(§16.1의 계약).
     else render();
   };
   const onChange = ev => {
@@ -284,5 +289,5 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
   container.addEventListener('change', onChange); container.addEventListener('input', onInput); container.addEventListener('click', onClick); container.addEventListener('focusout', onFocusOut);
   const unsubs = [store.subscribe(render), ui.subscribe(render)];
   render();
-  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('change', onChange); container.removeEventListener('input', onInput); container.removeEventListener('click', onClick); container.removeEventListener('focusout', onFocusOut); } };
+  return { destroy() { unsubs.forEach(u => u()); tabs.destroy(); container.removeEventListener('change', onChange); container.removeEventListener('input', onInput); container.removeEventListener('click', onClick); container.removeEventListener('focusout', onFocusOut); } };
 }
