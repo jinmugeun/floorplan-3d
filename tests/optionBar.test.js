@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { optionBarHtml, applyOptionInput, dimBarHtml, dimBarSignature, syncDimBar, autoFocusDim, OPTION_LABELS, OPTION_TITLES, OPTION_RANGE, rangeOf, DIM_LABELS, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
 import { DUCT_RANGE } from '../src/state/ductSchema.js';
 import { fmtLen } from '../src/util/units.js';
@@ -112,7 +112,8 @@ describe('옵션 바 입력 읽기', () => {
 describe('옵션 바의 치수 칸(§16.7)', () => {
   const wallTool = (len = 3000, typed = '') => ({
     name: 'wall', opts: { thickness: 200 },
-    dims: () => ({ fields: [{ key: 'len', text: typed || String(len), mm: len, active: true }] }),
+    // typed는 도구가 말하는 "사람이 이 칸에 글자를 쳤다"다(리뷰 C-2).
+    dims: () => ({ fields: [{ key: 'len', text: typed || String(len), mm: len, active: true, typed: typed !== '' }] }),
   });
 
   test('도구가 치수 칸을 내놓으면 라벨·단위·step이 붙는다', () => {
@@ -133,7 +134,7 @@ describe('옵션 바의 치수 칸(§16.7)', () => {
     expect(html).toContain('길이 (ft·in)');
   });
 
-  test('syncDimBar는 서명이 같으면 값만 맞추고 포커스 칸은 건드리지 않는다', () => {
+  test('syncDimBar는 서명이 같으면 값만 맞추고 사람이 친 칸만 지킨다(리뷰 C-2)', () => {
     const root = document.createElement('div');
     root.innerHTML = '<div id="optionBar"><span id="optionDims"></span></div>';
     document.body.appendChild(root);
@@ -147,8 +148,14 @@ describe('옵션 바의 치수 칸(§16.7)', () => {
     expect(host.querySelector('[name="dim:len"]')).toBe(el);  // 같은 노드다(타이핑이 끊기지 않게)
     expect(el.value).toBe('3500');
     el.focus();
+    // §17.8(1)이 그리는 내내 칸에 포커스를 주므로, 포커스를 건너뛰면 배너가 가리키는 칸이 0으로
+    // 굳는다(리뷰 C-2). 손대지 않은 칸은 포커스가 있어도 실측을 따라가고 선택도 되살린다.
+    const selected = vi.spyOn(el, 'select');
     syncDimBar(root, wallTool(4000), { units: 'mm' });
-    expect(el.value).toBe('3500');                            // 포커스 칸은 그대로다
+    expect(el.value).toBe('4000');
+    expect(selected).toHaveBeenCalled();                      // 이어 타이핑이 값을 덮어쓴다(계획 8 리뷰 C-1)
+    syncDimBar(root, wallTool(5200, '4000'), { units: 'mm' });
+    expect(el.value).toBe('4000');                            // 사람이 친 칸은 덮어쓰지 않는다
     // 칸 목록이 바뀌면 다시 만든다.
     const roomish = { name: 'room', opts: {}, dims: () => ({ fields: [{ key: 'w', text: '1', mm: 1, active: true }, { key: 'h', text: '2', mm: 2, active: false }] }) };
     expect(dimBarSignature(roomish)).toBe('w,h');
@@ -250,20 +257,24 @@ describe('옵션 바의 범위·되돌림 계약', () => {
 });
 
 
-// §17.8(1): 그리는 동안 치수 칸이 포커스를 갖는다(오늘의집 규칙) — 칸이 **처음 생긴 프레임에만**
-// 한 번 준다. 그리는 내내 매 프레임 훔치면 캔버스의 숫자·[Esc] 경로가 죽는다.
+// §17.8(1): 그리는 동안 치수 칸이 포커스를 갖는다(오늘의집 규칙) — **확정할 값이 생긴 첫
+// 프레임에만** 한 번 준다(리뷰 C-1: 칸이 생긴 프레임은 길이가 0이라 거기서 친 길이는 방향이
+// 없어 확정되지 못했다). 그리는 내내 매 프레임 훔치면 캔버스의 숫자·[Esc] 경로가 죽는다.
 describe('그리는 동안 치수 칸 자동 포커스', () => {
   const mount = () => { const d = document.createElement('div'); document.body.appendChild(d); d.innerHTML = '<span id="optionDims"></span>'; return d; };
   const toolWith = fields => ({ name: 'wall', opts: {}, dims: () => (fields ? { fields } : null) });
   const len = (text = '3000') => [{ key: 'len', text, mm: 3000, active: true }];
 
-  test('칸이 0개에서 1개 이상이 된 프레임에만 포커스를 준다', () => {
+  test('실측이 0을 벗어난 첫 프레임에만 포커스를 준다(리뷰 C-1)', () => {
     const root = mount();
-    const empty = toolWith(null), drawing = toolWith(len());
+    const empty = toolWith(null), zero = toolWith([{ key: 'len', text: '0', mm: 0, active: true }]), drawing = toolWith(len());
     syncDimBar(root, empty, { units: 'mm' });
     expect(autoFocusDim(root, empty)).toBe(false);            // 칸이 없다
+    syncDimBar(root, zero, { units: 'mm' });
+    expect(autoFocusDim(root, zero)).toBe(false);             // 첫 점을 찍은 프레임: 칸은 있어도 확정할 값이 없다
+    expect(document.activeElement).not.toBe(root.querySelector('[name="dim:len"]'));
     syncDimBar(root, drawing, { units: 'mm' });
-    expect(autoFocusDim(root, drawing)).toBe(true);
+    expect(autoFocusDim(root, drawing)).toBe(true);           // 마우스가 움직여 실측이 생긴 프레임
     const el = root.querySelector('[name="dim:len"]');
     expect(document.activeElement).toBe(el);
     el.blur();

@@ -30,17 +30,18 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
   const finish = () => { const had = points.length > 0; reset(); if (had) onDone(); return had; };
   // 타이핑한 길이로 한 구간을 확정한다(§17.8). 읽을 수 없는 값(파싱 실패·0 이하)은 버리지 않고
   // 그대로 두어 사용자가 고칠 수 있게 하고, [Enter]는 먹은 것으로 친다(체인을 끝내지 않는다).
+  // 방향이 아직 없으면(커서가 마지막 점 위 — 첫 점을 찍은 그 프레임이다) 아무것도 하지 않고
+  // 빠져나온다(리뷰 C-1): norm([0,0]) === [0,0]이라 끝점이 시작점과 같아져 addSegment가 버리는데
+  // typed만 비워져, 자동 포커스된 칸에 친 3500이 벽도 토스트도 없이 사라졌다.
   const commitTyped = () => {
     const len = parseLen(typed, store.get().units);
-    if (len != null && len > 0) {
-      const d = norm(sub(cursor, last()));
-      const e = add(last(), mul(d, len));
-      if (addSegment(last(), e)) points.push(e);
-      typed = '';
-    }
+    if (len === null || len <= 0) return true;
+    if (dist(cursor, last()) < 10) return true;          // 방향이 없다 — 타이핑을 지키고 기다린다
+    const e = add(last(), mul(norm(sub(cursor, last())), len));
+    if (addSegment(last(), e)) { points.push(e); typed = ''; }   // 성공했을 때만 비운다
     return true;
   };
-  return {
+  const api = {
     name: 'wall', opts,
     // 단계 안내(§14.7).
     get hint() { return last() ? DRAW_CHAIN_HINT : '첫 점을 클릭하세요 (1/2)'; },
@@ -61,7 +62,7 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
       // §17.8(3): 캔버스의 [Enter]도 칸의 [Enter]와 같은 일을 한다 — 보이는 값을 확정하고,
       // 확정할 것이 없을 때(커서가 마지막 점 위) 체인을 끝낸다. 그래서 [Enter] 두 번 = 확정 + 완료다.
-      if (ev.key === 'Enter') { if (this.commitDims()) return true; return finish(); }
+      if (ev.key === 'Enter') { if (api.commitDims()) return true; return finish(); }
       return false;
     },
     getPreview() { return { points: [...points], cursor, guides, typed }; },
@@ -72,7 +73,8 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
       if (!last() || !cursor) return null;
       const units = store.get().units ?? 'mm';
       const mm = Math.round(dist(last(), cursor));
-      return { fields: [{ key: 'len', text: typed !== '' ? typed : fmtLen(mm, units), mm, active: true }] };
+      // typed는 "사람이 이 칸에 글자를 쳤다"다(리뷰 C-2): 옵션 바가 포커스된 칸을 갱신할지 이것으로 정한다.
+      return { fields: [{ key: 'len', text: typed !== '' ? typed : fmtLen(mm, units), mm, active: true, typed: typed !== '' }] };
     },
     dimSig() { const d = this.dims(); return d ? d.fields.map(f => `${f.key}:${f.text}:1`).join('|') : ''; },
     setDim(key, text) { if (key !== 'len' || !last()) return false; typed = String(text ?? ''); return true; },
@@ -100,4 +102,5 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
     },
     cancel() { reset(); },
   };
+  return api;
 }

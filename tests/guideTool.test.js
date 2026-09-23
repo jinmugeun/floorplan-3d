@@ -214,3 +214,17 @@ test('보조선의 캔버스 [Enter]는 보이는 좌표로 확정하고, 확정
   expect(store.undo()).toBe(true);
   expect(activeFloor(store.get()).guides).toHaveLength(0);
 });
+
+// 리뷰 C-2: 보조선 칸도 "사람이 쳤는가"를 함께 내놓는다 — 손대지 않은 칸은 포커스가 있어도
+// 커서를 따라가고, 친 칸만 옵션 바가 지킨다.
+test('보조선 치수 칸이 타이핑 여부를 말한다(리뷰 C-2)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  t.onPointerMove([1500.5, 800.25]);
+  expect(t.dims().fields[0].typed).toBe(false);
+  expect(t.setDim('pos', '1800')).toBe(true);
+  expect(t.dims().fields[0].typed).toBe(true);
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).guides[0].pos).toBe(1800);
+  expect(t.dims().fields[0].typed).toBe(false);             // 확정하면 다시 모델을 따라간다
+});

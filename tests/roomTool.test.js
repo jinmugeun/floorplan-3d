@@ -175,3 +175,24 @@ test('방 도구의 캔버스 [Enter]는 commitDims와 같은 사각형을 놓�
   // 그리던 사각형이 없으면 [Enter]를 소비하지 않는다(키맵이 다른 쓰임을 갖는다).
   expect(t.onKey({ key: 'Enter', preventDefault() {} })).toBe(false);
 });
+
+// 리뷰 M-2·C-2: 10 mm 미만 사각형은 "확정하지 않았다"를 돌려준다(셸이 그 [Enter]를 도구의 onKey로
+// 넘긴다 — 리뷰 I-2) · 칸은 "사람이 쳤는가"를 함께 내놓는다(옵션 바가 포커스 칸을 갱신할지 정한다).
+test('방 도구는 확정 여부를 돌려주고 칸이 타이핑 여부를 말한다(리뷰 M-2·C-2)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store, onDone() {} });
+  t.onPointerDown([1000.5, 1000.25]);
+  expect(t.dims().fields.map(f => f.typed)).toEqual([false, false]);
+  expect(t.dims().fields.map(f => f.mm)).toEqual([0, 0]);   // 첫 모서리 프레임에는 확정할 값이 없다
+  expect(t.commitDims()).toBe(false);
+  expect(store.canUndo()).toBe(false);                     // 빈 되돌림 단계도 없다
+  t.setDim('w', '3000');
+  expect(t.dims().fields.map(f => f.typed)).toEqual([true, false]);
+  expect(t.commitDims()).toBe(false);                      // H가 아직 0이다
+  expect(t.dims().fields[0].text).toBe('3000');            // 친 글자는 그대로 남는다
+  t.onPointerMove([1500.5, 3000.25]);
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+  expect(store.undo()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+});

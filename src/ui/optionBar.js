@@ -134,8 +134,11 @@ function dimFieldsHtml(fields, units) {
 // **칸 목록**의 서명이다(값은 넣지 않는다): 이것이 같으면 DOM을 다시 만들지 않는다.
 export const dimBarSignature = tool => (tool?.dims?.()?.fields ?? []).map(f => f.key).join(',');
 
-// #optionDims를 도구 상태에 맞춘다. 칸 목록이 그대로면 **포커스가 없는 칸의 값만** 고친다:
-// 타이핑 중인 칸을 다시 만들면 커서가 튀고 조합 중인 글자가 사라진다.
+// #optionDims를 도구 상태에 맞춘다. 칸 목록이 그대로면 값만 고친다: 칸을 다시 만들면 커서가
+// 튀고 조합 중인 글자가 사라진다. 포커스가 있는 칸도 **사람이 치지 않았으면** 실측을 따라간다
+// (리뷰 C-2): §17.8(1)이 그리는 내내 칸에 포커스를 주므로, 포커스를 건너뛰던 예전 규칙이면
+// 배너가 가리키는 그 칸이 0으로 굳어 캔버스 라벨과 다른 수를 말한다. 지키는 것은 f.typed —
+// 도구가 "이 칸에 글자를 쳤다"고 말한 칸뿐이다.
 export function syncDimBar(root, tool, { units = 'mm' } = {}) {
   const host = root?.querySelector?.('#optionDims');
   if (!host) return false;
@@ -147,8 +150,11 @@ export function syncDimBar(root, tool, { units = 'mm' } = {}) {
     const el = host.querySelector(`[name="dim:${f.key}"]`);
     if (!el) continue;
     el.parentElement?.classList.toggle('on', !!f.active);
-    if (el === host.ownerDocument?.activeElement) continue;
-    if (el.value !== f.text) el.value = f.text;
+    const focused = el === host.ownerDocument?.activeElement;
+    if (focused && f.typed) continue;                      // 사람이 친 글자만 지킨다
+    // 포커스 칸을 고칠 때는 선택도 되살린다(계획 8 리뷰 C-1): 그래야 이어 타이핑이 값을 덮어쓰고
+    // 45003000 같은 이어 붙기가 다시 생기지 않는다.
+    if (el.value !== f.text) { el.value = f.text; if (focused) el.select?.(); }
     // 값과 함께 기준값도 갱신한다(리뷰 M-11): data-mm의 유일한 의미는 "readLen이 *고치지 않았다*를
     // 판정하는 기준"인데, 그리기 때의 값 그대로 남아 마우스를 움직이는 동안 영구히 낡았다.
     // 지금은 읽는 곳이 없어 무해하지만, 누군가 치수 칸의 change를 applyOptionInput으로 흘리면
@@ -158,12 +164,14 @@ export function syncDimBar(root, tool, { units = 'mm' } = {}) {
   return true;
 }
 
-// 칸 수의 "직전 프레임" 기억. root(=옵션 바 노드)마다 따로 센다: 셸이 여러 개 떠 있는 테스트에서
-// 래치가 섞이지 않게 한다. WeakMap이라 노드가 사라지면 함께 사라진다.
-const dimCount = new WeakMap();
+// "직전 프레임에 확정할 값이 있었는가"의 기억. root(=옵션 바 노드)마다 따로 센다: 셸이 여러 개
+// 떠 있는 테스트에서 래치가 섞이지 않게 한다. WeakMap이라 노드가 사라지면 함께 사라진다.
+const dimReady = new WeakMap();
 
 // 그리는 동안 치수 칸이 포커스를 갖는다(§17.8(1) · 감사 §57). 주는 순간은 하나다:
-// **칸이 0개에서 하나 이상으로 바뀐 프레임**(= 첫 점을 찍어 칸이 처음 생긴 순간).
+// **확정할 값이 처음 생긴 프레임**(= 칸의 실측이 0을 벗어난 첫 마우스 이동).
+// 칸이 생긴 프레임(첫 점을 찍은 그 프레임)은 커서가 아직 마지막 점 위라 길이가 0이다 —
+// 거기서 포커스를 주면 칸이 "0"인 채로 열리고, 그때 친 길이는 방향이 없어 확정되지 못한다(리뷰 C-1).
 // 그리고 사람이 이미 어떤 입력 칸에 글자를 치고 있으면 훔치지 않는다.
 // 다음 점을 클릭하면 셸이 blur하고(§17.8(2)) 그 뒤 프레임은 이 조건에 걸리지 않으므로
 // 마우스를 움직이는 내내 포커스를 다시 가져가지 않는다.
@@ -171,9 +179,10 @@ export function autoFocusDim(root, tool, doc = document) {
   const host = root?.querySelector?.('#optionDims');
   if (!host) return false;
   const fields = tool?.dims?.()?.fields ?? [];
-  const before = dimCount.get(root) ?? 0;
-  dimCount.set(root, fields.length);
-  if (!fields.length || before > 0) return false;
+  const ready = fields.some(f => f.mm > 0);
+  const before = dimReady.get(root) ?? false;
+  dimReady.set(root, ready);
+  if (!ready || before) return false;
   const active = doc?.activeElement;
   if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA')) return false;
   const f = fields.find(x => x.active) ?? fields[0];

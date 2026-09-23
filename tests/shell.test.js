@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, afterEach } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, createItem, activeFloor } from '../src/state/schema.js';
@@ -12,6 +12,10 @@ import { LAYOUT_DEBOUNCE_MS } from '../src/ui/layout.js';
 
 // 세 태스크(6·8·12)의 테스트가 이 한 헬퍼로 셸을 띄운다. opts는 createShell에 그대로 넘어가므로
 // mountShell({ onToolChange })처럼 셸 생성 인자를 더할 수 있다.
+// 같은 jsdom 문서를 모든 테스트가 나눠 쓴다: 앞 테스트가 남긴 INPUT 포커스가 autoFocusDim의
+// "사람이 타이핑 중이면 훔치지 않는다" 조건에 걸려 뒤 테스트를 흔든다(리뷰 M-4).
+afterEach(() => document.activeElement?.blur?.());
+
 function mountShell(opts = {}) {
   const root = document.createElement('div');
   document.body.appendChild(root);
@@ -975,14 +979,17 @@ test('사용자가 연 우측 패널은 다음 자동 접힘에서 제외된다'
 });
 
 // §16.7: 그리는 동안 옵션 바에 치수 칸이 뜨고, 그 칸의 타이핑·[Enter]가 도구로 들어간다.
-test('옵션 바의 치수 칸이 도구와 이어진다', () => {
+// 리뷰 C-2·I-3: 예전에는 여기서 #c2d를 한 번 클릭해 포커스를 뺀 뒤에야 "도구 값이 칸에 돌아온다"를
+// 봤다 — 그 한 줄이 곧 회귀를 가리는 반창고였다(§17.8(1) 뒤로는 칸이 늘 포커스를 쥔다).
+// 이제 포커스를 쥔 채로 본다: 손대지 않은 칸은 실측을 따라가고, 사람이 친 칸은 덮어쓰지 않는다.
+test('옵션 바의 치수 칸이 도구와 이어진다(리뷰 C-2)', () => {
   const calls = [];
   const { shell, root } = mountShell({ onToolChange: () => calls.push('render') });   // Task 6 Step 1이 만든 헬퍼(opts가 createShell로 그대로 간다)
-  let typed = '', committed = 0;
+  let typed = '', measured = 3000, committed = 0;
   const tool = {
     name: 'wall', opts: { thickness: 200 }, hint: '다음 점을 클릭',
-    dims: () => ({ fields: [{ key: 'len', text: typed || '3000', mm: 3000, active: true }] }),
-    dimSig: () => `len:${typed || '3000'}:1`,
+    dims: () => ({ fields: [{ key: 'len', text: typed || String(measured), mm: measured, active: true, typed: typed !== '' }] }),
+    dimSig: () => `len:${typed || String(measured)}:1`,
     setDim(k, v) { typed = v; return true; },
     commitDims() { committed += 1; return true; },
   };
@@ -990,19 +997,24 @@ test('옵션 바의 치수 칸이 도구와 이어진다', () => {
   const el = root.querySelector('#optionDims [name="dim:len"]');
   expect(el.value).toBe('3000');
   expect(root.querySelector('[name="thickness"]')).not.toBeNull();   // 도구 옵션도 함께 있다
+  expect(document.activeElement).toBe(el);                           // §17.8(1): 그리는 동안 칸이 포커스를 갖는다
+  // 손대지 않은 칸은 포커스를 쥔 채로도 마우스 실측을 따라간다(배너가 가리키는 칸이 0으로 굳지 않게).
+  const selected = vi.spyOn(el, 'select');
+  measured = 3974;
+  shell.refreshTool();
+  expect(el.value).toBe('3974');
+  expect(selected).toHaveBeenCalled();                               // 선택을 되살려 이어 타이핑이 덮어쓴다
   el.value = '4500';
   el.dispatchEvent(new Event('input', { bubbles: true }));
   expect(typed).toBe('4500');
   expect(calls).toContain('render');
+  // 사람이 친 칸은 마우스가 움직여도 그대로 둔다(타이핑 중인 글자를 지우지 않는다).
+  measured = 5200;
+  shell.refreshTool();
+  expect(el.value).toBe('4500');
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   expect(committed).toBe(1);
-  // 캔버스에서 타이핑한 값은 refreshTool()로 칸에 되돌아온다. 칸이 처음 생긴 순간 포커스를 받으므로
-  // (§17.8(1)) 캔버스로 타이핑하려면 먼저 캔버스를 클릭한 상태여야 한다(§17.8(2)가 포커스를 돌려준다) —
-  // 포커스가 칸에 남아 있으면 syncDimBar가 그 칸을 건너뛴다(타이핑 중인 글자를 지우지 않는 규칙).
-  root.querySelector('#c2d').dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
-  typed = '5000';
-  shell.refreshTool();
-  expect(root.querySelector('#optionDims [name="dim:len"]').value).toBe('5000');
+  shell.destroy();
 });
 
 // 그리는 도구를 흉내 낸 스텁: 확정하면 버퍼가 비고 실측이 0에서 다시 시작한다(벽 도구와 같은 모양).
@@ -1011,7 +1023,7 @@ function dimStub() {
   const s = { typed: '', measured: 3000, committed: [], cancelled: 0 };
   s.tool = {
     name: 'wall', opts: { thickness: 200 }, hint: '다음 점을 클릭',
-    dims: () => ({ fields: [{ key: 'len', text: s.typed || String(s.measured), mm: s.measured, active: true }] }),
+    dims: () => ({ fields: [{ key: 'len', text: s.typed || String(s.measured), mm: s.measured, active: true, typed: s.typed !== '' }] }),
     dimSig: () => `len:${s.typed || String(s.measured)}:1`,
     setDim(k, v) { s.typed = v; return true; },
     commitDims() { s.committed.push(s.typed); s.typed = ''; s.measured = 0; return true; },
@@ -1023,7 +1035,6 @@ function dimStub() {
 // §17.8(1)(2): 첫 점을 찍으면 치수 칸이 포커스를 받고, 다음 점을 클릭하면 캔버스로 돌아온다.
 // 돌아오지 않으면 캔버스의 숫자·[Enter]·[Esc] 경로가 칸에 갇혀 죽는다.
 test('치수 칸은 처음 생길 때 한 번 포커스를 받고 캔버스 클릭이 풀어 준다', () => {
-  document.activeElement?.blur?.();                      // 같은 jsdom 문서다: 앞선 테스트가 남긴 포커스를 치운다
   const { shell, root } = mountShell();
   const s = dimStub();
   let drawing = false;
@@ -1080,6 +1091,47 @@ test('치수 칸의 [Esc]는 글자와 도구 버퍼를 함께 되돌린다(리�
   expect(ev.defaultPrevented).toBe(true);           // keymap의 revertField가 한 번 더 돌지 않는다
   expect(s.cancelled).toBe(0);                      // 그리던 도구는 취소되지 않는다
   expect(document.activeElement).not.toBe(el);      // 칸에서 나온다(캔버스로 돌아갈 수 있다)
+});
+
+// 리뷰 I-1: 배너는 "[Esc] 그리기 끝"이라고 말하는데, §17.8(1)이 그리는 내내 칸에 포커스를 주면서
+// 첫 [Esc]가 칸만 비우고 끝났다(손대지 않은 칸에서는 눈에 보이는 변화조차 없다) — 약속이 첫 누름에
+// 거짓이 됐다. 손대지 않은 칸의 [Esc]는 도구로 흘려보낸다. 글자를 친 칸은 예전 규칙 그대로다.
+test('손대지 않은 치수 칸의 [Esc]는 도구로 흘러가 그리기를 끝낸다(리뷰 I-1)', () => {
+  const { shell, root } = mountShell();
+  const s = dimStub();
+  const keys = [];
+  const tool = { ...s.tool, onKey: ev => { keys.push(ev.key); return true; } };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  el.focus();
+  const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  el.dispatchEvent(ev);
+  expect(keys).toEqual(['Escape']);                 // 배너가 약속한 "그리기 끝"이 첫 누름에 참이다
+  expect(ev.defaultPrevented).toBe(true);           // keymap의 revertField가 겹쳐 돌지 않는다
+  // 글자를 친 칸에서는 첫 [Esc]가 되돌리기다(그 사람에게는 되돌릴 것이 있다).
+  el.focus();
+  el.value = '4500'; el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(keys).toEqual(['Escape']);                 // 도구로 넘어가지 않는다(한 번 더 눌러야 끝난다)
+  expect(s.typed).toBe('');                         // 글자와 도구 버퍼만 되돌린다
+  shell.destroy();
+});
+
+// 리뷰 I-2: 확정할 것이 없을 때 캔버스의 [Enter]는 체인을 끝내는데 칸의 [Enter]만 아무 일도 하지
+// 않았다(감사 §57이 지적한 "같은 화면, 포커스에 따라 다른 결과"가 뒤집힌 모양). 자동 포커스가
+// 기본이 된 뒤로는 그것이 "한 번의 키로 그리기를 끝낼 방법이 없다"가 됐다.
+test('확정할 것이 없으면 칸의 [Enter]도 도구로 흘러간다(리뷰 I-2)', () => {
+  const { shell, root } = mountShell();
+  const s = dimStub();
+  const keys = [];
+  const tool = { ...s.tool, commitDims: () => false, onKey: ev => { keys.push(ev.key); return true; } };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  el.focus();
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  expect(keys).toEqual(['Enter']);                  // 도구 계약(확정 → 없으면 완료)을 그대로 지난다
+  expect(s.committed).toEqual([]);                  // 확정한 것은 없다
+  shell.destroy();
 });
 
 // 리뷰 I-2·I-7: 범위는 도구를 함께 보고(덕트 단면 h는 3000), 잘림은 조용히 일어나지 않는다.

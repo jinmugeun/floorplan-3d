@@ -183,13 +183,15 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   });
   // 치수 칸은 타이핑마다 도구 버퍼에 들어가고(캔버스 프리뷰가 그 값으로 따라온다), 포커스가 옮겨 간
   // 칸이 곧 활성 칸이다(캔버스의 [Tab]과 같은 상태를 가리킨다 — §16.7).
-  els.optionBar.addEventListener('input', ev => { const k = dimKey(ev.target); if (k && currentTool?.setDim?.(k, ev.target.value)) onToolChange(); });
-  els.optionBar.addEventListener('focusin', ev => { const k = dimKey(ev.target); if (k) { currentTool?.focusDim?.(k); syncDims(); onToolChange(); } });
+  let dimTouched = false;   // 이번 포커스 동안 사람이 이 칸에 글자를 쳤는가(리뷰 I-1: [Esc]의 뜻이 여기서 갈린다)
+  els.optionBar.addEventListener('input', ev => { const k = dimKey(ev.target); if (!k) return; dimTouched = true; if (currentTool?.setDim?.(k, ev.target.value)) onToolChange(); });
+  els.optionBar.addEventListener('focusin', ev => { const k = dimKey(ev.target); if (k) { dimTouched = false; currentTool?.focusDim?.(k); syncDims(); onToolChange(); } });
   // 다음 점을 클릭하는 순간 포커스를 캔버스 쪽으로 돌려준다(§17.8(2) · 감사 §57): 치수 칸이 키를
   // 계속 먹으면 캔버스의 숫자·[Enter]·[Esc] 경로가 죽는다. 캡처 단계라 도구의 pointerdown보다
-  // 먼저 돌고, 칸이 비워지므로 이어지는 syncDims의 autoFocusDim도 "빈 상태 → 하나" 조건에
-  // 걸리지 않는다(한 번이 지켜진다).
-  els.canvas2d.addEventListener('pointerdown', () => { const a = document.activeElement; if (dimKey(a)) a.blur(); }, true);
+  // 먼저 돈다. **왼쪽 버튼만** 본다(리뷰 M-1): 오른쪽 클릭(맥락 메뉴)·가운데 드래그(패닝)는
+  // §17.8(2)가 말한 "다음 점을 클릭"이 아니다. 클릭 프레임은 실측이 0이라 autoFocusDim의 래치가
+  // 닫히고, 마우스가 다시 움직여 확정할 값이 생기면 그때 칸이 포커스를 되찾는다(§17.8(1)).
+  els.canvas2d.addEventListener('pointerdown', ev => { if (ev.button) return; const a = document.activeElement; if (dimKey(a)) a.blur(); }, true);
   // 길이 입력은 change뿐 아니라 [Enter]로도 반영한다(값을 고치고 Enter만 누르면 그대로였다 — §12.5).
   // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다). 뒤이어 오는
   // 네이티브 change는 isDuplicateCommit이 한 번 삼킨다(§16.1). select는 INPUT이 아니라 애초에 걸리지
@@ -202,10 +204,14 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     // 치수 칸의 [Esc]는 글자와 도구 버퍼를 **함께** 되돌린다(리뷰 I-5): keymap의 revertField는 글자만
     // 되돌려, 다음 프레임의 syncDimBar가 그대로 남은 버퍼를 다시 써 넣었다(되돌림이 없던 일이 됐다).
     // 빈 버퍼 = 마우스 실측으로 복귀 = 이 칸의 "없던 일"이다. 도구는 취소하지 않는다(§16.7).
+    // 손대지 않은 칸이면 그 [Esc]를 도구에도 넘긴다(리뷰 I-1): 되돌릴 글자가 없어 눈에 보이는 변화가
+    // 없으므로, 배너가 약속한 "[Esc] 그리기 끝"이 자동 포커스가 기본이 된 뒤로 첫 누름에 거짓이었다.
     if (ev.key === 'Escape' && dk) {
       ev.preventDefault();                            // keymap의 revertField가 한 번 더 돌지 않게 한다
+      const untouched = !dimTouched;
       currentTool?.setDim?.(dk, '');
       ev.target.blur();                               // 포커스가 없어야 syncDims가 이 칸을 다시 채운다
+      if (untouched) currentTool?.onKey?.({ key: 'Escape', preventDefault() {} });
       syncDims(); onToolChange();
       return;
     }
@@ -214,15 +220,17 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     ev.preventDefault();
     // 치수 칸의 [Enter]는 도구의 확정이다(벽을 놓고 다음 점으로 — §16.7). 옵션 값이 아니다.
     if (dk) {
+      // 확정한 칸은 모델 값으로 되맞춘다(계획 8 리뷰 C-1): preventDefault를 했으므로 blur가 없어
+      // 포커스가 칸에 남고, 낡은 글자(4500)에 다음 타이핑이 이어 붙어 45003000(45 m 벽)이 놓였다 —
+      // select()가 이어 타이핑에 덮어쓰게 한다. 확정할 것이 없으면 도구의 onKey로 넘긴다(리뷰 I-2):
+      // 캔버스의 [Enter]는 그때 체인을 끝내는데 칸의 [Enter]만 아무 일도 하지 않아, 자동 포커스가
+      // 기본이 된 뒤로는 한 번의 키로 그리기를 끝낼 방법이 없었다.
       if (currentTool?.commitDims?.()) {
-        // 확정한 칸은 모델 값으로 되맞춘다(리뷰 C-1): 셸이 preventDefault를 했으므로 blur가 없어
-        // 포커스가 칸에 남고, syncDimBar는 포커스 칸을 건너뛴다 → 낡은 글자(4500)가 남아 다음
-        // 타이핑이 이어 붙었다(45003000 = 45 m 벽). select()로 이어 타이핑이 덮어쓰게 한다.
         const f = currentTool.dims?.()?.fields.find(x => x.key === dk);
         ev.target.value = f ? f.text : '';
         ev.target.select?.();
-        syncDims(); onToolChange();
-      }
+      } else currentTool?.onKey?.({ key: 'Enter', preventDefault() {} });
+      syncDims(); onToolChange();
       return;
     }
     ev.target.dispatchEvent(new Event('change', { bubbles: true }));

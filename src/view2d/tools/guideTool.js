@@ -39,7 +39,7 @@ export function createGuideTool({ store, view, opts: given = null }) {
     store.dispatch(d => { activeFloor(d).guides.push(g); });
     lastId = g.id;
   };
-  return {
+  const api = {
     name: 'guide', opts,
     hint: '보조선을 놓을 자리를 클릭 · 다시 클릭하면 지웁니다 · [Esc] 종료',
     getSnap() { return mark; },
@@ -52,7 +52,8 @@ export function createGuideTool({ store, view, opts: given = null }) {
       const at = g ? g.pos : cursor?.[axis()];
       if (!Number.isFinite(at)) return null;
       const mm = Math.round(at);
-      return { fields: [{ key: 'pos', text: typed !== '' ? typed : fmtLen(mm, units()), mm, active: true }] };
+      // typed는 "사람이 이 칸에 글자를 쳤다"다(리뷰 C-2): 손대지 않은 칸은 포커스가 있어도 커서를 따라간다.
+      return { fields: [{ key: 'pos', text: typed !== '' ? typed : fmtLen(mm, units()), mm, active: true, typed: typed !== '' }] };
     },
     dimSig() { const d = this.dims(); return d ? `pos:${d.fields[0].text}:1` : ''; },
     setDim(key, text) { if (key !== 'pos') return false; typed = String(text ?? ''); return true; },
@@ -97,10 +98,11 @@ export function createGuideTool({ store, view, opts: given = null }) {
       // 음수 좌표는 어느 단위에서나 있으므로 '-'는 따로 통과시킨다.
       if (ev.key === '-' || typedChar(units()).test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
-      if (ev.key === 'Enter') return this.commitDims();       // §17.8(3): 캔버스와 칸이 한 함수다
+      if (ev.key === 'Enter') return api.commitDims();        // §17.8(3): 캔버스와 칸이 한 함수다
       return false;
     },
     draw(ctx, v) { if (typed) v.label(`${typed}|`, v.toWorld([ctx.canvas.clientWidth / 2, 40]), { bg: '#fff', color: v.COLORS.dim }); drawSnapMark(ctx, v, this.getSnap()); },
     cancel() { typed = ''; lastId = null; mark = null; },
   };
+  return api;
 }

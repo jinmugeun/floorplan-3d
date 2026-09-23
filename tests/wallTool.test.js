@@ -156,10 +156,11 @@ test('벽 도구의 치수 칸은 길이 하나이고 타이핑·확정이 캔�
   expect(t.dims()).toBeNull();                       // 그리기 전에는 칸이 없다
   t.onPointerDown([0.5, 0.25]);
   t.onPointerMove([3000.5, 0.25]);
-  expect(t.dims()).toEqual({ fields: [{ key: 'len', text: '3000', mm: 3000, active: true }] });
+  expect(t.dims()).toEqual({ fields: [{ key: 'len', text: '3000', mm: 3000, active: true, typed: false }] });
   const sig = t.dimSig();
   expect(t.setDim('len', '4500')).toBe(true);
   expect(t.dims().fields[0].text).toBe('4500');
+  expect(t.dims().fields[0].typed).toBe(true);       // 옵션 바가 이 칸을 덮어쓰지 않게 하는 신호다(리뷰 C-2)
   expect(t.dimSig()).not.toBe(sig);                  // 뷰가 이 서명으로 옵션 바를 다시 맞춘다
   expect(t.commitDims()).toBe(true);
   const w = activeFloor(store.get()).walls;
@@ -248,4 +249,31 @@ test('[Esc]는 그리기를 끝내고 이미 놓인 구간은 남긴다', () => 
   expect(activeFloor(store.get()).walls).toHaveLength(1);   // "취소"가 아니라 "그리기 끝"이다
   expect(done).toBe(1);
   expect(t.getPreview().points).toHaveLength(0);
+});
+
+// 리뷰 C-1(브라우저 실측): 자동 포커스된 칸에 3500을 치고 [Enter]를 눌렀는데 벽도 토스트도 없이
+// 타이핑만 사라졌다. 첫 점을 찍은 프레임은 커서가 곧 마지막 점이라 방향이 없는데(norm([0,0])이
+// [0,0]이다) typed는 성공 여부와 무관하게 비워졌다 — 이제 방향이 없으면 아무것도 지우지 않는다.
+test('방향이 없는 프레임의 타이핑은 사라지지 않고 방향이 생기면 그 길이로 확정된다(리뷰 C-1)', () => {
+  const store = createStore(createEmptyProject());
+  let done = 0;
+  const t = createWallTool({ store, onDone: () => done++ });
+  t.onPointerDown([0.5, 0.25]);                       // 첫 점: 커서가 곧 마지막 점이다(길이 0)
+  expect(t.dims().fields[0].mm).toBe(0);
+  expect(t.setDim('len', '3500')).toBe(true);
+  expect(t.commitDims()).toBe(true);                  // [Enter]는 먹되(체인을 끝내지 않는다)
+  expect(activeFloor(store.get()).walls).toHaveLength(0);   // 길이 0 벽은 놓지 않고
+  expect(t.getPreview().typed).toBe('3500');          // 친 글자도 지우지 않는다
+  expect(store.canUndo()).toBe(false);                // 빈 되돌림 단계도 없다
+  // 마우스가 방향을 주면 그 3500이 그대로 한 벽이 된다(한 동작 = 한 단계).
+  t.onPointerMove([1000.5, 0.25]);
+  expect(t.commitDims()).toBe(true);
+  const w = activeFloor(store.get()).walls;
+  expect(w).toHaveLength(1);
+  expect(Math.round(Math.hypot(w[0].b[0] - w[0].a[0], w[0].b[1] - w[0].a[1]))).toBe(3500);
+  expect(t.getPreview().typed).toBe('');              // 성공했을 때만 비운다
+  expect(done).toBe(0);                               // 체인은 이어진다
+  expect(store.undo()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(store.canUndo()).toBe(false);                // 되돌림은 한 단계뿐이다
 });
