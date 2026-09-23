@@ -133,3 +133,18 @@ test('벽 도구는 단계에 따라 안내가 바뀐다', () => {
   // 그리는 중의 첫 [Esc]는 도구가 소비하고(체인만 지운다), 체인이 없으면 소비하지 않는다 → 키맵이 선택으로(결정 19b).
   expect(t.onKey({ key: 'Escape', preventDefault() {} })).toBe(false);   // 체인이 없으면 소비하지 않는다(키맵이 선택으로)
 });
+
+// §16.6: hit을 버리지 않는다 — 커서 옆 마커가 그것을 그린다.
+test('벽 도구가 스냅 종류를 내놓고 허용치는 화면 배율을 따른다', () => {
+  const store = createStore(createEmptyProject());
+  const view = { camera: { scale: 0.1 } };                  // 8 px = 80 mm
+  const t = createWallTool({ store, view, onDone() {} });
+  t.onPointerDown([0.5, 0.25]); t.onPointerDown([4000.5, 0.25]);
+  const t2 = createWallTool({ store, view, onDone() {} });
+  t2.onPointerMove([40, 40]);                               // 끝점 [0.5, 0.25]에서 56 mm → 80 mm 안
+  expect(t2.getSnap()).toEqual({ point: [0.5, 0.25], hit: 'point' });
+  // 확대하면(배율 1) 허용치가 20 mm로 좁아져 같은 자리가 더는 물리지 않는다.
+  const t3 = createWallTool({ store, view: { camera: { scale: 1 } }, onDone() {} });
+  t3.onPointerMove([40, 40]);
+  expect(t3.getSnap()?.hit).not.toBe('point');
+});

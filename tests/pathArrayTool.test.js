@@ -5,7 +5,8 @@ import { createEmptyProject, activeFloor, createItem } from '../src/state/schema
 import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { createPathArrayTool, PATH_SNAP_TOL } from '../src/view2d/tools/pathArrayTool.js';
+import { createPathArrayTool } from '../src/view2d/tools/pathArrayTool.js';
+import { tolMm } from '../src/geom/snap.js';
 
 const fakeView = { camera: { scale: 0.1 }, requestRender: () => {} };
 function setup() {
@@ -98,10 +99,10 @@ describe('경로 배열 도구', () => {
   });
 });
 
-// §14.10 이월: 점 스냅 허용오차를 150 → 50 mm로 좁힌다(150 mm면 가까운 두 점을 따로 찍을 수 없었다).
-test('점 스냅 허용오차는 50 mm다', () => {
+// §16.6: 도구별 상수가 사라지고 화면 8 px 한 규칙이 됐다 — 이름도 그 사실을 말한다.
+test('점 스냅 허용오차는 화면 8 px이다(§16.6)', () => {
   const a = setup();
-  expect(PATH_SNAP_TOL).toBe(50);
+  expect(tolMm(fakeView.camera.scale)).toBe(80);   // 이 파일의 fakeView는 scale 0.1이다(10행)
   a.t.onPointerDown([2000, 1000], {});
   a.t.onPointerMove([2000, 1120], {});                  // 120 mm 떨어진 자리: 예전에는 앞 점으로 붙었다
   expect(a.t.getPreview().cursor).toEqual([2000, 1120]);

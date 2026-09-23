@@ -3,26 +3,27 @@
 // arrayCopy로 만든다. 선택도 그대로 둔다 — 배열 복사의 대상이 선택이기 때문이다.
 // ui·view는 도구 인터페이스를 맞추기 위해 받는다(다시 그리기는 view2d가 한다).
 import { activeFloor } from '../../state/schema.js';
-import { snapPoint } from '../../geom/snap.js';
+import { snapPoint, tolMm } from '../../geom/snap.js';
+import { drawSnapMark } from '../snapMarks.js';
 import { dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
 import { PATH_MIN_POINTS } from '../../ui/messages.js';
 
-// 점 스냅 허용오차(§14.10 이월). snapPoint의 기본값 150 mm는 이 도구에서는 너무 넓었다:
-// 가까운 두 점을 따로 찍을 수 없고, "마지막 점을 다시 클릭 = 완료"가 의도보다 자주 걸렸다.
-export const PATH_SNAP_TOL = 50;
+// 허용치는 geom/snap.js 한 규칙이다(§16.6 · 계획 7 이월). 예전에는 이 도구만 50 mm를 따로 썼다:
+// 고정 150 mm가 너무 넓어 가까운 두 점을 따로 찍을 수 없었기 때문인데, 화면 8 px 기준이 되면
+// 확대한 화면에서 그 문제가 저절로 사라진다(축소한 화면에서는 넓은 편이 오히려 맞다).
 
 export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => {}, toast = () => {} }) {
   const floor = () => activeFloor(store.get());
-  let points = [], cursor = null, guides = [];
+  let points = [], cursor = null, guides = [], hit = null;
   const last = () => points[points.length - 1] ?? null;
-  const reset = () => { points = []; cursor = null; guides = []; };
+  const reset = () => { points = []; cursor = null; guides = []; hit = null; };
 
   // 직교 잠금은 [Shift]를 누르고 있을 때만이다(벽·덕트 도구처럼 옵션 바로 켜 두는 방식이 아니다 —
   // 이 도구에는 옵션 바가 없다). 점·보조선·벽 스냅은 늘 켜져 있다.
   const resolve = (p, ev) => snapPoint(p, {
     points, guides: floor().guides, walls: floor().walls,
-    anchor: last(), ortho: !!ev?.shiftKey, snap: true, tol: PATH_SNAP_TOL,
+    anchor: last(), ortho: !!ev?.shiftKey, snap: true, tol: tolMm(view?.camera?.scale),
   });
 
   function finish() {
@@ -38,14 +39,14 @@ export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => 
     hint: '경로를 클릭해 그립니다. [Shift] 직교 잠금 · [Backspace] 한 점 되돌리기 · [Enter]·더블클릭 완료 · [Esc] 취소',
     onPointerDown(p, ev) {
       const r = resolve(p, ev);
-      cursor = r.point; guides = r.guides;
+      cursor = r.point; guides = r.guides; hit = r.hit;
       // 마지막 점을 다시 클릭하면 완료다(브라우저 더블클릭의 두 번째 pointerdown도 여기로 온다).
-      // 실제 판정 거리는 이 도구의 점 스냅 허용오차(PATH_SNAP_TOL = 50 mm)다: 그 안을 클릭하면 cursor가 마지막
+      // 실제 판정 거리는 §16.6의 한 규칙(화면 8 px = tolMm(scale))이다: 그 안을 클릭하면 cursor가 마지막
       // 점으로 붙어 거리가 0이 되므로, 아래 10 mm 비교는 스냅이 꺼진 경우를 위한 여유다.
       if (last() && dist(cursor, last()) < 10) { finish(); return; }
       points.push(cursor);
     },
-    onPointerMove(p, ev) { const r = resolve(p, ev); cursor = r.point; guides = r.guides; },
+    onPointerMove(p, ev) { const r = resolve(p, ev); cursor = r.point; guides = r.guides; hit = r.hit; },
     onPointerUp() {},
     onKey(ev) {
       if (ev.key === 'Escape') { reset(); onDone(null); return true; }
@@ -56,6 +57,7 @@ export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => 
     onHintClick() { reset(); onDone(null); },
     onContextMenu() { reset(); onDone(null); return null; },
     getPreview() { return { points: points.map(q => [q[0], q[1]]), cursor, guides }; },
+    getSnap() { return cursor && hit ? { point: cursor, hit } : null; },
     draw(ctx, v) {
       const [cw, ch] = [ctx.canvas.clientWidth || ctx.canvas.width, ctx.canvas.clientHeight || ctx.canvas.height];
       for (const g of guides) {
@@ -81,6 +83,7 @@ export function createPathArrayTool({ store, ui, view, ids = [], onDone = () => 
         const mid = [(last()[0] + cursor[0]) / 2, (last()[1] + cursor[1]) / 2];
         v.label(fmtLen(dist(last(), cursor), v.units ?? 'mm'), mid, { bg: '#fff', color: v.COLORS.dim });
       }
+      drawSnapMark(ctx, v, this.getSnap());
     },
     cancel() { reset(); },
   };

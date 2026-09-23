@@ -1,5 +1,15 @@
 import { dist, add, sub, mul, dot } from './vec.js';
 
+// 스냅 허용치는 **화면 px 한 규칙**이다(§16.6 · 감사 §44). 도면 좌표는 mm이고 배율은 뷰마다
+// 다르므로, "손가락이 닿는 거리"는 화면에서 재야 한다: 8 px이 그 거리다(측정 도구가 이미 쓰던 값).
+// 확대하면 좁아지고 축소하면 넓어지지만 20 mm 아래로는 내려가지 않는다 — 그보다 좁으면 mm 단위
+// 도면에서 점을 물 수 없다(측정 도구의 Math.max(20, …)를 그대로 옮겼다).
+// 배율을 모르는 호출자(뷰 없이 만든 도구·순수 테스트)는 예전 기본값 150 mm를 그대로 받는다.
+export const SNAP_PX = 8;
+export const MIN_TOL_MM = 20;
+export const DEFAULT_TOL_MM = 150;
+export const tolMm = (scale, px = SNAP_PX) => (Number.isFinite(scale) && scale > 0 ? Math.max(MIN_TOL_MM, px / scale) : DEFAULT_TOL_MM);
+
 // 벽 선분 위의 수선의 발(perpendicular foot), 선분 밖으로는 벗어나지 않도록 클램프한다.
 // walls.js의 distToSegment와 같은 계산이지만, distToSegment는 거리만 돌려줄 뿐 발점 자체를
 // 반환하지 않으므로 snap에는 쓸 수 없어 여기 별도로 둔다.
@@ -26,7 +36,7 @@ function lockedAxisIntersection(a, b, yLocked, xLocked, anchor) {
   return null;
 }
 
-export function snapPoint(p, { points = [], tol = 150, anchor = null, ortho = false, snap = true, guides = [], walls = [] } = {}) {
+export function snapPoint(p, { points = [], tol = DEFAULT_TOL_MM, anchor = null, ortho = false, snap = true, guides = [], walls = [] } = {}) {
   let point = [p[0], p[1]], hit = null;
   const alignGuides = [];
   if (ortho && anchor) {

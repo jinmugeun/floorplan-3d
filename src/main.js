@@ -155,8 +155,8 @@ const structTool = kind => () => {
 let pendingProduct = null; // startPlace가 세팅하고, place 도구가 켜질 때 읽는다
 const tools = {
   select: () => createSelectTool({ store, ui, view, itemActions, surfaceActions, toast: shell.toast, onLocked: () => shell.toast(PLAN_LOCKED) }),
-  room: () => createRoomTool({ store, opts: toolOpts.room, onDone: stickyDone }),
-  wall: () => createWallTool({ store, opts: toolOpts.wall, onDone: stickyDone }),
+  room: () => createRoomTool({ store, view, opts: toolOpts.room, onDone: stickyDone }),
+  wall: () => createWallTool({ store, view, opts: toolOpts.wall, onDone: stickyDone }),
   delete: createDeleteTool,
   'column-square': structTool('column-square'),
   'column-round': structTool('column-round'),

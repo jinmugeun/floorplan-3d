@@ -1,6 +1,8 @@
 import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
+import { addWalls } from '../src/state/floorOps.js';
+import { rectWalls } from '../src/geom/walls.js';
 import { createRoomTool } from '../src/view2d/tools/roomTool.js';
 
 const key = k => ({ key: k, preventDefault() {} });
@@ -96,4 +98,13 @@ test('방 도구는 단계에 따라 안내가 바뀐다', () => {
   expect(t.hint).toBe('맞은편 모서리를 클릭 (2/2)');
   t.onPointerDown([4000.5, 3000.25]);
   expect(t.hint).toBe('첫 모서리를 클릭 (1/2)');   // 커밋하면 다시 1단계다(도구는 켜진 채)
+});
+
+test('방 도구도 스냅 종류를 내놓는다(§16.6)', () => {
+  const store = createStore(createEmptyProject());
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  const t = createRoomTool({ store, view: { camera: { scale: 0.1 } }, onDone() {} });
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([4000.5, 3000.25]);
+  expect(t.getSnap()).toEqual({ point: [4000.5, 3000.25], hit: 'point' });
 });

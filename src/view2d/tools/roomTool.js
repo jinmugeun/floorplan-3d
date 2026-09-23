@@ -1,17 +1,24 @@
 import { activeFloor } from '../../state/schema.js';
 import { addWalls } from '../../state/floorOps.js';
 import { rectWalls, endpoints } from '../../geom/walls.js';
-import { snapPoint } from '../../geom/snap.js';
+import { snapPoint, tolMm } from '../../geom/snap.js';
+import { drawSnapMark } from '../snapMarks.js';
 import { fmtLen, parseLen, typedChar } from '../../util/units.js';
 
 export const ROOM_TOOL_DEFAULTS = { thickness: 200, snap: true };
 
 // opts를 넘기면 그 객체를 그대로 쓰고 tool.opts로 돌려준다(도구를 다시 켜도 옵션 바의 편집이 유지되도록).
-export function createRoomTool({ store, onDone = () => {}, opts: given = null }) {
+export function createRoomTool({ store, view = null, onDone = () => {}, opts: given = null }) {
   const opts = given ?? { ...ROOM_TOOL_DEFAULTS };
-  let start = null, cur = null, typed = { w: '', h: '', field: 'w' };
-  const reset = () => { start = null; cur = null; typed = { w: '', h: '', field: 'w' }; };
-  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls), guides: f.guides, walls: f.walls, snap: opts.snap }).point; };
+  let start = null, cur = null, typed = { w: '', h: '', field: 'w' }, hit = null;
+  const reset = () => { start = null; cur = null; typed = { w: '', h: '', field: 'w' }; hit = null; };
+  // 허용치는 화면 8 px 한 규칙이다(§16.6). hit은 커서 옆 마커가 쓴다(감사 §42).
+  const snap = p => {
+    const f = activeFloor(store.get());
+    const r = snapPoint(p, { points: endpoints(f.walls), guides: f.guides, walls: f.walls, snap: opts.snap, tol: tolMm(view?.camera?.scale) });
+    hit = r.hit;
+    return r.point;
+  };
   const dims = () => {
     const units = store.get().units;
     const sx = Math.sign(cur[0] - start[0]) || 1, sy = Math.sign(cur[1] - start[1]) || 1;
@@ -43,6 +50,7 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
       return false;
     },
     getPreview() { if (!start) return null; const d = dims(); return { start, end: d.end, w: d.w, h: d.h, typed: { ...typed } }; },
+    getSnap() { return cur && hit ? { point: cur, hit } : null; },
     draw(ctx, view) {
       const pv = this.getPreview(); if (!pv) return;
       const [x0, y0] = pv.start, [x1, y1] = pv.end;
@@ -50,6 +58,7 @@ export function createRoomTool({ store, onDone = () => {}, opts: given = null })
       const wLabel = `${fmtLen(pv.w, view.units ?? 'mm')}${pv.typed.field === 'w' ? '|' : ''}`, hLabel = `${fmtLen(pv.h, view.units ?? 'mm')}${pv.typed.field === 'h' ? '|' : ''}`;
       view.label(wLabel, [(x0 + x1) / 2, y0], { bg: '#fff', color: view.COLORS.dim });
       view.label(hLabel, [x1, (y0 + y1) / 2], { bg: '#fff', color: view.COLORS.dim });
+      drawSnapMark(ctx, view, this.getSnap());
     },
     cancel() { reset(); },
   };

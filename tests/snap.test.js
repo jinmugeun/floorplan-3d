@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { snapPoint } from '../src/geom/snap.js';
+import { snapPoint, tolMm, SNAP_PX, MIN_TOL_MM, DEFAULT_TOL_MM } from '../src/geom/snap.js';
 
 test('snaps to nearby point', () => {
   const r = snapPoint([105, 95], { points: [[100, 100]], tol: 20 });
@@ -53,4 +53,17 @@ test('with ortho, a nearer parallel wall does not hide a valid intersection on a
   const C = { a: [2000, 50], b: [4000, 50] };
   const r = snapPoint([2900, 20], { walls: [C, A], tol: 150, anchor: [0, 0], ortho: true });
   expect(r.point).toEqual([3000, 0]); expect(r.hit).toBe('wall');
+});
+
+// §16.6: 허용치는 화면 px 한 규칙이다 — 도구마다 다른 상수(150 mm · 50 mm · 8/scale)를 없앤다.
+test('tolMm은 화면 8 px을 mm로 바꾸고 최소 20 mm를 지킨다', () => {
+  expect(SNAP_PX).toBe(8);
+  expect(MIN_TOL_MM).toBe(20);
+  expect(DEFAULT_TOL_MM).toBe(150);
+  expect(tolMm(0.056)).toBeCloseTo(142.857, 3);     // 빈 프로젝트 기본 배율 → 예전 150과 거의 같다
+  expect(tolMm(0.5)).toBe(20);                      // 확대하면 좁아지다가 20 mm에서 멈춘다
+  expect(tolMm(0.005)).toBe(1600);                  // 축소하면 넓어진다(늘 화면 8 px이다)
+  expect(tolMm(0.1, 16)).toBe(160);                 // px을 주면 그 화면 거리로 잰다
+  // 배율을 모르면 예전 기본값으로 떨어진다(뷰 없이 만든 도구·순수 테스트).
+  for (const bad of [undefined, null, 0, -1, NaN, Infinity]) expect(tolMm(bad)).toBe(DEFAULT_TOL_MM);
 });

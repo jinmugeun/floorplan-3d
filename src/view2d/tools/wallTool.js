@@ -1,18 +1,21 @@
 import { activeFloor } from '../../state/schema.js';
 import { addWalls } from '../../state/floorOps.js';
 import { makeWall, endpoints } from '../../geom/walls.js';
-import { snapPoint } from '../../geom/snap.js';
+import { snapPoint, tolMm } from '../../geom/snap.js';
+import { drawSnapMark } from '../snapMarks.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
 import { fmtLen, parseLen, typedChar } from '../../util/units.js';
 
 export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
 
-export function createWallTool({ store, onDone = () => {}, opts: given = null }) {
+// view는 스냅 허용치(화면 8 px → mm)에 쓴다(§16.6). 넘기지 않으면 예전 기본값 150 mm다.
+export function createWallTool({ store, view = null, onDone = () => {}, opts: given = null }) {
   const opts = given ?? { ...WALL_TOOL_DEFAULTS };
-  let points = [], cursor = null, guides = [], typed = '';
-  const reset = () => { points = []; cursor = null; guides = []; typed = ''; };
+  let points = [], cursor = null, guides = [], typed = '', hit = null;
+  const reset = () => { points = []; cursor = null; guides = []; typed = ''; hit = null; };
   const last = () => points[points.length - 1] ?? null;
-  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls).concat(points), guides: f.guides, walls: f.walls, anchor: last(), ortho: opts.ortho, snap: opts.snap }); };
+  const tol = () => tolMm(view?.camera?.scale);
+  const snap = p => { const f = activeFloor(store.get()); return snapPoint(p, { points: endpoints(f.walls).concat(points), guides: f.guides, walls: f.walls, anchor: last(), ortho: opts.ortho, snap: opts.snap, tol: tol() }); };
   const addSegment = (a, b) => {
     if (dist(a, b) < 10) return false;
     let s = a, e = b;
@@ -26,13 +29,14 @@ export function createWallTool({ store, onDone = () => {}, opts: given = null })
     // 단계 안내(§14.7).
     get hint() { return last() ? '다음 점을 클릭 · [Enter] 완료 · [Esc] 취소' : '첫 점을 클릭하세요 (1/2)'; },
     onPointerDown(p) {
-      const r = snap(p); cursor = r.point; guides = r.guides;
-      if (points.length >= 2 && dist(cursor, points[0]) <= 150) { addSegment(last(), points[0]); finish(); return; }
+      const r = snap(p); cursor = r.point; guides = r.guides; hit = r.hit;
+      // 고리 닫기 판정도 같은 허용치를 쓴다(§16.6: 확대하면 좁아진다 — 예전에는 고정 150 mm였다).
+      if (points.length >= 2 && dist(cursor, points[0]) <= tol()) { addSegment(last(), points[0]); finish(); return; }
       if (last() && dist(cursor, last()) < 10) { finish(); return; }
       if (last()) addSegment(last(), cursor);
       points.push(cursor); typed = '';
     },
-    onPointerMove(p) { const r = snap(p); cursor = r.point; guides = r.guides; },
+    onPointerMove(p) { const r = snap(p); cursor = r.point; guides = r.guides; hit = r.hit; },
     onPointerUp() {},
     onKey(ev) {
       if (ev.key === 'Escape') return finish(); // 그리던 벽이 없으면 소비하지 않는다
@@ -51,14 +55,16 @@ export function createWallTool({ store, onDone = () => {}, opts: given = null })
       return false;
     },
     getPreview() { return { points: [...points], cursor, guides, typed }; },
+    getSnap() { return cursor && hit ? { point: cursor, hit } : null; },
     draw(ctx, view) {
       for (const g of guides) { const [w, h] = [ctx.canvas.clientWidth || ctx.canvas.width, ctx.canvas.clientHeight || ctx.canvas.height]; ctx.strokeStyle = view.COLORS.guide; ctx.setLineDash([6, 4]); ctx.beginPath(); if (g.type === 'v') { const x = view.toScreen([g.x, 0])[0]; ctx.moveTo(x, 0); ctx.lineTo(x, h); } else { const y = view.toScreen([0, g.y])[1]; ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke(); ctx.setLineDash([]); }
-      if (!last() || !cursor) { if (cursor) { const s = view.toScreen(cursor); ctx.beginPath(); ctx.arc(s[0], s[1], 5, 0, Math.PI * 2); ctx.strokeStyle = view.COLORS.wallSel; ctx.stroke(); } return; }
+      if (!last() || !cursor) { if (cursor) { const s = view.toScreen(cursor); ctx.beginPath(); ctx.arc(s[0], s[1], 5, 0, Math.PI * 2); ctx.strokeStyle = view.COLORS.wallSel; ctx.stroke(); drawSnapMark(ctx, view, this.getSnap()); } return; }
       const a = view.toScreen(last()), b = view.toScreen(cursor);
       ctx.strokeStyle = view.COLORS.wallSel; ctx.lineWidth = Math.max(2, opts.thickness * view.camera.scale); ctx.globalAlpha = 0.5;
       ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
       const mid = [(last()[0] + cursor[0]) / 2, (last()[1] + cursor[1]) / 2];
       view.label(typed ? `${typed}|` : fmtLen(dist(last(), cursor), view.units ?? 'mm'), mid, { bg: '#fff', color: view.COLORS.dim });
+      drawSnapMark(ctx, view, this.getSnap());
     },
     cancel() { reset(); },
   };

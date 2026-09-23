@@ -4,6 +4,7 @@ import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls, addMeasure } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createMeasureTool } from '../src/view2d/tools/measureTool.js';
+import { tolMm } from '../src/geom/snap.js';
 
 const ctxProxy = () => new Proxy({}, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
 
@@ -60,4 +61,9 @@ test('측정선 히트 허용치는 확대 배율을 따른다', () => {
   zoomedIn.cancel();
   zoomedIn.onPointerDown([500, 5]);
   expect(activeFloor(store.get()).measures).toHaveLength(0);
+});
+
+test('측정 도구의 허용치는 tolMm과 같은 값이다(§16.6)', () => {
+  expect(tolMm(0.1)).toBe(80);
+  expect(tolMm(undefined)).toBe(150);   // 뷰 없이 만든 도구의 예전 값과 같다
 });
