@@ -1,7 +1,7 @@
 // 시방서 대화상자: 용지·구역 옵션을 고르고, 도면 이미지를 만들어 인쇄하거나 HTML로 내려받는다.
 import { specHtml, SPEC_SECTIONS, PAPER } from '../io/specSheet.js';
 import { activeFloor, floorIsEmpty } from '../state/schema.js';
-import { elevationAspect, planExtent } from '../geom/elevation.js';   // 그림 비율의 정본(리뷰 M-7·M-9)
+import { elevationAspect, planExtent, topViewAspect } from '../geom/elevation.js';   // 그림 비율의 정본(리뷰 M-7·M-9)
 import { capture2D, downloadText, filenameFor, printBodyPx } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
@@ -73,8 +73,13 @@ export function openSpecDialog({ store, ui, view3d, onClose = () => {} }) {
       // 바닥선·천장선도 같은 elevationAspect를 쓰므로 선과 사진이 같은 프레임을 본다.
       const f = activeFloor(store.get());
       const width = printBodyPx(paper, landscape) * 2;
-      const height = Math.round(width / elevationAspect({ extent: planExtent(f.walls), height: f.height ?? 0 }));
+      const elevH = Math.round(width / elevationAspect({ extent: planExtent(f.walls), height: f.height ?? 0 }));
+      // 천장 평면도만 **평면 자신의 비율**로 잰다(재리뷰 2 N-2): 그것은 입면이 아니라 평면이라
+      // 층고와 무관하다. 입면 비율을 물려받던 동안 5.71:1 도면의 천장 평면도가 117 × 108 px로
+      // 인쇄되고 폭의 85%가 빈 종이였다 — 절은 그대로 두고 높이만 제 비율로 되돌린다.
+      const topH = Math.round(width / topViewAspect(f.walls));
       for (const preset of ELEV) {
+        const height = preset === 'top' ? topH : elevH;
         try { images[preset] = view3d.renderImage({ width, height, preset }); } catch { failed += 1; }
       }
     }

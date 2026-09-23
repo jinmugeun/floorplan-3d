@@ -2,7 +2,7 @@
 // 규칙이 io/specSheet.js(인쇄물 포매터) 안에 살던 동안 3D 카메라가 그 모듈을 import했다 —
 // 이제 geom/ 한 곳이고, 인쇄물·카메라·비트맵이 모두 여기서 같은 값을 받는다.
 import { describe, test, expect } from 'vitest';
-import { elevationAspect, elevationFrame, planExtent, ELEV_ASPECT_MIN, ELEV_ASPECT_MAX, ELEV_MARGIN } from '../src/geom/elevation.js';
+import { elevationAspect, elevationFrame, planExtent, planSize, topViewAspect, ELEV_ASPECT_MIN, ELEV_ASPECT_MAX, ELEV_MARGIN } from '../src/geom/elevation.js';
 import { rectWalls } from '../src/geom/walls.js';
 
 describe('입면 그림 비율(elevationAspect)', () => {
@@ -77,4 +77,36 @@ test('planExtent는 도면의 가로·세로 중 큰 쪽이다(소수 좌표)', 
   expect(planExtent(rectWalls([0, 0], [3000.25, 4000.5], 200))).toBeCloseTo(4000.5, 9);
   expect(planExtent([])).toBe(8000);                             // 벽이 없는 층의 기본값은 bounds()와 같다
   expect(planExtent()).toBe(8000);
+});
+
+test('planSize는 가로·세로를 따로 준다(소수 좌표)', () => {
+  const s = planSize(rectWalls([0, 0], [4000.5, 3000.25], 200));
+  expect(s.width).toBeCloseTo(4000.5, 9);
+  expect(s.depth).toBeCloseTo(3000.25, 9);
+  expect(planSize([])).toEqual({ width: 8000, depth: 8000 });    // 기본값도 planExtent와 같은 자리에서 나온다
+  expect(planSize()).toEqual({ width: 8000, depth: 8000 });
+});
+
+// 재리뷰 2 N-2: 천장 평면도(top)는 입면이 아니라 평면이다. 입면 비율을 물려받던 동안 20.0 × 18.6 m
+// 평면이 5.71:1 띠 한가운데 117 × 108 px로 인쇄돼(선 길이 3.2배 축소) 방 윤곽이 5 px였다.
+describe('천장 평면도 비율(topViewAspect)', () => {
+  test('층고가 아니라 평면 자신의 가로/세로가 정하고, 한계는 입면과 같다', () => {
+    expect(topViewAspect(rectWalls([0, 0], [20000.5, 6000.25], 200))).toBeCloseTo(20000.5 / 6000.25, 9);
+    // 샘플 평면(20.0 × 18.6 m)은 거의 정사각이라 아래 한계에 붙는다 — 1530 × 861, 파동 1과 같은 그림.
+    expect(topViewAspect(rectWalls([0, 0], [20000, 18600], 200))).toBeCloseTo(ELEV_ASPECT_MIN, 12);
+    // 세로로 긴 평면도 아래 한계다(그림이 세로로 쓸데없이 커지지 않는다).
+    expect(topViewAspect(rectWalls([0, 0], [6000, 20000], 200))).toBeCloseTo(ELEV_ASPECT_MIN, 12);
+    // 아주 납작한 평면은 6:1에서 잘린다(그 아래로는 높이가 128 px 밑이다).
+    expect(topViewAspect(rectWalls([0, 0], [44100, 3500], 200))).toBe(ELEV_ASPECT_MAX);
+    // 같은 평면이면 층고가 달라도 같은 값이다 — 입면 비율과 갈라지는 지점이 바로 여기다.
+    const walls = rectWalls([0, 0], [20000.5, 6000.25], 200);
+    expect(topViewAspect(walls)).not.toBeCloseTo(elevationAspect({ extent: 20000.5, height: 3500.25 }), 6);
+  });
+
+  test('벽이 없거나 한 줄인 도면에서도 숫자를 준다', () => {
+    expect(topViewAspect([])).toBeCloseTo(ELEV_ASPECT_MIN, 12);   // 8000 × 8000 → 1:1 → 아래 한계
+    expect(topViewAspect()).toBeCloseTo(ELEV_ASPECT_MIN, 12);
+    expect(topViewAspect([{ a: [0, 0], b: [20000, 0] }])).toBe(ELEV_ASPECT_MAX);   // 깊이 0 → 최소 깊이로 잰다
+    expect(topViewAspect([{ a: [0, 0], b: [0, 0] }])).toBeCloseTo(ELEV_ASPECT_MIN, 12);
+  });
 });

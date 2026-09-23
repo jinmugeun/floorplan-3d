@@ -5,7 +5,7 @@ import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { elevationAspect, planExtent } from '../src/geom/elevation.js';
+import { elevationAspect, planExtent, topViewAspect } from '../src/geom/elevation.js';
 import { openSpecDialog } from '../src/ui/specDialog.js';
 
 // I-2: 모의를 vi.fn으로 둔다 — 인자를 보지 않으면 capture2D(store, ui)로 되돌려도 전부 초록이었다.
@@ -110,11 +110,39 @@ describe('시방서 대화상자', () => {
     const w = printBodyPx('A4', false) * 2;                 // A4 세로: 765 × 2 = 1530
     expect(a.shots).toHaveLength(5);
     // 이 도면(4.0 × 3.0 m · 층고 2.3 m)은 16:9보다 세로로 길어 아래 한계에 붙는다 → 1530 × 861.
-    expect(elevationAspect({ extent: planExtent(activeFloor(a.store.get()).walls), height: 2300 })).toBeCloseTo(16 / 9, 12);
+    // 평면 비율(4.0 / 3.0)도 같은 한계에 붙어 천장 평면도까지 같은 크기다 — 우연이 아니라 두
+    // 비율이 같은 clamp를 쓰기 때문이다(갈라지는 도면은 아래 N-2 테스트가 잡는다).
+    const walls = activeFloor(a.store.get()).walls;
+    expect(elevationAspect({ extent: planExtent(walls), height: 2300 })).toBeCloseTo(16 / 9, 12);
+    expect(topViewAspect(walls)).toBeCloseTo(16 / 9, 12);
     for (const s of a.shots) {
       expect(s.width).toBe(w);
       expect(s.height).toBe(Math.round((w * 9) / 16));
     }
+  });
+
+  // 재리뷰 2 N-2: 천장 평면도는 입면이 아니라 평면이라 층고가 아니라 **평면 자신의 가로/세로**가
+  // 비율을 정한다. 다섯 장을 입면 비율로 한꺼번에 재던 동안, 샘플(20.0 × 18.6 m)의 천장 평면도가
+  // 5.71:1 띠 한가운데 117 × 108 px로 인쇄되고 폭의 85%가 빈 종이였다.
+  test('입면 넷은 한 크기이고 천장 평면도는 제 비율로 잰다', async () => {
+    const store = createStore(createEmptyProject('납작한 도면'));
+    addWalls(store, rectWalls([0, 0], [20000.5, 6000.25], 200));
+    store.dispatch(d => { activeFloor(d).height = 3500.25; }, { record: false });
+    const shots = [];
+    openSpecDialog({ store, ui: createUiState(), view3d: { renderImage: o => { shots.push(o); return 'data:,'; } } });
+    document.querySelector('.modal.spec [name="download"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => expect(shots).toHaveLength(5));
+    const { printBodyPx } = await import('../src/io/file.js');
+    const w = printBodyPx('A4', false) * 2;
+    const walls = activeFloor(store.get()).walls;
+    const elev = shots.filter(s => s.preset !== 'top'), top = shots.find(s => s.preset === 'top');
+    const elevH = Math.round(w / elevationAspect({ extent: planExtent(walls), height: 3500.25 }));
+    expect(elev).toHaveLength(4);
+    for (const s of elev) { expect(s.width).toBe(w); expect(s.height).toBe(elevH); }   // 5.714:1 → 1530 × 268
+    expect(top.width).toBe(w);
+    expect(top.height).toBe(Math.round(w / topViewAspect(walls)));                     // 3.333:1 → 1530 × 459
+    expect(top.height).not.toBe(elevH);
+    expect(top.height / elevH).toBeGreaterThan(1.7);                                   // 평면이 선 길이로 1.7배 커진다
   });
 
   // 가로로 긴 도면(샘플 모양: 20 m × 층고 3.5 m)은 5.71:1 그림이 된다 — 16:9였다면 861 px였던

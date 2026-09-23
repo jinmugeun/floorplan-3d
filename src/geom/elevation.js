@@ -42,10 +42,29 @@ export function elevationFrame({ extent = 6000, height = 2300, aspect = 0, margi
   };
 }
 
-// 도면의 가로·세로 중 큰 쪽(mm). view3d의 bounds()와 같은 계산이라 카메라와 자리가 어긋나지 않는다.
-export function planExtent(walls) {
+// 도면의 가로·세로(mm). view3d의 bounds()와 같은 계산이라 카메라와 자리가 어긋나지 않는다.
+export function planSize(walls) {
   const pts = endpoints(walls ?? []);
-  if (!pts.length) return 8000;                               // 벽이 없는 층의 기본값도 bounds()와 같다
+  if (!pts.length) return { width: 8000, depth: 8000 };       // 벽이 없는 층의 기본값도 bounds()와 같다
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  return { width: Math.max(...xs) - Math.min(...xs), depth: Math.max(...ys) - Math.min(...ys) };
+}
+
+// 도면의 가로·세로 중 큰 쪽(mm).
+export function planExtent(walls) {
+  const { width, depth } = planSize(walls);
+  return Math.max(width, depth);
+}
+
+// 천장 평면도(top)의 그림 비율. 그것은 입면이 아니라 **평면**이라 층고와 무관하고, 비율은 평면
+// 자신의 가로/세로다(재리뷰 2 N-2). 입면 비율을 물려받으면 20.0 × 18.6 m 평면이 5.71:1 띠 한가운데
+// 117 × 108 px로 인쇄됐다 — 선 길이 3.2배·면적 10배로 줄어 방 윤곽이 5 px였다. 한계는 입면과 같은
+// 값을 쓴다: 16:9보다 세로로 길면 그림이 쓸데없이 커지고, 6:1보다 납작하면 높이가 128 px 아래다.
+// 카메라(orthoViewParams)는 top의 절두체 세로를 도면의 큰 쪽에서 잡고 가로를 비율만큼 늘리므로,
+// 이 비율을 주면 평면이 가로·세로 같은 몫으로 담긴다(파동 1의 16:9 그림과 같은 프레이밍이다).
+export function topViewAspect(walls) {
+  const { width, depth } = planSize(walls);
+  const w = Math.max(Number(width) || 0, ELEV_MIN_EXTENT);    // 한 줄짜리(깊이 0) 도면도 답을 준다
+  const d = Math.max(Number(depth) || 0, ELEV_MIN_EXTENT);
+  return Math.min(Math.max(w / d, ELEV_ASPECT_MIN), ELEV_ASPECT_MAX);
 }
