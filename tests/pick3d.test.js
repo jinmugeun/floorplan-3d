@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, vi } from 'vitest';
 import * as THREE from 'three';
+import { elevationFrame } from '../src/io/specSheet.js';
 import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch, tintGizmo, gizmoTintFor, itemMeshOf, previewItemMesh, GIZMO_COLORS } from '../src/view3d/pick3d.js';
 import { createItem, createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { createStore } from '../src/state/store.js';
@@ -66,6 +67,34 @@ describe('3D 편집 계산', () => {
     expect(a.halfW / a.halfH).toBeCloseTo(2);
     const small = orthoViewParams('front', { center: [0, 0], extent: 100, height: 2300, aspect: 1 });
     expect(small.halfH).toBeGreaterThan(1); // 아주 작은 도면도 최소 크기를 갖는다
+  });
+
+  // 리뷰 I-3 · 감사 §37: 입면도가 "회색 띠 하나"였던 원인은 컷어웨이가 아니라 프레이밍이었다.
+  // 샘플(평면 18.6 × 20.0 m · 층고 3.5 m)에서 세로 절두체 23 m · 건물 15.2%가 나왔다.
+  test('입면 프레임은 건물 높이에서 나오고 도면 폭을 자르지 않는다(소수 입력)', () => {
+    // 세로가 이기는 도면: 16:9 그림에서 건물이 세로의 대부분을 채운다.
+    const tall = elevationFrame({ extent: 8400.5, height: 3500.25, aspect: 16 / 9 });
+    expect(tall.fill).toBeGreaterThanOrEqual(0.6);
+    expect(tall.halfW * 2).toBeGreaterThanOrEqual(8.4005);          // 도면 폭이 그대로 들어간다
+    expect(tall.halfW / tall.halfH).toBeCloseTo(16 / 9, 9);
+    // 바닥선·천장선은 그림 가운데를 기준으로 대칭이고, 둘 사이가 곧 층고다.
+    expect(tall.floorFrac + tall.ceilFrac).toBeCloseTo(1, 9);
+    expect(tall.floorFrac - tall.ceilFrac).toBeCloseTo(tall.fill, 9);
+    expect(tall.centerY).toBeCloseTo(1.750125, 9);
+    // 가로가 이기는 도면(샘플): 세로를 건물 높이로 줄이되 벽 전체가 보이게 남긴다.
+    const wide = elevationFrame({ extent: 20000.5, height: 3500.25, aspect: 16 / 9 });
+    expect(wide.halfW * 2).toBeCloseTo((20000.5 * 1.15) / 1000, 9); // 폭 여백은 15%로 그대로
+    expect(wide.fill).toBeGreaterThan(0.25);                        // 예전 규칙은 0.152였다
+    expect(wide.fill).toBeGreaterThan(elevationFrame({ extent: 20000.5, height: 3500.25, aspect: 16 / 9, margin: 2 }).fill);
+    // orthoViewParams가 같은 값을 쓴다: 입면 넷만 바뀌고 평면도·저면도는 예전 규칙 그대로다.
+    const opts = { center: [0, 0], extent: 20000.5, height: 3500.25, aspect: 16 / 9 };
+    for (const n of ['front', 'back', 'left', 'right']) {
+      expect(orthoViewParams(n, opts).halfH).toBeCloseTo(wide.halfH, 9);
+      expect(orthoViewParams(n, opts).target[1]).toBeCloseTo(wide.centerY, 9);
+    }
+    const plan = (Math.max(20000.5, 2000) * 1.15) / 1000;
+    expect(orthoViewParams('top', opts).halfH).toBeCloseTo(plan / 2, 9);
+    expect(orthoViewParams('bottom', opts).halfH).toBeCloseTo(plan / 2, 9);
   });
 
   test('모르는 이름은 정면으로 떨어진다', () => {

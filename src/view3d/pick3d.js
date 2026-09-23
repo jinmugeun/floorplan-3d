@@ -4,6 +4,9 @@ import { activeFloor } from '../state/schema.js';
 import { updateItem } from '../state/floorOps.js';
 import { DEG, RAD, normDeg } from '../geom/items.js';
 import { itemMenuItems } from '../ui/itemMenu.js';
+// 입면 프레이밍의 정본은 인쇄물 쪽에 있다(io/specSheet.js): 시방서가 그리는 바닥선·천장선이
+// 이 카메라와 같은 값을 써야 자리가 맞는다. view3d → io는 내려가는 방향이다(view3d → ui와 같다).
+import { elevationFrame } from '../io/specSheet.js';
 
 // three 오브젝트(m, y = 위) → 아이템 필드(mm, z = 밑면 높이, rot = 화면 시계 방향 각도)
 // rot은 정수 도로 반올림한다: 15° 스냅의 부동소수 오차가 문서에 남지 않게.
@@ -101,17 +104,21 @@ const DIRS = { front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 
 const UPS = { top: [0, 0, -1], bottom: [0, 0, 1] };
 
 // 2D 투영(정면/배면/좌/우/평면/저면) 직교 카메라 값. 모두 three 좌표(m).
+// 입면(dir[1] === 0: 정면·배면·좌·우)의 세로 절두체는 **건물 높이**에서 나온다(§17.4(2) 개정 ·
+// 리뷰 I-3): 평면 크기로 잡으면 층고 3.5 m 건물이 세로 23 m 화면의 15%짜리 회색 띠가 된다.
+// 평면도·저면도는 세로가 곧 도면 깊이라 예전 규칙 그대로다.
 export function orthoViewParams(name, { center = [0, 0], extent = 6000, height = 2300, aspect = 1 } = {}) {
   const dir = DIRS[name] ?? DIRS.front;
   const up = UPS[name] ?? [0, 1, 0];
   const size = (Math.max(extent, 2000) * 1.15) / 1000;
   const target = [center[0] / 1000, height / 2000, center[1] / 1000];
   const dist = size * 2 + 10;
+  const fr = dir[1] === 0 ? elevationFrame({ extent, height, aspect }) : null;
   return {
     target, up, dist,
     pos: [target[0] + dir[0] * dist, target[1] + dir[1] * dist, target[2] + dir[2] * dist],
-    halfH: size / 2,
-    halfW: (size / 2) * aspect,
+    halfH: fr ? fr.halfH : size / 2,
+    halfW: fr ? fr.halfW : (size / 2) * aspect,
   };
 }
 

@@ -5,7 +5,7 @@ import { addWalls, addItem, updateRoom } from '../src/state/floorOps.js';
 import { applyMaterial } from '../src/state/materialOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { specHtml, SPEC_SECTIONS, PAPER, AIRFLOW_TITLES, CMH } from '../src/io/specSheet.js';
+import { specHtml, SPEC_SECTIONS, PAPER, AIRFLOW_TITLES, CMH, elevationFrame, planExtent } from '../src/io/specSheet.js';
 import { roomAirflow } from '../src/vent/airflow.js';
 import { estimateRows } from '../src/io/estimate.js';
 import { setItemFlag } from '../src/state/itemOps.js';
@@ -39,7 +39,7 @@ describe('시방서 HTML', () => {
     const few = specHtml({ project: project(), options: { sections: { plan: false, elevations: false, products: false, walls: false, notes: false } } });
     expect(few).toContain('공간 목록');
     expect(few).not.toContain('제품 목록');
-    expect(few).not.toContain('입면도');
+    expect(few).not.toContain('<h2>입면도</h2>');   // 절 이름을 좁혀 본다(M-3): CSS 주석은 절과 무관하게 늘 실린다
   });
 
   test('공간·벽·제품 표에 실제 값이 들어간다(소수 좌표)', () => {
@@ -143,6 +143,29 @@ describe('시방서 HTML', () => {
     expect(elev).toContain('<figcaption>천장 평면도 · 층고 2300 mm</figcaption>');
   });
 
+  // 리뷰 I-3 · 감사 §37: 배율만 고쳤을 때 입면도는 여전히 "회색 띠 하나"였다 — 세로 절두체를
+  // 평면 크기에서 뽑았기 때문이다. 이제 세로는 건물 높이에서 나오고, 그림 위에 바닥선·천장선과
+  // 층고 치수선을 얹는다(선의 자리는 촬영 카메라와 같은 elevationFrame이 준다).
+  test('입면도 그림에 바닥선·천장선과 층고 치수선이 얹힌다', () => {
+    const p = project();
+    const f = p.floors[0];
+    const fr = elevationFrame({ extent: planExtent(f.walls), height: f.height });
+    expect(planExtent(f.walls)).toBeCloseTo(4000.5, 9);          // 가로·세로 중 큰 쪽(mm)
+    expect(fr.fill).toBeGreaterThanOrEqual(0.6);                 // 4.0 × 2.3 m 도면은 세로가 이긴다
+    const html = specHtml({ project: p, images: { front: 'data:,f', top: 'data:,t' }, options: {} });
+    const pct = n => `${(n * 100).toFixed(2)}%`;
+    expect(html).toContain(`<span class="gl" style="top:${pct(fr.ceilFrac)}"></span>`);
+    expect(html).toContain(`<span class="gl" style="top:${pct(fr.floorFrac)}"></span>`);
+    expect(html).toContain(`<span class="dim" style="top:${pct(fr.ceilFrac)};height:${pct(fr.floorFrac - fr.ceilFrac)}"><b>2300 mm</b></span>`);
+    // 천장 평면도는 위에서 내려다본 그림이라 바닥선·천장선이 없다(그림 둘 중 하나에만 붙는다).
+    expect(html.match(/class="dim"/g)).toHaveLength(1);
+    expect(html.match(/<div class="shot">/g)).toHaveLength(2);
+    expect(html).toContain('<figcaption>정면도 · 층고 2300 mm</figcaption>');   // 캡션은 그대로다
+    // 선을 넣어도 평면도는 예전 그대로다(겹칠 그림이 아니다).
+    const plan = specHtml({ project: p, images: { plan: 'data:,p' }, options: {} });
+    expect(plan).not.toContain('class="shot"');
+  });
+
   // §17.4(2): 입면도는 한 줄에 한 장이어야 본문 폭 기준 배율 0.5가 실제로 지켜진다.
   test('입면도 절만 한 줄 한 장이다', () => {
     const html = specHtml({ project: project(), images: { front: 'data:,f', back: 'data:,b' }, options: {} });
@@ -196,10 +219,12 @@ test('빈 절은 인쇄에서 빠진다(§16.11 · 감사 §8)', () => {
   // 이미지가 없으면 그 절 자체를 빼고 "이미지가 없습니다."도 찍지 않는다.
   const noImg = specHtml({ project: project(), images: {}, options: {} });
   expect(noImg).not.toContain('이미지가 없습니다');
-  expect(noImg).not.toContain('평면도');
-  expect(noImg).not.toContain('입면도');
+  // 단정은 **절 제목**으로 좁힌다(M-3): 문서 전체에서 그 글자를 찾으면 CSS 주석과 천장 평면도
+  // 캡션까지 걸려, 프로덕션 주석을 테스트에 맞춰 비틀게 된다.
+  expect(noImg).not.toContain('<h2>평면도</h2>');
+  expect(noImg).not.toContain('<h2>입면도</h2>');
   // 이미지가 있으면 그 절만 남는다.
   const onlyPlan = specHtml({ project: project(), images: { plan: 'data:image/png;base64,P' }, options: {} });
-  expect(onlyPlan).toContain('평면도');
-  expect(onlyPlan).not.toContain('입면도');
+  expect(onlyPlan).toContain('<h2>평면도</h2>');
+  expect(onlyPlan).not.toContain('<h2>입면도</h2>');
 });

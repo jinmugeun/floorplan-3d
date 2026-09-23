@@ -5,7 +5,7 @@
 // 서로 다른 수량을 말한다(견적서 수량은 줄었는데 시방서 제품 목록만 그대로 남는 식이다).
 import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
-import { wallLength } from '../geom/walls.js';
+import { wallLength, endpoints } from '../geom/walls.js';
 import { fmtLen, fmtArea } from '../util/units.js';
 import { roomAirflow, systemAirflow, UNPLACED_ROOM } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // src/io/ → src/ui/ import는 계층 역전이다(아키텍처 §9)
@@ -20,6 +20,36 @@ const FLOW_LABELS = { supply: '급기', exhaust: '배기', mixed: '급·배기' 
 // 한 도면에서 뽑은 두 화면이 서로 다른 이름으로 불리지 않는다(airflowPanel.js의 h3와 같다).
 export const AIRFLOW_TITLES = { room: '실별 풍량', system: '계통별 풍량' };
 export const CMH = '(CMH)';
+
+// 입면도 프레이밍(§17.4(2) 개정 · 리뷰 I-3 · 감사 §37). 세로 절두체를 **평면 크기**에서 뽑던
+// 규칙은 층고 3.5 m 건물을 23 m 높이 화면 안의 15%짜리 회색 띠로 만들었다. 세로는 건물 높이로
+// 잡고, 그 비율로는 도면 폭이 들어가지 않을 때만 들어갈 만큼만 넓힌다 — 입면도는 벽 전체가
+// 보여야 도면이므로 잘라 내지 않는다. 카메라(view3d/pick3d.js의 orthoViewParams)와 인쇄물의
+// 바닥선·천장선이 **같은 값**을 써야 하므로 규칙은 여기 한 곳이다(view3d → io는 내려가는 방향이다).
+// 단위: extent·height는 mm, half*·centerY는 m(three 좌표), *Frac은 그림 위에서 잰 0..1 비율.
+export const ELEV_ASPECT = 16 / 9;    // §17.4(2)가 못 박은 입면도 비트맵 비율(specDialog와 같은 수)
+export const ELEV_MARGIN = 1.15;      // 건물 둘레의 여백(기존 직교 프레임과 같은 값)
+export const ELEV_MIN_EXTENT = 2000;  // 아주 작은 도면도 최소 크기를 갖는다(기존 규칙 그대로)
+export function elevationFrame({ extent = 6000, height = 2300, aspect = ELEV_ASPECT, margin = ELEV_MARGIN } = {}) {
+  const a = Math.max(Number(aspect) || 0, 0.01);
+  const h = Math.max(Number(height) || 0, 0) / 1000;
+  const halfWNeed = (Math.max(Number(extent) || 0, ELEV_MIN_EXTENT) * margin) / 2000;
+  const halfH = Math.max((h * margin) / 2, halfWNeed / a);
+  const centerY = h / 2;
+  return {
+    halfH, halfW: halfH * a, centerY,
+    fill: h / (2 * halfH),                                    // 그림 높이에서 건물이 차지하는 비율
+    ceilFrac: (centerY + halfH - h) / (2 * halfH),
+    floorFrac: (centerY + halfH) / (2 * halfH),
+  };
+}
+// 도면의 가로·세로 중 큰 쪽(mm). view3d의 bounds()와 같은 계산이라 카메라와 자리가 어긋나지 않는다.
+export function planExtent(walls) {
+  const pts = endpoints(walls ?? []);
+  if (!pts.length) return 8000;                               // 벽이 없는 층의 기본값도 bounds()와 같다
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+}
 
 const typeLabel = t => ROOM_TYPES.find(([v]) => v === t)?.[1] ?? '미지정';
 // 마감재 조회의 정본은 assignmentOf 한 함수다(§17.4(1)): 레거시 문자열 필드까지 같은 답을 읽는다.
@@ -69,7 +99,17 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   // 캡션은 그림이 여럿인 절(입면도)에만 붙인다(§17.4(3) · 감사 §41): 절 제목이 곧 캡션인 평면도에는
   // 같은 말을 두 번 적지 않는다. 층고는 **그림 밖 캡션**에 적는다 — 렌더에 글자를 그리지 않는다.
   const img = (src, label, caption = '') => (src ? `<figure><img src="${esc(src)}" alt="${esc(label)}">${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>` : '');
-  const elevFigs = ELEVATIONS.map(([k, l]) => img(images[k], l, `${l} · 층고 ${fmtLen(f.height ?? 0, units)} ${uLabel}`)).join('');
+  // 바닥선·천장선과 층고 치수선을 그림 **위에** 겹쳐 그린다(§17.4(2) 개정 · 리뷰 I-3 · 감사 §37):
+  // 렌더에 글자를 굽지 않는 규칙은 그대로고, 선의 자리는 촬영 카메라와 같은 elevationFrame이 준다.
+  // 천장 평면도(top)는 위에서 내려다본 그림이라 바닥선·천장선이 없다.
+  const fr = elevationFrame({ extent: planExtent(f.walls), height: f.height ?? 0 });
+  const pct = n => `${(n * 100).toFixed(2)}%`;
+  const guides = `<span class="gl" style="top:${pct(fr.ceilFrac)}"></span><span class="gl" style="top:${pct(fr.floorFrac)}"></span>`
+    + `<span class="dim" style="top:${pct(fr.ceilFrac)};height:${pct(fr.floorFrac - fr.ceilFrac)}"><b>${len(f.height ?? 0)} ${esc(uLabel)}</b></span>`;
+  const elevFig = (src, label, guide) => (src
+    ? `<figure><div class="shot">${guide}<img src="${esc(src)}" alt="${esc(label)}"></div><figcaption>${esc(`${label} · 층고 ${fmtLen(f.height ?? 0, units)} ${uLabel}`)}</figcaption></figure>`
+    : '');
+  const elevFigs = ELEVATIONS.map(([k, l]) => elevFig(images[k], l, k === 'top' ? '' : guides)).join('');
   // 제목 블록(§16.11 · 감사 §8): 값이 없어도 칸은 남는다 — 인쇄물에 손으로 적을 자리다.
   const cell = (label, v) => `<td><b>${esc(label)}</b> ${esc(String(v ?? '').trim())}</td>`;
   const sheetHead = `<table class="title-block"><tbody><tr>
@@ -92,11 +132,16 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     th, td { border: 1px solid #c8ccd2; padding: 4px 6px; text-align: left; }
     .figs { display: flex; flex-wrap: wrap; gap: 8px; }
     figure { margin: 0; flex: 1 1 45%; }
-    /* elev 절(그림 여러 장)은 한 줄 한 장이다(§17.4(2)): 두 장씩 놓으면 본문 폭의 절반이 되어
-       배율이 0.25로 떨어진다. 절 이름을 이 주석에 적지 않는다 — "빈 절은 인쇄에서 빠진다" 테스트가
-       문서 전체에서 그 글자를 찾기 때문이다. */
+    /* 입면도 절(그림 여러 장)은 한 줄 한 장이다(§17.4(2)): 두 장씩 놓으면 본문 폭의 절반이 되어
+       배율이 0.25로 떨어진다. */
     .figs.elev figure { flex: 1 1 100%; }
     figure img { width: 100%; border: 1px solid #c8ccd2; }
+    /* 바닥선·천장선과 층고 치수선(§17.4(2) 개정 · 감사 §37): 그림 위에 겹치고 자리는 인라인 style이
+       준다(elevationFrame). 배경색은 인쇄에서 꺼질 수 있으므로 선과 글자만으로 읽히게 둔다. */
+    .shot { position: relative; line-height: 0; }
+    .shot .gl { position: absolute; left: 0; right: 0; border-top: 1px dashed #5b6775; }
+    .shot .dim { position: absolute; left: 8px; border-left: 1px solid #5b6775; }
+    .shot .dim b { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); font-size: 10px; font-weight: 600; color: #5b6775; line-height: 1; white-space: nowrap; }
     figcaption { font-size: 11px; color: #5b6775; }
     .meta { font-size: 12px; color: #5b6775; }
     pre.notes { white-space: pre-wrap; font: inherit; border: 1px solid #c8ccd2; padding: 8px; min-height: 40px; }
