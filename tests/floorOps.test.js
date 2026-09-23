@@ -447,17 +447,27 @@ test('없는 방을 지우면 아무 단계도 만들지 않는다', () => {
   off();
 });
 
-// §17.7(감사 §53): 판정의 기준은 "도착한 층"이 아니라 **내용이 달라진 층**이다.
-// 순수한 층 전환(setActiveFloor)은 달라진 층이 없으므로 알릴 것도 없다.
-test('crossFloorName은 층 내용이 실제로 달라졌을 때만 이름을 돌려준다', () => {
+// §17.7(감사 §53): **데려갈 층**의 기준은 "도착한 층"이 아니라 내용이 달라진 층이다.
+// 부를 이름은 거기에 한 갈래가 더 있다 — 리뷰 I-1의 프로젝트 수준 단계(아래).
+test('crossFloorName은 달라진 층을 부르고, 달라진 층이 없으면 도착한 층을 부른다', () => {
   const store = createStore(createEmptyProject());
   addFloor(store, { name: 'Floor 2', copy: 'none' });
   const onTwo = store.get();
   setActiveFloor(store, 0);
   const onOne = store.get();
-  expect(crossFloorName(onOne, onTwo)).toBeNull();          // 층 전환만으로는 달라진 층이 없다
-  expect(crossFloorName(onTwo, onTwo)).toBeNull();
+  expect(changedFloorIndex(onOne, onTwo)).toBeNull();       // 층 전환만으로는 달라진 층이 없다
+  expect(crossFloorName(onTwo, onTwo)).toBeNull();          // 같은 스냅숏: 화면도 그대로다
   expect(crossFloorName(undefined, onOne)).toBeNull();
+  // 리뷰 I-1: 층 내용을 하나도 바꾸지 않으면서 **기록되는** 단계가 실제로 있다(프로젝트 이름 변경 ·
+  // 배경 도면 삽입·제거). 그 단계의 되돌리기·다시 실행도 스냅숏의 activeFloor로 화면을 옮기는데,
+  // 부를 "변경 층"이 없다고 토스트까지 사라지면 §16.4의 보증("화면이 말없이 다른 층으로 넘어갔다")이
+  // 이 경로에서만 되살아난다. 그래서 옛 규칙(도착한 층)으로 돌아간다 — 되돌리기·다시 실행 양쪽 다.
+  expect(crossFloorName(onOne, { ...onTwo, background: { src: 'x' } })).toBe('Floor 2');
+  expect(crossFloorName({ ...onTwo, background: { src: 'x' } }, onOne)).toBe('Floor 1');
+  expect(changedFloorIndex(onOne, { ...onTwo, name: '다른 이름' })).toBeNull();  // 그래도 데려갈 층은 없다
+  // 판정은 activeFloor만 본다(무엇이 달라졌는지는 묻지 않는다): 순수한 층 전환은 { record: false }라
+  // 애초에 되돌리기 짝을 만들지 않으므로, 이 한 갈래로 두 경우를 가르려 애쓰지 않는다.
+  expect(crossFloorName(onOne, onTwo)).toBe('Floor 2');
 });
 
 // §17.7: 되돌리기(도착 층이 곧 변경 층)와 다시 실행(도착 층이 어긋난다)이 같은 판정 하나를 쓴다.

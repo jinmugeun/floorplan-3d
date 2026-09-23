@@ -10,6 +10,15 @@ export function createStore(initial, { limit = 100 } = {}) {
   const record = () => { if (tx) { pushPast(tx.snapshot); tx = null; } else pushPast(state); };
   // 지금까지의 변경을 한 단계로 확정한다. 아무것도 바뀌지 않았으면 히스토리(redo 포함)를 그대로 둔다.
   const closeTransaction = () => { if (tx && state !== tx.snapshot) pushPast(tx.snapshot); tx = null; };
+  // 되돌린·다시 실행한 스냅숏 위에 **활성 층만** 덧쓴다(§17.7 리뷰 I-2). opts.activeFloor는 숫자이거나
+  // (설치할 스냅숏) → 인덱스 | null인 함수다: 다시 실행이 데려갈 층은 스냅숏을 봐야 아는데 future를
+  // 미리 볼 방법이 없으므로, 판정할 자리가 "설치 직전"인 여기뿐이다. 스냅숏 객체는 히스토리에도
+  // 남아 있을 수 있으니 고치지 않고 얕은 사본을 앉힌다. 기록이 아니므로 past·future는 그대로다.
+  const withFloor = (snapshot, opts) => {
+    const want = typeof opts?.activeFloor === 'function' ? opts.activeFloor(snapshot) : opts?.activeFloor;
+    if (!Number.isInteger(want) || want < 0 || want >= (snapshot?.floors?.length ?? 0)) return snapshot;
+    return want === (snapshot.activeFloor ?? 0) ? snapshot : { ...snapshot, activeFloor: want };
+  };
   return {
     get: () => state,
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
@@ -37,8 +46,11 @@ export function createStore(initial, { limit = 100 } = {}) {
     // 알림을 원자적으로 묶고 알림은 정확히 한 번 — 구독자가 보는 canUndo·canRedo는 언제나 false다.
     swap(next) { tx = null; state = next; past.length = 0; future.length = 0; notify(); },
     // 열린 트랜잭션이 있으면 먼저 한 단계로 확정하고 나서 되돌린다(드래그 도중 undo → 드래그 시작점으로).
-    undo() { closeTransaction(); if (!past.length) return false; future.push(state); state = past.pop(); notify(); return true; },
-    redo() { closeTransaction(); if (!future.length) return false; past.push(state); state = future.pop(); notify(); return true; },
+    // opts.activeFloor를 주면 **스냅숏 설치와 활성 층 이동이 한 알림**으로 끝난다(§17.7 리뷰 I-2):
+    // 층을 따로 dispatch로 옮기면 알림이 두 번 나가고, 3D는 씬 서명(build.js의 sceneSignature)에
+    // activeFloor가 들어 있어 씬을 **두 번** 짓는다 — 그중 첫 번째는 사용자가 곧 떠날 층이라 순수 낭비다.
+    undo(opts) { closeTransaction(); if (!past.length) return false; future.push(state); state = withFloor(past.pop(), opts); notify(); return true; },
+    redo(opts) { closeTransaction(); if (!future.length) return false; past.push(state); state = withFloor(future.pop(), opts); notify(); return true; },
     canUndo: () => past.length > 0,
     canRedo: () => future.length > 0,
   };

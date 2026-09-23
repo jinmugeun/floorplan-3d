@@ -92,16 +92,22 @@ export { ROOM_PROPS, copyRoomProps } from './floorInternal.js';
 // 아니다(리뷰 I-1). (2) 사용자가 보던 층도, 도착할 층도 그 층이면 같은 층 안의 변경이라 알릴 것이
 // 없다. 판정은 첫 번째로 달라진 층에서 끝낸다: 한 단계가 두 층을 함께 바꾸는 경로는 없다
 // (층을 가로지르는 편집 액션이 없고, 층 복사는 층 수를 바꾼다).
-export function changedFloorIndex(prev, next) {
+// 판정 한 번으로 둘을 함께 돌려준다(리뷰 m-1: 배선이 같은 스캔을 두 번 하지 않는다).
+//   index — 다시 실행이 데려갈 층(없으면 null) · name — 토스트가 부를 층 이름(없으면 null)
+// 둘이 늘 같지는 않다: 층 내용이 하나도 안 달라졌는데 스냅숏이 화면만 옮기는 **프로젝트 수준
+// 단계**(프로젝트 이름 변경 · 배경 도면 삽입·제거)에서는 데려갈 층이 없고(index null) 부를 이름만
+// 있다 — 거기서는 §16.4의 옛 규칙(도착한 층)으로 돌아간다(리뷰 I-1). 그러지 않으면 "화면이 말없이
+// 다른 층으로 넘어갔다"를 막던 보증이 그 경로에서만 사라진다(배경 도면은 이 앱의 주 워크플로다).
+export function crossFloorStep(prev, next) {
+  const none = { index: null, name: null };
   const a = prev?.floors ?? [], b = next?.floors ?? [];
-  if (!a.length || a.length !== b.length) return null;
+  if (!a.length || a.length !== b.length) return none;
+  const pa = prev.activeFloor ?? 0, na = next.activeFloor ?? 0;
   for (let i = 0; i < a.length; i++) {
     if (JSON.stringify(a[i]) === JSON.stringify(b[i])) continue;
-    return (prev.activeFloor ?? 0) === i && (next.activeFloor ?? 0) === i ? null : i;
+    return pa === i && na === i ? none : { index: i, name: b[i]?.name ?? null };
   }
-  return null;
+  return pa === na ? none : { index: null, name: b[na]?.name ?? null };
 }
-export function crossFloorName(prev, next) {
-  const i = changedFloorIndex(prev, next);
-  return i === null ? null : (next?.floors?.[i]?.name ?? null);
-}
+export function changedFloorIndex(prev, next) { return crossFloorStep(prev, next).index; }
+export function crossFloorName(prev, next) { return crossFloorStep(prev, next).name; }

@@ -57,6 +57,35 @@ describe('store', () => {
     let undos = 0; while (s.undo()) undos++;
     expect(undos).toBe(3);
   });
+  // §17.7 리뷰 I-2: 층을 가로지르는 되돌리기·다시 실행은 "스냅숏 설치 + 활성 층 이동"이 한 동작이다.
+  // 층을 따로 dispatch로 옮기면 알림이 두 번 나가고, 3D는 씬 서명에 activeFloor가 들어 있어 씬을 두 번
+  // 짓는다(첫 번째는 곧 떠날 층). 덧쓰기는 기록이 아니므로 past·future는 그대로여야 한다.
+  test('undo/redo의 activeFloor 옵션: 알림 한 번 · past·future 불변', () => {
+    const s = createStore({ floors: [{ name: 'A' }, { name: 'B' }], activeFloor: 0, n: 0 });
+    s.dispatch(d => { d.n = 1; });
+    let calls = 0; s.subscribe(() => calls++);
+    expect(s.undo({ activeFloor: 1 })).toBe(true);
+    expect(s.get()).toEqual({ floors: [{ name: 'A' }, { name: 'B' }], activeFloor: 1, n: 0 });
+    expect(calls).toBe(1);                       // 알림은 정확히 한 번
+    expect(s.canUndo()).toBe(false);             // 덧쓰기는 되돌리기 단계를 더하지 않는다
+    expect(s.canRedo()).toBe(true);              // 다시 실행 스택도 살아 있다
+    // 다시 실행이 데려갈 층은 스냅숏을 봐야 안다: 함수 형태는 설치 직전의 스냅숏을 받는다.
+    expect(s.redo({ activeFloor: next => (next.n === 1 ? 1 : null) })).toBe(true);
+    expect(calls).toBe(2);
+    expect(s.get()).toEqual({ floors: [{ name: 'A' }, { name: 'B' }], activeFloor: 1, n: 1 });
+    expect(s.canUndo()).toBe(true);
+    expect(s.canRedo()).toBe(false);
+  });
+  test('activeFloor 옵션이 없거나 범위 밖이면 스냅숏을 그대로 앉힌다', () => {
+    const s = createStore({ floors: [{ name: 'A' }], activeFloor: 0, n: 0 });
+    s.dispatch(d => { d.n = 1; });
+    expect(s.undo({ activeFloor: 5 })).toBe(true);              // 층이 하나뿐이다
+    expect(s.get().activeFloor).toBe(0);
+    expect(s.redo({ activeFloor: () => null })).toBe(true);     // 데려갈 층이 없다
+    expect(s.get()).toEqual({ floors: [{ name: 'A' }], activeFloor: 0, n: 1 });
+    expect(s.undo()).toBe(true);                                // 옵션 없는 옛 호출도 그대로다
+    expect(s.get().n).toBe(0);
+  });
   test('transaction: beginTransaction records once, unrecorded dispatches collapse', () => {
     const s = createStore({ n: 0 });
     s.beginTransaction();
