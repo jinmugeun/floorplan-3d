@@ -58,7 +58,11 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
     // 가져온 도면에서 벽이 이어지지 않은 자리(§18.6). 도구 안내보다 뒤에 둔다 — 지금 하는 일이
     // 먼저다. 이 안내는 §18.10이 "자르지 않는다"고 못 박은 하나다: 이 도면은 원리적으로 자동으로
     // 닫히지 않으므로(식당–조리실 경계가 배식대다) 고칠 자리를 보여 주는 것이 기능의 결론이다.
-    if (s.openEnds?.pts?.length) {
+    // 안내는 **가져온 그 층**의 것이다(Task 13 재검토 I-4): 다른 층에서는 감춘다(지우지는 않는다 —
+    // 돌아오면 다시 보인다). 층은 번호가 아니라 id로 가린다 — 앞 층을 지워도 어긋나지 않는다(m-8).
+    // ui/는 view2d/를 import할 수 없으므로 이 한 줄은 view2d/openEnds2d.js의 같은 판정과 짝이다:
+    // 둘을 함께 고친다. floor를 적지 않은 안내(옛 호출자)는 층을 가리지 않는다.
+    if (s.openEnds?.pts?.length && (!s.openEnds.floor || activeFloor(store.get())?.id === s.openEnds.floor)) {
       return `<span class="hint">${esc(DXF_OPEN_ENDS(s.openEnds.pts.length))}</span> <button type="button" id="btnOpenEnds">${esc(DXF_OPEN_ENDS_VIEW)}</button>`;
     }
     // 온보딩을 닫은 뒤의 첫 방 유도(§16.12 · 감사 §47). 방이 없는 동안만 보이고, 첫 방이 생기면

@@ -3,6 +3,7 @@ import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
 import { transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
 import { createView2D } from './view2d/view2d.js';
+import { createOpenEnds } from './view2d/openEnds2d.js';
 import { createMinimap } from './view2d/minimap.js';
 import { createRoomTool, ROOM_TOOL_DEFAULTS } from './view2d/tools/roomTool.js';
 import { createWallTool, WALL_TOOL_DEFAULTS } from './view2d/tools/wallTool.js';
@@ -42,6 +43,7 @@ import { createHistoryActions } from './app/historyActions.js';
 import { createFirstRoomFit } from './app/firstRoomFit.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
+import { createDxfActions } from './app/dxfActions.js';
 import { stickyTools } from './ui/prefs.js';
 import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED } from './ui/messages.js';
 
@@ -53,7 +55,11 @@ const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D �
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 let dnd = null;     // 같은 이유로 여기서 선언한다(드래그 옵션이 닫아서 읽는다 — 배선은 startPlace 다음에 만든다)
 const menu = createContextMenu(document.body);
-const view = createView2D(shell.els.canvas2d, store, ui, { menu, onCameraChange: () => minimap?.requestRender(), onDragOver: p => dnd?.onDragOver(p), onDrop: p => dnd?.onDrop(p), onDragLeave: () => dnd?.onDragLeave(), onHint: () => shell.refreshTool() });   // 태스크 5의 onCameraChange를 유지한다 · onHint는 배너 + 치수 칸(§16.7)
+// 끊긴 끝점 마커는 기존 overlay 훅으로 그린다(§18.6 — view2d/view2d.js는 고치지 않는다).
+// destroy()는 만든 쪽(여기)의 몫이지만(Task 13 리뷰) main.js에는 뷰를 걷어 내는 경로가 없다:
+// 이 객체의 수명이 곧 앱(페이지)의 수명이다(사전 검토 M-10). 정리 경로가 생기면 그 자리에서 부른다.
+const openEnds = createOpenEnds(ui, { centerOn: p => view.centerOn(p), store });
+const view = createView2D(shell.els.canvas2d, store, ui, { menu, overlay: openEnds.overlay, onCameraChange: () => minimap?.requestRender(), onDragOver: p => dnd?.onDragOver(p), onDrop: p => dnd?.onDrop(p), onDragLeave: () => dnd?.onDragLeave(), onHint: () => shell.refreshTool() });   // 태스크 5의 onCameraChange를 유지한다 · onHint는 배너 + 치수 칸(§16.7)
 const { createDeleteTool, deleteSelection, deleteOrTool } = createDeleteActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const arrange = createArrangeActions({ store, ui, view, toast: shell.toast, setTool: name => setTool(name) });
 const selectedItemIds = () => { const s = ui.get().selection; return s?.type === 'item' ? [s.id] : s?.type === 'multi' && s.kind === 'item' ? [...s.ids] : []; };
@@ -187,6 +193,7 @@ canvas2d.addEventListener('pointerdown', ev => { if (ui.get().fpPick && ev.butto
 document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => b.dataset.tool === 'delete' ? deleteOrTool() : setTool(b.dataset.tool)));
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 document.querySelector('[data-action="background"]').addEventListener('click', () => openBackgroundDialog({ store }));
+document.querySelector('[data-action="dxf"]').addEventListener('click', () => dxf.open());
 document.querySelector('[data-action="flipH"]').addEventListener('click', () => transformFloor(store, p => [-p[0], p[1]]));
 document.querySelector('[data-action="flipV"]').addEventListener('click', () => transformFloor(store, p => [p[0], -p[1]]));
 document.querySelector('[data-action="rotL"]').addEventListener('click', () => transformFloor(store, p => [p[1], -p[0]]));
@@ -228,7 +235,8 @@ const auto = startAutosave(store, { onSaved: t => saveInd.markSaved('auto', t) }
 // 한 프로젝트 세션에 한 번만 튀고, 같은 자리에서 첫 방 유도(firstRoomHint)도 끈다.
 // 프로젝트를 갈아 끼우는 길은 스스로 fit을 부르므로 래치만 다시 잡는다(onProjectSwap = rearm).
 const firstRoomFit = createFirstRoomFit({ store, ui, view });
-const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm });
+const dxf = createDxfActions({ store, ui, view, toast: shell.toast, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm });
+const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm, onDxf: () => dxf.open() });
 // 온보딩을 닫으면 배너가 다음 행동을 가리킨다(§16.12 · 감사 §47).
 const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store, onDone: () => ui.set({ firstRoomHint: true }) }); };
 if (projectIsEmpty(store.get())) project.showStart({ onClose: maybeOnboard });
@@ -241,7 +249,7 @@ document.getElementById('btnSave').addEventListener('click', () => {
 });
 createTopbar({ store, ui, shell, menu, view3d, actions: project.actions });
 
-const files = createFileActions({ store, ui, view, view3d, toast: shell.toast, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm });
+const files = createFileActions({ store, ui, view, view3d, toast: shell.toast, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm, onDxfFile: f => dxf.onDxfFile(f) });
 document.getElementById('btnLoad').addEventListener('click', () => files.openFileDialog());
 document.querySelectorAll('[data-action="capture"]').forEach(b => b.addEventListener('click', () => files.captureNow()));
 files.wireDrop(document.getElementById('canvasWrap'));

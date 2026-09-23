@@ -264,3 +264,7 @@ export const DXF_STEP_ROOMS = '방 만드는 중';
 export const DXF_PHASE_STEP = { decode: 1, parse: 2, explode: 2, walls: 3, rooms: 4, trace: 4 };
 export const DXF_BADGE_OFF = '꺼진 레이어';
 export const DXF_BADGE_HATCH = '해치(벽 채움)';
+
+// 시작 화면의 네 번째 동작 카드(§18.7). 문구는 §18.7이 글자로 정했다.
+export const DXF_CARD_TITLE = 'DXF 도면 가져오기';
+export const DXF_CARD_DESC = '캐드 도면(.dxf)에서 벽을 자동으로 뽑아 평면도를 만듭니다.';

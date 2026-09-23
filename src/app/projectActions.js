@@ -15,7 +15,7 @@ import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUI
 
 // onProjectSwap: 프로젝트를 갈아 끼운 직후(view.fit()과 같은 자리) 부른다 — 첫 방 자동 fit 래치를
 // 새 프로젝트 기준으로 다시 잡는다(app/firstRoomFit.js). 넘기지 않는 호출자(테스트)에는 아무 일도 없다.
-export function createProjectActions({ store, ui, view, toast = () => {}, restored = null, isDirty = () => true, markSaved = () => {}, saveNow = () => {}, onProjectSwap = () => {} }) {
+export function createProjectActions({ store, ui, view, toast = () => {}, restored = null, isDirty = () => true, markSaved = () => {}, saveNow = () => {}, onProjectSwap = () => {}, onDxf = () => {} }) {
   // 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
   function showStart({ restore = restored, onClose = () => {} } = {}) {
     openStartScreen({
@@ -29,6 +29,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       onRestore: () => { if (restore) { store.swap(restore); view.fit(); onProjectSwap(); markSaved('auto'); toast(RESTORED); } },
       onEmpty: () => {},
       onUpload: () => openBackgroundDialog({ store }),
+      onDxf: () => onDxf(),
       onSample: () => { loadSample(store); view.fit(); onProjectSwap(); },
       onTemplate: id => { const p = templateProject(id); if (p) { store.swap(p); view.fit(); onProjectSwap(); } },
     });

@@ -404,3 +404,21 @@ describe('3D 드래그의 되돌리기 계약 (§17.5)', () => {
     expect(pos()).toEqual([2000.5, 1500.25]);   // 취소한 드래그는 히스토리에 없다
   });
 });
+
+// §18.11 · §17.3: 프로젝트 교체는 되돌리기 단계가 **0개**인 동작이다. DXF 가져오기도 같다 —
+// 이 계약은 dxfWiring.test.js에도 있지만 정본은 이 파일이다.
+test('DXF 가져오기는 되돌리기 단계를 남기지 않는다', async () => {
+  const { createDxfActions } = await import('../src/app/dxfActions.js');
+  const store = createStore(createEmptyProject());
+  const project = createEmptyProject('경산 사동중');
+  project.floors[0].walls = rectWalls([-3000, -2000], [3000, 2000], 200, 3500);
+  let dialogOpts = null;
+  const dxf = createDxfActions({
+    store, ui: createUiState(), view: { fit: () => {} },
+    openDialog: o => { dialogOpts = o; return { close: () => {} }; },
+  });
+  dxf.open();
+  await dialogOpts.onImported({ project, stats: { walls: 4, rooms: 1, openEnds: [] } });
+  expect(store.canUndo()).toBe(false);
+  expect(store.canRedo()).toBe(false);
+});

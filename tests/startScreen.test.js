@@ -12,7 +12,7 @@ test('three cards route to their callbacks and the overlay closes', () => {
   const s = openStartScreen({ store, onEmpty: () => calls.push('empty'), onUpload: () => calls.push('upload'), onSample: () => calls.push('sample') });
   const overlay = document.querySelector('#startScreen');
   expect(overlay).not.toBeNull();
-  expect(overlay.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(3); // 템플릿 카드는 .tpl로 구분한다
+  expect(overlay.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(4); // 템플릿 카드는 .tpl로 구분한다(§18.7이 DXF 카드를 더했다)
   expect(overlay.textContent).toContain('강당중 조리실');
   overlay.querySelector('[data-start="sample"]').click();
   expect(calls).toEqual(['sample']);
@@ -52,7 +52,7 @@ test('템플릿 카드 목록을 보여주고 고르면 onTemplate이 불린다'
   const cards = [...root.querySelectorAll('[data-template]')];
   expect(cards.map(c => c.dataset.template)).toEqual(['builtin-studio']); // 빈 프로젝트·샘플은 위 카드가 담당한다
   expect(cards[0].classList.contains('tpl')).toBe(true);         // 위 카드 3개와 구분되는 클래스
-  expect(root.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(3);
+  expect(root.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(4);
   expect(root.textContent).toContain('템플릿');
   cards[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
   expect(picked).toEqual(['builtin-studio']);
@@ -67,7 +67,7 @@ test('자동 저장본이 있으면 "이어서 작업" 카드가 맨 앞에 뜨�
   openStartScreen({ store, restored: createEmptyProject('강당중 조리실'), onRestore: () => calls.push('restore'), onEmpty: () => calls.push('empty') });
   const root = document.getElementById('startScreen');
   const cards = [...root.querySelectorAll('.start-card:not(.tpl)')];
-  expect(cards).toHaveLength(4);
+  expect(cards).toHaveLength(5);   // 이어서 작업 + 동작 카드 4장(§18.7)
   expect(cards[0].dataset.start).toBe('restore');
   expect(cards[0].classList.contains('restore')).toBe(true);
   expect(cards[0].textContent).toContain('강당중 조리실');
@@ -146,11 +146,11 @@ test('템플릿 카드에 96 px 축소 도면 캔버스가 있다(§16.12)', () 
   expect(canvas.width).toBe(96);
 });
 
-// §17.12(1) · 감사 §25: 동작 카드 3장에도 축소 그림이 붙어 카드 높이가 템플릿 카드와 같아진다.
-test('동작 카드 셋도 96 px 미리보기 캔버스를 갖는다', () => {
+// §17.12(1) · 감사 §25: 동작 카드 4장에도 축소 그림이 붙어 카드 높이가 템플릿 카드와 같아진다.
+test('동작 카드 넷도 96 px 미리보기 캔버스를 갖는다', () => {
   document.body.innerHTML = ''; localStorage.clear();
   openStartScreen({ store: createStore(createEmptyProject()) });
-  for (const key of ['empty', 'upload', 'sample']) {
+  for (const key of ['empty', 'upload', 'dxf', 'sample']) {
     const c = document.querySelector(`[data-start="${key}"] canvas`);
     expect(c, key).not.toBeNull();
     expect(c.width).toBe(PREVIEW_PX);

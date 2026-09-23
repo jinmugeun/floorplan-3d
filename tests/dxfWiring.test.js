@@ -4,12 +4,16 @@
 import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject, createFloor } from '../src/state/schema.js';
+import { createEmptyProject, createFloor, activeFloor } from '../src/state/schema.js';
+import { createDxfActions } from '../src/app/dxfActions.js';
+import { openStartScreen } from '../src/ui/startScreen.js';
+import { createFileActions } from '../src/app/fileActions.js';
+import { shellHtml } from '../src/ui/shellHtml.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createOpenEnds, OPEN_END_COLOR, OPEN_END_PX } from '../src/view2d/openEnds2d.js';
 import { createBanner } from '../src/ui/banner.js';
-import { DXF_OPEN_ENDS, DXF_OPEN_ENDS_VIEW } from '../src/ui/messages.js';
+import { DXF_OPEN_ENDS, DXF_OPEN_ENDS_VIEW, DXF_IMPORTED, DXF_CARD_TITLE, DXF_CARD_DESC, CONFIRM_LOAD } from '../src/ui/messages.js';
 
 // 기록용 2D 컨텍스트: 메서드는 호출을 그때의 strokeStyle·lineWidth와 함께 쌓고, 두 상태는
 // 평범한 속성이다(Proxy는 대입을 기록하지 못해 색·굵기를 검사할 수 없다 — 리뷰 I-2).
@@ -155,4 +159,169 @@ test('배너가 끊긴 끝점을 말하고 [보기]가 index를 올린다', () =
   banner.render(ui.get());
   expect(el.hidden).toBe(true);
   banner.destroy();
+});
+
+// onImported가 받는 인자 그대로: { project, stats }. 수치는 2026-09-23 실파일 실측이다.
+const imported = (walls = 213, rooms = 52) => {
+  const project = createEmptyProject('경산 사동중');
+  project.floors[0].walls = rectWalls([-3000, -2000], [3000, 2000], 200, 3500);
+  return { project, stats: { walls, rooms, areaM2: 249.7, openEnds: [[0.5, 0.25], [1000.5, 2000.25]], thickness: [[200, 4]], unmatchedNames: [], items: 128, size: [6000, 4000] } };
+};
+function actions(opts = {}) {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const view = { fit: vi.fn(), centerOn: vi.fn(), requestRender: vi.fn() };
+  const toasts = [], marks = [];
+  let dialogOpts = null;
+  const dxf = createDxfActions({
+    store, ui, view, toast: m => toasts.push(m),
+    markSaved: k => marks.push(k), saveNow: vi.fn(), onProjectSwap: vi.fn(),
+    openDialog: o => { dialogOpts = o; return { close: vi.fn() }; },
+    ...opts,
+  });
+  return { store, ui, view, toasts, marks, dxf, opened: () => dialogOpts };
+}
+
+test('가져오기는 swap 한 번으로 끝나고 되돌릴 단계를 남기지 않는다', async () => {
+  const { store, ui, view, toasts, marks, dxf, opened } = actions();
+  dxf.open();
+  expect(opened()).toBeTruthy();
+  const payload = imported();
+  const stats = payload.stats;
+  const ok = await opened().onImported(payload);
+  expect(ok).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+  expect(store.canUndo()).toBe(false);
+  expect(store.canRedo()).toBe(false);
+  expect(view.fit).toHaveBeenCalledTimes(1);
+  expect(marks).toEqual(['none']);
+  expect(toasts).toEqual([DXF_IMPORTED(213, 52)]);
+  // Task 13 재검토 I-4: 안내는 **가져온 층의 것**이라 층 id가 함께 들어간다.
+  expect(ui.get().openEnds).toEqual({ pts: stats.openEnds, index: 0, floor: activeFloor(store.get()).id });
+});
+
+test('작업 중이면 CONFIRM_LOAD가 먼저이고, 취소하면 도면이 그대로다', async () => {
+  const confirm = vi.fn(async () => false);
+  const saveNow = vi.fn();
+  const { store, dxf, opened } = actions({ confirm, saveNow, isDirty: () => true });
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  const before = store.get();
+  dxf.open();
+  expect(await opened().onImported(imported())).toBe(false);
+  expect(confirm).toHaveBeenCalledWith(CONFIRM_LOAD);
+  expect(saveNow).not.toHaveBeenCalled();
+  expect(store.get()).toBe(before);              // 한 글자도 바뀌지 않는다
+  // 확인하면 자동 저장본을 먼저 남기고 교체한다(fileActions.loadFile과 같은 순서).
+  const yes = actions({ confirm: async () => true, saveNow, isDirty: () => true });
+  addWalls(yes.store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  yes.dxf.open();
+  expect(await yes.opened().onImported(imported())).toBe(true);
+  expect(saveNow).toHaveBeenCalledTimes(1);
+  expect(yes.store.canUndo()).toBe(false);
+});
+
+test('onDxfFile은 떨어뜨린 파일을 그대로 대화상자에 넘긴다', () => {
+  const { dxf, opened } = actions();
+  const f = { name: '평면도.dxf' };
+  dxf.onDxfFile(f);
+  expect(opened().file).toBe(f);
+});
+
+test('시작 화면에 DXF 카드가 네 번째 동작 카드로 들어간다', () => {
+  document.body.innerHTML = ''; localStorage.clear();
+  const calls = [];
+  openStartScreen({ store: createStore(createEmptyProject()), onDxf: () => calls.push('dxf') });
+  const cards = [...document.querySelectorAll('.start-card:not(.tpl)')];
+  expect(cards.map(c => c.dataset.start)).toEqual(['empty', 'upload', 'dxf', 'sample']);
+  const card = document.querySelector('[data-start="dxf"]');
+  expect(card.textContent).toContain(DXF_CARD_TITLE);
+  expect(card.textContent).toContain(DXF_CARD_DESC);
+  expect(card.querySelector('canvas')).not.toBeNull();     // 다른 동작 카드와 같은 높이
+  card.click();
+  expect(calls).toEqual(['dxf']);
+  expect(document.querySelector('#startScreen')).toBeNull();
+});
+
+test('캔버스에 떨어뜨린 .dxf는 onDxfFile로 가고 [불러오기]가 둘 다 받는다', async () => {
+  const onDxfFile = vi.fn();
+  const store = createStore(createEmptyProject());
+  const acts = createFileActions({ store, ui: createUiState(), view: { fit: vi.fn() }, view3d: { capture: () => 'data:,' }, onDxfFile });
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  acts.wireDrop(el);
+  const drop = files => { const ev = new Event('drop', { bubbles: true, cancelable: true }); ev.dataTransfer = { files }; el.dispatchEvent(ev); };
+  const dxfFile = { name: '평면도.DXF', type: '', text: async () => '' };
+  drop([dxfFile]);
+  expect(onDxfFile).toHaveBeenCalledWith(dxfFile);          // 확장자는 대소문자를 가리지 않는다
+  // JSON 경로는 그대로다.
+  drop([{ name: 'a.json', type: 'application/json', text: async () => '{}' }]);
+  await new Promise(r => setTimeout(r, 0));
+  expect(onDxfFile).toHaveBeenCalledTimes(1);
+  // 같은 [불러오기] 버튼이 둘 다 받는다.
+  const created = [];
+  const realCreate = document.createElement.bind(document);
+  vi.spyOn(document, 'createElement').mockImplementation(tag => { const e = realCreate(tag); if (tag === 'input') { e.click = () => {}; created.push(e); } return e; });
+  acts.openFileDialog();
+  expect(created[0].accept).toBe('.json,.dxf,application/json');
+  document.createElement.mockRestore();
+});
+
+test('셸 마크업과 main.js가 세 진입점을 배선한다', async () => {
+  expect(shellHtml()).toContain('data-action="dxf"');
+  // 사전 검토 C-6: 이 파일은 **jsdom 환경**이라 `new URL(…, import.meta.url)`이
+  // `http://localhost:3000/src/main.js`가 되고 `fileURLToPath`가 던진다(Vite가 그 패턴을
+  // 에셋 URL로 바꾼다). vitest의 cwd가 `app/`이므로 경로 문자열로 읽는다.
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const main = readFileSync(resolve(process.cwd(), 'src/main.js'), 'utf8');
+  expect(main).toContain("createDxfActions({");
+  expect(main).toContain("[data-action=\"dxf\"]");
+  expect(main).toContain('createOpenEnds(ui,');
+  expect(main).toContain('onDxfFile:');
+  expect(main).toContain('onDxf:');
+  expect(main).toContain('overlay: openEnds.overlay');
+});
+
+// Task 13 재검토 I-4: 안내는 **가져온 그 층**의 것이다. 다른 층으로 가면 배너도 빨간 ✚도 감추고
+// (지우지는 않는다), 돌아오면 다시 보인다 — 다른 층의 벽을 가리키는 빨간 십자는 거짓말이다.
+test('안내는 가져온 층에서만 보인다(다른 층에서는 배너도 마커도 없다)', () => {
+  document.body.innerHTML = '';
+  const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.floors.push(createFloor('Floor 2')); });
+  const ui = createUiState();
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  const banner = createBanner({ store, ui, el });
+  const { overlay } = createOpenEnds(ui, { store });
+  const floor = activeFloor(store.get()).id;
+  const draws = () => { const ctx = recCtx(); overlay(ctx, { toScreen: p => p }); return ctx.calls.length; };
+  ui.set({ openEnds: { pts: [[0.5, 0.25], [1000.5, 2000.25]], index: 0, floor } });
+  banner.render(ui.get());
+  expect(el.hidden).toBe(false);
+  expect(draws()).toBeGreaterThan(0);
+  store.dispatch(d => { d.activeFloor = 1; }, { record: false });   // 다른 층으로 간다
+  banner.render(ui.get());
+  expect(el.hidden).toBe(true);
+  expect(draws()).toBe(0);
+  expect(ui.get().openEnds.floor).toBe(floor);                      // 안내 자체는 살아 있다
+  store.dispatch(d => { d.activeFloor = 0; }, { record: false });   // 돌아오면
+  banner.render(ui.get());
+  expect(el.hidden).toBe(false);                                    // 다시 보인다
+  expect(draws()).toBeGreaterThan(0);
+  banner.destroy();
+});
+
+// m-8: 층은 **번호가 아니라 id**로 가린다 — 앞 층을 지우면 번호가 밀린다.
+test('가져온 층보다 앞의 층을 지워도 안내는 살아남는다', () => {
+  const store = createStore(createEmptyProject());
+  store.dispatch(d => { d.floors.unshift(createFloor('지하 1층')); d.activeFloor = 1; });
+  const ui = createUiState();
+  const { overlay } = createOpenEnds(ui, { store });
+  const oe = { pts: [[0.5, 0.25]], index: 0, floor: activeFloor(store.get()).id };
+  ui.set({ openEnds: oe });
+  store.dispatch(d => { d.floors.splice(0, 1); d.activeFloor = 0; });   // 앞 층이 사라져 번호가 밀린다
+  expect(ui.get().openEnds).toBe(oe);
+  const ctx = recCtx();
+  overlay(ctx, { toScreen: p => p });
+  expect(ctx.calls.length).toBeGreaterThan(0);                          // 여전히 그린다
 });

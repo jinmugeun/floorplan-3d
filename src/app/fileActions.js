@@ -11,7 +11,7 @@ import { projectIsEmpty } from './topbar.js';
 // — confirmLeave는 반대로 true(묻는 쪽)를 기본값으로 쓴다. 새로 배선하는 곳은 반드시 넘긴다(m2).
 // onProjectSwap: 불러오기로 프로젝트를 갈아 끼운 직후(view.fit()과 같은 자리) 부른다 — 첫 방 자동 fit
 // 래치를 새 프로젝트 기준으로 다시 잡는다(app/firstRoomFit.js).
-export function createFileActions({ store, ui, view, view3d, toast = () => {}, confirm = confirmDialog, isDirty = () => false, markSaved = () => {}, saveNow = () => {}, onProjectSwap = () => {} }) {
+export function createFileActions({ store, ui, view, view3d, toast = () => {}, confirm = confirmDialog, isDirty = () => false, markSaved = () => {}, saveNow = () => {}, onProjectSwap = () => {}, onDxfFile = () => {} }) {
   async function loadFile(file) {
     if (!file) return;                            // 파일 선택 취소
     // §15.13(감사 §19): 작업 중이면 먼저 묻는다. 빈 프로젝트나 저장 직후에는 잃을 것이 없다.
@@ -29,8 +29,8 @@ export function createFileActions({ store, ui, view, view3d, toast = () => {}, c
   }
   function openFileDialog() {
     const i = document.createElement('input');
-    i.type = 'file'; i.accept = '.json,application/json';
-    i.onchange = () => loadFile(i.files[0]);
+    i.type = 'file'; i.accept = '.json,.dxf,application/json';
+    i.onchange = () => { const f = i.files[0]; if (f && /\.dxf$/i.test(f.name)) onDxfFile(f); else loadFile(f); };
     i.click();
   }
   async function captureNow() {
@@ -52,6 +52,7 @@ export function createFileActions({ store, ui, view, view3d, toast = () => {}, c
       const file = ev.dataTransfer?.files?.[0];
       if (!file) return;
       if (file.type === 'application/json' || /\.json$/i.test(file.name)) loadFile(file);
+      else if (/\.dxf$/i.test(file.name)) onDxfFile(file);
       else if (/^image\//.test(file.type)) openBackgroundDialog({ store });
     });
   }

@@ -47,6 +47,7 @@ export function shellHtml({ name = '' } = {}) {
       <section data-panel="background" hidden>
         <h3>배경 도면</h3>
         <button data-action="background">도면 이미지 업로드 <kbd>B</kbd></button>
+        <button data-action="dxf">DXF 가져오기</button>
         <p class="hint">사진이나 스캔을 올리고 모서리를 찍어 펴고, 두 점으로 축척을 잡습니다.</p>
       </section>
       <section data-panel="airflow" hidden><h3>풍량 집계</h3><div id="airflow"></div></section>

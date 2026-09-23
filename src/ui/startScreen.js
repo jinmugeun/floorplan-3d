@@ -5,11 +5,12 @@ import { esc } from '../util/html.js';
 import { focusTrap } from './dialogBase.js';
 import { confirmDialog } from './confirmDialog.js';
 import { promptDialog } from './promptDialog.js';
-import { CONFIRM_TEMPLATE_DELETE, TEMPLATE_RENAME, TEMPLATE_NAME_TAKEN, NAME_REQUIRED, RESTORE_CARD_TITLE, restoreCardDesc } from './messages.js';
+import { CONFIRM_TEMPLATE_DELETE, TEMPLATE_RENAME, TEMPLATE_NAME_TAKEN, NAME_REQUIRED, RESTORE_CARD_TITLE, restoreCardDesc, DXF_CARD_TITLE, DXF_CARD_DESC } from './messages.js';
 
 const CARDS = [
   { key: 'empty', title: '빈 프로젝트', desc: '빈 화면에서 방과 벽을 직접 그립니다.' },
   { key: 'upload', title: '도면 이미지 업로드', desc: '사진이나 스캔을 올려 기울기를 펴고 축척을 잡습니다.' },
+  { key: 'dxf', title: DXF_CARD_TITLE, desc: DXF_CARD_DESC },
   { key: 'sample', title: '샘플 (강당중 조리실)', desc: '방 11개가 그려진 예제 도면으로 시작합니다.' },
 ];
 // 위 카드 3개가 담당하는 내장 템플릿은 목록에서 뺀다(같은 것을 두 번 보여주지 않는다).
@@ -19,7 +20,7 @@ const HIDDEN = new Set(['builtin-empty', 'builtin-gangdang']);
 const restoreCard = (p, at) => ({ key: 'restore', title: RESTORE_CARD_TITLE, desc: restoreCardDesc(p?.name, at) });
 
 // 프로젝트가 비어 있을 때 띄우는 시작 오버레이.
-export function openStartScreen({ store, restored = null, restoredAt = null, onEmpty = () => {}, onUpload = () => {}, onSample = () => {}, onTemplate = () => {}, onRestore = () => {}, onClose = () => {} }) {
+export function openStartScreen({ store, restored = null, restoredAt = null, onEmpty = () => {}, onUpload = () => {}, onDxf = () => {}, onSample = () => {}, onTemplate = () => {}, onRestore = () => {}, onClose = () => {} }) {
   const cards = restored ? [restoreCard(restored, restoredAt), ...CARDS] : CARDS;
   const root = document.createElement('div');
   root.id = 'startScreen';
@@ -48,7 +49,7 @@ export function openStartScreen({ store, restored = null, restoredAt = null, onE
       try { if (!sampleFloor) { const p = buildSampleProject(); sampleFloor = p.floors?.[p.activeFloor ?? 0] ?? null; } return sampleFloor ? projectShapes(sampleFloor) : null; }
       catch { return null; }
     }
-    if (id === 'empty' || id === 'upload') return placeholderShapes(id);
+    if (id === 'empty' || id === 'upload' || id === 'dxf') return placeholderShapes(id);
     try { const p = templateProject(id); return p ? projectShapes(p.floors?.[p.activeFloor ?? 0]) : null; }
     catch { return null; }
   };
@@ -74,7 +75,7 @@ export function openStartScreen({ store, restored = null, restoredAt = null, onE
     && !BUILTIN_TEMPLATES.some(t => t.name === name);
   // 어느 길로 닫혀도(카드·템플릿·Esc·close()) 한 번만 알린다 — 온보딩이 시작 화면 위에 겹쳐 뜨지 않게.
   const close = () => { if (!root.parentNode) return; root.remove(); trap.destroy(); onClose(); };
-  const handlers = { empty: onEmpty, upload: onUpload, sample: onSample, restore: onRestore };
+  const handlers = { empty: onEmpty, upload: onUpload, dxf: onDxf, sample: onSample, restore: onRestore };
   root.addEventListener('click', async ev => {
     const del = ev.target.closest('[data-tpl-delete]');
     if (del) {
