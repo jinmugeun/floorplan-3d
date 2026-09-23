@@ -4,7 +4,7 @@ import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockCont
 import { activeFloor } from '../state/schema.js';
 import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPACITY } from './build.js';
 import { hiddenWallIds, applyCutawayTo, shotCutaway, soloMeshVisible } from './cutaway.js';
-import { endpoints } from '../geom/walls.js';
+import { planBounds } from '../geom/elevation.js';
 import { cameraDistance, fitDistance, shotPosition, canReframeShot } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
 import { applyPerfMode } from './perfMode.js';
@@ -44,7 +44,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     onFallback: on => onFpFallback(on),
   });
   // size는 두 변(mm)이다: fitDistance가 정사각 근사 대신 실제 직사각형 bbox로 거리를 잡는다.
-  const bounds = () => { const pts = endpoints(activeFloor(store.get()).walls); if (!pts.length) return { center: [4000, 3000], extent: 8000, size: [8000, 6000] }; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const sx = Math.max(...xs) - Math.min(...xs), sy = Math.max(...ys) - Math.min(...ys); return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], extent: Math.max(sx, sy), size: [sx, sy] }; };
+  // 계산과 빈 층 기본값의 정본은 geom/elevation.planBounds 하나다(리뷰 I-5: 전에는 두 벌이었고 기본값만 달랐다 — depth 6000 vs 8000).
+  const bounds = () => planBounds(activeFloor(store.get()).walls);
   const center = () => bounds().center;
   // 2D 투영(정면/배면/좌/우/평면/저면)의 고정 직교 카메라는 orthoView.js에 있다(§15.12 Step 9a).
   // 피커는 콜백으로만 넘긴다: orthoView가 pick3d를 직접 import하지 않게.
@@ -155,26 +156,24 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   // 렌더샷: 화면과 다른 해상도로 한 장 렌더해 dataURL을 돌려준다.
   // setSize(w, h, false)는 캔버스 CSS 크기를 건드리지 않으므로 화면이 흔들리지 않는다.
   function renderImage({ width = 1920, height = 1080, preset = null } = {}) {
-    const prev = new THREE.Vector2(); renderer.getSize(prev);
-    const prevRatio = renderer.getPixelRatio();
-    let cam = ov.camera() ?? camera;
+    const prev = new THREE.Vector2(); renderer.getSize(prev); const prevRatio = renderer.getPixelRatio();
+    let cam = ov.camera() ?? camera, shotAt = null;
     if (preset) {
       const b = bounds();
-      const p = orthoViewParams(preset, { center: b.center, extent: b.extent, height: activeFloor(store.get()).height, aspect: width / height });
+      // size는 평면·저면 절두체가 도면의 가로·세로를 보게 한다(리뷰 I-6). 화면의 2D 투영(orthoView.setOrthoView)과 **같은 인자**여야 인쇄물과 화면의 프레임이 갈리지 않는다.
+      const p = orthoViewParams(preset, { center: b.center, extent: b.extent, size: b.size, height: activeFloor(store.get()).height, aspect: width / height });
       const shot = new THREE.OrthographicCamera(-p.halfW, p.halfW, p.halfH, -p.halfH, 0.01, 1000);
       shot.position.set(...p.pos); shot.up.set(...p.up);
       shot.lookAt(new THREE.Vector3(...p.target)); shot.updateProjectionMatrix();
-      cam = shot;
-      // 정면도·측면도는 앞쪽 벽을 지운다(§17.4(2) · 감사 §37: "회색 띠 하나"가 여기서 풀린다).
-      const hid = shotCutaway(activeFloor(store.get()), [p.pos[0] * 1000, p.pos[2] * 1000, p.pos[1] * 1000], preset, store.get().view);
-      if (hid) applyCutawayTo(group, { hidden: hid, baseOpacity: store.get().view.wallOpacity ?? 1 }); else showAllWalls();
+      cam = shot; shotAt = [p.pos[0] * 1000, p.pos[2] * 1000, p.pos[1] * 1000];
     }
-    // 화면↔출력 종횡비 차이만큼 거리를 보정한다(§16.9 · 감사 §10): 방향과 사용자의 줌은 그대로 둔다.
-    // 조건·수학은 fit.js에 있다(이 파일의 300줄 상한): 프리셋·1인칭·2D 투영은 타지 않는다(리뷰 I-1).
+    // 화면↔출력 종횡비 차이만큼 거리를 보정한다(§16.9 · 감사 §10): 방향과 사용자의 줌은 그대로 둔다. 조건·수학은 fit.js에 있다(이 파일의 300줄 상한): 프리셋·1인칭·2D 투영은 타지 않는다(리뷰 I-1).
     const home = canReframeShot({ preset, isScreenCamera: cam === camera, isPerspective: cam.isPerspectiveCamera, controlsEnabled: controls.enabled }) ? camera.position.clone() : null;
     const prevAspect = cam.isPerspectiveCamera ? cam.aspect : null;
     // 렌더가 던져도(컨텍스트 소실 · 오염된 캔버스) 화면이 렌더샷 상태로 남지 않게 되돌리기는 finally에 있다(리뷰 I-3).
     try {
+      // 정면도·측면도는 앞쪽 벽을 지운다(§17.4(2) · 감사 §37). try **안**이다(리뷰 m-9): 밖에 두면 여기 닿기 전에 던진 렌더가 화면을 "앞 벽이 지워진" 채로 남겼다(finally의 resize()도 돌지 않았다).
+      if (shotAt) { const hid = shotCutaway(activeFloor(store.get()), shotAt, preset, store.get().view); if (hid) applyCutawayTo(group, { hidden: hid, baseOpacity: store.get().view.wallOpacity ?? 1 }); else showAllWalls(); }
       if (home) { const b = bounds(); camera.position.copy(shotPosition({ position: home, target: controls.target, center: toThree([b.center[0], b.center[1], 0]), extentMm: b.extent, aspect: width / height, screenAspect: camera.aspect, fov: camera.fov, height: activeFloor(store.get()).height, width: b.size[0], depth: b.size[1] })); }
       renderer.setPixelRatio(1);
       renderer.setSize(width, height, false);

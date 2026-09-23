@@ -7,7 +7,7 @@ import { itemMenuItems } from '../ui/itemMenu.js';
 // 입면 프레이밍의 정본은 geom/elevation.js 한 곳이다(리뷰 M-7): 시방서가 그리는 바닥선·천장선이
 // 이 카메라와 같은 값을 써야 자리가 맞는다. 인쇄물 포매터(io/specSheet.js)가 아니라 geom/에 두어
 // 3D 카메라가 카탈로그·풍량까지 딸린 모듈에 의존하지 않는다(view3d → geom은 이미 여는 방향이다).
-import { elevationFrame } from '../geom/elevation.js';
+import { elevationFrame, planFrame } from '../geom/elevation.js';
 
 // three 오브젝트(m, y = 위) → 아이템 필드(mm, z = 밑면 높이, rot = 화면 시계 방향 각도)
 // rot은 정수 도로 반올림한다: 15° 스냅의 부동소수 오차가 문서에 남지 않게.
@@ -107,19 +107,22 @@ const UPS = { top: [0, 0, -1], bottom: [0, 0, 1] };
 // 2D 투영(정면/배면/좌/우/평면/저면) 직교 카메라 값. 모두 three 좌표(m).
 // 입면(dir[1] === 0: 정면·배면·좌·우)의 세로 절두체는 **건물 높이**에서 나온다(§17.4(2) 개정 ·
 // 리뷰 I-3): 평면 크기로 잡으면 층고 3.5 m 건물이 세로 23 m 화면의 15%짜리 회색 띠가 된다.
-// 평면도·저면도는 세로가 곧 도면 깊이라 예전 규칙 그대로다.
-export function orthoViewParams(name, { center = [0, 0], extent = 6000, height = 2300, aspect = 1 } = {}) {
+// 평면도·저면도는 size(도면의 가로·세로 mm)를 받으면 planFrame이 잡는다(최종 리뷰 I-6): 예전
+// 규칙(max(가로, 세로))은 폭 20 m · 깊이 5 m 도면을 가로·세로 모두 22%로 그렸다. size를 주지
+// 않는 부름은 옛 규칙 그대로다(두 호출자 view3d.renderImage·orthoView.setOrthoView가 모두 준다).
+export function orthoViewParams(name, { center = [0, 0], extent = 6000, height = 2300, aspect = 1, size = null } = {}) {
   const dir = DIRS[name] ?? DIRS.front;
   const up = UPS[name] ?? [0, 1, 0];
-  const size = (Math.max(extent, 2000) * 1.15) / 1000;
+  const span = (Math.max(extent, 2000) * 1.15) / 1000;
   const target = [center[0] / 1000, height / 2000, center[1] / 1000];
-  const dist = size * 2 + 10;
-  const fr = dir[1] === 0 ? elevationFrame({ extent, height, aspect }) : null;
+  const dist = span * 2 + 10;
+  const fr = dir[1] === 0 ? elevationFrame({ extent, height, aspect })
+    : size ? planFrame({ width: size[0], depth: size[1], aspect }) : null;
   return {
     target, up, dist,
     pos: [target[0] + dir[0] * dist, target[1] + dir[1] * dist, target[2] + dir[2] * dist],
-    halfH: fr ? fr.halfH : size / 2,
-    halfW: fr ? fr.halfW : (size / 2) * aspect,
+    halfH: fr ? fr.halfH : span / 2,
+    halfW: fr ? fr.halfW : (span / 2) * aspect,
   };
 }
 

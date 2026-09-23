@@ -2,7 +2,7 @@
 // 규칙이 io/specSheet.js(인쇄물 포매터) 안에 살던 동안 3D 카메라가 그 모듈을 import했다 —
 // 이제 geom/ 한 곳이고, 인쇄물·카메라·비트맵이 모두 여기서 같은 값을 받는다.
 import { describe, test, expect } from 'vitest';
-import { elevationAspect, elevationFrame, planExtent, planSize, topViewAspect, ELEV_ASPECT_MIN, ELEV_ASPECT_MAX, ELEV_MARGIN } from '../src/geom/elevation.js';
+import { elevationAspect, elevationFrame, planBounds, planExtent, planFrame, planSize, topViewAspect, ELEV_ASPECT_MIN, ELEV_ASPECT_MAX, ELEV_MARGIN } from '../src/geom/elevation.js';
 import { rectWalls } from '../src/geom/walls.js';
 
 describe('입면 그림 비율(elevationAspect)', () => {
@@ -75,7 +75,7 @@ describe('입면 프레임(elevationFrame)', () => {
 test('planExtent는 도면의 가로·세로 중 큰 쪽이다(소수 좌표)', () => {
   expect(planExtent(rectWalls([0, 0], [4000.5, 3000.25], 200))).toBeCloseTo(4000.5, 9);
   expect(planExtent(rectWalls([0, 0], [3000.25, 4000.5], 200))).toBeCloseTo(4000.5, 9);
-  expect(planExtent([])).toBe(8000);                             // 벽이 없는 층의 기본값은 bounds()와 같다
+  expect(planExtent([])).toBe(8000);                             // 벽이 없는 층의 기본값은 planBounds 한 곳에서 나온다
   expect(planExtent()).toBe(8000);
 });
 
@@ -83,8 +83,10 @@ test('planSize는 가로·세로를 따로 준다(소수 좌표)', () => {
   const s = planSize(rectWalls([0, 0], [4000.5, 3000.25], 200));
   expect(s.width).toBeCloseTo(4000.5, 9);
   expect(s.depth).toBeCloseTo(3000.25, 9);
-  expect(planSize([])).toEqual({ width: 8000, depth: 8000 });    // 기본값도 planExtent와 같은 자리에서 나온다
-  expect(planSize()).toEqual({ width: 8000, depth: 8000 });
+  // 최종 리뷰 I-5: 빈 층의 기본값은 view3d.bounds()가 쓰던 [8000, 6000]이다(전에는 여기만 8000×8000이라
+  // 주석의 "bounds()와 같다"가 거짓이었다 — m-4). 이 값이 곧 빈 층의 3D 프레이밍이라 바꾸면 회귀다.
+  expect(planSize([])).toEqual({ width: 8000, depth: 6000 });
+  expect(planSize()).toEqual({ width: 8000, depth: 6000 });
 });
 
 // 재리뷰 2 N-2: 천장 평면도(top)는 입면이 아니라 평면이다. 입면 비율을 물려받던 동안 20.0 × 18.6 m
@@ -104,9 +106,49 @@ describe('천장 평면도 비율(topViewAspect)', () => {
   });
 
   test('벽이 없거나 한 줄인 도면에서도 숫자를 준다', () => {
-    expect(topViewAspect([])).toBeCloseTo(ELEV_ASPECT_MIN, 12);   // 8000 × 8000 → 1:1 → 아래 한계
+    expect(topViewAspect([])).toBeCloseTo(ELEV_ASPECT_MIN, 12);   // 8000 × 6000 → 1.33:1 → 아래 한계
     expect(topViewAspect()).toBeCloseTo(ELEV_ASPECT_MIN, 12);
     expect(topViewAspect([{ a: [0, 0], b: [20000, 0] }])).toBe(ELEV_ASPECT_MAX);   // 깊이 0 → 최소 깊이로 잰다
     expect(topViewAspect([{ a: [0, 0], b: [0, 0] }])).toBeCloseTo(ELEV_ASPECT_MIN, 12);
+  });
+});
+
+// 최종 리뷰 I-5: 같은 bbox를 view3d.bounds()와 planSize가 각자 셌고 **빈 층의 기본값만** 달랐다.
+// 이제 정본은 planBounds 하나이고 bounds()는 그것을 그대로 돌려준다.
+test('planBounds는 중심·큰 쪽·두 변을 한 번에 준다(소수 좌표)', () => {
+  const b = planBounds(rectWalls([1000.5, 2000.25], [5001, 5000.75], 200));
+  expect(b.center[0]).toBeCloseTo(3000.75, 9);
+  expect(b.center[1]).toBeCloseTo(3500.5, 9);
+  expect(b.size[0]).toBeCloseTo(4000.5, 9);
+  expect(b.size[1]).toBeCloseTo(3000.5, 9);
+  expect(b.extent).toBeCloseTo(4000.5, 9);
+  // 빈 층의 기본값은 예전 bounds()의 값 그대로다(3D 프레이밍 무변경).
+  expect(planBounds([])).toEqual({ center: [4000, 3000], extent: 8000, size: [8000, 6000] });
+  expect(planBounds()).toEqual({ center: [4000, 3000], extent: 8000, size: [8000, 6000] });
+  expect(planExtent(rectWalls([0, 0], [4000.5, 3000.25], 200))).toBeCloseTo(planBounds(rectWalls([0, 0], [4000.5, 3000.25], 200)).extent, 12);
+});
+
+// 최종 리뷰 I-6(Task 10 N-4): 평면 투영의 절두체가 max(가로, 세로)라 폭 20 m · 깊이 5 m 도면이
+// 가로·세로 모두 22%만 찼다. 이제 세로는 깊이에서 나오고 가로는 비율만큼만 넓힌다.
+describe('평면 프레임(planFrame)', () => {
+  test('가로로 납작한 도면이 그림을 가득 채운다(소수 좌표)', () => {
+    const width = 20000.5, depth = 5000.25, aspect = topViewAspect(rectWalls([0, 0], [width, depth], 0));
+    const fr = planFrame({ width, depth, aspect });
+    expect(fr.halfH).toBeCloseTo(Math.max((depth * ELEV_MARGIN) / 2000, (width * ELEV_MARGIN) / 2000 / aspect), 12);
+    expect(fr.halfW).toBeCloseTo(fr.halfH * aspect, 12);
+    // 채움률: 예전 규칙은 가로·세로 모두 ≈22%였다(halfH = 11.5 m · halfW = 46 m).
+    expect(width / 1000 / (2 * fr.halfW)).toBeGreaterThanOrEqual(0.8);
+    expect(depth / 1000 / (2 * fr.halfH)).toBeGreaterThanOrEqual(0.8);
+    // 여백은 입면과 같은 ELEV_MARGIN이다: 채움률의 상한이 1 / 1.15다.
+    expect(width / 1000 / (2 * fr.halfW)).toBeLessThanOrEqual(1 / ELEV_MARGIN + 1e-12);
+  });
+  test('세로로 긴 도면·아주 작은 도면·이상한 비율에서도 잘라 내지 않는다', () => {
+    const tall = planFrame({ width: 5000, depth: 20000, aspect: 16 / 9 });
+    expect(tall.halfH).toBeCloseTo((20000 * ELEV_MARGIN) / 2000, 12);   // 세로가 이긴다
+    expect(5000 / 1000 / (2 * tall.halfW)).toBeLessThanOrEqual(1);      // 가로는 남는다(잘리지 않는다)
+    const tiny = planFrame({ width: 0, depth: 0, aspect: 1 });
+    expect(tiny.halfH).toBeCloseTo((2000 * ELEV_MARGIN) / 2000, 12);    // ELEV_MIN_EXTENT 하한
+    expect(planFrame({ width: 8000, depth: 6000, aspect: 0 }).aspect).toBe(1);
+    expect(Number.isFinite(planFrame({ width: 8000, depth: 6000, aspect: NaN }).halfW)).toBe(true);
   });
 });

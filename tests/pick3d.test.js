@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { elevationFrame } from '../src/geom/elevation.js';   // M-7: 프레임 규칙은 geom/에 산다(io/가 아니다)
+import { elevationFrame, planFrame } from '../src/geom/elevation.js';   // M-7: 프레임 규칙은 geom/에 산다(io/가 아니다)
 import { gizmoPatch, orthoViewParams, disposeGizmo, gizmoAxes, createItemPicker, createDragLatch, tintGizmo, gizmoTintFor, itemMeshOf, previewItemMesh, GIZMO_COLORS } from '../src/view3d/pick3d.js';
 import { createItem, createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { createStore } from '../src/state/store.js';
@@ -86,7 +86,7 @@ describe('3D 편집 계산', () => {
     expect(wide.halfW * 2).toBeCloseTo((20000.5 * 1.15) / 1000, 9); // 폭 여백은 15%로 그대로
     expect(wide.fill).toBeGreaterThan(0.25);                        // 예전 규칙은 0.152였다
     expect(wide.fill).toBeGreaterThan(elevationFrame({ extent: 20000.5, height: 3500.25, aspect: 16 / 9, margin: 2 }).fill);
-    // orthoViewParams가 같은 값을 쓴다: 입면 넷만 바뀌고 평면도·저면도는 예전 규칙 그대로다.
+    // orthoViewParams가 같은 값을 쓴다: 입면 넷만 바뀌고 평면도·저면도는 size 없이 부르면 예전 규칙이다(I-6).
     const opts = { center: [0, 0], extent: 20000.5, height: 3500.25, aspect: 16 / 9 };
     for (const n of ['front', 'back', 'left', 'right']) {
       expect(orthoViewParams(n, opts).halfH).toBeCloseTo(wide.halfH, 9);
@@ -97,6 +97,26 @@ describe('3D 편집 계산', () => {
     expect(orthoViewParams('bottom', opts).halfH).toBeCloseTo(plan / 2, 9);
   });
 
+
+  // 최종 리뷰 I-6(Task 10 N-4): 평면·저면 절두체가 max(가로, 세로)라 가로로 납작한 도면이
+  // 가로·세로 모두 22%만 찼다(시방서의 천장 평면도가 그 크기로 인쇄됐다). size를 받으면 planFrame이 잡는다.
+  test('평면·저면 프레임은 size를 받으면 도면의 가로·세로로 잡는다(소수 좌표)', () => {
+    const size = [20000.5, 5000.25], aspect = 4;
+    const opts = { center: [0, 0], extent: Math.max(...size), height: 3500.25, aspect, size };
+    const fr = planFrame({ width: size[0], depth: size[1], aspect });
+    for (const n of ['top', 'bottom']) {
+      const p = orthoViewParams(n, opts);
+      expect(p.halfH).toBeCloseTo(fr.halfH, 9);
+      expect(p.halfW).toBeCloseTo(fr.halfW, 9);
+      expect(p.halfW / p.halfH).toBeCloseTo(aspect, 9);              // 절두체 비율은 그림 비율 그대로다
+      expect(size[0] / 1000 / (2 * p.halfW)).toBeGreaterThanOrEqual(0.8);   // 예전에는 0.22였다
+      expect(size[1] / 1000 / (2 * p.halfH)).toBeGreaterThanOrEqual(0.8);
+    }
+    // 입면 넷은 size를 줘도 건물 높이에서 나온다(planFrame을 타지 않는다).
+    expect(orthoViewParams('front', opts).halfH).toBeCloseTo(elevationFrame({ extent: opts.extent, height: opts.height, aspect }).halfH, 9);
+    // 카메라 거리·시선은 예전 그대로다(extent만 본다).
+    expect(orthoViewParams('top', opts).pos).toEqual(orthoViewParams('top', { ...opts, size: null }).pos);
+  });
   test('모르는 이름은 정면으로 떨어진다', () => {
     const p = orthoViewParams('없음', { center: [0, 0], extent: 6000, height: 2300, aspect: 1 });
     expect(p.pos[2]).toBeGreaterThan(0);

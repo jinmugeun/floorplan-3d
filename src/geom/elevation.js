@@ -42,18 +42,38 @@ export function elevationFrame({ extent = 6000, height = 2300, aspect = 0, margi
   };
 }
 
-// 도면의 가로·세로(mm). view3d의 bounds()와 같은 계산이라 카메라와 자리가 어긋나지 않는다.
-export function planSize(walls) {
+// 도면의 bbox(월드 mm): 중심 · 큰 쪽 · 두 변. view3d의 bounds()가 이것을 그대로 돌려준다
+// (최종 리뷰 I-5). 전에는 같은 계산이 두 벌이었고 **벽이 없는 층의 기본값만 서로 달랐는데**
+// (여기 depth 8000 · bounds() 6000) 주석은 "같다"라고 단언했다(m-4). 정본은 여기 한 곳이고
+// 값은 bounds()가 쓰던 [8000, 6000]이다 — 화면 종횡비에 가까워 빈 층의 3D 프레이밍이 그대로다.
+export function planBounds(walls) {
   const pts = endpoints(walls ?? []);
-  if (!pts.length) return { width: 8000, depth: 8000 };       // 벽이 없는 층의 기본값도 bounds()와 같다
+  if (!pts.length) return { center: [4000, 3000], extent: 8000, size: [8000, 6000] };
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  return { width: Math.max(...xs) - Math.min(...xs), depth: Math.max(...ys) - Math.min(...ys) };
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  return { center: [(x0 + x1) / 2, (y0 + y1) / 2], extent: Math.max(x1 - x0, y1 - y0), size: [x1 - x0, y1 - y0] };
+}
+
+// 도면의 가로·세로(mm).
+export function planSize(walls) {
+  const [width, depth] = planBounds(walls).size;
+  return { width, depth };
 }
 
 // 도면의 가로·세로 중 큰 쪽(mm).
-export function planExtent(walls) {
-  const { width, depth } = planSize(walls);
-  return Math.max(width, depth);
+export function planExtent(walls) { return planBounds(walls).extent; }
+
+// 평면 투영(천장 평면도 top · 저면도 bottom)의 직교 절두체. elevationFrame의 평면판이다
+// (최종 리뷰 I-6 · Task 10 N-4): 예전 규칙은 세로를 max(가로, 세로)로 잡고 가로를 비율만큼
+// 늘려, 폭 20 m · 깊이 5 m 도면이 세로 11.5 m(필요 2.875) · 가로 46 m(필요 10)가 됐다 —
+// 가로·세로 모두 22%만 차고 시방서의 천장 평면도가 그 크기로 인쇄됐다. 이제 세로는 **깊이**에서
+// 나오고, 그 비율로 가로가 들어가지 않을 때만 들어갈 만큼 넓힌다(잘라 내지 않는다).
+export function planFrame({ width = 0, depth = 0, aspect = 1, margin = ELEV_MARGIN } = {}) {
+  const w = (Math.max(Number(width) || 0, ELEV_MIN_EXTENT) * margin) / 2000;
+  const d = (Math.max(Number(depth) || 0, ELEV_MIN_EXTENT) * margin) / 2000;
+  const a = Math.max(Number(aspect) || 1, 0.01);
+  const halfH = Math.max(d, w / a);
+  return { halfH, halfW: halfH * a, aspect: a };
 }
 
 // 천장 평면도(top)의 그림 비율. 그것은 입면이 아니라 **평면**이라 층고와 무관하고, 비율은 평면

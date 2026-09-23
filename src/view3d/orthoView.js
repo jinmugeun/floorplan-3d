@@ -21,7 +21,9 @@ export function createOrthoView({
   // 2D 투영(정면/배면/좌/우/평면/저면): 도면을 도면처럼 고정된 직교 카메라로 본다.
   function setOrthoView(name) {
     const b = bounds(), w = container.clientWidth || 1, h = container.clientHeight || 1;
-    const p = orthoViewParams(name, { center: b.center, extent: b.extent, height: activeFloor(store.get()).height, aspect: w / h });
+    // size를 함께 넘긴다(최종 리뷰 I-6): 평면·저면의 절두체가 도면의 가로·세로를 보게 한다.
+    // renderImage(인쇄물)와 **같은 인자**여야 같은 도면이 화면과 인쇄에서 다른 프레임이 되지 않는다.
+    const p = orthoViewParams(name, { center: b.center, extent: b.extent, size: b.size, height: activeFloor(store.get()).height, aspect: w / h });
     if (!ortho2) ortho2 = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 1000);
     ortho2.left = -p.halfW; ortho2.right = p.halfW; ortho2.top = p.halfH; ortho2.bottom = -p.halfH;
     ortho2.position.set(...p.pos); ortho2.up.set(...p.up);
