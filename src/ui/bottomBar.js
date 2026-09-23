@@ -4,13 +4,18 @@
 // 버튼은 다시 만들지 않고 **노드째로 옮긴다** — main.js·shell.js가 id로 걸어 둔
 // 리스너가 그대로 살아 있어야 한다(HTML을 다시 그리면 전부 끊긴다).
 //
-// 접기는 **단계(data-overflow의 값)**로 나뉜다. 1100 px에서는 1단계(3D 전용 묶음) + 꼬리 라벨
-// 아이콘화만으로도 133 px이 남아, sticky 꼬리가 늘 보여야 하는 단위 묶음을 94 px 덮었다(리뷰 I-1).
-// §15.4는 "1366·1100 모두 겹침 0"을 요구하므로, 꼬리가 sticky로 붙기 **전에** 다음 단계를 접는다:
-//   1 = 3D 전용 묶음(카메라·햇빛·캡쳐·2D 투영·기즈모)   ← 1366 px은 여기서 끝난다
-//   2 = 도면 잠금                                      ← 1100 px에서 여기부터 필요하다
-//   3 = 단위(mm / ft·in)                               ← §14.3의 "단위는 늘 보인다"를 좁히므로 최후
+// 접기는 **단계**로 나뉘고, 단계 표는 ui/bottomTiers.js가 갖고 **현재 모드**가 고른다(§17.2):
+//   2D  1 = 3D 전용 묶음(카메라·햇빛·캡처·2D 투영·기즈모)   2 = 도면 잠금   3 = 단위(mm / ft·in)
+//   3D  1 = 도면 잠금                                       2 = 단위        3 = 3D 전용 묶음
+// 마크업의 data-overflow 값은 2D 기준 기본값으로 남고(shellHtml), retier()가 sync마다 다시 매긴다 —
+// "3D 모드인데 3D 컨트롤부터 사라진다"가 사라진다(감사 §3·§32).
+// 1100 px에서는 1단계 + 꼬리 라벨 아이콘화만으로도 133 px이 남아, sticky 꼬리가 늘 보여야 하는
+// 단위 묶음을 94 px 덮었다(리뷰 I-1). §15.4는 "1366·1100 모두 겹침 0"을 요구하므로, 꼬리가
+// sticky로 붙기 **전에** 다음 단계를 접는다.
 // 그래도 넘치면(더 접을 것이 없으면) 꼬리를 sticky로 붙여 접힌 기능에 두 번의 클릭이 늘 닿게 한다.
+
+import { tierOf } from './bottomTiers.js';
+import { focusables, trapTab } from './dialogBase.js';
 
 export const BOTTOM_HYSTERESIS = 64;
 
@@ -21,7 +26,8 @@ export function compactNext({ compact = false, scrollWidth = 0, clientWidth = 0,
   return !(clientWidth >= fullWidth + hysteresis);
 }
 
-export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYSTERESIS, onOpen = () => {} } = {}) {
+// getMode는 주입으로 받는다(ui/는 app/을 import하지 않는다): 셸이 () => ui.get().mode를 넘긴다.
+export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYSTERESIS, onOpen = () => {}, getMode = () => '3d' } = {}) {
   const bar = root?.querySelector?.('#bottombar') ?? null;
   const more = root?.querySelector?.('#bottomMore') ?? null;
   const btn = root?.querySelector?.('#btnBottomMore') ?? null;
@@ -33,24 +39,31 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
   const order = [...bar.children];
   const segs = order.filter(el => el.hasAttribute?.('data-overflow'))
     .map(el => ({ el, tier: Math.max(1, Number(el.getAttribute('data-overflow')) || 1), count: 0 }));
-  const maxTier = segs.reduce((m, s) => Math.max(m, s.tier), 0);
+  // 단계는 sync마다 현재 모드로 다시 매긴다(§17.2). data-overflow의 값은 2D 기준 기본값으로 남는다.
+  const modeKey = () => (getMode() === '2d' ? '2d' : '3d');
+  const retier = () => { for (const s of segs) s.tier = tierOf(s.el.id, modeKey()); };
+  const maxTier = () => segs.reduce((m, s) => Math.max(m, s.tier), 0);
   const ctl = el => [...el.querySelectorAll('button, select, input')];
   // 접기 판정에 영향을 주는 컨트롤 목록은 **한 번만** 모은다: 노드가 바 ↔ 팝오버를 오가므로
   // 매번 다시 모으면 순서가 바뀌어 서명이 달라진다. 더보기 버튼 자신은 뺀다(접힘에 따라
   // 켜지고 꺼지므로 서명에 넣으면 접은 직후 곧바로 재측정으로 펼쳐 버린다).
   const tracked = ctl(bar).filter(el => el !== btn);
-  const signature = () => tracked.map(el => (el.hidden ? '0' : '1')).join('');
+  // 모드도 서명에 넣는다: 모드가 바뀌면 단계 표가 통째로 달라지므로 접힌 것을 먼저 다 펼쳐야 한다.
+  const signature = () => `${modeKey()}|${tracked.map(el => (el.hidden ? '0' : '1')).join('')}`;
   let tier = 0, fullWidth = 0, sig = null;
 
   const size = () => (measure ? measure() : { scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth });
-  const focusable = () => ctl(more).find(el => !el.hidden && !el.closest('[hidden]')) ?? null;
+  // 공용 규칙을 그대로 쓴다(§17.2): [hidden] 조상 판정까지 같은 함수가 한다.
+  const focusable = () => focusables(more)[0] ?? null;
   function closeMore() {
     const wasOpen = more.classList.contains('open');
+    // 판정은 **닫기 직전에** 한다(감사 §4): 팝오버를 숨기면 브라우저가 포커스를 body로 옮겨
+    // 닫은 뒤의 document.activeElement로는 "안에 있었는가"를 알 수 없다 → 포커스가 레일로 떨어졌다.
+    const wasInside = wasOpen && more.contains(document.activeElement);
     more.classList.remove('open');
     if (!tier) more.hidden = true;
     btn.setAttribute('aria-expanded', 'false');
-    // 팝오버 안에 있던 포커스는 더보기 버튼으로 돌려준다([Esc]로 닫고 포커스가 body로 떨어지지 않게).
-    if (wasOpen && !btn.hidden && more.contains(document.activeElement)) btn.focus();
+    if (wasInside && !btn.hidden) btn.focus();
   }
   // 되돌릴 자리: 원래 순서에서 자기 **다음으로 바에 남아 있는** 요소 앞에 넣는다.
   function place(el) {
@@ -87,6 +100,7 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
     // 3D에서 접힌 채 2D로 가면 필요한 폭이 줄어드는데도 3D 시절 fullWidth 탓에 계속 접혀 있었다.
     // #bottomMore는 position: fixed라 되돌려도 #layout 기하가 바뀌지 않아 리사이즈 재진입이 없다.
     if (now !== sig) { sig = now; if (tier) { setTier(0); fullWidth = 0; } }
+    retier();                                                       // 모드가 정한 단계로 다시 매긴다(§17.2)
     syncSegs();                                                     // 측정 전에 묶음을 드러낸다/감춘다
     const { scrollWidth, clientWidth } = size();
     if (!tier) fullWidth = Math.max(scrollWidth, clientWidth);      // 펼친 상태에서만 "필요한 폭"을 잰다
@@ -97,7 +111,7 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
     // 그래도 넘치면 꼬리를 sticky로 붙이기 전에 다음 단계를 접는다: sticky 꼬리는 불투명해서
     // 늘 보이는 묶음을 덮으므로(감사 §24 · 리뷰 I-1) "더 접을 것이 없다"가 붙이기의 전제다.
     let m = size();
-    while (tier > 0 && tier < maxTier && m.scrollWidth > m.clientWidth) { setTier(tier + 1); syncMoreBtn(); m = size(); }
+    while (tier > 0 && tier < maxTier() && m.scrollWidth > m.clientWidth) { setTier(tier + 1); syncMoreBtn(); m = size(); }
     bar.classList.toggle('tail-sticky', m.scrollWidth > m.clientWidth);
   }
   const onBtn = () => {
@@ -109,7 +123,12 @@ export function createBottomBar(root, { measure = null, hysteresis = BOTTOM_HYST
     else if (more.contains(document.activeElement)) btn.focus();
   };
   const onDocDown = ev => { if (more.classList.contains('open') && !more.contains(ev.target) && ev.target !== btn) closeMore(); };
-  const onKey = ev => { if (ev.key === 'Escape' && more.classList.contains('open')) { ev.stopPropagation(); closeMore(); } };
+  // 열려 있는 동안 [Esc]는 닫고 [Tab]은 안에서 돈다("보기"·"도움말" 팝오버와 같은 두 함수를 쓴다).
+  const onKey = ev => {
+    if (!more.classList.contains('open')) return;
+    if (ev.key === 'Escape') { ev.stopPropagation(); closeMore(); return; }
+    if (ev.key === 'Tab') { ev.stopPropagation(); trapTab(ev, focusables(more)); }
+  };
   btn.addEventListener('click', onBtn);
   document.addEventListener('pointerdown', onDocDown, true);
   document.addEventListener('keydown', onKey, true);

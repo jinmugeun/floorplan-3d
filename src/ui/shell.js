@@ -78,7 +78,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   relayout();
   // 팝오버는 한 번에 하나만 열린다: 더보기를 열면 셸 팝오버(보기·카메라·햇빛·도움말)를 닫는다.
   // pops는 아래에서 만들지만 이 콜백은 클릭 때 비로소 돌아 TDZ에 걸리지 않는다.
-  bottom = createBottomBar(root, { onOpen: () => pops.close() });
+  bottom = createBottomBar(root, { onOpen: () => pops.close(), getMode: () => ui.get().mode });
   const resizeWatch = createResizeWatch(layout, relayout);
   q('#btnRightPanel').addEventListener('click', () => { autoOff.right = false; userOpen.right = true; togglePanel(layout, 'right', false); q('#btnRightPanel').hidden = true; syncBottom(true); onMinimapResize(); });
   const splitters = [
