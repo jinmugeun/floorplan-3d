@@ -263,6 +263,11 @@ test('캔버스에 떨어뜨린 .dxf는 onDxfFile로 가고 [불러오기]가 �
   vi.spyOn(document, 'createElement').mockImplementation(tag => { const e = realCreate(tag); if (tag === 'input') { e.click = () => {}; created.push(e); } return e; });
   acts.openFileDialog();
   expect(created[0].accept).toBe('.json,.dxf,application/json');
+  // 선택창의 .dxf 갈래도 onDxfFile로 간다 — accept만 보면 onchange를 옛 형태로 되돌려도 통과한다(Task 14 리뷰 I-1).
+  Object.defineProperty(created[0], 'files', { value: [dxfFile] });
+  created[0].onchange();
+  expect(onDxfFile).toHaveBeenCalledTimes(2);
+  expect(onDxfFile).toHaveBeenLastCalledWith(dxfFile);
   document.createElement.mockRestore();
 });
 
