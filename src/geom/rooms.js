@@ -120,10 +120,14 @@ export function detectRooms(walls, prevRooms = []) {
       floorMat: prev?.floorMat ?? null, ceilingMat: prev?.ceilingMat ?? null,
       design: prev?.design ?? { EA: 0, SA: 0 },
       points: f.pts, wallIds: f.wallIds.filter(id => wallById[id]),
-      area: Math.abs(polygonArea(inner)) / 1e6,
+      // 안쪽 폴리곤은 offsetPolygon이 근-평행 변을 교차시키면 뒤집히거나 폭발한다(폭 6 mm 조각이 54.8 m²로 보고됐다 —
+      // 계획 10 슬리버 리뷰). 부호가 뒤집혔거나 바깥 면적을 넘으면 바깥 폴리곤 면적(상한)으로 되돌린다.
+      area: saneArea(polygonArea(inner), f.area) / 1e6,
     };
   });
 }
+
+const saneArea = (innerA, outerA) => (Number.isFinite(innerA) && innerA > 0 && innerA <= outerA) ? innerA : outerA;
 
 export function roomInnerPolygon(room, walls, extra = 0) {
   const insets = room.points.map((_, i) => {
