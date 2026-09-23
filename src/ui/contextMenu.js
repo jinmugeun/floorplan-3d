@@ -48,7 +48,14 @@ export function createContextMenu(root) {
       ev.stopPropagation(); ev.preventDefault();
       const b = buttons()[activeIndex()];
       if (b && !b.disabled) b.click();
+      return;
     }
+    // 메뉴가 열린 동안 글자 단축키는 뒤로 새지 않는다(§16.12 · M-10 — 팝오버와 같은 규칙).
+    // 이 리스너도 document 캡처 단계이므로(open()의 addEventListener(..., true)) 끊으면 타깃
+    // 리스너까지 막힌다: 입력 칸이 든 메뉴는 없지만 규칙을 팝오버와 같게 두어 두 곳이 갈라지지 않게 한다.
+    const t = ev.target;
+    const inField = t?.tagName === 'INPUT' || t?.tagName === 'SELECT' || t?.tagName === 'TEXTAREA';
+    if (!inField && !ev.ctrlKey && !ev.metaKey && !ev.altKey) ev.stopPropagation();
   }
   function open(x, y, list) {
     const back = opener ?? document.activeElement;   // 메뉴를 다시 열어도 원래 자리를 잃지 않는다

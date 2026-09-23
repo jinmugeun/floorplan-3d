@@ -6,6 +6,7 @@ import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createPlaceTool } from '../src/view2d/tools/placeTool.js';
+import { DROP_NEEDS_WALL } from '../src/ui/messages.js';
 
 const fakeView = { camera: { scale: 0.1 } };
 function setup(productId) {
@@ -124,4 +125,22 @@ test('onPointerMove + onPointerDown 한 번이 한 개를 놓고 되돌림도 �
   expect(ui.get().selection).toEqual({ type: 'item', id: items[0].id });
   store.undo();
   expect(activeFloor(store.get()).items).toHaveLength(0);
+});
+
+// §16.12(감사 §40): 빈 캔버스에서 "전체" 그리드의 첫 타일(고정창 600)을 클릭하면 아이템이
+// 허공에 생겼다. 끌어 놓기 경로는 DROP_NEEDS_WALL로 막는다 — 두 경로를 같게 만든다.
+test('벽이 없으면 벽 부착 제품을 놓지 않고 같은 문구로 알린다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const toasts = [];
+  const t = createPlaceTool({ store, ui, view: fakeView, product: productById('window-fix-600'), onDone() {}, toast: m => toasts.push(m) });
+  t.onPointerDown([1000.5, 1000.25]);
+  expect(activeFloor(store.get()).items).toHaveLength(0);
+  expect(toasts).toEqual([DROP_NEEDS_WALL]);
+  expect(ui.get().selection).toBeNull();
+  // 벽이 있으면 예전처럼 붙는다.
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  t.onPointerDown([2000.5, 0.25]);
+  expect(activeFloor(store.get()).items).toHaveLength(1);
+  expect(activeFloor(store.get()).items[0].wallId).toBeTruthy();
 });

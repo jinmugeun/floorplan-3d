@@ -257,7 +257,7 @@ test('타일 크기 기본값은 300이다(마감재 패널과 같다)', async (
   click(a.root, '[name="addBand"]');
   const row = a.q('.region-row');
   const first = row.querySelector('[name="mat"]').value;
-  expect(materialById(first).scale).toEqual([1000, 1000]);                       // 재질 자신의 scale은 1000인데
+  expect(materialById(first).scale).toEqual([300, 300]);                         // 새 행의 기본 재질은 타일의 첫 재질이다(§16.12)
   expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(300);          // 새 행은 패널과 같은 300으로 열린다
   expect(Number(row.querySelector('[name="scaleH"]').value)).toBe(300);
   // 재질을 바꾸면 덮어쓰기를 버리고 그 재질의 기본 scale을 따른다(놀라지 않게).
@@ -294,4 +294,21 @@ test('편집기도 [Tab]을 안에서 돌리고 닫을 때 부른 곳으로 포�
   expect(document.activeElement).toBe(inside[0]);        // 모달 밖으로 나가지 않는다
   click(root, '[name="cancel"]');
   expect(document.activeElement).toBe(opener);           // 부른 버튼이 다시 포커스를 갖는다
+});
+
+// §16.12(N-2 · 사전 검토 M-5): 새 행은 타일의 첫 재질로 열리므로 칸이 그 재질의 기본 scale을
+// 보이고, 비-타일 재질로 바꾸면 덮어쓰기를 버려 그 재질의 scale(1000)을 보인다.
+test('타일 크기 칸은 재질의 기본 scale을 보인다(비-타일로 바꾸면 그 재질을 따른다)', async () => {
+  const { materialById, MATERIALS } = await import('../src/materials/catalog.js');
+  const { TILE_CATEGORY } = await import('../src/ui/materialPanel.js');
+  const a = setup();
+  click(a.root, '[name="addBand"]');
+  const row = a.q('.region-row');
+  const first = row.querySelector('[name="mat"]').value;
+  expect(materialById(first).category).toBe(TILE_CATEGORY);
+  expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(materialById(first).scale[0]);
+  const solid = MATERIALS.find(m => m.category !== TILE_CATEGORY);
+  set(row.querySelector('[name="mat"]'), solid.id);
+  expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(solid.scale[0]);
+  expect(Number(row.querySelector('[name="scaleH"]').value)).toBe(solid.scale[1]);
 });

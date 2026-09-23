@@ -5,6 +5,7 @@ import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOV
 import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from '../src/ui/messages.js';
 import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, WHY_CLIPBOARD_EMPTY, WHY_MIN_POINTS, WHY_NO_ACTION } from '../src/ui/messages.js';
 import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from '../src/ui/messages.js';
+import { FIRST_ROOM_HINT } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -158,4 +159,8 @@ test('템플릿 문구는 §16.10이 적은 글자 그대로다', () => {
   expect(CONFIRM_TEMPLATE_DELETE('내 방').message).toContain('"내 방" 템플릿을 지웁니다');
   expect(TEMPLATE_NAME_TAKEN).toBe('같은 이름의 템플릿이 있습니다');
   expect(NAME_REQUIRED).toBe('이름을 입력해주세요');
+});
+
+test('첫 방 안내는 §16.12가 적은 글자 그대로다', () => {
+  expect(FIRST_ROOM_HINT).toBe('왼쪽 [방 그리기 F]로 첫 방을 그려 보세요');
 });

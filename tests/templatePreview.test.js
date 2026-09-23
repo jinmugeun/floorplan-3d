@@ -3,7 +3,7 @@
 import { describe, test, expect } from 'vitest';
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
-import { previewBox, previewShapes, drawPreview, PREVIEW_PX } from '../src/ui/templatePreview.js';
+import { previewBox, previewShapes, projectShapes, drawPreview, PREVIEW_PX } from '../src/ui/templatePreview.js';
 
 const room = { points: [[0, 0], [4000.5, 0], [4000.5, 3000.25], [0, 3000.25]] };
 
@@ -37,4 +37,22 @@ describe('템플릿 미리보기', () => {
     expect(() => drawPreview(null, { outline: [], boxes: [] })).not.toThrow();
     expect(() => drawPreview({ getContext: () => null }, { outline: [], boxes: [] })).not.toThrow();
   });
+});
+
+// §16.12(감사 §48): 시작 화면 카드가 어떤 도면인지 열어야 알았다.
+test('projectShapes는 층 전체(방 여러 개 + 제품)를 한 상자에 담는다', () => {
+  const floor = {
+    walls: [{ id: 'w1', a: [0, 0], b: [4000.5, 0], thickness: 200 }, { id: 'w2', a: [0, 6000.25], b: [4000.5, 6000.25], thickness: 200 }],
+    rooms: [{ id: 'r1', points: [[0, 0], [4000.5, 0], [4000.5, 3000], [0, 3000]] }, { id: 'r2', points: [[0, 3000], [4000.5, 3000], [4000.5, 6000.25], [0, 6000.25]] }],
+    items: [createItem(productById('sofa-3'), { pos: [2000.5, 1500.25] })],
+  };
+  const s = projectShapes(floor, { size: PREVIEW_PX, pad: 4 });
+  expect(s.rooms).toHaveLength(2);
+  expect(s.boxes).toHaveLength(1);
+  // 세로가 긴 도면이므로 세로가 (96 − 8)을 채운다.
+  const ys = s.rooms.flat().map(p => p[1]);
+  expect(Math.min(...ys)).toBeCloseTo(4, 6);
+  expect(Math.max(...ys)).toBeCloseTo(92, 6);
+  expect(projectShapes({ walls: [], rooms: [], items: [] })).toEqual({ outline: [], rooms: [], boxes: [] });
+  expect(projectShapes(null)).toEqual({ outline: [], rooms: [], boxes: [] });
 });

@@ -2,6 +2,7 @@ import { activeFloor, createItem } from '../../state/schema.js';
 import { addItem } from '../../state/floorOps.js';
 import { snapItemPos, nearestWallPlacement, WALL_ATTACH_DIST } from '../../geom/items.js';
 import { drawItem } from '../items2d.js';
+import { DROP_NEEDS_WALL } from '../../ui/messages.js';
 
 // 배치 고스트(반투명 제품 + 스냅 가이드 점선) 그리기. placeTool과 structTool이 나눠 쓴다(§13.2).
 export function drawGhost(ctx, v, ghost) {
@@ -17,7 +18,7 @@ export function drawGhost(ctx, v, ghost) {
 }
 
 // 라이브러리 타일을 누르면 켜지는 도구. 한 번 배치하면 선택 도구로 돌아간다(오늘의집과 같은 동작).
-export function createPlaceTool({ store, ui, view, product, onDone = () => {} }) {
+export function createPlaceTool({ store, ui, view, product, onDone = () => {}, toast = () => {} }) {
   const floor = () => activeFloor(store.get());
   const embed = !!product.opening; // 문·창·개구부는 벽 두께 안에 박힌다
   let ghost = ghostAt([0, 0], false);
@@ -46,6 +47,10 @@ export function createPlaceTool({ store, ui, view, product, onDone = () => {} })
     onPointerMove(p, ev) { ghost = ghostAt(p, !!ev?.ctrlKey); },
     onPointerDown(p, ev) {
       ghost = ghostAt(p, !!ev?.ctrlKey);
+      // 벽 부착 제품은 벽 위에만 놓인다(§16.12 · 감사 §40). 끌어 놓기 경로(app/dndActions.js)가
+      // 쓰는 것과 **같은 문구**로 알리고 놓지 않는다 — 두 경로가 다르게 동작하던 자리다.
+      // 도구는 켜진 채 남는다: 벽을 그린 뒤 다시 클릭할 수 있다.
+      if (product.attach === 'wall' && !ghost.item.wallId) { toast(DROP_NEEDS_WALL); return; }
       const item = { ...ghost.item, pos: [Math.round(ghost.item.pos[0]), Math.round(ghost.item.pos[1])] };
       addItem(store, item);
       ui.set({ selection: { type: 'item', id: item.id } });

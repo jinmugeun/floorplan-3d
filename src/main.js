@@ -164,7 +164,7 @@ const tools = {
   guide: () => createGuideTool({ store, view, opts: toolOpts.guide }),
   measure: () => createMeasureTool({ store, opts: toolOpts.measure, view }),
   duct: () => createDuctTool({ store, ui, view, opts: toolOpts.duct, onDone: () => setTool('select') }),
-  place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select') }),
+  place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select'), toast: shell.toast }),
   pathArray: () => arrange.createPathTool(),
 };
 function setTool(name) { cancelReplace(); const t = tools[name](); ui.set({ tool: name }); view.setTool(t); shell.setOptionBar(t); }
@@ -224,9 +224,14 @@ const dirty = createDirtyTracker(store, { onChange: () => saveInd.show() });
 const saveInd = createSaveIndicator(dirty);
 const auto = startAutosave(store, { onSaved: t => saveInd.markSaved('auto', t) });   // 표시 시각 = 저장 시각
 const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow() });
-const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store }); };
+// 온보딩을 닫으면 배너가 다음 행동을 가리킨다(§16.12 · 감사 §47).
+const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store, onDone: () => ui.set({ firstRoomHint: true }) }); };
 if (projectIsEmpty(store.get())) project.showStart({ onClose: maybeOnboard });
 else maybeOnboard();
+// 첫 방이 생기면 화면을 맞춘다(§16.12 · 감사 §49): 빈 프로젝트 기본 배율 0.056에서 처음 그린
+// 3000 mm 벽이 168 px이고 치수 라벨이 11 px이라 "화면 맞추기"를 스스로 눌러야 했다.
+let hadRooms = (activeFloor(store.get()).rooms ?? []).length > 0;
+store.subscribe(s => { const n = (activeFloor(s).rooms ?? []).length; if (!hadRooms && n > 0) view.fit(); hadRooms = n > 0; });
 document.getElementById('btnSave').addEventListener('click', () => {
   downloadText(filenameFor(store.get()), serializeProject(store.get()));
   auto.saveNow();               // 자동 저장본도 최신으로 만든다(그 onSaved가 시각을 먼저 적는다)

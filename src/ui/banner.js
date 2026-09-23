@@ -4,7 +4,7 @@
 import { esc } from '../util/html.js';
 import { activeFloor } from '../state/schema.js';
 import { memoCollisions } from '../geom/collide.js';
-import { COLLISION_BANNER, COLLISION_BANNER_QUIET, FP_BANNER, FP_EXIT } from './messages.js';
+import { COLLISION_BANNER, COLLISION_BANNER_QUIET, FP_BANNER, FP_EXIT, FIRST_ROOM_HINT } from './messages.js';
 
 // 드래그가 끝났다고 볼 이벤트. lostpointercapture까지 받아 두면 캡처가 풀리는 경로도 놓치지 않는다.
 export const DRAG_END_EVENTS = ['pointerup', 'pointercancel', 'lostpointercapture'];
@@ -55,6 +55,9 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
         ? `<button type="button" class="hint" data-action="hintCancel">${esc(t.hint)}</button>`
         : `<span class="hint">${esc(t.hint)}</span>`;
     }
+    // 온보딩을 닫은 뒤의 첫 방 유도(§16.12 · 감사 §47). 방이 생기면 조건이 저절로 풀린다 —
+    // 플래그를 지우는 코드가 없어도 사라지므로 "한 번"이 지켜진다(다시 켜는 경로도 없다).
+    if (s.firstRoomHint && !(activeFloor(store.get())?.rooms?.length)) return `<span class="hint">${esc(FIRST_ROOM_HINT)}</span>`;
     return '';
   }
   function render(s = ui.get()) {

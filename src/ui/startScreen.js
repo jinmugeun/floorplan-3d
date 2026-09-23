@@ -1,4 +1,5 @@
-import { allTemplateCards, deleteTemplate, renameTemplate, listTemplates, BUILTIN_TEMPLATES } from '../templates/projectTemplates.js';
+import { allTemplateCards, deleteTemplate, renameTemplate, listTemplates, templateProject, BUILTIN_TEMPLATES } from '../templates/projectTemplates.js';
+import { projectShapes, mountPreviews, PREVIEW_PX } from './templatePreview.js';
 import { esc } from '../util/html.js';
 import { focusTrap } from './dialogBase.js';
 import { confirmDialog } from './confirmDialog.js';
@@ -24,12 +25,21 @@ export function openStartScreen({ store, restored = null, onEmpty = () => {}, on
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', '시작하기');
   // 내장 템플릿 카드는 버튼 하나다. **저장한** 템플릿 카드는 열기 + [이름 변경]·[삭제] 세 버튼이라
   // 버튼 안에 버튼을 넣을 수 없어 div로 감싼다(§16.10 · 감사 §18).
+  // 축소 도면(§16.12 · 감사 §48): "원룸 6평"이 어떤 도면인지 열지 않고 알 수 있게 한다.
+  const previewTag = id => `<canvas data-tpl="${esc(id)}" width="${PREVIEW_PX}" height="${PREVIEW_PX}" aria-hidden="true"></canvas>`;
   const tplCard = c => (c.user
     ? `<div class="start-card tpl user">
-        <button type="button" class="start-open" data-template="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>
+        <button type="button" class="start-open" data-template="${esc(c.id)}">${previewTag(c.id)}<b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>
         <div class="row"><button type="button" data-tpl-rename="${esc(c.id)}">이름 변경</button><button type="button" data-tpl-delete="${esc(c.id)}" class="danger">삭제</button></div>
       </div>`
-    : `<button type="button" class="start-card tpl" data-template="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>`);
+    : `<button type="button" class="start-card tpl" data-template="${esc(c.id)}">${previewTag(c.id)}<b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>`);
+  // 카드 하나마다 그 템플릿의 프로젝트를 한 번 만들어 그린다(내장 원룸 + 저장한 템플릿 몇 장).
+  // 실패하거나 도면이 비면 캔버스는 빈 채 남는다(mountPreviews가 null을 받으면 그린 것이 없다).
+  const shapesFor = id => {
+    if (id === 'restore') return restored ? projectShapes(restored.floors?.[restored.activeFloor ?? 0]) : null;
+    try { const p = templateProject(id); return p ? projectShapes(p.floors?.[p.activeFloor ?? 0]) : null; }
+    catch { return null; }
+  };
   const templatesHtml = () => {
     const list = allTemplateCards().filter(c => !HIDDEN.has(c.id));
     return list.length
@@ -38,12 +48,15 @@ export function openStartScreen({ store, restored = null, onEmpty = () => {}, on
   };
   root.innerHTML = `<div class="start-card-row">
     <h1>주방 환기 3D 플래너</h1>
-    <div class="start-cards">${cards.map(c => `<button type="button" class="start-card${c.key === 'restore' ? ' restore' : ''}" data-start="${c.key}"><b>${esc(c.title)}</b><span>${esc(c.desc)}</span></button>`).join('')}</div>
+    <div class="start-cards">${cards.map(c => `<button type="button" class="start-card${c.key === 'restore' ? ' restore' : ''}" data-start="${c.key}">${c.key === 'restore' ? previewTag('restore') : ''}<b>${esc(c.title)}</b><span>${esc(c.desc)}</span></button>`).join('')}</div>
     <h2 class="start-sub">템플릿</h2>
     <div class="start-cards" data-part="templates">${templatesHtml()}</div>
   </div>`;
   document.body.appendChild(root);
-  const refreshTemplates = () => { root.querySelector('[data-part="templates"]').innerHTML = templatesHtml(); };
+  // 카드를 다시 그린 뒤에도(이름 변경·삭제) 축소 도면을 다시 칠한다 — innerHTML 교체가 캔버스를 버린다.
+  const paintPreviews = () => mountPreviews(root, shapesFor);
+  const refreshTemplates = () => { root.querySelector('[data-part="templates"]').innerHTML = templatesHtml(); paintPreviews(); };
+  paintPreviews();
   // 검증은 renameTemplate과 같은 규칙을 본다(저장한 템플릿·내장 템플릿과 이름이 겹치면 막는다). 저장은 하지 않는다.
   const renameCheck = (id, name) => !listTemplates().some(t => t.id !== id && t.name === name)
     && !BUILTIN_TEMPLATES.some(t => t.name === name);

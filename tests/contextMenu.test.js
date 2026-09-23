@@ -173,3 +173,18 @@ test('메뉴 안에서 난 스크롤은 메뉴를 닫지 않고, 페이지 스�
   document.dispatchEvent(new Event('scroll', { bubbles: true }));
   expect(menu.isOpen()).toBe(false);
 });
+
+// §16.12(M-10): 팝오버와 같은 규칙이다 — 메뉴를 읽는 중에 누른 [L]이 도구를 바꾸지 않는다.
+test('열려 있는 동안 글자 키는 window로 새지 않고 Ctrl 조합은 통과한다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const menu = createContextMenu(root);
+  menu.open(10, 10, [{ label: 'A', onSelect() {} }]);
+  const seen = [];
+  const onWin = ev => seen.push(ev.key);
+  window.addEventListener('keydown', onWin);
+  try {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+  } finally { window.removeEventListener('keydown', onWin); menu.close(); }
+  expect(seen).toEqual(['z']);
+});

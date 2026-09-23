@@ -2,9 +2,10 @@
 import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject, createItem } from '../src/state/schema.js';
+import { createEmptyProject, createItem, activeFloor } from '../src/state/schema.js';
 import { createShell, gizmoBtnVisible } from '../src/ui/shell.js';
-import { addItem } from '../src/state/floorOps.js';
+import { addItem, addWalls } from '../src/state/floorOps.js';
+import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { COLLISION_BANNER, COLLISION_BANNER_QUIET } from '../src/ui/messages.js';
 import { LAYOUT_DEBOUNCE_MS } from '../src/ui/layout.js';
@@ -1067,4 +1068,20 @@ test('옵션 바에서 잘린 값은 칸에 되돌아오고 안내가 뜬다(리
   expect(tool.opts.h).toBe(3000);                   // normalizeDuct가 조용히 줄이기 전에 칸에서 잘린다
   expect(el.value).toBe('3000');
   expect([...document.querySelectorAll('.toast')].map(t => t.textContent)).toContain('최대 3000 mm까지');
+});
+
+// §16.12(감사 §47): 온보딩이 끝나면 빈 격자만 남았다 — 배너가 다음 행동을 가리킨다.
+test('첫 방 안내는 방이 없을 때만, 도구 안내가 없을 때만 보인다', () => {
+  const { shell, ui, store, root } = mountShell();      // Task 6 Step 1이 만든 헬퍼(벽·방이 없는 빈 프로젝트)
+  expect(root.querySelector('#banner').hidden).toBe(true);
+  ui.set({ firstRoomHint: true });
+  expect(root.querySelector('#banner').textContent).toContain('왼쪽 [방 그리기 F]로 첫 방을 그려 보세요');
+  // 도구 안내가 있으면 그쪽이 먼저다(무엇을 하는 중인지가 더 급하다).
+  shell.setOptionBar({ name: 'room', opts: {}, hint: '첫 모서리를 클릭 (1/2)' });
+  expect(root.querySelector('#banner').textContent).toContain('첫 모서리를 클릭');
+  shell.setOptionBar(null);
+  // 방이 생기면 저절로 사라진다.
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  expect(activeFloor(store.get()).rooms).toHaveLength(1);
+  expect(root.querySelector('#banner').hidden).toBe(true);
 });

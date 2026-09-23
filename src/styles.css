@@ -252,3 +252,5 @@ button.primary, .primary { background: var(--accent); color: var(--on-accent); b
 .start-open b { font-size: 14px; } .start-open span { color: var(--muted); font-size: 12px; }
 .start-card.tpl.user .row { display: flex; gap: 6px; }
 .start-card.tpl.user .row button:not(.primary):not(.danger) { flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font-family: inherit; margin: 0; }
+/* 시작 화면 카드의 축소 도면(§16.12)은 96 px 정사각이고 글자 위에 놓인다. */
+.start-card canvas[data-tpl] { align-self: center; background: #f4f6f8; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 2px; }

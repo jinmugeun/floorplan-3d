@@ -135,3 +135,12 @@ test('사용자 템플릿 카드에 [이름 변경]·[삭제]가 있다', async 
   await vi.waitFor(() => expect(listTemplates()).toHaveLength(0));
   await vi.waitFor(() => expect(document.querySelector('#startScreen').querySelector('.start-card.tpl.user')).toBeNull());
 });
+
+test('템플릿 카드에 96 px 축소 도면 캔버스가 있다(§16.12)', () => {
+  localStorage.clear();
+  document.body.innerHTML = '';
+  openStartScreen({ store: createStore(createEmptyProject()) });
+  const canvas = document.querySelector('.start-card.tpl canvas[data-tpl]');
+  expect(canvas).not.toBeNull();
+  expect(canvas.width).toBe(96);
+});

@@ -171,3 +171,6 @@ export const TEMPLATE_FILTER_RESET = '필터 초기화';
 // 저장한 프로젝트 템플릿 관리(§16.10 · 감사 §18: deleteTemplate 호출자가 0이었다).
 export const TEMPLATE_RENAME = { title: '템플릿 이름 변경', label: '템플릿 이름', ok: '변경' };
 export const CONFIRM_TEMPLATE_DELETE = name => ({ title: '템플릿 삭제', message: `"${name}" 템플릿을 지웁니다. 되돌릴 수 없습니다.`, ok: '삭제', danger: true });
+
+// 첫 5분(§16.12 · 감사 §47): 온보딩을 닫으면 다음에 누를 것을 가리킨다. 방이 생기면 사라진다.
+export const FIRST_ROOM_HINT = '왼쪽 [방 그리기 F]로 첫 방을 그려 보세요';

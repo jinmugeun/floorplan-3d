@@ -173,3 +173,21 @@ test('앵커가 바뀌면 [Esc]는 새 앵커로 포커스를 돌린다', () => 
   expect(document.activeElement).toBe(second);
   pop.destroy();
 });
+
+// §16.12(M-10): 열려 있는 동안 글자 단축키가 window까지 새면 읽는 중에 도구가 바뀐다.
+// 다만 팝오버 안의 입력 칸에서 누른 키는 그대로 지나가야 한다(keymap.js의 INPUT 가드가 받는다).
+test('열려 있는 동안 글자 키는 window로 새지 않고, Ctrl 조합과 입력 칸은 통과한다', () => {
+  const root = document.createElement('div'); document.body.appendChild(root);
+  const pop = createPopover(root);
+  pop.open(anchorAt(), '<label><input type="number" name="thickness" value="200"> 두께</label>');
+  const seen = [];
+  const onWin = ev => seen.push(ev.key);
+  window.addEventListener('keydown', onWin);
+  try {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+    // 팝오버 안의 숫자 칸에서 누른 [Enter]는 막지 않는다(캡처에서 끊으면 INPUT 가드까지 막힌다).
+    pop.el.querySelector('[name="thickness"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  } finally { window.removeEventListener('keydown', onWin); pop.destroy(); }
+  expect(seen).toEqual(['z', 'Enter']);
+});

@@ -1,6 +1,7 @@
 // 마감재 편집기: 벽 하나의 한 면을 영역으로 나눠 여러 재질을 쓴다(오늘의집의 직선 L·사각형 F).
 // 영역 좌표는 벽 왼쪽 끝(a)에서 u(mm), 바닥에서 z(mm)다. band는 벽 전체 폭이라 u를 무시한다.
-import { MATERIALS, materialById } from '../materials/catalog.js';
+import { MATERIALS, materialsIn, materialById } from '../materials/catalog.js';
+import { TILE_CATEGORY } from './materialPanel.js';
 import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, uid, MAT_RANGE } from '../state/schema.js';
 import { regionsOf, setWallRegions } from '../state/materialOps.js';
@@ -101,11 +102,16 @@ export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = t
   // 넣는다 — validateRegion도 이 값을 범위 안으로 받아들인다.
   function newRow(kind, { len: L, height: H }) {
     const lenR = Math.round(L);
-    // 타일 크기는 마감재 패널과 같은 300×300으로 열린다(§15.11 — 감사 §14의 "300 대 1000"):
-    // 재질 자신의 scale(MATERIALS[0] = 무광 화이트 페인트는 1000)이 아니라 이 기본값을 실어 주므로
-    // 같은 타일이 패널과 편집기에서 다른 크기로 보이지 않는다. 재질을 바꾸면 이 덮어쓰기는 버려지고
-    // 새 재질의 기본 scale을 따른다(아래 change 핸들러의 name === 'mat').
-    const mat = { id: MATERIALS[0].id, offset: [0, 0], angle: 0, scale: [...DEFAULT_TILE_SCALE] };
+    // 타일 크기는 마감재 패널과 같은 300×300으로 열린다(§15.11 — 감사 §14의 "300 대 1000").
+    // 다만 **타일 카테고리가 아닌 재질에는 scale을 싣지 않는다**(§16.12 · 계획 7 재리뷰 N-2):
+    // solid 패턴에는 반복 크기가 뜻이 없어 보이지 않는 값이 되고, 마감재 패널의 가드(타일만 scale을
+    // 쓴다)와도 어긋났다. 그래서 새 행의 기본 재질을 **타일 카테고리의 첫 재질**로 바꾼다 —
+    // 그러지 않으면 MATERIALS[0](무광 화이트 페인트)은 타일이 아니라 scale이 실리지 않고 칸이
+    // 1000을 보여 §15.11의 "300" 결정이 조용히 되돌려진다(사전 검토 C-10). 재질을 바꾸면 이
+    // 덮어쓰기는 버려지고 새 재질의 기본 scale을 따른다(아래 change 핸들러의 name === 'mat').
+    const first = materialsIn(TILE_CATEGORY)[0] ?? MATERIALS[0];
+    const mat = { id: first.id, offset: [0, 0], angle: 0 };
+    if (first.category === TILE_CATEGORY) mat.scale = [...DEFAULT_TILE_SCALE];
     return kind === 'band'
       ? { id: uid('rg'), kind: 'band', u0: 0, u1: lenR, z0: 0, z1: Math.min(1200, H), mat }
       : { id: uid('rg'), kind: 'rect', u0: 0, u1: Math.min(1000, lenR), z0: 0, z1: Math.min(1000, H), mat };

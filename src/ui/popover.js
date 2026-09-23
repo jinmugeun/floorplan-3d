@@ -27,7 +27,18 @@ export function createPopover(root) {
     if (ev.key === 'Escape') { ev.stopPropagation(); close(); return; }
     // 팝오버가 열려 있으면 Tab은 안에서만 돈다. 포커스가 바깥에 있으면 안으로 데려온다
     // (trapTab은 목록에 없는 포커스를 앞으로는 첫, 뒤로는 마지막 항목으로 보낸다).
-    if (ev.key === 'Tab') { ev.stopPropagation(); trapTab(ev, focusables(el)); }
+    if (ev.key === 'Tab') { ev.stopPropagation(); trapTab(ev, focusables(el)); return; }
+    // 글자 단축키는 뒤로 새지 않는다(§16.12 · 계획 7 이월 M-10): 팝오버를 읽는 중에 누른 [L]이
+    // 도구를 벽 그리기로 바꿨다. 조합키(Ctrl·Meta·Alt)는 통과시킨다 — Ctrl+Z·Ctrl+S는 팝오버와
+    // 무관하게 쓰여야 한다.
+    // 이 리스너는 document의 **캡처** 단계다(아래 addEventListener(..., true)): 여기서 전파를
+    // 끊으면 타깃과 그 안의 어떤 keydown 리스너에도 이벤트가 닿지 않는다(글자 삽입 자체는
+    // 기본 동작이라 살아남는다). 그래서 팝오버 안의 입력·선택·여러 줄 칸에서는 끊지 않는다 —
+    // 그러지 않으면 그 칸에서 누른 [Enter]·[Esc]가 keymap.js의 INPUT 가드(commitField·
+    // revertField)까지 가지 못한다. 읽기만 하는 상태에서 누른 [L]만 막는 것이 목표다.
+    const t = ev.target;
+    const inField = t?.tagName === 'INPUT' || t?.tagName === 'SELECT' || t?.tagName === 'TEXTAREA';
+    if (!inField && !ev.ctrlKey && !ev.metaKey && !ev.altKey) ev.stopPropagation();
   };
   // 페이지가 스크롤되면 앵커에서 떨어지므로 닫는다. 단 팝오버 안에서 난 스크롤(넘치는 목록을
   // Tab으로 감싸 돌 때 브라우저가 일으킨다)은 페이지 스크롤이 아니다 — 캡처 단계라 여기까지 온다.
