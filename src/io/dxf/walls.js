@@ -63,7 +63,10 @@ export function snapEndpoints(list, tol) {
 
 // 10-②. 매달린 끝을 **자기 방향으로** 연장해 이웃 벽의 무한직선과 만나게 한다(T·L 닫기).
 // 뒤로 여는 폭은 살짝 지나친 끝을 되당길 만큼(두께 + snap)뿐이다: 프로토타입처럼 −4,000까지 열면
-// 매달린 끝이 반대편 벽 직선으로 수천 mm 점프해 벽이 minWall 아래로 줄어 사라진다.
+// 매달린 끝이 반대편 벽 직선으로 수천 mm 점프해 벽이 minWall 아래로 줄어 사라진다. 폭을 묶는 것만으로는
+// 모자란다(리뷰 F2) — 200 mm 벽 두 줄 사이에 낀 400 mm 가벽은 450 mm 안쪽으로 당겨져도 minWall
+// 아래로 줄어 지워진다. 그래서 **뒤로 당기는 후보는 벽이 minWall 이상으로 남을 때만** 받는다
+// (닫지 못한 접합은 끊긴 끝점으로 §18.6이 사람에게 보여 준다 — 벽을 지우는 것보다 낫다).
 export function closeJunctions(list, P = DXF_PARAMS) {
   const out = list.map(w => ({ ...w, a: [...w.a], b: [...w.b] }));
   const shared = p => out.filter(w => len(w.a, p) < 1 || len(w.b, p) < 1).length;
@@ -83,6 +86,7 @@ export function closeJunctions(list, P = DXF_PARAMS) {
         if (Math.abs(den) < 1e-9) continue;                        // 평행
         const s = ((o.a[0] - p[0]) * e[1] - (o.a[1] - p[1]) * e[0]) / den;
         if (s < back || s > P.extend) continue;
+        if (s < 0 && L0 + s < P.minWall) continue;                 // 뒤로 당겨 minWall 아래로 줄면 지워진다
         const q = [p[0] + dir[0] * s, p[1] + dir[1] * s];
         const t = ((q[0] - o.a[0]) * e[0] + (q[1] - o.a[1]) * e[1]) / (e[0] * e[0] + e[1] * e[1]);
         const marg = (o.thickness + w.thickness) / 2 / Math.hypot(e[0], e[1]);
@@ -153,24 +157,35 @@ export function dropTinyComponents(list, minWalls = DXF_PARAMS.minComp) {
 // 개구부 틈(§18.4의 두 번째 신호 · 사전 검토 C-2). 이 도면의 문은 **미닫이**라 스윙 궤적 원호가
 // 아예 없다(파일 전체에서 반지름 600~1,200 mm ∧ 스윕 60~110°인 원호는 5개뿐이고 전부 기구 레이어다).
 // 대신 벽을 이루는 면선 쌍이 **둘 다 비는 구간**이 문·통로다: buildFaces가 faceGap(5,200 mm)으로
-// 이어 놓기 전의 raw 구간을 보고, 벽의 겹침 구간(c.ov) 안에서 덮이지 않은 600~1,500 mm 토막을 찾는다.
+// 이어 놓기 전의 raw 구간을 보고, 벽의 겹침 구간(c.ov) 안에서 **두 면선 모두** 덮이지 않은
+// 600~1,500 mm 토막을 찾는다. "하나라도 비는" 구간을 쓰면(리뷰 F1) 한쪽 면선만 끊긴 작도 오류가
+// 벽에 있지도 않은 문이 된다 — 바깥 면선이 멀쩡한데 안쪽만 900 mm 끊기면 유령 문 하나, 끊긴 자리가
+// 어긋나면 유령 문 둘이 나온다.
+const holes = (cov, s0, s1) => {   // 덮인 구간 cov(오름차순) 기준으로 [s0, s1] 안에서 비어 있는 토막들
+  const out = [];
+  let t = s0;
+  for (const [a, b] of cov) {
+    if (b <= s0) continue;
+    if (a >= s1) break;
+    if (a > t) out.push([t, a]);
+    t = Math.max(t, b);
+  }
+  if (t < s1) out.push([t, s1]);
+  return out;
+};
 export function openingGaps(accepted, P = DXF_PARAMS) {
   const out = [];
   for (const c of accepted) {
     const u = c.A.u, n = c.A.n, off = (c.A.off + c.B.off) / 2;
-    const cov = mergeIv(ivOverlap(c.A.raw ?? c.A.intervals, c.B.raw ?? c.B.intervals));
-    const at = (t0, t1) => {
-      const m = (t0 + t1) / 2;
-      out.push({ p: [u[0] * m + n[0] * off, u[1] * m + n[1] * off], width: t1 - t0 });
-    };
+    const covA = mergeIv(c.A.raw ?? c.A.intervals), covB = mergeIv(c.B.raw ?? c.B.intervals);
     for (const [s0, s1] of c.ov) {
-      let t = s0;
-      for (const [a, b] of cov) {
-        if (b <= s0 || a >= s1) continue;
-        if (a - t >= GAP_RANGE[0] && a - t <= GAP_RANGE[1]) at(t, a);
-        t = Math.max(t, b);
+      // 면선마다의 빈 토막을 구해 **교집합**을 낸다 — 그것이 둘 다 비는 구간이다. 폭은 양끝 포함으로 잰다.
+      for (const [t0, t1] of ivOverlap(holes(covA, s0, s1), holes(covB, s0, s1))) {
+        const width = t1 - t0;
+        if (width < GAP_RANGE[0] || width > GAP_RANGE[1]) continue;
+        const m = (t0 + t1) / 2;
+        out.push({ p: [u[0] * m + n[0] * off, u[1] * m + n[1] * off], width });
       }
-      if (s1 - t >= GAP_RANGE[0] && s1 - t <= GAP_RANGE[1]) at(t, s1);
     }
   }
   return out;

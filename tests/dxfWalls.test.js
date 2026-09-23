@@ -63,6 +63,21 @@ test('closeJunctions는 매달린 끝을 자기 방향으로만 연장한다(T�
   // 뒤로 1,900 mm 점프하는 연장은 막는다(§18.3-10-②의 "자기 방향으로").
   const wide = closeJunctions([wall(0.5, 100.25, 2000.5, 100.25), wall(100.5, 0.25, 100.5, 4000.25)], P);
   expect(wide[0].b[0]).toBeCloseTo(2000.5, 6);
+  // 리뷰 F2: 200 mm 바 두 줄(y = 2000.25 · 2100.25) 사이에 낀 길이 400 가벽. 뒤로 300 mm 당기면
+  // 길이 100 < minWall이라 extractWalls가 지워 버린다 — 그런 후보는 받지 않고 매달린 채 둔다.
+  const pinched = closeJunctions([
+    wall(3000.5, 2000.25, 3000.5, 2400.25),
+    wall(0.5, 2000.25, 6000.5, 2000.25), wall(0.5, 2100.25, 6000.5, 2100.25),
+  ], P);
+  expect(L(pinched[0])).toBeGreaterThanOrEqual(P.minWall);
+  expect(L(pinched[0])).toBeCloseTo(400, 6);
+  expect(pinched[0].a).toEqual([3000.5, 2000.25]);             // 먼 쪽 끝도 그대로다
+  expect(pinched[0].b).toEqual([3000.5, 2400.25]);
+  // 살짝 지나친 끝(300.5 mm)은 여전히 바로 되당긴다 — 벽이 minWall 위로 남기 때문이다.
+  const over = closeJunctions([wall(3000.5, 0.25, 3000.5, 2300.75), wall(0.5, 2000.25, 6000.5, 2000.25)], P);
+  expect(over[0].b[1]).toBeCloseTo(2000.25, 6);
+  expect(L(over[0])).toBeCloseTo(2000, 6);
+  expect(over[0].a).toEqual([3000.5, 0.25]);
 });
 
 test('bridgeGaps는 마주보는 매달린 끝을 잇고 어긋난 끝은 잇지 않는다', () => {
@@ -89,11 +104,12 @@ test('dropTinyComponents는 벽 4개 미만 덩어리를 버린다', () => {
 // 바깥 면선 (0.5, 0.25)~(6000.5, 4000.25), 안쪽 면선은 200 mm 안으로 들어온다.
 const rectSegs = ({ doorGap = true, wide = false } = {}) => {
   const X1 = wide ? 12000.5 : 6000.5, Y1 = 4000.25;
-  const bottomInner = doorGap
-    ? [seg(0.5, 200.25, 2500.5, 200.25), seg(3400.5, 200.25, X1, 200.25)]      // 900 mm 문 틈
-    : [seg(0.5, 200.25, X1, 200.25)];
+  // 900 mm 문 틈은 **두 면선을 모두** 끊는다(실제 개구부가 그렇다 — 한쪽만 끊긴 것은 작도 오류다).
+  const bottom = y => (doorGap
+    ? [seg(0.5, y, 2500.5, y), seg(3400.5, y, X1, y)]
+    : [seg(0.5, y, X1, y)]);
   return [
-    seg(0.5, 0.25, X1, 0.25), ...bottomInner,
+    ...bottom(0.25), ...bottom(200.25),
     seg(0.5, Y1, X1, Y1), seg(0.5, Y1 - 200, X1, Y1 - 200),
     seg(0.5, 0.25, 0.5, Y1), seg(200.5, 0.25, 200.5, Y1),
     seg(X1, 0.25, X1, Y1), seg(X1 - 200, 0.25, X1 - 200, Y1),
@@ -143,6 +159,7 @@ test('벽 후보 레이어가 0개면 도형으로 추정하고 guessed를 켠�
 // 사전 검토 C-2: 이 도면의 문은 미닫이라 스윙 호가 없다 — 문 자리는 **면선 쌍의 틈**이 알려 준다.
 test('openingGaps는 면선 쌍이 둘 다 비는 600~1500 mm 구간을 개구부로 준다', () => {
   expect(GAP_RANGE).toEqual([600, 1500]);
+  const gapsOf = segs => extractWalls(exOf(segs), { wallLayers: new Set(['WAL']), params: P, thickness: 200 }).gaps;
   const r = extractWalls(exOf(rectSegs()), { wallLayers: new Set(['WAL']), params: P, thickness: 200 });
   expect(r.gaps).toHaveLength(1);
   expect(r.gaps[0].width).toBeCloseTo(900, 6);                 // 900 mm 문 틈
@@ -152,8 +169,36 @@ test('openingGaps는 면선 쌍이 둘 다 비는 600~1500 mm 구간을 개구�
   const solid = extractWalls(exOf(rectSegs({ doorGap: false })), { wallLayers: new Set(['WAL']), params: P, thickness: 200 });
   expect(solid.walls).toHaveLength(4);
   expect(solid.gaps).toEqual([]);
-  // 범위 밖 폭은 개구부가 아니다 — 위 벽에 3,000 mm 틈을 내도 gaps는 늘지 않는다.
-  const wide = rectSegs().filter(s => !(s.a[1] === 4000.25 && s.b[1] === 4000.25));
-  wide.push(seg(0.5, 4000.25, 1000.5, 4000.25), seg(4000.5, 4000.25, 6000.5, 4000.25));
-  expect(extractWalls(exOf(wide), { wallLayers: new Set(['WAL']), params: P, thickness: 200 }).gaps).toHaveLength(1);
+  // 범위 밖 폭은 개구부가 아니다 — 위 벽의 **두 면선 모두** 3,000 mm를 끊어도 gaps는 늘지 않는다.
+  const topCut = y => [seg(0.5, y, 1000.5, y), seg(4000.5, y, 6000.5, y)];
+  const wide = rectSegs().filter(s => !(s.a[1] === s.b[1] && (s.a[1] === 4000.25 || s.a[1] === 3800.25)));
+  wide.push(...topCut(4000.25), ...topCut(3800.25));
+  expect(gapsOf(wide)).toHaveLength(1);
+  // 리뷰 F1: 판정은 "하나라도 비는" 구간이 아니라 "**둘 다** 비는" 구간이다.
+  const outer = (x0, x1) => (x0 === null ? [seg(0.5, 0.25, 6000.5, 0.25)] : [seg(0.5, 0.25, x0, 0.25), seg(x1, 0.25, 6000.5, 0.25)]);
+  const inner = (x0, x1) => (x0 === null ? [seg(0.5, 200.25, 6000.5, 200.25)] : [seg(0.5, 200.25, x0, 200.25), seg(x1, 200.25, 6000.5, 200.25)]);
+  // (a) 바깥 면선은 멀쩡하고 안쪽만 2500.5~3400.5가 끊겼다 → 유령 문 0개(고치기 전에는 900 mm 하나)
+  expect(gapsOf([...outer(null), ...inner(2500.5, 3400.5)])).toEqual([]);
+  // (b) 끊긴 자리가 어긋나 공통으로 비는 구간이 없다 → 0개(고치기 전에는 유령 문 둘)
+  expect(gapsOf([...outer(4000.5, 4900.5), ...inner(2500.5, 3400.5)])).toEqual([]);
+  // (c)~(e) 폭 경계는 **쌍 단위로** 잰다: 이 둘뿐인 합성 도면에서는 1,500 mm 틈이 ROI
+  // (largestCluster의 500 mm 연결)까지 갈라 놓아 extractWalls가 반쪽만 보기 때문이다.
+  const both = (x0, x1) => {
+    const segs = [...outer(x0, x1), ...inner(x0, x1)];
+    const pairs = candidatePairs(buildFaces(segs, P), P);
+    return openingGaps(matchPairs(pairs, thicknessModes(pairs, P), P), P);
+  };
+  // (c) 둘 다 같은 900.5 mm 구간이 비면 개구부 하나 — 폭은 그 공통 구간, 점은 중심선 위 중점이다.
+  const one = both(2500.25, 3400.75);
+  expect(one).toHaveLength(1);
+  expect(one[0].width).toBeCloseTo(900.5, 6);
+  expect(one[0].p[0]).toBeCloseTo(2950.5, 6);
+  expect(one[0].p[1]).toBeCloseTo(100.25, 6);
+  expect(gapsOf([...outer(2500.25, 3400.75), ...inner(2500.25, 3400.75)])).toEqual(one);   // 파이프라인 전체로도 같다
+  // (d) 공통으로 비는 구간이 500 mm면 개구부가 아니다(문보다 좁다).
+  expect(both(2500.5, 3000.5)).toEqual([]);
+  // (e) GAP_RANGE는 양끝을 포함한다 — 정확히 600도, 정확히 1500도 개구부 하나다.
+  expect(both(2500.5, 3100.5).map(g => g.width)).toEqual([600]);
+  expect(both(2500.5, 4000.5).map(g => g.width)).toEqual([1500]);
+  expect(both(2500.5, 4000.6).map(g => g.width)).toEqual([]);      // 1500.1은 범위 밖이다
 });
