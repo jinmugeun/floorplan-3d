@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { transformFloor, pruneSelection, pruneSolo, crossFloorName, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
+import { transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
 import { createView2D } from './view2d/view2d.js';
 import { createMinimap } from './view2d/minimap.js';
 import { createRoomTool, ROOM_TOOL_DEFAULTS } from './view2d/tools/roomTool.js';
@@ -38,11 +38,12 @@ import { openOnboarding, isOnboarded } from './ui/onboarding.js';
 import { createTopbar, projectIsEmpty } from './app/topbar.js';
 import { createDirtyTracker, createSaveIndicator } from './app/dirty.js';
 import { createProjectActions } from './app/projectActions.js';
+import { createHistoryActions } from './app/historyActions.js';
 import { createFirstRoomFit } from './app/firstRoomFit.js';
 import { serializeProject, downloadText, startAutosave, loadAutosave, filenameFor } from './io/file.js';
 import { createFileActions } from './app/fileActions.js';
 import { stickyTools } from './ui/prefs.js';
-import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from './ui/messages.js';
+import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED } from './ui/messages.js';
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
@@ -189,12 +190,9 @@ document.querySelector('[data-action="flipH"]').addEventListener('click', () => 
 document.querySelector('[data-action="flipV"]').addEventListener('click', () => transformFloor(store, p => [p[0], -p[1]]));
 document.querySelector('[data-action="rotL"]').addEventListener('click', () => transformFloor(store, p => [p[1], -p[0]]));
 document.querySelector('[data-action="rotR"]').addEventListener('click', () => transformFloor(store, p => [-p[1], p[0]]));
-// 층을 가로지르는 되돌리기는 어느 층의 무엇이 되돌려졌는지 알린다(§16.4 · 감사 §30):
-// 화면이 말없이 다른 층으로 넘어가면 "내가 누른 것과 다른 일이 일어났다"로 읽힌다.
-// 문구는 방향마다 다르다(되돌렸습니다 / 다시 실행했습니다): 만드는 함수를 인자로 받는다.
-const withFloorNote = (fn, msg) => () => { const prev = store.get(); if (!fn()) return; const name = crossFloorName(prev, store.get()); if (name) shell.toast(msg(name)); };
-const undoAction = withFloorNote(() => store.undo(), CROSS_FLOOR_UNDO);
-const redoAction = withFloorNote(() => store.redo(), CROSS_FLOOR_REDO);
+// 층을 가로지르는 되돌리기·다시 실행은 어느 층의 무엇이 되돌려졌는지 알리고, 다시 실행은
+// **변경이 있던 층**으로 데려간다(§17.7 · 감사 §53). 규칙과 배선은 app/historyActions.js 한 곳이다.
+const { undoAction, redoAction } = createHistoryActions({ store, toast: shell.toast });
 document.getElementById('btnUndo').addEventListener('click', undoAction);
 document.getElementById('btnRedo').addEventListener('click', redoAction);
 // 줌·화면 맞추기는 현재 모드의 뷰가 받는다(2D 도면 / 3D 카메라).

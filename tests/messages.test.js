@@ -147,15 +147,15 @@ test('층 문구는 §16.4가 적은 글자 그대로다', () => {
   expect(CROSS_FLOOR_REDO('Floor 2')).toBe('다른 층(Floor 2)의 변경을 다시 실행했습니다');
 });
 
-// 리뷰 I-2: withFloorNote가 undo·redo 양쪽을 감싸는데 문구가 하나여서 [다시 실행]을 눌러도
-// "되돌렸습니다"가 떴다. 배선은 main.js 두 줄이고 거기에는 테스트가 붙을 진입점이 없으므로
-// (store·shell·DOM을 다 만들어야 한다) 방향과 문구의 짝을 글자로 고정한다 — styles.test.js와 같은 방식.
-test('층 간 undo/redo 토스트는 각자 방향에 맞는 문구를 쓴다', () => {
+// §17.7: 배선이 app/historyActions.js로 내려가 진짜 모듈 테스트가 붙었다(tests/historyActions.test.js).
+// 여기서는 main.js가 그 모듈을 쓰는지, 문구가 배선 파일에만 있는지를 본다(다시 인라인으로 흩어지지 않게).
+test('층 간 undo/redo 배선은 historyActions 한 곳이다', () => {
   const main = readFileSync(join(SRC_DIR, 'main.js'), 'utf8');
-  expect(main).toContain('const undoAction = withFloorNote(() => store.undo(), CROSS_FLOOR_UNDO);');
-  expect(main).toContain('const redoAction = withFloorNote(() => store.redo(), CROSS_FLOOR_REDO);');
-  // 문구를 만드는 함수를 인자로 받는다: 한쪽만 고쳐 다시 갈라지는 일을 막는다.
-  expect(main).toContain('if (name) shell.toast(msg(name));');
+  expect(main).toContain('createHistoryActions({ store, toast: shell.toast })');
+  expect(main).not.toContain('withFloorNote');
+  const hist = readFileSync(join(SRC_DIR, 'app/historyActions.js'), 'utf8');
+  expect(hist).toContain('CROSS_FLOOR_UNDO');
+  expect(hist).toContain('CROSS_FLOOR_REDO');
 });
 
 test('템플릿 문구는 §16.10이 적은 글자 그대로다', () => {

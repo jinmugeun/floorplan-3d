@@ -5,7 +5,7 @@ import { placeOnWall } from '../src/geom/items.js';
 import { openingsOnWall } from '../src/geom/openings.js';
 import { productById } from '../src/products/catalog.js';
 import { rectWalls, moveWallParallel, makeWall } from '../src/geom/walls.js';
-import { addWalls, addItem, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo, updateWallProps, deleteMeasure, crossFloorName } from '../src/state/floorOps.js';
+import { addWalls, addItem, deleteWall, deleteRoom, updateRoom, setRoomWallThickness, transformFloor, setWalls, selectionStillValid, addMeasure, addFloor, setActiveFloor, renameFloor, deleteFloor, updateFloor, totalArea, setWallLength, setRoomWallHeight, pruneSelection, deleteWalls, duplicateRoom, pruneSolo, updateWallProps, deleteMeasure, crossFloorName, changedFloorIndex, updateItem } from '../src/state/floorOps.js';
 
 const setup = () => { const s = createStore(createEmptyProject()); addWalls(s, rectWalls([0, 0], [4000, 3000], 200)); return s; };
 
@@ -447,16 +447,35 @@ test('없는 방을 지우면 아무 단계도 만들지 않는다', () => {
   off();
 });
 
-// §16.4(감사 §30): 층을 가로지르는 undo는 활성 층을 갈아탄다 — 그 사실을 배선이 알 수 있어야 한다.
-test('crossFloorName은 활성 층이 갈아탄 경우에만 그 층 이름을 돌려준다', () => {
+// §17.7(감사 §53): 판정의 기준은 "도착한 층"이 아니라 **내용이 달라진 층**이다.
+// 순수한 층 전환(setActiveFloor)은 달라진 층이 없으므로 알릴 것도 없다.
+test('crossFloorName은 층 내용이 실제로 달라졌을 때만 이름을 돌려준다', () => {
   const store = createStore(createEmptyProject());
   addFloor(store, { name: 'Floor 2', copy: 'none' });
   const onTwo = store.get();
   setActiveFloor(store, 0);
   const onOne = store.get();
-  expect(crossFloorName(onOne, onTwo)).toBe('Floor 2');   // 되돌린 변경은 Floor 2의 것이다
+  expect(crossFloorName(onOne, onTwo)).toBeNull();          // 층 전환만으로는 달라진 층이 없다
   expect(crossFloorName(onTwo, onTwo)).toBeNull();
-  expect(crossFloorName(undefined, onOne)).toBeNull();     // 0 → 0
+  expect(crossFloorName(undefined, onOne)).toBeNull();
+});
+
+// §17.7: 되돌리기(도착 층이 곧 변경 층)와 다시 실행(도착 층이 어긋난다)이 같은 판정 하나를 쓴다.
+// 사용자가 보던 층도, 도착할 층도 변경 층이면 "같은 층 안의 변경"이라 null이다.
+test('changedFloorIndex는 내용이 달라진 층을 찾고 같은 층 안의 변경은 null이다', () => {
+  const store = createStore(createEmptyProject());
+  addFloor(store, { name: '2층', copy: 'none' });            // 활성 층 = 1
+  const id = addItem(store, createItem(productById('hood-box'), { pos: [1000.5, 2000.25] }));
+  const before = store.get();
+  updateItem(store, id, { pos: [1111, 2222] });
+  const after = store.get();
+  expect(changedFloorIndex(before, after)).toBeNull();       // 둘 다 2층에서 본 변경이다
+  const onOne = { ...after, activeFloor: 0 };
+  expect(changedFloorIndex(onOne, before)).toBe(1);          // 1층에서 누른 Ctrl+Z
+  expect(crossFloorName(onOne, before)).toBe('2층');
+  const redoTarget = { ...after, activeFloor: 0 };           // 다시 실행의 스냅숏은 "되돌리기를 누른 순간"의 층을 들고 있다
+  expect(changedFloorIndex(before, redoTarget)).toBe(1);
+  expect(crossFloorName(before, redoTarget)).toBe('2층');
 });
 
 // 리뷰 I-1: addFloor·deleteFloor는 **자기 자신이** 활성 층을 옮기는 기록된 단계다. 그 단계의
