@@ -276,4 +276,38 @@ describe('마감재 오프셋·각도 칸도 같은 계약을 지킨다 (리뷰 
     store.undo();
     expect(matIn(store).offset).toEqual([10, 20]);
   });
+
+  // 리뷰 I-1: 타일 크기(scale)는 이 칸이 건드리지 않는 값인데 **편집마다 조용히 사라졌다** —
+  // applyMaterialField가 id·offset·angle 세 필드만 옮겨 담았기 때문이다. paint-white 픽스처에는
+  // scale이 없어 이 계약의 마지막 구멍이었다: 타일 + scale로 한 번 더 돌린다.
+  function withTile() {
+    const ctx = setup();
+    const id = activeFloor(ctx.store.get()).walls[0].id;
+    applyMaterial(ctx.store, { kind: 'wall', id, side: 'in' },
+      { id: 'tile-white-300', offset: [10, 20], angle: 30, scale: [300, 300] }, { record: false });
+    ctx.ui.set({ selection: { type: 'wall', id } });
+    ctx.counter.reset();
+    return ctx;
+  }
+
+  test('오프셋을 고쳐도 타일 크기(scale)가 남는다', () => {
+    const { store, el, counter } = withTile();
+    typeAndCommit(q(el, 'matU-in'), 40);
+    expect(counter.get()).toBe(1);
+    expect(matIn(store)).toEqual({ id: 'tile-white-300', offset: [40, 20], angle: 30, scale: [300, 300] });
+    store.undo();
+    expect(matIn(store).scale).toEqual([300, 300]);
+  });
+
+  test('각도를 고쳐도 타일 크기(scale)가 남고, 같은 값 확정은 여전히 0단계다', () => {
+    const { store, el, counter } = withTile();
+    typeAndCommit(q(el, 'matA-in'), 90);
+    expect(matIn(store)).toEqual({ id: 'tile-white-300', offset: [10, 20], angle: 90, scale: [300, 300] });
+    const before = store.get();
+    counter.reset();
+    typeAndCommit(q(el, 'matA-in'), 90);
+    expect(counter.get()).toBe(0);
+    expect(store.get()).toBe(before);
+    expect(matIn(store).scale).toEqual([300, 300]);
+  });
 });

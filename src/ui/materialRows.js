@@ -73,15 +73,19 @@ export function applyMaterialField(store, sel, el) {
   if (String(el.value ?? '').trim() === '') return true;
   const v = Number(el.value);
   if (!Number.isFinite(v)) return true;               // 숫자가 아닌 값도 버린다
-  const next = { id: cur.id, offset: [...cur.offset], angle: cur.angle };
+  // scale(타일 크기 덮어쓰기)은 이 칸이 건드리지 않지만 **함께 옮겨야** 한다(리뷰 I-1): 세 필드만
+  // 싣던 예전 모양은 applyMaterial → cloneAssign이 받은 것을 그대로 앉히므로, 300×300으로 깔아 둔
+  // 타일이 오프셋 한 칸을 고치는 순간 재질 기본 크기로 조용히 돌아갔다.
+  const next = { id: cur.id, offset: [...cur.offset], angle: cur.angle, ...(cur.scale ? { scale: [...cur.scale] } : {}) };
   if (which === 'A') next.angle = v;
   else next.offset[which === 'U' ? 0 : 1] = v;
   // 같은 값 가드(리뷰 N-6): applyMaterial이 실제로 앉힐 모양과 지금 값을 비교해 같으면 dispatch를
   // 하지 않는다 — 그러지 않으면 같은 값 확정이 빈 undo 단계를 남긴다(§16.1 · 감사 §41).
   // normalizeAssignment를 지나므로 클램프·각도 정규화로 지금 값과 같아진 입력(오프셋 50099 → 1000,
-  // 각도 390 → 30)도 함께 걸린다. 이 칸이 건드리는 것은 offset·angle뿐이라 세 값만 본다.
+  // 각도 390 → 30)도 함께 걸린다. 옮기는 네 값(offset 둘·angle·scale)을 모두 본다.
   const want = normalizeAssignment(next);
-  if (want && want.angle === cur.angle && want.offset[0] === cur.offset[0] && want.offset[1] === cur.offset[1]) return true;
+  if (want && want.angle === cur.angle && want.offset[0] === cur.offset[0] && want.offset[1] === cur.offset[1]
+      && String(want.scale) === String(cur.scale)) return true;
   applyMaterial(store, target, next);
   return true;
 }
