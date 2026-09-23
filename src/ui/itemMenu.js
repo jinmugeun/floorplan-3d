@@ -1,6 +1,8 @@
 import { activeFloor } from '../state/schema.js';
 import { ductLinksOf } from '../state/ductOps.js';
 import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY } from './messages.js';
+// 사유 하나가 disabled와 title을 함께 만든다(리뷰 I-3): 세 메뉴가 같은 헬퍼를 쓴다.
+import { why } from './menuReason.js';
 
 // 경로 배열을 못 쓰는 두 이유. 문구는 메뉴 title과 단축키 토스트(app/arrangeActions.js)가 나눠 쓴다(M-10).
 export const PATH_2D_HINT = '2D에서 사용';
@@ -14,16 +16,18 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
   const a = itemActions;
   const call = (name, ...args) => () => a[name]?.(...args);
   const grouped = (f.groups ?? []).some(g => g.itemIds.some(id => ids.includes(id)));
+  const one = items.length === 1;                 // "같은 제품 선택"은 하나만 고를 때다
   const allHidden = items.every(i => i.hidden);
   const allLocked = items.every(i => i.locked);
   // 경로 배열 복사는 2D 캔버스에 경로를 그려야 한다: 3D에서는 비활성으로 두고 이유를 알린다(§13.1).
   // 1인칭 위치 찍기(fpPick)는 mode가 '2d'지만 첫 클릭을 1인칭 진입이 가져간다: 배선이 막는 것과 표시를 맞춘다(M-10).
   const u = ui.get();
   const in2d = u.mode === '2d' && !u.fpPick;
-  const why = u.fpPick ? PATH_FP_HINT : PATH_2D_HINT;
+  const pathReason = in2d ? null : u.fpPick ? PATH_FP_HINT : PATH_2D_HINT;
+  const canPaste = !!u.clipboard?.length;         // ui.get()은 위에서 한 번만 부른다(리뷰 I-3)
   // 설비에 이어진 덕트 꼭짓점은 설비 아래에 숨는다: 메뉴에서 바로 그 꼭짓점을 고를 수 있게 한다(§12.5).
   // "연결된 덕트가 있으면"만 보인다 — 설비가 아니거나 연결이 없으면 항목 자체를 뺀다(비활성 표시가 아니다).
-  const link = items.length === 1 && items[0].kind === 'equipment' ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
+  const link = one && items[0].kind === 'equipment' ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
   return [
     { label: '좌우 반전', shortcut: 'Alt+H', onSelect: call('mirror', 'h') },
     { label: '상하 반전', shortcut: 'Alt+V', onSelect: call('mirror', 'v') },
@@ -34,14 +38,14 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
     { label: '직선 배열 복사', shortcut: 'Alt+A', onSelect: call('arrayCopy', 'linear') },
     { label: '원형 배열 복사', shortcut: 'Alt+C', onSelect: call('arrayCopy', 'circular') },
     { label: '회전 복사', shortcut: 'Alt+X', onSelect: call('arrayCopy', 'rotate') },
-    { label: '경로 배열 복사', shortcut: 'Alt+S', disabled: !in2d, ...(in2d ? {} : { title: why }), onSelect: call('pathArray') },
+    { label: '경로 배열 복사', shortcut: 'Alt+S', ...why(pathReason), onSelect: call('pathArray') },
     'sep',
     { label: '복사', shortcut: 'Ctrl+C', onSelect: call('copy') },
-    { label: '붙여넣기', shortcut: 'Ctrl+V', disabled: !(ui.get().clipboard?.length), ...(ui.get().clipboard?.length ? {} : { title: WHY_CLIPBOARD_EMPTY }), onSelect: call('paste') },
-    { label: '그룹화', shortcut: 'Ctrl+G', disabled: items.length < 2, ...(items.length < 2 ? { title: WHY_MIN_TWO } : {}), onSelect: call('group') },
-    { label: '그룹 해제', shortcut: 'Ctrl+Shift+G', disabled: !grouped, ...(grouped ? {} : { title: WHY_NOT_GROUPED }), onSelect: call('ungroup') },
+    { label: '붙여넣기', shortcut: 'Ctrl+V', ...why(canPaste ? null : WHY_CLIPBOARD_EMPTY), onSelect: call('paste') },
+    { label: '그룹화', shortcut: 'Ctrl+G', ...why(items.length < 2 ? WHY_MIN_TWO : null), onSelect: call('group') },
+    { label: '그룹 해제', shortcut: 'Ctrl+Shift+G', ...why(grouped ? null : WHY_NOT_GROUPED), onSelect: call('ungroup') },
     'sep',
-    { label: '같은 제품 선택', disabled: items.length !== 1, ...(items.length === 1 ? {} : { title: WHY_ONE_ONLY }), onSelect: call('selectSame') },
+    { label: '같은 제품 선택', ...why(one ? null : WHY_ONE_ONLY), onSelect: call('selectSame') },
     { label: allHidden ? '숨김 해제' : '숨김', shortcut: 'Ctrl+H', onSelect: call('toggleHidden') },
     { label: allLocked ? '잠금 해제' : '잠금', shortcut: 'Ctrl+L', onSelect: call('toggleLocked') },
     'sep',

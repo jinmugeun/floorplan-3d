@@ -20,16 +20,19 @@ function mountShell(opts = {}) {
 }
 
 // §16.5(감사 §38): 아이콘·짧은 이름만 있는 버튼에 마우스 툴팁이 없어 무엇인지 알 수 없었다.
-// 규칙을 글로 적는 대신 실측으로 센다 — 네 묶음의 버튼은 모두 title 또는 aria-label을 갖는다.
-test('상단 바·하단 바·반전 회전·층 버튼에 툴팁 공백이 없다', () => {
+// 규칙을 글로 적는 대신 실측으로 센다 — 세 묶음의 버튼은 모두 마우스 툴팁(title)을 갖는다.
+// 판정은 title만 본다(리뷰 I-1): 감사 §38이 지적한 것은 "마우스로 무엇인지 알 수 없다"였으므로
+// aria-label이 대신 서면 그 회귀를 놓친다. 묶음마다 개수를 먼저 세는 것도 같은 이유다 —
+// 선택자가 리팩터링으로 어긋나면 gaps는 빈 배열이라 테스트 이름만 남고 보증이 사라진다.
+test('상단 바·하단 바·반전 회전 버튼에 툴팁 공백이 없다', () => {
   const { root } = mountShell();
-  const groups = ['#topbar button', '#bottombar button', '#panel .row button', '#floorBar button'];
+  const groups = ['#topbar button', '#bottombar button', '#panel .row button'];
   const gaps = [];
   for (const sel of groups) {
-    for (const b of root.querySelectorAll(sel)) {
-      const title = (b.getAttribute('title') ?? '').trim();
-      const label = (b.getAttribute('aria-label') ?? '').trim();
-      if (!title && !label) gaps.push(`${sel} → ${b.id || b.dataset.action || b.textContent.trim()}`);
+    const bs = root.querySelectorAll(sel);
+    expect(bs.length, `선택자가 아무것도 잡지 못했다: ${sel}`).toBeGreaterThan(0);
+    for (const b of bs) {
+      if (!(b.getAttribute('title') ?? '').trim()) gaps.push(`${sel} → ${b.id || b.dataset.action || b.textContent.trim()}`);
     }
   }
   expect(gaps).toEqual([]);
@@ -37,8 +40,8 @@ test('상단 바·하단 바·반전 회전·층 버튼에 툴팁 공백이 없�
   expect(root.querySelector('#btnSave').title).toContain('[Ctrl+S]');
   expect(root.querySelector('#btnUndo').title).toContain('[Ctrl+Z]');
 });
-// (`#floorBar`는 속성 패널이 그리므로 셸만 띄운 이 테스트에서는 비어 있다 — 그 묶음은
-//  `floorBar.test.js`의 문자열 단정과 Task 13의 브라우저 프로브가 함께 확인한다.)
+// (층 바는 속성 패널이 그리므로 셸만 띄운 이 테스트에는 없다 — 그 묶음은 `floorBar.test.js`의
+//  문자열 단정과 Task 13의 브라우저 프로브가 함께 확인한다.)
 
 // §16.5(감사 §39): onHintClick이 없는 도구에서는 안내가 탭 스톱도 링크도 아니어야 한다.
 test('배너 안내는 취소를 구현한 도구에서만 버튼이다', () => {

@@ -6,7 +6,7 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
 import { createDuct } from '../src/state/ductSchema.js';
-import { addDuct } from '../src/state/ductOps.js';
+import { addDuct, updateDuct } from '../src/state/ductOps.js';
 import { ductMenuItems } from '../src/ui/ductMenu.js';
 import { WHY_LOCKED_DUCT, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION } from '../src/ui/messages.js';
 
@@ -40,6 +40,24 @@ describe('덕트 컨텍스트 메뉴의 비활성 사유', () => {
     expect(pick(items, '설비 연결 해제').title).toBe(WHY_NO_CONNECTION);
     // 활성 항목에는 빈 title이 붙지 않는다.
     expect(pick(items, '급기로 전환').title).toBeUndefined();
+  });
+
+  // 리뷰 I-3: 같은 조건식을 disabled와 title에 두 번 적던 자리를 ui/menuReason.js의 why() 하나로
+  // 모았다. 한쪽만 바뀌는 회귀("활성인데 사유가 붙는다"는 전수 테스트가 못 잡는다)를 여기서 막는다 —
+  // 잠그면 둘이 함께 켜지고, 풀면 둘이 함께 꺼진다.
+  test('비활성 사유와 disabled는 같은 조건에서 나온다', () => {
+    const { store, ui, id } = setup();
+    const on = pick(ductMenuItems({ store, ui, sel: sel(id) }), '급기로 전환');
+    expect(on.disabled).toBe(false);
+    expect(on.title).toBeUndefined();               // 활성이면 사유도 없다
+    updateDuct(store, id, { locked: true });
+    const locked = pick(ductMenuItems({ store, ui, sel: sel(id) }), '급기로 전환');
+    expect(locked.disabled).toBe(true);
+    expect(locked.title).toBe(WHY_LOCKED_DUCT);     // 비활성이면 사유가 있다
+    updateDuct(store, id, { locked: false });
+    const off = pick(ductMenuItems({ store, ui, sel: sel(id) }), '급기로 전환');
+    expect(off.disabled).toBe(false);
+    expect(off.title).toBeUndefined();              // 풀면 둘이 함께 꺼진다
   });
 
   test('잠긴 덕트는 잠금이 먼저 말해진다', () => {

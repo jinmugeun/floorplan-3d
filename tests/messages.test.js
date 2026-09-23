@@ -3,6 +3,7 @@ import { test, expect } from 'vitest';
 import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE, DAMPER_ADDED, DAMPER_DELETED, PASTE_RESULT, CURVED_WALL_TITLE, CANVAS_LABEL, MINIMAP_LABEL } from '../src/ui/messages.js';
 import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE, COPIED, COPIED_N, ARRAY_TOO_MANY, ARRAY_MULTI_WARN, LOADED, RESTORED, JSON_EXPORTED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, SPLIT_REGIONS_RESET, OPENING_NEEDS_WALL, KEYS_RESET, KEYS_LOADED, KEY_TAKEN, POPUP_BLOCKED, SHOT_SAVED, GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, SPEC_IMAGES_FAIL, SPEC_FAIL } from '../src/ui/messages.js';
 import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from '../src/ui/messages.js';
+import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, WHY_CLIPBOARD_EMPTY, WHY_MIN_POINTS, WHY_NO_ACTION } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,6 +110,26 @@ test('src/의 toast( 인자에 한국어 리터럴이 없다(§16.8)', () => {
     });
   }
   expect(bad).toEqual([]);
+});
+
+// §16.5(감사 §19)의 비활성 사유. 말투가 하나여야 하므로("무엇이 없음/아님" 한 마디) 글자로 못 박는다.
+// WHY_NO_ROOM은 surfaceMenu.js에 인라인 리터럴로 남아 있던 유일한 사유였다(리뷰 I-2) — 문구는
+// messages.js 한 곳에서 온다는 전역 제약을 지키려고 이 묶음으로 옮겼다(값은 그대로다).
+test('비활성 메뉴 사유는 §16.5가 적은 글자 그대로다', () => {
+  expect(WHY_LOCKED_ITEM).toBe('잠긴 제품');
+  expect(WHY_LOCKED_DUCT).toBe('잠긴 덕트');
+  expect(WHY_NO_SELECTION).toBe('선택이 없음');
+  expect(WHY_NO_MATERIAL).toBe('바른 마감재가 없음');
+  expect(WHY_NO_ROOM).toBe('이 벽이 속한 방이 없음');
+  expect(WHY_NO_SEGMENT).toBe('구간을 고르지 않음');
+  expect(WHY_NO_VERTEX).toBe('꼭짓점을 고르지 않음');
+  expect(WHY_NO_CONNECTION).toBe('연결된 설비가 없음');
+  expect(WHY_MIN_TWO).toBe('제품이 2개 미만');
+  expect(WHY_NOT_GROUPED).toBe('그룹이 아님');
+  expect(WHY_ONE_ONLY).toBe('제품 하나만 고를 때');
+  expect(WHY_CLIPBOARD_EMPTY).toBe('복사한 제품이 없음');
+  expect(WHY_MIN_POINTS).toBe('점이 2개뿐');
+  expect(WHY_NO_ACTION).toBe('이 화면에서 쓸 수 없음');
 });
 
 test('층 문구는 §16.4가 적은 글자 그대로다', () => {
