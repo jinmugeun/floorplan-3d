@@ -9,6 +9,7 @@ import { explode } from '../src/io/dxf/explode.js';
 import { layerStats, defaultChecked, roleLayers } from '../src/io/dxf/classify.js';
 import { extractWalls } from '../src/io/dxf/walls.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
+import { buildOpenings } from '../src/io/dxf/openings.js';
 import { normalizeProject } from '../src/state/schema.js';
 
 const path = n => fileURLToPath(new URL(`./fixtures/${n}`, import.meta.url));
@@ -82,4 +83,14 @@ test('만들어진 프로젝트가 normalizeProject를 통과하고 한글 실�
   expect(project.name).toBe('경산 사동중');                       // 높이 980 mm 제목 문자(레이어 TEXT2)
   const named = project.floors[0].rooms.filter(r => /[가-힣]/.test(r.name));
   expect(named.length + built.stats.unmatchedNames.length).toBeGreaterThanOrEqual(2);
+});
+
+// 사전 검토 C-2: 이 도면에 스윙 호가 0개이므로 개구부는 **벽 틈**에서 나온다.
+// expected.json은 건드리지 않는다(Task 8의 스냅숏은 벽까지다) — 여기서는 하한만 본다.
+test('픽스처의 개구부는 벽 틈에서 나오고 전부 벽에 붙는다', () => {
+  const items = buildOpenings({ ex, walls: built.walls, toApp: built.toApp, openingLayers: openRole, gaps: extracted.gaps });
+  expect(items.filter(i => i.productId === 'opening-pass').length).toBeGreaterThanOrEqual(10);
+  expect(items.every(i => i.attach === 'wall' && typeof i.wallId === 'string')).toBe(true);
+  expect(items.every(i => built.walls.some(w => w.id === i.wallId))).toBe(true);
+  expect(items.filter(i => i.kind === 'door')).toHaveLength(0);     // 스윙 호가 없다
 });
