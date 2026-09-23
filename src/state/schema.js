@@ -3,6 +3,7 @@ import { detectRooms, ROOM_FLOOR_COLOR, ROOM_CEILING_COLOR } from '../geom/rooms
 import { materialById } from '../materials/catalog.js';
 import { normalizeEquipProps, hoodCmh } from '../vent/equipment.js';
 import { normalizeDuct } from './ductSchema.js';
+import { defaultFloorName } from './schemaFloors.js';
 
 let counter = 0;
 export const SCHEMA_VERSION = 1;
@@ -21,6 +22,9 @@ export function uid(prefix = 'id') {
   counter += 1;
   return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}`;
 }
+
+// 층 기본 이름의 정본은 잎 모듈 schemaFloors.js다(M-22 · 이 파일의 299줄 예산 — 계획 9 I-7).
+export { defaultFloorName };
 
 export function createFloor(name = 'Floor 1') {
   return { id: uid('f'), name, height: 2300, slab: 0, walls: [], rooms: [], items: [], ducts: [], guides: [], measures: [], groups: [] };
@@ -208,6 +212,13 @@ export function normalizeProject(p) {
   const src = obj(p);
   const floors = arr(src.floors).map(normalizeFloor);
   if (!floors.length) floors.push(createFloor());
+  // 이름이 겹치면 뒤의 층을 "쓰이지 않는 가장 작은 Floor N"으로 바꾼다(M-22): normalizeFloor의 기본
+  // 이름은 index + 1인데 다른 층이 이미 그 이름을 쓰고 있을 수 있다(층 바의 select에 같은 이름 둘).
+  const seen = new Set();
+  for (const f of floors) {
+    if (seen.has(f.name)) f.name = defaultFloorName([...seen].map(name => ({ name })));
+    seen.add(f.name);
+  }
   const active = num(src.activeFloor, 0);
   return {
     ...src,
@@ -276,6 +287,5 @@ export function activeFloor(p) {
   return p.floors[p.activeFloor ?? 0];
 }
 
-// 산출물 대화상자(견적서·시방서·렌더샷)가 함께 쓰는 빈 도면 판정(§17.11(1)).
-// app/topbar.js의 projectIsEmpty를 쓰지 않는 이유는 불변식이다: ui/는 app/을 import하지 않는다.
+// 산출물 대화상자(견적서·시방서·렌더샷)가 함께 쓰는 빈 도면 판정(§17.11(1) — ui/는 app/의 projectIsEmpty를 쓸 수 없다).
 export const floorIsEmpty = f => !(f?.walls?.length || f?.rooms?.length || f?.items?.length || f?.ducts?.length);

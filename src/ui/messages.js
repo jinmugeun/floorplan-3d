@@ -141,9 +141,9 @@ export const CROSS_FLOOR_REDO = name => `다른 층(${name})의 변경을 다시
 
 // 비활성 메뉴 항목의 사유(§16.5 · 감사 §19). 말투는 하나다: "무엇이 없음/아님" 한 마디.
 // 계획 7의 CURVED_WALL_TITLE("곡선벽은 아직 지원하지 않습니다")이 만든 자리를 나머지 항목에 넓힌다.
-export const WHY_LOCKED_ITEM = '잠긴 제품';
+// (WHY_LOCKED_ITEM·WHY_NO_SELECTION은 호출자가 하나도 없어 지웠다 — §17.12 이월 M-3.
+//  잠금 거부는 LOCKED_ITEM_EDIT 쪽 한 벌이 맡고, "선택이 없음" 메뉴는 아예 열리지 않는다.)
 export const WHY_LOCKED_DUCT = '잠긴 덕트';
-export const WHY_NO_SELECTION = '선택이 없음';
 export const WHY_NO_MATERIAL = '바른 마감재가 없음';
 export const WHY_NO_ROOM = '이 벽이 속한 방이 없음';
 export const WHY_NO_SEGMENT = '구간을 고르지 않음';
@@ -159,8 +159,8 @@ export const WHY_MIN_POINTS = '점이 2개뿐';
 // main.js가 넘기는 actions가 없으면 꺼진다 — 사용자에게는 "고장"이 아니라 "여기서는 아님"이다.
 export const WHY_NO_ACTION = '이 화면에서 쓸 수 없음';
 
-// 렌더샷·갤러리(§16.9 · 감사 §9·§11).
-export const SHOT_BUSY = '렌더 중입니다';
+// 렌더샷·갤러리(§16.9 · 감사 §9·§11). "렌더 중입니다" 문구는 지웠다(§17.12 이월 M-21):
+// 렌더 중에는 버튼이 disabled라 click이 나오지 않아 도달할 수 없었다.
 export const CONFIRM_SHOT_DELETE = { title: '렌더샷 삭제', message: '이 렌더샷을 갤러리에서 지울까요?', ok: '삭제', danger: true };
 
 // 타이핑 치수(§16.7 · 감사 §43): 정확히 동작하는데 보이지 않던 기능이다.

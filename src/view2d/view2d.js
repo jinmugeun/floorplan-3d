@@ -8,6 +8,10 @@ import { memoCollisions, collidingFor } from '../geom/collide.js';
 import { drawWalls } from './walls2d.js';
 import { collectLabels, placeLabels, drawLabels, ductObstacles } from './labels2d.js';
 
+// 줌 상·하한은 한 곳이다(M-19 · "정한 것 35"): fit()과 zoomAt이 같은 클램프를 지난다.
+export const ZOOM_RANGE = [0.005, 2];
+const clampScale = s => Math.max(ZOOM_RANGE[0], Math.min(ZOOM_RANGE[1], s));
+
 const COLORS = { wall: '#3a4351', wallSel: '#14b8c4', room: '#e2c9a4', roomSel: '#d3b58a', grid: '#d9dee5', grid2: '#eceff3', text: '#5b6775', guide: '#e8b100', dim: '#1b2430' };
 
 // 키 표기는 전역 규칙(대괄호 + 실제 키 이름)을 따른다: §12.4의 인용문은 'F로'였지만 앱의 다른 모든
@@ -58,12 +62,14 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
   function fit(padding = 1000) {
     const [[x0, y0], [x1, y1]] = bounds(); const [w, h] = size();
     camera.cx = (x0 + x1) / 2; camera.cy = (y0 + y1) / 2;
-    camera.scale = Math.min(w / (x1 - x0 + padding * 2), h / (y1 - y0 + padding * 2));
+    // zoomAt과 같은 클램프를 지난다(M-19): 200 m 넘는 도면에서 배율이 0에 가까워지면
+    // tolMm(scale)의 상한이 사라져 스냅 허용치가 도면 전체가 된다.
+    camera.scale = clampScale(Math.min(w / (x1 - x0 + padding * 2), h / (y1 - y0 + padding * 2)));
     requestRender(); cameraMoved();
   }
   function zoomAt(s, factor) {
     const before = toWorld(s);
-    camera.scale = Math.max(0.005, Math.min(2, camera.scale * factor));
+    camera.scale = clampScale(camera.scale * factor);
     const after = toWorld(s);
     camera.cx += before[0] - after[0]; camera.cy += before[1] - after[1];
     requestRender(); cameraMoved();

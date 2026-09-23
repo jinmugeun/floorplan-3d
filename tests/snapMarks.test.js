@@ -1,7 +1,10 @@
 // §16.6: 스냅 종류를 계산해 두고 쓰지 않던 것(감사 §42)을 커서 옆 마커로 보이게 한다.
 // 캔버스 없이 가짜 ctx로 "무엇을 그렸나"만 본다(2D 그리기 테스트의 관례).
 import { describe, test, expect } from 'vitest';
-import { drawSnapMark, SNAP_GLYPH, SNAP_LABEL, MARK_OFFSET_PX } from '../src/view2d/snapMarks.js';
+import { drawSnapMark, SNAP_GLYPH, SNAP_LABEL, MARK_OFFSET_PX, MARK_BG } from '../src/view2d/snapMarks.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { LABEL_BG } from '../src/view2d/ducts2d.js';
 
 const fakeCtx = (clientWidth = 800) => {
   const calls = [];
@@ -60,4 +63,14 @@ describe('스냅 마커', () => {
     expect(drawSnapMark(ctx, view, { point: [0, 0], hit: '엉뚱' })).toBe(false);
     expect(ctx.calls).toEqual([]);
   });
+});
+
+// §17.12 이월(M-17): 그리기 전용 파일이 LABEL_BG 하나 때문에 덕트 모듈에 매여 있었다.
+test('snapMarks는 ducts2d를 import하지 않고, 색 값은 LABEL_BG와 같다', () => {
+  const src = readFileSync(fileURLToPath(new URL('../src/view2d/snapMarks.js', import.meta.url)), 'utf8');
+  expect(src).not.toContain("from './ducts2d.js'");
+  expect(MARK_BG).toBe('rgba(255,255,255,0.85)');       // 같은 값이 지역 상수로 남는다
+  // 의도한 복제를 **정적으로 묶는다**(사전 검토 M-14 · "정한 것 34"): 한쪽만 바꾸면 여기서 깨진다.
+  // 테스트가 두 모듈을 함께 import하는 것은 불변식이 아니다(`src/`의 의존 방향만 architecture.test가 본다).
+  expect(MARK_BG).toBe(LABEL_BG);
 });

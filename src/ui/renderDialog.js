@@ -4,7 +4,7 @@ import { addShot } from '../io/gallery.js';
 import { downloadDataUrl, filenameFor } from '../io/file.js';
 import { openGalleryDialog } from './galleryDialog.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
-import { SHOT_BUSY, OUTPUT_EMPTY_TITLE } from './messages.js';
+import { OUTPUT_EMPTY_TITLE } from './messages.js';
 import { activeFloor, floorIsEmpty } from '../state/schema.js';
 
 export const RENDER_SIZES = [[1280, 720], [1920, 1080], [3840, 2160]];
@@ -58,7 +58,7 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   });
   syncEmpty();
   async function render() {
-    if (busy) { part('msg').textContent = SHOT_BUSY; return; }
+    if (busy) return;              // 렌더 중에는 버튼이 disabled라 여기까지 오지 않는다(M-21: 문구도 지웠다)
     busy = true;
     buttons().forEach(b => { b.disabled = true; });
     try {

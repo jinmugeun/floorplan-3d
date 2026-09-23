@@ -1,7 +1,8 @@
 // 커서 옆의 스냅 마커(§16.6 · 감사 §42). snapPoint가 이미 돌려주던 hit을 화면에 보이게 한다:
 // 끝점에 물렸는지 벽면에 물렸는지 보조선에 물렸는지가 커서 원 하나로는 구분되지 않았다.
 // 그리기만 하는 파일이라 도구 여섯이 draw()에서 한 줄로 부른다(view2d.js는 건드리지 않는다).
-import { LABEL_BG } from './ducts2d.js';
+// 그리기 전용 파일이 덕트 모듈에 매이지 않게 색 상수를 여기 둔다(M-17). 값은 ducts2d의 LABEL_BG와 같다.
+export const MARK_BG = 'rgba(255,255,255,0.85)';
 
 // §16.6이 글자까지 정한 글리프와 라벨.
 export const SNAP_GLYPH = { point: '■', wall: '△', guide: '┆', align: '⋯', ortho: '⊾' };
@@ -27,7 +28,7 @@ export function drawSnapMark(ctx, view, mark) {
   const flip = cw > 0 && s[0] + MARK_OFFSET_PX + w > cw;   // 폭을 모르면 예전처럼 오른쪽이다
   ctx.textAlign = flip ? 'right' : 'left';
   const x = flip ? s[0] - MARK_OFFSET_PX : s[0] + MARK_OFFSET_PX;
-  ctx.fillStyle = LABEL_BG;
+  ctx.fillStyle = MARK_BG;
   ctx.fillRect(flip ? x - w + 4 : x - 4, s[1] - 9, w, 18);
   ctx.fillStyle = view.COLORS.dim;
   ctx.fillText(text, x, s[1]);

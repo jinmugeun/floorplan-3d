@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
-import { createEmptyProject, activeFloor, createItem } from '../src/state/schema.js';
+import { createEmptyProject, activeFloor, createItem, migrate } from '../src/state/schema.js';
 import { placeOnWall } from '../src/geom/items.js';
 import { openingsOnWall } from '../src/geom/openings.js';
 import { productById } from '../src/products/catalog.js';
@@ -539,4 +539,18 @@ test('renameFloor: 같은 이름으로 바꾸면 dispatch하지 않는다(리뷰
   renameFloor(s, 1, '3층');
   expect(s.get()).not.toBe(before);
   expect(s.get().floors[1].name).toBe('3층');
+});
+
+// §17.12 이월(M-22): normalizeFloor의 기본 이름은 `Floor ${index+1}`이라 다른 층이 이미 그 이름을
+// 쓰고 있으면 같은 이름이 둘 생긴다(층 바의 select에 같은 항목이 두 개로 보인다).
+test('층 기본 이름은 언제나 유일하다(이름이 겹친 파일도)', () => {
+  const p = migrate({ name: 'x', floors: [{ name: 'Floor 2' }, {}, {}] });
+  const names = p.floors.map(f => f.name);
+  expect(names[0]).toBe('Floor 2');
+  expect(new Set(names).size).toBe(3);
+  // addFloor는 예전 규칙 그대로다("쓰이지 않는 가장 작은 Floor N").
+  const store = createStore(p);
+  addFloor(store, { copy: 'none' });
+  const after = store.get().floors.map(f => f.name);
+  expect(new Set(after).size).toBe(after.length);
 });

@@ -8,6 +8,14 @@ import { fileURLToPath } from 'node:url';
 const CSS = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8');
 const lines = CSS.split('\n');
 
+// M-24: 부정 단정은 선택자를 못 찾아도 통과한다. 먼저 "그 선택자가 있다"를 단정하고 본문만 본다.
+function ruleBody(selector) {
+  const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  const hit = [...bare.matchAll(/([^{}]*)\{([^{}]*)\}/g)].find(([, sel]) => sel.split(',').some(s => s.trim() === selector));
+  if (!hit) throw new Error(`CSS 규칙 없음: ${selector}`);
+  return hit[2];
+}
+
 test('.primary는 파일 마지막 200줄 안에 있고 배경과 글자색을 함께 선언한다', () => {
   // 토큰은 `button.primary, .primary`다(m-5): .primary 하나(0,1,0)는 `.pop-row button`·`.seg button`
   // 같은 컨텍스트 규칙(0,1,1)에 져서 그 안에 주 동작 버튼이 하나 생기면 감사 #23이 되살아났다.
@@ -219,4 +227,13 @@ test('.danger 버튼의 빨간 테두리를 덮는 규칙이 없다(리뷰 M-20)
   // 문제였다). 그 규칙이 늘면 여기서 다시 보아야 한다는 표시로 개수를 고정한다.
   const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
   expect(bare.match(/button:not\(\.primary\)(?!:not\(\.danger\))/g)).toHaveLength(13);
+});
+
+// §17.12 이월(M-24): 부정 단정은 **선택자를 못 찾아도** 통과한다 — 규칙 이름이 바뀌면 보증이
+// 조용히 사라진다. "선택자가 있다"를 먼저 단정하는 도우미를 두고 새 규칙들을 그것으로 본다.
+test('ruleBody는 없는 선택자에서 실패하고, 새 규칙 셋을 확인한다', () => {
+  expect(() => ruleBody('.없는규칙')).toThrow();
+  expect(ruleBody('#panel.narrow .layer-code')).toMatch(/display:\s*none/);
+  expect(ruleBody('.hint-on')).toMatch(/outline:/);
+  expect(ruleBody('.layer-head')).toMatch(/display:\s*grid/);
 });

@@ -2,19 +2,14 @@
 // floorOps.js에서 다시 내보낸다(호출자는 계속 floorOps.js만 import한다).
 // 공유 조각(reattach·seatCopies·copyRoomProps)은 floorInternal.js에서 가져온다: floorOps.js를 import하지
 // 않으므로 순환 import가 없다.
-import { createFloor, uid, activeFloor } from './schema.js';
+import { createFloor, uid, activeFloor, defaultFloorName } from './schema.js';
 import { normalizeWalls } from '../geom/normalize.js';
 import { detectRooms } from '../geom/rooms.js';
 import { wallLength } from '../geom/walls.js';
 import { reattach, seatCopies, copyRoomProps, cloneProp } from './floorInternal.js';
 
-// 기본 층 이름은 아직 쓰이지 않는 가장 작은 Floor N이다("Floor 2"가 이미 있으면 Floor 3).
-export function defaultFloorName(floors) {
-  const used = new Set(floors.map(f => f.name));
-  let n = 1;
-  while (used.has(`Floor ${n}`)) n += 1;
-  return `Floor ${n}`;
-}
+// 기본 층 이름의 정본은 schema.js다(M-22): normalizeFloor도 같은 규칙을 쓴다.
+export { defaultFloorName } from './schema.js';
 export function addFloor(store, { name = null, copy = 'none' } = {}, opts) {
   return store.dispatch(d => {
     const base = activeFloor(d);

@@ -3,7 +3,7 @@ import { test, expect } from 'vitest';
 import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAST_FLOOR_TITLE, MATERIAL_BOTH_SIDES, TEMPLATE_RESULT, PATH_MIN_POINTS, SAVED_MANUAL, savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, CONFIRM_LOAD, FP_BANNER, FP_EXIT, FP_NO_LOCK, WALL_DELETE_RESULT, ROOMS_GONE, DAMPER_ADDED, DAMPER_DELETED, PASTE_RESULT, CURVED_WALL_TITLE, CANVAS_LABEL, MINIMAP_LABEL } from '../src/ui/messages.js';
 import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE, COPIED, COPIED_N, ARRAY_TOO_MANY, ARRAY_MULTI_WARN, LOADED, RESTORED, JSON_EXPORTED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, SPLIT_REGIONS_RESET, OPENING_NEEDS_WALL, KEYS_RESET, KEYS_LOADED, KEY_TAKEN, POPUP_BLOCKED, SHOT_SAVED, GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, SPEC_IMAGES_FAIL, SPEC_FAIL } from '../src/ui/messages.js';
 import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from '../src/ui/messages.js';
-import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, WHY_CLIPBOARD_EMPTY, WHY_MIN_POINTS, WHY_NO_ACTION } from '../src/ui/messages.js';
+import { WHY_LOCKED_DUCT, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, WHY_CLIPBOARD_EMPTY, WHY_MIN_POINTS, WHY_NO_ACTION } from '../src/ui/messages.js';
 import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from '../src/ui/messages.js';
 import { FIRST_ROOM_HINT, WALL_ITEM_SLIDE_HINT } from '../src/ui/messages.js';
 import { DUCT_DRAWN, DUCT_NO_SYSTEM } from '../src/ui/messages.js';
@@ -125,9 +125,7 @@ test('src/의 toast( 인자에 한국어 리터럴이 없다(§16.8)', () => {
 // WHY_NO_ROOM은 surfaceMenu.js에 인라인 리터럴로 남아 있던 유일한 사유였다(리뷰 I-2) — 문구는
 // messages.js 한 곳에서 온다는 전역 제약을 지키려고 이 묶음으로 옮겼다(값은 그대로다).
 test('비활성 메뉴 사유는 §16.5가 적은 글자 그대로다', () => {
-  expect(WHY_LOCKED_ITEM).toBe('잠긴 제품');
   expect(WHY_LOCKED_DUCT).toBe('잠긴 덕트');
-  expect(WHY_NO_SELECTION).toBe('선택이 없음');
   expect(WHY_NO_MATERIAL).toBe('바른 마감재가 없음');
   expect(WHY_NO_ROOM).toBe('이 벽이 속한 방이 없음');
   expect(WHY_NO_SEGMENT).toBe('구간을 고르지 않음');
@@ -216,4 +214,17 @@ test('"이어서 작업" 카드 문구는 저장 시각을 0 채움으로 적는
   expect(restoreCardDesc('강당중 조리실')).toBe('자동 저장된 "강당중 조리실"을 불러옵니다.');
   expect(restoreCardDesc('강당중 조리실', new Date('2026-09-23T13:32:00'))).toBe('자동 저장된 "강당중 조리실"을 불러옵니다. (13:32 저장)');
   expect(restoreCardDesc('x', new Date('2026-09-23T03:04:00'))).toContain('(03:04 저장)');
+});
+
+// §17.12 이월(M-3 · M-21): 내보냈지만 아무도 부르지 않는 사유·토스트 상수는 지운다.
+test('내보낸 WHY_* 상수는 모두 호출자가 있고 SHOT_BUSY는 사라졌다', () => {
+  const src = readFileSync(join(SRC_DIR, 'ui/messages.js'), 'utf8');
+  const names = [...src.matchAll(/export const (WHY_[A-Z_]+)/g)].map(m => m[1]);
+  expect(names.length).toBeGreaterThan(0);
+  const others = walkJs(SRC_DIR).filter(f => !f.endsWith('messages.js')).map(f => readFileSync(f, 'utf8'));
+  for (const n of names) {
+    expect(others.some(t => new RegExp(`\\b${n}\\b`).test(t)), `${n}의 호출자`).toBe(true);
+  }
+  expect(src).not.toContain('SHOT_BUSY');                // 비활성 버튼은 click을 내지 않는다(도달 불가)
+  expect(others.every(t => !t.includes('SHOT_BUSY'))).toBe(true);
 });

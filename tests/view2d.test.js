@@ -5,7 +5,7 @@ import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
-import { createView2D, drawEmptyGuide, EMPTY_GUIDE_LINES } from '../src/view2d/view2d.js';
+import { createView2D, drawEmptyGuide, EMPTY_GUIDE_LINES, ZOOM_RANGE } from '../src/view2d/view2d.js';
 import { LABEL_BG } from '../src/view2d/labels2d.js';
 
 function makeCanvas() {
@@ -497,4 +497,30 @@ test('덕트 띠 위의 방 이름은 라벨 패스에서 빠진다', async () =
   await frame(); await frame();
   expect(texts).not.toContain('비가열조리실');
   v.destroy();
+});
+
+// §17.12 이월(M-19): fit()이 zoomAt의 [0.005, 2] 클램프를 지나지 않아 200 m 넘는 도면에서
+// 배율이 0에 가까워지고 tolMm(scale)의 상한이 사라졌다.
+// 수치가 실제로 갈린다(makeCanvas는 clientWidth 800 · clientHeight 600을 **둘 다** 정의하고
+// view2d의 size()는 그것을 읽는다): 400 m × 300 m를 padding 0으로 맞추면 미클램프 값이
+// min(800/400000, 600/300000) = 0.002이고 클램프 값은 0.005다 — 고치기 전에는 0.002가 남았다.
+// 20 mm 도면은 미클램프 40, 클램프 2다.
+test('fit()도 줌 클램프를 지난다', () => {
+  const big = createStore(createEmptyProject());
+  addWalls(big, rectWalls([0.5, 0.25], [400000.5, 300000.25], 200));     // 400 m × 300 m
+  const v1 = createView2D(makeCanvas(), big, createUiState());
+  v1.fit(0);
+  expect(v1.camera.scale).toBeGreaterThanOrEqual(ZOOM_RANGE[0]);
+  v1.destroy();
+  const tiny = createStore(createEmptyProject());
+  addWalls(tiny, rectWalls([0.5, 0.25], [20.5, 20.25], 2));              // 20 mm 도면
+  const v2 = createView2D(makeCanvas(), tiny, createUiState());
+  v2.fit(0);
+  expect(v2.camera.scale).toBeLessThanOrEqual(ZOOM_RANGE[1]);
+  // 줌 경로도 **같은** 상·하한을 지킨다(두 벌이 되면 한쪽만 고쳐진다 — "정한 것 35").
+  v2.zoomBy(1e6);
+  expect(v2.camera.scale).toBe(ZOOM_RANGE[1]);
+  v2.zoomBy(1e-9);
+  expect(v2.camera.scale).toBe(ZOOM_RANGE[0]);
+  v2.destroy();
 });
