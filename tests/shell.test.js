@@ -1135,3 +1135,25 @@ test('레일 탭을 열면 onPanelShow가 그 이름으로 불린다', () => {
   root.querySelector('#rail button[data-panel="layers"]').click();
   expect(seen).toEqual(['layers']);
 });
+
+// §17.10(2): 라벨 밀도는 store.dispatch가 아니라 kvp에 쓴다(저장 형식 무변경). 재빌드는 배선이 건다.
+test('라벨 밀도 select는 kvp에 남기고 onLabelDensity를 부른다', async () => {
+  const { LABEL_DENSITY_KEY, labelDensity } = await import('../src/ui/prefs.js');
+  localStorage.clear();
+  const calls = [];
+  const { root, store, ui } = mountShell({ onLabelDensity: v => calls.push(v) });
+  ui.set({ mode: 'iso' });
+  const before = JSON.stringify(store.get());
+  root.querySelector('#btnView').click();
+  // 이 셸의 팝오버만 본다(document.querySelector는 앞선 테스트가 열어 둔 팝오버를 먼저 집는다 —
+  // createPopover는 .popover를 root에 붙이고 닫을 때만 innerHTML을 비운다).
+  const sel = root.querySelector('.popover [data-pref="labelDensity"]');
+  expect(sel).not.toBeNull();
+  expect(sel.value).toBe('auto');
+  sel.value = 'off';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(localStorage.getItem(LABEL_DENSITY_KEY)).toBe('off');
+  expect(labelDensity()).toBe('off');
+  expect(calls).toEqual(['off']);
+  expect(JSON.stringify(store.get())).toBe(before);       // 프로젝트는 한 글자도 바뀌지 않는다
+});

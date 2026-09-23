@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as THREE from 'three';
-import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_H_PX, labelTextureSize, cullSprites, cullLabels, LABEL3D_PRIORITY, LABEL_DEBOUNCE_MS, LABEL_BOX_PX, spriteLabelSize, createCameraWatch } from '../src/view3d/labels3d.js';
+import { buildLabels, labelSprite, setLabelCanvasFactory, clearLabelCache, LABEL_H_PX, labelTextureSize, cullSprites, cullLabels, LABEL3D_PRIORITY, LABEL_DEBOUNCE_MS, LABEL_BOX_PX, spriteLabelSize, createCameraWatch, setLabelCollapsed, LABEL_DOT_TEXT, LABEL_DOT_H } from '../src/view3d/labels3d.js';
 import { createOrthoView } from '../src/view3d/orthoView.js';
 import { DEFAULT_VIEW, createItem } from '../src/state/schema.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
@@ -123,21 +123,70 @@ test('성능 우선 모드는 라벨을 만들지 않고 빈 labels 그룹을 �
   expect(off.children).toHaveLength(0);
 });
 
+// §17.10(1) · 감사 §5: 컬링된 라벨은 사라지는 대신 점(●)으로 남는다 — 무엇이 가려졌는지 보인다.
+test('labelSprite는 색과 펼친 크기를 기억하고 setLabelCollapsed가 왕복한다', () => {
+  const s = labelSprite('750×400', { color: '#dc2626' });
+  expect(s.userData.text).toBe('750×400');
+  expect(s.userData.color).toBe('#dc2626');
+  expect(s.userData.fullScale).toEqual([s.scale.x, s.scale.y]);
+  const full = [s.scale.x, s.scale.y], map0 = s.material.map;
+  expect(setLabelCollapsed(s, true)).toBe(true);
+  expect(s.userData.collapsed).toBe(true);
+  expect(s.material.map).not.toBe(map0);
+  expect(s.scale.y).toBeCloseTo(LABEL_DOT_H, 6);
+  expect(s.scale.x).toBeLessThan(full[0]);
+  expect(setLabelCollapsed(s, true)).toBe(false);          // 같은 상태면 아무것도 하지 않는다
+  expect(setLabelCollapsed(s, false)).toBe(true);
+  expect(s.material.map).toBe(map0);                       // 텍스처 캐시는 글자·색 키라 같은 것이 돌아온다
+  expect(s.scale.x).toBeCloseTo(full[0], 6);
+  expect(s.scale.y).toBeCloseTo(full[1], 6);
+  expect(LABEL_DOT_TEXT).toBe('●');
+  expect(setLabelCollapsed(null, true)).toBe(false);
+});
+
 // §15.12: 컬링은 카메라가 멈춘 뒤 한 번 돈다(view3d가 120 ms 디바운스). 투영은 주입할 수 있다.
-test('cullLabels는 그룹의 스프라이트 visible을 맞춘다', () => {
+test('cullLabels는 화면 밖만 감추고 겹친 것은 점으로 남긴다', () => {
   const g = buildLabels({ items: [hood], ducts: [duct] }, {});
-  expect(g.children).toHaveLength(2);
-  // 둘을 같은 화면 자리로 투영하면 우선순위가 낮은 덕트 라벨이 숨는다.
-  const keep = cullLabels(g, null, { width: 800, height: 600, project: () => [400, 300] });
   const eq = g.children.find(c => c.userData.itemId === hood.id);
   const dl = g.children.find(c => c.userData.ductId === 'd1');
+  cullLabels(g, null, { width: 800, height: 600, project: () => [400, 300] });
   expect(eq.visible).toBe(true);
-  expect(dl.visible).toBe(false);
-  expect(keep.has(eq.uuid)).toBe(true);
-  // 서로 멀면 둘 다 보인다.
+  expect(eq.userData.collapsed).toBe(false);
+  expect(dl.visible).toBe(true);                            // 사라지지 않는다
+  expect(dl.userData.collapsed).toBe(true);                 // 점으로 남는다
+  // 자리가 떨어지면 저절로 펼쳐진다(지금의 44 → 58 동작과 같은 경로).
   let n = 0;
   cullLabels(g, null, { width: 800, height: 600, project: () => [100 + (n++) * 300, 300] });
-  expect(g.children.every(c => c.visible)).toBe(true);
+  expect(g.children.every(c => c.visible && !c.userData.collapsed)).toBe(true);
+});
+
+test('라벨 밀도 세 값이 다른 결과를 낸다', () => {
+  const mk = () => buildLabels({ items: [hood], ducts: [duct] }, {});
+  const all = mk();
+  cullLabels(all, null, { width: 800, height: 600, project: () => [400, 300], density: 'all' });
+  expect(all.children.every(c => c.visible && !c.userData.collapsed)).toBe(true);
+  const auto = mk();
+  cullLabels(auto, null, { width: 800, height: 600, project: () => [400, 300], density: 'auto' });
+  expect(auto.children.filter(c => c.userData.collapsed)).toHaveLength(1);
+  const off = mk();
+  expect(cullLabels(off, null, { width: 800, height: 600, project: () => [400, 300], density: 'off' }).size).toBe(0);
+  expect(off.children.every(c => !c.visible)).toBe(true);
+  // 'off'는 씬에서도 라벨을 만들지 않는다(성능 우선과 같은 빈 그룹).
+  expect(buildLabels({ items: [hood], ducts: [duct] }, {}, { density: 'off' }).children).toHaveLength(0);
+  expect(buildLabels({ items: [hood], ducts: [duct] }, {}, { density: 'all' }).children).toHaveLength(2);
+});
+
+// 점이 되면 스프라이트가 작아진다: 그 작은 상자로 다음 판정을 하면 자리가 늘 이겨 깜빡인다.
+test('겹침 판정은 점이 된 뒤에도 펼친 크기로 한다(깜빡임 방지)', () => {
+  const g = buildLabels({ items: [hood], ducts: [duct] }, {});
+  const dl = g.children.find(c => c.userData.ductId === 'd1');
+  const at = () => cullLabels(g, null, { width: 800, height: 600, project: () => [400, 300] });
+  at();
+  expect(dl.userData.collapsed).toBe(true);
+  at();                                                     // 두 번째 프레임에도 같은 답이다
+  expect(dl.userData.collapsed).toBe(true);
+  at();
+  expect(dl.userData.collapsed).toBe(true);
 });
 
 // 아래 세 테스트는 리뷰 Important 1·2·3(고정된 visible · 거울 투영 · 줌 불변)을 막는다.
@@ -172,7 +221,9 @@ test('카메라 뒤의 스프라이트는 후보에서 뺀다(거울 투영이 �
   eq.position.set(0.0005, 0.0025, 0.01);
   cullLabels(g, cam, { width: 800, height: 600 });
   expect(eq.visible).toBe(true);
-  expect(dl.visible).toBe(false);
+  expect(eq.userData.collapsed).toBe(false);
+  expect(dl.visible).toBe(true);              // §17.10: 화면 안이면 사라지지 않고
+  expect(dl.userData.collapsed).toBe(true);   // 점으로 자리를 남긴다
 });
 
 test('겹침 상자는 스프라이트의 실제 화면 크기를 따른다(줌 2배에도 판정이 같다)', () => {
@@ -185,8 +236,8 @@ test('겹침 상자는 스프라이트의 실제 화면 크기를 따른다(줌 
   for (const [name, cam] of [['기본', far], ['2배 줌인', near]]) {
     const g = at();
     cullLabels(g, cam, { width: 800, height: 600 });
-    expect(g.children[0].visible, `${name}: 설비 번호`).toBe(true);
-    expect(g.children[1].visible, `${name}: 덕트 단면`).toBe(false);
+    expect(g.children[0].userData.collapsed, `${name}: 설비 번호`).toBe(false);
+    expect(g.children[1].userData.collapsed, `${name}: 덕트 단면`).toBe(true);
   }
   // 고정 12 px 상자로는 같은 배치가 "안 겹친다"로 읽혀 감사 §11 증상이 되돌아온다(회귀 방어).
   expect(cullSprites([

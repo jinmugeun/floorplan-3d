@@ -48,7 +48,7 @@ import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE,
 const store = createStore(createEmptyProject());
 const ui = createUiState();
 let layersPanel = null;   // 아래에서 만든다: 레일 탭을 열 때 선택 행을 보여 주려면 핸들이 필요하다(§17.6(3))
-const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m), onMinimapResize: () => minimap?.requestRender(), onOpenKeymap: () => openSettingsDialog({ store, tab: 'keys' }), onExitFp: () => setMode('iso'), onToolChange: () => view.requestRender(), onPanelShow: name => { if (name === 'layers') layersPanel?.reveal(); } });
+const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m), onMinimapResize: () => minimap?.requestRender(), onOpenKeymap: () => openSettingsDialog({ store, tab: 'keys' }), onExitFp: () => setMode('iso'), onToolChange: () => view.requestRender(), onPanelShow: name => { if (name === 'layers') layersPanel?.reveal(); }, onLabelDensity: () => view3d.refreshLabels() });
 const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D 투영 선택(view3d가 상태를 되돌려 준다)
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 let dnd = null;     // 같은 이유로 여기서 선언한다(드래그 옵션이 닫아서 읽는다 — 배선은 startPlace 다음에 만든다)

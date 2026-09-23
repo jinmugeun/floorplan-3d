@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { V2_OPTIONS, V3_OPTIONS, DISPLAY_MODES, PERF_MODES, viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from '../src/ui/viewOptions.js';
+import { V2_OPTIONS, V3_OPTIONS, DISPLAY_MODES, PERF_MODES, LABEL_DENSITY, viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from '../src/ui/viewOptions.js';
 import { DEFAULT_VIEW } from '../src/state/schema.js';
 
 test('option lists cover every schema flag with Korean labels', () => {
@@ -66,4 +66,16 @@ test('보기·카메라 팝오버의 select에 aria-label이 있다', () => {
   expect(html).toContain('aria-label="디스플레이 모드"');
   expect(html).toContain('aria-label="성능 모드"');
   expect(cameraPopoverHtml(DEFAULT_VIEW)).toContain('aria-label="카메라 타입"');
+});
+
+// §17.10(2): 3D 보기 팝오버에만 있다(2D 라벨은 이미 v2 토글로 끈다).
+test('3D 보기 팝오버에 라벨 밀도 3단이 있다', () => {
+  expect(LABEL_DENSITY).toEqual([['all', '모두'], ['auto', '자동'], ['off', '끔']]);
+  const view = { v2: {}, v3: {}, cutaway: true, display: 'normal', hiddenLine: false, perfMode: 'display' };
+  const html = viewPopoverHtml(view, '3d');
+  expect(html).toContain('<h4>라벨 밀도</h4>');
+  expect(html).toContain('data-pref="labelDensity"');
+  expect(html).toContain('aria-label="라벨 밀도"');
+  for (const [, label] of LABEL_DENSITY) expect(html).toContain(`>${label}</option>`);
+  expect(viewPopoverHtml(view, '2d')).not.toContain('data-pref="labelDensity"');
 });

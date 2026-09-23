@@ -10,6 +10,7 @@ import { ductVisible, sizeLabel } from '../view2d/ducts2d.js';
 import { perfSettings } from './perfMode.js';
 import { textWidth } from '../geom/textWidth.js';
 import { placeLabels } from '../view2d/labels2d.js';
+import { labelDensity } from '../ui/prefs.js';
 
 // 텍스처는 글자 폭을 따른다(§15.12 · 감사 §11): 128×128 정사각에 그리고 스프라이트 비율을 2.5로
 // 고정해 `750×400`이 잘렸다. 높이는 고정(44 px)이고 폭만 글자 폭 + 여백이다.
@@ -21,6 +22,8 @@ export const LABEL3D_PRIORITY = ['equip', 'ductSize'];   // 설비 번호가 덕
 export const LABEL_BOX_PX = 12;      // 카메라를 모를 때(투영 주입 등) 쓰는 상자 글자 크기
 export const LABEL_BOX_MIN_PX = 6;   // 아주 멀어도 상자가 0으로 사라지지 않게(겹침을 놓치지 않게)
 const LABEL_LIFT = 150;          // 설비 윗면·덕트 윗면에서 라벨까지(mm) — bodyDrag.js의 SLIDE_LIFT와 같은 값(M-14)
+export const LABEL_DOT_TEXT = '●';
+export const LABEL_DOT_H = 0.18;   // 점 스프라이트의 높이(m). 기본 라벨 0.4의 절반 이하다.
 
 export function labelTextureSize(text) {
   const w = Math.ceil(textWidth(String(text ?? ''), LABEL_FONT_PX) + LABEL_PAD_PX);
@@ -71,15 +74,22 @@ export function labelSprite(text, { color = '#1b2430', height = 0.4 } = {}) {
   s.scale.set((height * w) / h, height, 1);   // 텍스처 비율 그대로 — 글자가 눌리거나 잘리지 않는다
   s.name = 'label';
   s.userData.text = String(text);
+  // 점(●)으로 축약했다가 되돌리는 데 필요한 두 가지(§17.10): 색과 펼친 크기.
+  s.userData.color = color;
+  s.userData.fullScale = [s.scale.x, s.scale.y];
+  s.userData.collapsed = false;
   return s;
 }
 
 // 층의 라벨을 한 그룹으로(name 'labels'). 자식에 wallId·roomId가 없어 컷어웨이·단일 공간 모드가
 // 건드리지 않는다 — v3.equipLabels / v3.ductLabels 플래그로만 끈다(덕트가 꺼지면 덕트 라벨도 없다).
-export function buildLabels(floor, view = {}) {
+// density 'off'는 성능 우선과 같은 빈 그룹이다(§17.10(2)). 값은 브라우저 설정이라 주입으로 받는다:
+// 이 파일은 기본값으로 저장된 값을 읽고, 테스트는 그것을 덮어쓴다.
+export function buildLabels(floor, view = {}, { density = labelDensity() } = {}) {
   const g = new THREE.Group();
   g.name = 'labels';
   const v3 = view.v3 ?? {};
+  if (density === 'off') return g;
   if (!perfSettings(view.perfMode).labels) return g;   // 성능 우선: 빈 'labels' 그룹만 준다(§13.4)
   if (v3.equipLabels !== false) {
     for (const it of floor.items ?? []) {
@@ -133,8 +143,10 @@ export const onScreen = z => z === undefined || z === null || (z >= -1 && z <= 1
 // 스프라이트가 화면에서 차지하는 높이(px). 스프라이트는 늘 카메라를 마주보므로 월드 방향과
 // 무관하게 "보이는 절두체 높이 대비 스케일"이면 된다: 원근은 시선 방향 거리로, 직교는 절두체
 // 높이로 낸다(둘 다 camera.zoom을 나눈다 — updateProjectionMatrix가 그렇게 쓴다).
-export function spriteScreenHeight(sprite, camera, height = 1) {
-  const sy = Number(sprite?.scale?.y) || 0;
+// scaleY를 주면 그 크기로 잰다(§17.10): 점으로 축약된 스프라이트도 **펼친 크기**로 겹침을
+// 판정해야 한다 — 작아진 상자로 다시 재면 자리가 늘 이겨 점과 글자가 프레임마다 깜빡인다.
+export function spriteScreenHeight(sprite, camera, height = 1, scaleY = null) {
+  const sy = Number(scaleY ?? sprite?.scale?.y) || 0;
   if (!sy || !camera || !(height > 0)) return 0;
   const zoom = Number(camera.zoom) || 1;
   let frustumH = 0;
@@ -150,8 +162,8 @@ export function spriteScreenHeight(sprite, camera, height = 1) {
 // 겹침 상자는 labelBox가 글자 크기(px)로 재므로 화면 높이를 글자 크기로 환산해 넘긴다.
 // 고정 12 px이던 때는 한 줌에서만 맞았다: 줌인하면 라벨 간 화면 거리와 스프라이트 크기가 같이
 // 커지는데 상자만 그대로여서 겹침을 놓쳤다(감사 §11 재발). 이제 상자도 같이 커져 줌 불변이다.
-export function spriteLabelSize(sprite, camera, height = 1) {
-  const sh = spriteScreenHeight(sprite, camera, height);
+export function spriteLabelSize(sprite, camera, height = 1, scaleY = null) {
+  const sh = spriteScreenHeight(sprite, camera, height, scaleY);
   return sh > 0 ? Math.max(LABEL_BOX_MIN_PX, (sh * LABEL_FONT_PX) / LABEL_H_PX) : LABEL_BOX_PX;
 }
 
@@ -169,25 +181,56 @@ export function createCameraWatch(eps = 1e-4) {
   };
 }
 
+// 스프라이트를 점(●)으로 축약하거나 되돌린다. 실제로 바뀌었으면 true.
+// 텍스처 캐시는 글자·색 키라 점 텍스처도 색마다 하나뿐이다(메모리는 늘지 않는다).
+export function setLabelCollapsed(sprite, collapsed) {
+  if (!sprite?.material) return false;
+  if (!!sprite.userData.collapsed === !!collapsed) return false;
+  const map = labelTexture(collapsed ? LABEL_DOT_TEXT : (sprite.userData.text ?? ''), sprite.userData.color ?? '#1b2430');
+  if (!map) return false;
+  sprite.material.map = map;
+  sprite.material.needsUpdate = true;
+  if (collapsed) {
+    const { w, h } = labelTextureSize(LABEL_DOT_TEXT);
+    sprite.scale.set((LABEL_DOT_H * w) / h, LABEL_DOT_H, 1);
+  } else {
+    const [x, y] = sprite.userData.fullScale ?? [sprite.scale.x, sprite.scale.y];
+    sprite.scale.set(x, y, 1);
+  }
+  sprite.userData.collapsed = !!collapsed;
+  return true;
+}
+
 // 'labels' 그룹의 스프라이트를 화면에 투영해 visible을 맞춘다. 카메라가 멈춘 뒤 한 번만 부른다
 // (view3d가 LABEL_DEBOUNCE_MS 디바운스, 2D 투영 진입·이탈도 같은 디바운스로 다시 잰다).
 // project를 주면 그것으로 투영한다(테스트용).
-export function cullLabels(group, camera, { width = 1, height = 1, project = null } = {}) {
+// density(§17.10(2)): 'all' = 컬링하지 않는다 · 'auto' = 겹치면 점(●)으로 축약 · 'off' = 모두 숨긴다.
+// 'auto'에서 **화면 밖**만 visible = false가 되고, 화면 안에서 자리를 잃은 라벨은 점으로 남는다
+// (무엇이 가려졌는지 보이고, 가까이 가면 자리 경쟁에서 이겨 저절로 펼쳐진다 — 감사 §5).
+// 기본값은 buildLabels와 **같은 규칙**이다(`labelDensity()` — "정한 것 22"): 한쪽만 리터럴 'auto'를
+// 쓰면 저장값이 'all'인 브라우저에서 "짓기"와 "컬링"의 기본값이 갈린다(사전 검토 M-8).
+// labelDensity()는 localStorage가 없는 node 테스트에서도 'auto'를 돌려준다(try/catch).
+export function cullLabels(group, camera, { width = 1, height = 1, project = null, density = labelDensity() } = {}) {
   const sprites = (group?.children ?? []).filter(s => s.name === 'label');
   if (!sprites.length || (!camera && !project)) return new Set();
+  if (density === 'off') { for (const s of sprites) s.visible = false; return new Set(); }
   const toScreen = project ?? (p => projectSprite(p, camera, { width, height }));
-  const entries = [];
+  const entries = [], offScreen = new Set();
   for (const s of sprites) {
     const sp = toScreen(s.position);
-    if (!onScreen(sp?.[2])) continue;   // 카메라 뒤·절두체 밖 — 자리 경쟁에서 빼고 visible은 아래에서 false가 된다
+    if (!onScreen(sp?.[2])) { offScreen.add(s.uuid); continue; }   // 카메라 뒤·절두체 밖은 자리 경쟁에서 뺀다
     entries.push({
       // kind 폴백 'ductSize': buildLabels는 두 경로에서 늘 kind를 넣으므로 닿지 않는다. 밖에서 만든
       // 스프라이트가 섞이면 조용히 낮은 우선순위로 둔다(설비 번호 자리를 빼앗지 않게).
       key: s.uuid, kind: s.userData.kind ?? 'ductSize', text: s.userData.text ?? '', sp,
-      size: spriteLabelSize(s, camera, height),
+      // 판정은 늘 **펼친 크기**로 한다(점이 되어도 상자는 그대로다 — 깜빡임 방지).
+      size: spriteLabelSize(s, camera, height, s.userData.fullScale?.[1] ?? null),
     });
   }
-  const keep = cullSprites(entries);
-  for (const s of sprites) s.visible = keep.has(s.uuid);
+  const keep = density === 'all' ? new Set(entries.map(e => e.key)) : cullSprites(entries);
+  for (const s of sprites) {
+    s.visible = !offScreen.has(s.uuid);
+    if (s.visible) setLabelCollapsed(s, !keep.has(s.uuid));
+  }
   return keep;
 }

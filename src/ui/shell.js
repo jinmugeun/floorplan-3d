@@ -18,7 +18,7 @@ export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {})
 
 // onToolChange: 옵션 바의 치수 칸이 도구 상태를 바꿨다(§16.7). 배선이 캔버스를 다시 그리게 한다 —
 // ui/는 view2d/를 import하지 않으므로(아키텍처 §9) 셸이 직접 requestRender를 부를 수는 없다.
-export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {}, onToolChange = () => {}, onPanelShow = () => {} }) {
+export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {}, onToolChange = () => {}, onPanelShow = () => {}, onLabelDensity = () => {} }) {
   root.innerHTML = shellHtml({ name: store.get().name });
   const q = s => root.querySelector(s);
   const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials'), airflow: q('#airflow') };
@@ -147,7 +147,7 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // 팝오버(보기·카메라·햇빛·도움말) 배선은 ui/shellPopovers.js 한 곳에 있다(리뷰 I-8 — 300줄 규칙은
   // "커지기 전에 나눈다"였다: 예산에 닿아 설명 주석을 깎던 자리를 덩어리째 옮겼다). 셸은 상태만
   // 묻고(kind()·isOpen()) 화면이 바뀔 때 닫거나 다시 그리게 한다.
-  const pops = createShellPopovers(root, { store, ui, onOpenKeymap, onOpen: () => bottom?.closeMore() });
+  const pops = createShellPopovers(root, { store, ui, onOpenKeymap, onOpen: () => bottom?.closeMore(), onLabelDensity });
 
   let currentTool = null;
   // 옵션 바는 캔버스 위에 뜬 팝업이 아니라 캔버스 위쪽 행이다(§12.1): 옵션이 없으면 행이 접히고(hidden),

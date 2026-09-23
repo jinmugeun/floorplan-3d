@@ -15,6 +15,7 @@ import { createFacePicker } from './facePick.js';
 import { createBodyDrag } from './bodyDrag.js';
 import { createOrthoView } from './orthoView.js';
 import { cullLabels, createCameraWatch, LABEL_DEBOUNCE_MS } from './labels3d.js';
+import { labelDensity } from '../ui/prefs.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -258,7 +259,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
       labelTimer = 0;
       const g = group?.children.find(m => m.name === 'labels');
       if (!g || !g.children.length) return;
-      cullLabels(g, ov.camera() ?? camera, { width: container.clientWidth || 1, height: container.clientHeight || 1 });
+      cullLabels(g, ov.camera() ?? camera, { width: container.clientWidth || 1, height: container.clientHeight || 1, density: labelDensity() });
       requestRender();
     }, LABEL_DEBOUNCE_MS);
   }
@@ -290,5 +291,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender,
+    // 라벨 밀도는 kvp라 sceneSignature에 없다(§17.10): 값이 바뀌면 배선이 여기를 부른다.
+    refreshLabels() { rebuild(); scheduleLabelCull(); requestRender(); },
+    setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // §14.7: "그린 뒤 도구 유지"는 브라우저에만 남는다(프로젝트 파일은 바이트 하나도 늘지 않는다).
 import { test, expect, beforeEach } from 'vitest';
-import { STICKY_TOOLS_KEY, stickyTools, setStickyTools, DUCT_SYSTEM_KEY, lastDuctSystem, setLastDuctSystem } from '../src/ui/prefs.js';
+import { STICKY_TOOLS_KEY, stickyTools, setStickyTools, DUCT_SYSTEM_KEY, lastDuctSystem, setLastDuctSystem, LABEL_DENSITY_KEY, labelDensity, setLabelDensity } from '../src/ui/prefs.js';
 import { DUCT_NO_SYSTEM } from '../src/ui/messages.js';
 
 beforeEach(() => localStorage.clear());
@@ -102,4 +102,20 @@ test('일부러 비운 계통은 빈 값으로 기억되고 다음 활성화에�
   expect(toasts.filter(m => m === DUCT_NO_SYSTEM)).toHaveLength(1);   // 경고는 완성 1회뿐이다
   const b = make(shared);                          // 같은 객체로 도구를 다시 켠다
   expect(b.opts.system).toBe('');
+});
+
+// §17.10(2): 라벨 밀도는 프로젝트가 아니라 브라우저에 남는다(저장 형식 무변경).
+test('kvp.labelDensity의 기본값은 auto이고 세 값만 받는다', () => {
+  expect(LABEL_DENSITY_KEY).toBe('kvp.labelDensity');
+  expect(labelDensity()).toBe('auto');
+  setLabelDensity('all');
+  expect(localStorage.getItem(LABEL_DENSITY_KEY)).toBe('all');
+  expect(labelDensity()).toBe('all');
+  setLabelDensity('off');
+  expect(labelDensity()).toBe('off');
+  setLabelDensity('엉터리');                       // 모르는 값은 기본값으로 답한다
+  expect(labelDensity()).toBe('auto');
+  const get = localStorage.getItem;
+  localStorage.getItem = () => { throw new Error('막힘'); };
+  try { expect(labelDensity()).toBe('auto'); } finally { localStorage.getItem = get; }
 });

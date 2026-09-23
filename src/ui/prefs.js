@@ -20,3 +20,15 @@ export function lastDuctSystem() {
 export function setLastDuctSystem(s) {
   try { localStorage.setItem(DUCT_SYSTEM_KEY, String(s ?? '')); } catch { /* 저장 불가 */ }
 }
+
+// 3D 라벨 밀도(§17.10(2)). 'all' = 컬링하지 않는다 · 'auto' = 겹치면 점(●)으로 축약 · 'off' = 라벨 없음.
+// 프로젝트 파일에는 남기지 않는다(저장 형식 무변경) — 그래서 sceneSignature에도 들어가지 않고,
+// 값이 바뀔 때 main.js가 **명시적으로** 재빌드를 건다.
+export const LABEL_DENSITY_KEY = 'kvp.labelDensity';
+const DENSITIES = new Set(['all', 'auto', 'off']);
+export function labelDensity() {
+  try { const v = localStorage.getItem(LABEL_DENSITY_KEY); return DENSITIES.has(v) ? v : 'auto'; } catch { return 'auto'; }
+}
+export function setLabelDensity(v) {
+  try { localStorage.setItem(LABEL_DENSITY_KEY, DENSITIES.has(v) ? v : 'auto'); } catch { /* 저장 불가 */ }
+}

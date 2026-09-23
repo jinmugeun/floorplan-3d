@@ -3,6 +3,7 @@
 // 한 곳에 모이는 규칙 셋: ① 팝오버는 한 번에 하나만 열린다 ② 같은 버튼을 다시 누르면 닫힌다
 // ③ 보기 옵션 변경은 되돌릴 단계가 아니다({ record: false }).
 import { createPopover } from './popover.js';
+import { setLabelDensity } from './prefs.js';
 import { viewPopoverHtml, cameraPopoverHtml, sunPopoverHtml } from './viewOptions.js';
 import { helpHtml } from './helpPopover.js';
 
@@ -10,7 +11,9 @@ import { helpHtml } from './helpPopover.js';
 const setPath = (o, path, v) => { const ks = path.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = t[k]; t[ks.at(-1)] = v; };
 
 // onOpen: 다른 팝업(하단 바 더보기)을 닫아 달라는 신호다 — 셸이 그 배선을 갖고 있다.
-export function createShellPopovers(root, { store, ui, onOpenKeymap = () => {}, onOpen = () => {} }) {
+// onLabelDensity: 라벨 밀도는 프로젝트가 아니라 브라우저 설정이라 store.dispatch가 아니라
+// kvp에 쓴다(§17.10) — 씬을 다시 짓는 것은 배선(main.js)의 일이므로 콜백으로 알린다.
+export function createShellPopovers(root, { store, ui, onOpenKeymap = () => {}, onOpen = () => {}, onLabelDensity = () => {} }) {
   const q = s => root.querySelector(s);
   const pop = createPopover(root);
   let popKind = null;
@@ -32,6 +35,8 @@ export function createShellPopovers(root, { store, ui, onOpenKeymap = () => {}, 
   // 보기 옵션은 되돌릴 단계가 아니다(record: false).
   function applyViewChange(ev) {
     const el = ev.target;
+    // 라벨 밀도만 스토어가 아니라 로컬 설정이다(§17.10(2)).
+    if (el?.dataset?.pref === 'labelDensity') { setLabelDensity(el.value); onLabelDensity(el.value); return; }
     if (!el || (!el.dataset.v2 && !el.dataset.v3 && !el.dataset.view)) return;
     const value = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value;
     store.dispatch(d => {
