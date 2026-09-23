@@ -11,7 +11,7 @@ import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor } from './materialRows.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField, ventRowsClick } from './equipRows.js';
 import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
-import { field, num, numValue, lenField, readLen, withUnit, colorField, isDuplicateCommit } from './fieldUtils.js';
+import { field, num, numValue, lenField, readLen, withUnit, colorField, isDuplicateCommit, nextFocusName } from './fieldUtils.js';
 import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
@@ -164,14 +164,21 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (!colorTx) { store.beginTransaction(); colorTx = true; } // 드래그 시작 상태를 되돌림 지점으로 잡는다
     applyColor(ui.get().selection, el.name, el.value, { record: false });
   };
-  // 무동작 재렌더는 포커스를 되돌려 준다(리뷰 I-2 · MUST-CHECK N-2). render()는 container.innerHTML을
-  // 통째로 갈아 글자를 모델 값으로 되맞추는데(§16.1이 옳게 더한 동작), 그 순간 포커스를 갖고 있던
-  // 입력 노드가 사라져 document.activeElement가 <body>로 떨어졌다 — 클램프 경계에서 화살표를
-  // 두드리면 매 change마다 제자리를 잃었다. 패널은 이미 복구 장치(ui.focusField)를 갖고 있다:
-  // ui.set이 ui.subscribe(render)를 돌려 새 DOM을 만들고 :49-52가 같은 이름의 칸을 다시 잡는다.
-  // [Tab]으로 포커스가 이미 떠난 경우에는 다시 잡지 않는다(그 칸으로 되끌어오면 더 나쁘다).
+  // 확정 뒤 포커스(리뷰 I-2 · §17.6(4) · 감사 §30). render()가 container.innerHTML을 통째로 갈아
+  // 글자를 모델 값으로 되맞추면 포커스 노드가 사라져 activeElement가 <body>로 떨어진다 —
+  // 복구 장치는 ui.focusField다(ui.set → render → 같은 이름의 새 칸을 잡는다 · :49-52).
+  // 판정은 change가 **들어온 순간**의 포커스(focusAtChange)로 한다: 적용이 dispatch를 내면 store
+  // 구독이 먼저 돌아 이미 다시 그려진 뒤라 지금의 activeElement로는 세 경우가 구분되지 않는다.
+  let focusAtChange = null;
   const rerender = el => {
-    if (el?.name && container.contains(el) && document.activeElement === el) ui.set({ focusField: el.name });
+    const was = focusAtChange; focusAtChange = null;
+    // (1) 그 칸에 포커스가 있었다(클램프 화살표 연타·[Enter] 확정): 제자리로 돌려준다.
+    if (el?.name && was === el) ui.set({ focusField: el.name });
+    // (2) [Tab]·blur로 확정했다(브라우저는 change를 blur 뒤에 낸다 → <body>다): 다음 칸으로
+    //     옮겨 준다. 다음 칸이 없으면 제자리다.
+    else if (el?.name && (!was || was === container.ownerDocument?.body))
+      ui.set({ focusField: nextFocusName(container, el) ?? el.name });
+    // (3) 포커스가 이미 패널 밖으로 갔다: 글자만 되맞추고 되끌어오지 않는다(§16.1의 계약).
     else render();
   };
   const onChange = ev => {
@@ -179,16 +186,14 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     // [Enter] 확정 뒤 blur가 내는 같은 값의 네이티브 change는 한 번 삼킨다(§16.1). 적용 함수가
     // 이미 값을 거르지만, 클램프 토스트·잠금 토스트가 두 번 뜨는 것은 그쪽에서 막지 못한다.
     if (isDuplicateCommit(el)) return;
-    // 마감재·설비·덕트 갈래의 boolean은 "내 필드다"를 뜻할 뿐 "적용했다"가 아니다(반환 규약은 그대로 둔다).
-    // store.dispatch는 언제나 새 structuredClone을 상태로 앉히므로 상태 동일성이 곧 "dispatch가
-    // 없었다"다 → 그때만 직접 다시 그려 칸의 글자를 모델 값으로 되돌린다(리뷰 I-2b: eqNo가 이미
-    // 99(최대)일 때 50099를 확정하면 상태는 99인데 글자가 50099로 남았다. 리뷰 N-6: 마감재 오프셋
-    // 칸을 비우고 확정하면 값은 지켜지는데 칸이 빈 채로 남았다 — materialRows.js의 주석이 약속한
-    // "패널이 원래 값으로 다시 그린다"가 이 갈래에만 빠져 있었다).
-    const before = store.get();
-    if (applyMaterialField(store, sel, el)) { if (store.get() === before) rerender(el); return; }   // 마감재 오프셋·각도
-    if (applyVentField(store, ui, sel, el)) { if (store.get() === before) rerender(el); return; }   // 설비 속성 · 방 설계 풍량
-    if (applyDuctField(store, sel, el)) { if (store.get() === before) rerender(el); return; }       // 덕트 종류·계통·구간 단면
+    focusAtChange = document.activeElement;   // 적용이 재렌더를 돌리기 **전**의 포커스(rerender가 읽는다)
+    // 마감재·설비·덕트 갈래의 boolean은 "내 필드다"를 뜻할 뿐 "적용했다"가 아니다(반환 규약은 그대로).
+    // 적용됐든(값이 바뀌었다) 아니든(클램프·같은 값·잠금) 포커스와 글자의 계약은 같으므로 언제나
+    // rerender를 부른다(§17.6(4)): 적용됐으면 구독이 이미 다시 그렸고 rerender는 그 위에
+    // focusField만 얹는다. 적용되지 않았으면 rerender가 글자를 모델 값으로 되돌린다(리뷰 I-2b·N-6).
+    if (applyMaterialField(store, sel, el)) { rerender(el); return; }   // 마감재 오프셋·각도
+    if (applyVentField(store, ui, sel, el)) { rerender(el); return; }   // 설비 속성 · 방 설계 풍량
+    if (applyDuctField(store, sel, el)) { rerender(el); return; }       // 덕트 종류·계통·구간 단면
     if (name === 'bgOpacity') { store.dispatch(d => { d.background.opacity = Number(el.value); }, { record: false }); return; }
     if (name === 'bgVisible') { store.dispatch(d => { d.background.visible = el.checked; }, { record: false }); return; }
     if (name === 'bgLocked') { store.dispatch(d => { d.background.locked = el.checked; }, { record: false }); return; }
@@ -208,13 +213,15 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       if (v === null) { rerender(el); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
       // 적용된 것이 없으면(같은 값·클램프·잠금) dispatch가 없어 패널이 다시 그려지지 않는다 →
       // 칸의 글자가 모델과 어긋난 채 남는다(리뷰 I-2). 그때만 직접 다시 그려 모델 값을 보여 준다.
-      if (!applyNumber(store, sel, name, v)) rerender(el);
+      applyNumber(store, sel, name, v);
+      rerender(el);                                          // §17.6(4): 성공한 확정도 포커스를 옮겨 준다
       return;
     }
     if (el.type === 'number') {
       const v = numValue(el, { onClamp });
       if (v === null) { rerender(el); return; } // 잘못된 입력은 버리고 현재 값으로 되돌린다
-      if (!applyNumber(store, sel, name, v)) rerender(el);   // 리뷰 I-2: 적용되지 않았으면 글자를 모델 값으로
+      applyNumber(store, sel, name, v);
+      rerender(el);
       return;
     }
     if (el.type === 'color') {

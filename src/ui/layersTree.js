@@ -29,33 +29,57 @@ export function itemTag(item, { seq = 1, total = 1 } = {}) {
 
 const nameOf = it => it.name || productById(it.productId)?.name || '제품';
 
+// 행에 보이는 세 조각을 마우스 툴팁 한 줄로 잇는다(§17.6 · 감사 §33): 좁은 패널에서 이름이
+// 잘리거나 코드가 숨어도 전체를 읽을 수 있다. 빈 조각은 빠진다(구분점이 혼자 남지 않게).
+export const layerRowTitle = (name, code, size) => {
+  const tail = [code, size].map(s => String(s ?? '').trim()).filter(Boolean).join(' ');
+  return [String(name ?? '').trim(), tail].filter(Boolean).join(' · ');
+};
+
 function itemRow(it, { tag, selected, renaming }) {
   const p = productById(it.productId);
+  const code = it.code || p?.code || '';
+  const size = p ? fmtSize(it.size) : '';
   const body = renaming
     ? `<input type="text" data-name="${esc(it.id)}" value="${esc(nameOf(it))}" aria-label="${BTN_TITLES.rename}">`
-    : `<button type="button" class="layer-name" data-select="${esc(it.id)}">${esc(nameOf(it))}${tag ? ` <span class="layer-tag">${esc(tag)}</span>` : ''}</button>`;
+    : `<button type="button" class="layer-name" data-select="${esc(it.id)}" title="${esc(layerRowTitle(nameOf(it), code, size))}">${esc(nameOf(it))}${tag ? ` <span class="layer-tag">${esc(tag)}</span>` : ''}</button>`;
   const btn = (attr, on) => `<button type="button" ${attr}="${esc(it.id)}" class="${on ? 'on' : 'off'}" title="${BTN_TITLES[on ? 'show' : 'hide']}" aria-label="${BTN_TITLES[on ? 'show' : 'hide']}">${on ? '🚫' : '👁'}</button>`;
   const lock = `<button type="button" data-lock="${esc(it.id)}" class="${it.locked ? 'on' : 'off'}" title="${BTN_TITLES[it.locked ? 'unlock' : 'lock']}" aria-label="${BTN_TITLES[it.locked ? 'unlock' : 'lock']}">${it.locked ? '🔒' : '🔓'}</button>`;
   return `<li class="layer-item${selected ? ' on' : ''}${it.hidden ? ' off' : ''}"${selected ? ' data-sel="1"' : ''} data-id="${esc(it.id)}">
       ${body}
-      <span class="muted">${esc(it.code || p?.code || '')} ${p ? esc(fmtSize(it.size)) : ''}</span>
+      <span class="muted layer-code">${esc(code)} ${esc(size)}</span>
       <span class="layer-btns">${btn('data-hide', !!it.hidden)}${lock}<button type="button" data-rename="${esc(it.id)}" title="${BTN_TITLES.rename}" aria-label="${BTN_TITLES.rename}">✎</button></span></li>`;
 }
 
 // 덕트 행: 급배기 · 계통 · 총 길이. 이름 바꾸기는 없다(덕트 이름은 계통이 대신한다).
 function ductRow(d, { units, selected }) {
   const kind = d.kind === 'supply' ? '급기' : '배기';
-  const system = d.system ? ` · ${esc(d.system)}` : '';
+  // 행 글자와 툴팁을 **원문**으로 만들고 `esc`는 출력 지점에서 한 번만 한다(사전 검토 M-2):
+  // 예전처럼 조각에 `esc(d.system)`을 미리 섞으면 그 조각을 다시 esc하는 title에서 두 번
+  // 이스케이프되어 계통 이름의 `&`가 `&amp;amp;`로 보인다.
+  const label = `덕트 ${kind}${d.system ? ` · ${d.system}` : ''}`;
+  const len = fmtLen(Math.round(ductLength(d)), units);
+  // 툴팁 표기는 §17.6(1)의 예시 그대로다 — `덕트 급기 EA-1 · 12.4 m`: 계통 앞에는 구분점이
+  // 없고 길이 앞에만 있다(행에 보이는 label과 구분점 하나가 다른 이유다 — 사전 검토 M-1).
+  const title = layerRowTitle(`덕트 ${kind}${d.system ? ` ${d.system}` : ''}`, '', len);
   const eye = `<button type="button" data-duct-hide="${esc(d.id)}" class="${d.hidden ? 'on' : 'off'}" title="${BTN_TITLES[d.hidden ? 'show' : 'hide']}" aria-label="${BTN_TITLES[d.hidden ? 'show' : 'hide']}">${d.hidden ? '🚫' : '👁'}</button>`;
   const lock = `<button type="button" data-duct-lock="${esc(d.id)}" class="${d.locked ? 'on' : 'off'}" title="${BTN_TITLES[d.locked ? 'unlock' : 'lock']}" aria-label="${BTN_TITLES[d.locked ? 'unlock' : 'lock']}">${d.locked ? '🔒' : '🔓'}</button>`;
   return `<li class="layer-item${selected ? ' on' : ''}${d.hidden ? ' off' : ''}"${selected ? ' data-sel="1"' : ''} data-duct="${esc(d.id)}">
-      <button type="button" class="layer-name" data-duct-select="${esc(d.id)}">덕트 ${kind}${system}</button>
-      <span class="muted">${esc(fmtLen(Math.round(ductLength(d)), units))}</span>
+      <button type="button" class="layer-name" data-duct-select="${esc(d.id)}" title="${esc(title)}">${esc(label)}</button>
+      <span class="muted layer-code">${esc(len)}</span>
       <span class="layer-btns">${eye}${lock}</span></li>`;
 }
 
 // buckets = [{ room, items, ducts }] (layersPanel.buckets()의 결과 그대로).
-export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidden = true, selectedIds = new Set(), renaming = null, openState = new Map() } = {}) {
+// 방 노드가 처음에 열려 있는지: 사용자가 토글한 기억(openState)이 먼저고, 없으면 "내용이 있으면
+// 펼침"이다. autoCollapse(큰 도면)면 내용이 있어도 접힌 채 연다(§17.6).
+export const bucketOpen = (b, openState = new Map(), autoCollapse = false) => {
+  const id = b.room?.id ?? 'none';
+  if (openState?.has?.(id)) return openState.get(id);
+  return !autoCollapse && (b.items.length + b.ducts.length) > 0;
+};
+
+export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidden = true, selectedIds = new Set(), renaming = null, openState = new Map(), autoCollapse = false } = {}) {
   // 꼬리표는 **트리 전체**에서 같은 이름을 센다: 같은 후드 세 개가 서로 다른 방에 있어도 구분된다.
   // 번호도 같은 목록(숨김 필터 **전**)에서 매긴다(리뷰 M-6): 그려진 행에서만 세면 소파 둘 중 앞의
   // 것을 숨기고 "숨긴 항목 보기"를 끄는 순간 남은 #2가 #1이 됐다 — 같은 물건의 번호가 바뀌면
@@ -80,8 +104,7 @@ export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidde
       ? `<li class="layer-hidden"><button type="button" name="showHidden">${HIDDEN_LINE(hiddenCount)}</button></li>`
       : '';
     const id = b.room?.id ?? 'none';
-    const total = b.items.length + b.ducts.length;
-    const open = openState.has(id) ? openState.get(id) : total > 0;
+    const open = bucketOpen(b, openState, autoCollapse);
     const title = b.room ? `${esc(b.room.name || '이름 없는 공간')} (${fmtArea(b.room.area, { pyeong })})` : '미지정';
     const count = `제품 ${b.items.length} · 덕트 ${b.ducts.length}`;
     return `<li class="layer-room"><details data-room="${esc(id)}"${open ? ' open' : ''}>

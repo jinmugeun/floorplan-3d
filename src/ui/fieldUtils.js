@@ -2,6 +2,7 @@
 // 값은 언제나 mm 정수로 저장한다: 표시만 단위(mm / ft·in)에 따라 달라진다.
 import { fmtLen, parseLen } from '../util/units.js';
 import { esc } from '../util/html.js';
+import { focusables } from './dialogBase.js';
 
 export const field = (label, inner) => `<label class="field"><span>${label}</span>${inner}</label>`;
 // 단위별 숫자 간격(§15.9). mm 칸은 10 mm, ft·in 칸은 1/8 인치다 — 도면 치수를 1 mm 단위로
@@ -116,4 +117,16 @@ export function trackFields(root) {
   const on = ev => rememberFieldValue(ev.target);
   root.addEventListener('focusin', on);
   return { destroy() { root.removeEventListener('focusin', on); } };
+}
+
+// [Tab]·blur 확정 뒤에 포커스를 둘 다음 칸의 **이름**(§17.6(4)). 이름이 없는 버튼과 포커스를
+// 받을 수 없는 요소는 건너뛴다. el이 이미 DOM에서 떨어졌으면(재렌더 뒤) 같은 name의 새 노드를
+// 기준으로 삼는다 — 속성 패널은 innerHTML을 통째로 갈아 치우므로 두 순간이 모두 필요하다.
+export function nextFocusName(root, el) {
+  const list = focusables(root);
+  let at = list.indexOf(el);
+  if (at < 0 && el?.name) at = list.findIndex(x => x.name === el.name);
+  if (at < 0) return null;
+  for (let i = at + 1; i < list.length; i++) if (list[i].name) return list[i].name;
+  return null;
 }

@@ -258,3 +258,9 @@ button.primary, .primary { background: var(--accent); color: var(--on-accent); b
    커서는 선언하지 않는다: 카드 자체가 버튼이라 .start-card(또는 .start-open)의 pointer를 물려받아야
    "누르면 열린다"가 참이 된다. */
 .start-card canvas[data-tpl] { width: 96px; height: 96px; flex: 0 0 auto; align-self: center; background: #f4f6f8; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 2px; }
+/* 레이어 패널 머리 한 줄(§17.6): 검색 칸이 남는 폭을 다 쓰고 접기 버튼은 제 크기만 쓴다.
+   좁은 패널(#panel.narrow — ui/layout.js가 LAYER_CODE_HIDE_PX로 붙인다)에서는 행의 코드·크기를
+   숨겨 이름이 잘리지 않게 한다(전체 이름은 행 버튼의 title에 있다). */
+.layer-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-bottom: 6px; }
+.layer-head input[name="q"] { min-width: 0; }
+#panel.narrow .layer-code { display: none; }

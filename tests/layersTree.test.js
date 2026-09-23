@@ -2,8 +2,8 @@
 // DOM 배선 없이 직접 단정할 수 있다.
 import { describe, test, expect } from 'vitest';
 import { createItem } from '../src/state/schema.js';
-import { productById } from '../src/products/catalog.js';
-import { layerTreeHtml, itemTag, HIDDEN_LINE, BTN_TITLES, ALL_SHOW, ALL_HIDE } from '../src/ui/layersTree.js';
+import { productById, fmtSize } from '../src/products/catalog.js';
+import { layerTreeHtml, itemTag, HIDDEN_LINE, BTN_TITLES, ALL_SHOW, ALL_HIDE, layerRowTitle } from '../src/ui/layersTree.js';
 
 const hood = no => createItem(productById('hood-box'), { pos: [1000.5, 1000.25], props: { no } });
 const sofa = () => createItem(productById('sofa-3'), { pos: [2000.5, 2000.25] });
@@ -59,6 +59,32 @@ describe('레이어 트리 HTML', () => {
     expect(HIDDEN_LINE(3)).toBe('숨긴 항목 3개 — 숨긴 항목 보기');
     expect(ALL_SHOW).toBe('모두 보이기');
     expect(ALL_HIDE).toBe('모두 숨기기');
+  });
+
+  // §17.6(감사 §33·§49): 잘린 이름을 마우스로 확인할 길이 없었다. 코드·크기는 좁은 패널에서
+  // 숨을 수 있게 제 클래스를 갖는다(#panel.narrow .layer-code).
+  test('행 이름 버튼에 전체 이름·코드·크기 title이 붙고 코드는 layer-code다', () => {
+    const p = productById('hood-box');
+    const html = layerTreeHtml([{ room: room('r1', '가열조리실', 18.2), items: [hood(1)], ducts: [] }], ctx);
+    expect(html).toContain(`title="${p.name} · ${p.code} ${fmtSize(p.size)}"`);
+    expect(html).toContain('class="muted layer-code"');
+    expect(layerRowTitle('상자형 후드', 'VH-BX', '1600×1200×600')).toBe('상자형 후드 · VH-BX 1600×1200×600');
+    expect(layerRowTitle('덕트 급기 EA-1', '', '12400')).toBe('덕트 급기 EA-1 · 12400');   // §17.6(1)의 예시 표기
+    expect(layerRowTitle('이름만', '', '')).toBe('이름만');
+    // 덕트 행: 보이는 글자는 `덕트 배기 · EA-1`이고 툴팁은 §17.6(1)의 `덕트 배기 EA-1 · 길이`다(M-1).
+    // 그리고 이스케이프는 한 번만 한다(M-2): 계통 이름의 `&`가 `&amp;`로 한 번만 바뀐다.
+    const dh = layerTreeHtml([{ room: null, items: [], ducts: [{ id: 'd1', kind: 'exhaust', system: 'A&B', hidden: false, locked: false, points: [[0, 0], [12400, 0]], segments: [{ w: 500, h: 300, z: 2900 }], dampers: [], connections: [] }] }], ctx);
+    expect(dh).toContain('>덕트 배기 · A&amp;B<');
+    expect(dh).toContain('title="덕트 배기 A&amp;B · 12400"');
+    expect(dh).not.toContain('&amp;amp;');
+  });
+
+  // §17.6: 큰 도면은 접힌 채 연다(탭 스톱 2,000개 → 방 수 수준). 사용자 토글은 그대로 이긴다.
+  test('autoCollapse면 내용이 있는 방도 접힌 채 열리고 openState가 이긴다', () => {
+    const b = [{ room: room('r1', '가열조리실', 18.2), items: [sofa()], ducts: [] }];
+    expect(layerTreeHtml(b, ctx)).toContain('<details data-room="r1" open>');
+    expect(layerTreeHtml(b, { ...ctx, autoCollapse: true })).toContain('<details data-room="r1">');
+    expect(layerTreeHtml(b, { ...ctx, autoCollapse: true, openState: new Map([['r1', true]]) })).toContain('<details data-room="r1" open>');
   });
 });
 

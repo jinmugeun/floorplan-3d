@@ -8,6 +8,7 @@ import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { createLayersPanel, ductRoomId, hideAll } from '../src/ui/layersPanel.js';
 import { LAYERS_HIDDEN, LAYERS_SHOWN } from '../src/ui/messages.js';
+import { LAYER_SEARCH_PH, COLLAPSE_ALL, EXPAND_ALL } from '../src/ui/layersHeader.js';
 import { addDuct } from '../src/state/ductOps.js';
 import { pointInPolygon } from '../src/geom/rooms.js';
 import { roomAt, roomAirflow } from '../src/vent/airflow.js';
@@ -282,5 +283,49 @@ describe('레이어 패널', () => {
     expect(hideAll(store, f(), true)).toEqual({ items: 2, ducts: 0 });
     expect(hideAll(store, f(), true)).toEqual({ items: 0, ducts: 0 });   // 이미 숨겨져 있다
     expect(hideAll(store, f(), false)).toEqual({ items: 2, ducts: 0 });
+  });
+
+  // §17.6(감사 §28): 트리를 건너뛸 길 — 검색 칸은 패널 지역 상태다(스토어를 건드리지 않는다).
+  test('검색 칸이 트리를 좁히고 타이핑 중 포커스를 지킨다', () => {
+    const { el, store } = setup();
+    const q = el.querySelector('[name="q"]');
+    expect(q.placeholder).toBe(LAYER_SEARCH_PH);
+    q.focus();
+    q.value = '의자';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+    const rows = [...el.querySelectorAll('.layer-item')];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('식탁 의자');
+    expect(el.querySelectorAll('.layer-room')).toHaveLength(1);   // 남는 행이 없는 방 노드는 그리지 않는다
+    expect(document.activeElement.name).toBe('q');
+    expect(document.activeElement.value).toBe('의자');
+    expect(store.canUndo()).toBe(true);                            // 검색은 되돌릴 단계가 아니다(도면 생성 단계만 남아 있다)
+  });
+
+  test('[방 모두 접기]가 방 노드를 모두 접고 라벨이 바뀐다', () => {
+    const { el } = setup();
+    const btn = () => el.querySelector('[name="collapseAll"]');
+    expect(btn().textContent).toBe(COLLAPSE_ALL);
+    click(el, '[name="collapseAll"]');
+    expect([...el.querySelectorAll('details')].every(d => !d.open)).toBe(true);
+    expect(btn().textContent).toBe(EXPAND_ALL);
+    click(el, '[name="collapseAll"]');
+    expect([...el.querySelectorAll('details')].every(d => d.open)).toBe(true);
+  });
+
+  // §17.6(3) · §(d)의 §16.3: 레일 탭을 여는 순간에는 render()가 돌지 않아 영영 스크롤되지 않았다.
+  test('reveal()이 선택 행을 보이는 곳으로 스크롤한다', () => {
+    const seen = [];
+    const before = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () { seen.push(this); };   // jsdom에는 없다
+    try {
+      const { ui, panel, inRoom } = setup();
+      ui.set({ selection: { type: 'item', id: inRoom } });
+      expect(seen).toHaveLength(1);
+      seen.length = 0;
+      panel.reveal();
+      expect(seen).toHaveLength(1);
+      expect(seen[0].classList.contains('on')).toBe(true);
+    } finally { Element.prototype.scrollIntoView = before; }
   });
 });

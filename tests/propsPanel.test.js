@@ -11,6 +11,7 @@ import { createPropsPanel, applyNumber, lenField, withUnit, readLen } from '../s
 import { getKeepRatio, setKeepRatio } from '../src/ui/propsApply.js';
 import { applyMaterial, assignmentOf } from '../src/state/materialOps.js';
 import { fmtLen } from '../src/util/units.js';
+import { nextFocusName } from '../src/ui/fieldUtils.js';
 
 // 소수 좌표 도면 하나에 패널을 붙인다(기존 테스트들이 인라인으로 되풀이하던 모양 그대로).
 function setupPanel() {
@@ -794,4 +795,28 @@ test('벽 부착 제품 행에 벽 슬라이드 안내가 한 줄 붙는다', as
   const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000.5, 1500.25] }));
   ui.set({ selection: { type: 'item', id: hood } });
   expect(el.textContent).not.toContain(WALL_ITEM_SLIDE_HINT);
+});
+
+// §17.6(4) · §(d)의 §16.1(감사 §30): 값과 되돌리기는 맞는데 포커스가 BODY로 떨어져,
+// 칸을 연달아 채우려면 매번 마우스로 돌아와야 했다.
+test('[Tab]으로 확정하면 포커스가 다음 칸으로 간다', () => {
+  const { store, ui, el } = setupPanel();
+  const id = activeFloor(store.get()).walls[0].id;
+  ui.set({ selection: { type: 'wall', id } });
+  const th = el.querySelector('[name="thickness"]');
+  const after = nextFocusName(el, th);
+  expect(after).not.toBeNull();
+  th.focus();
+  th.value = '220';
+  th.blur();                                                  // 실브라우저의 [Tab]: blur 뒤에 change가 온다
+  th.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(220);
+  expect(document.activeElement.tagName).not.toBe('BODY');
+  expect(document.activeElement.name).toBe(after);
+  // 제자리 규칙은 그대로다: 포커스가 칸에 남아 있으면 그 칸으로 돌아온다(클램프 화살표).
+  const th2 = el.querySelector('[name="thickness"]');
+  th2.focus();
+  th2.value = '230';
+  th2.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(document.activeElement.name).toBe('thickness');
 });

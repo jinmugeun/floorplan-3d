@@ -1101,3 +1101,11 @@ test('프로젝트를 갈아 끼우면 ↶/↷ 버튼이 그 자리에서 꺼진
   expect(btns()).toEqual([true, true]);
   expect(store.undo()).toBe(false);              // 버튼이 말한 것과 스토어가 하는 일이 같다
 });
+
+// §17.6(3): 레일 탭을 여는 순간은 패널의 render()가 돌지 않는 유일한 자리다 — 셸이 알린다.
+test('레일 탭을 열면 onPanelShow가 그 이름으로 불린다', () => {
+  const seen = [];
+  const { root } = mountShell({ onPanelShow: n => seen.push(n) });
+  root.querySelector('#rail button[data-panel="layers"]').click();
+  expect(seen).toEqual(['layers']);
+});

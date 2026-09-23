@@ -2,7 +2,7 @@
 // §15.9: 입력 중 [Esc]로 되돌리고 [Enter]로 확정한다. 숫자 칸은 단위별 step을 갖고,
 // 소수 step(면풍속 0.05)은 값에 부동소수 먼지를 남기지 않는다(감사 §5 · §21).
 import { test, expect } from 'vitest';
-import { STEP, INCH_MM, stepMm, roundToStep, isTextField, numValue, readLen, lenField, rememberFieldValue, revertField, commitField, isDuplicateCommit, trackFields } from '../src/ui/fieldUtils.js';
+import { STEP, INCH_MM, stepMm, roundToStep, isTextField, numValue, readLen, lenField, rememberFieldValue, revertField, commitField, isDuplicateCommit, trackFields, nextFocusName } from '../src/ui/fieldUtils.js';
 import { fmtLen } from '../src/util/units.js';
 
 const inputOf = html => { const d = document.createElement('div'); document.body.appendChild(d); d.innerHTML = html; return d.querySelector('input'); };
@@ -197,4 +197,21 @@ test('ft·in 칸의 글자가 그려진 그대로면 저장된 mm를 돌려준�
   expect(readLen(el, 'ftin')).toBe(203);
   // mm 모드의 숫자 칸은 data-mm이 없다(표기가 이미 왕복한다).
   expect(inputOf(lenField('두께', 'thickness', 200, 2, 1000)).dataset.mm).toBeUndefined();
+});
+
+// §17.6(4) · 감사 §30: [Tab]으로 확정하면 패널이 통째로 다시 그려져 포커스가 <body>로 떨어졌다.
+// 다음 칸의 **이름**을 잡아 두면 새 DOM에서 그 이름으로 다시 잡을 수 있다(ui.focusField 복구 장치).
+test('nextFocusName은 다음 name 있는 포커스 가능 요소를 준다', () => {
+  const d = document.createElement('div');
+  document.body.appendChild(d);
+  d.innerHTML = '<input name="a"><button>이름 없음</button><input name="b" disabled><select name="c"><option>x</option></select><input name="d" hidden>';
+  const a = d.querySelector('[name="a"]');
+  expect(nextFocusName(d, a)).toBe('c');                  // 이름 없는 버튼·disabled·hidden은 건너뛴다
+  expect(nextFocusName(d, d.querySelector('[name="c"]'))).toBeNull();
+  expect(nextFocusName(d, null)).toBeNull();
+  // 재렌더로 노드가 갈린 뒤에도 같은 name으로 자리를 찾는다(속성 패널은 innerHTML을 통째로 간다).
+  const old = a;
+  d.innerHTML = d.innerHTML;
+  expect(old.isConnected).toBe(false);
+  expect(nextFocusName(d, old)).toBe('c');
 });

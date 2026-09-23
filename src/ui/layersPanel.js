@@ -1,7 +1,8 @@
 import { activeFloor } from '../state/schema.js';
 import { roomAt } from '../vent/airflow.js';
 import { setItemFlag, updateItem, setDuctFlag } from '../state/floorOps.js';
-import { layerTreeHtml, ALL_SHOW, ALL_HIDE } from './layersTree.js';
+import { layerTreeHtml, bucketOpen, ALL_SHOW, ALL_HIDE } from './layersTree.js';
+import { layersHeaderHtml, filterBuckets, rowCount, autoCollapsed } from './layersHeader.js';
 import { toast } from './toast.js';
 import { LAYERS_HIDDEN, LAYERS_SHOWN } from './messages.js';
 
@@ -13,6 +14,8 @@ export const ductRoomId = (floor, duct) => roomAt(duct.points[0], floor.rooms, f
 
 export function createLayersPanel(container, { store, ui }) {
   let renaming = null;
+  // 검색어는 패널 지역 상태다(§17.6): 스토어에도 ui에도 넣지 않는다 — 되돌릴 것도, 저장할 것도 아니다.
+  let query = '';
   // 방 노드의 접힘 기억. 기본값은 "내용이 있으면 펼침"이고(layersTree), 사용자가 토글하면 그 값이 이긴다.
   const openState = new Map();
 
@@ -43,12 +46,29 @@ export function createLayersPanel(container, { store, ui }) {
   let lastSel = '';
   function render() {
     const pyeong = !!store.get().settings?.pyeong;
+    const all = buckets();
+    // 필터 결과의 이름은 `visible`이다: 같은 render() 뒤쪽의 `const shown`은 **스크롤 게이트**
+    // (패널이 레일에서 숨겨졌는지)라는 다른 뜻이고 손대지 않으므로, 같은 이름을 쓰면 블록 스코프
+    // 재선언으로 `SyntaxError: Identifier 'shown' has already been declared`가 난다.
+    const visible = filterBuckets(all, query);
+    // 자동 접힘 문턱은 **거르기 전** 행 수로 본다: 검색 결과가 세 줄이라고 해서 큰 도면이
+    // 작아지는 것은 아니다(검색을 지우면 다시 510행이다).
+    const collapse = autoCollapsed(rowCount(all));
+    const anyOpen = visible.some(b => bucketOpen(b, openState, collapse));
+    // 글자를 치는 동안 innerHTML을 갈아 치우므로 포커스를 직접 돌려준다(renaming과 같은 규칙).
+    const searching = container.querySelector('[name="q"]') === container.ownerDocument?.activeElement;
     // "모두 보기" 체크박스(상태 거울 + 파괴적 스위치)를 두 동작으로 가른다(§16.3 · 감사 §20).
     container.innerHTML = `
       <div class="row layer-actions"><button type="button" name="showAll">${ALL_SHOW}</button><button type="button" name="hideAll">${ALL_HIDE}</button></div>
+      ${layersHeaderHtml({ query, anyOpen })}
       <label class="check"><input type="checkbox" name="showHidden" ${showHidden() ? 'checked' : ''}> 숨긴 항목 보기</label>
-      ${layerTreeHtml(buckets(), { units: store.get().units ?? 'mm', pyeong, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState })}`;
+      ${layerTreeHtml(visible, { units: store.get().units ?? 'mm', pyeong, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState, autoCollapse: collapse })}`;
     if (renaming) container.querySelector(`input[data-name="${renaming}"]`)?.focus();
+    if (searching) {
+      const s = container.querySelector('[name="q"]');
+      s?.focus();
+      try { s?.setSelectionRange(s.value.length, s.value.length); } catch { /* search 입력은 브라우저에 따라 막는다 */ }
+    }
     // 캔버스에서 고른 것이 트리 밖에 있으면 스크롤해 보여 준다(49행이 4화면이므로 꼭 필요하다).
     // **선택이 바뀔 때만** 한다: render()는 스토어·ui 양쪽에 걸려 있어 조건 없이 스크롤하면 다른 행의
     // 👁 클릭이나 캔버스 드래그가 사용자가 보고 있던 자리를 선택 행으로 되끌어당긴다.
@@ -73,6 +93,14 @@ export function createLayersPanel(container, { store, ui }) {
       return;
     }
     if (b.name === 'showHidden') { ui.set({ showHidden: true }); return; }   // 숨긴 항목을 되살릴 길(감사 §26)
+    if (b.name === 'collapseAll') {
+      // 하나라도 열려 있으면 모두 접고, 하나도 없으면 모두 편다(라벨이 곧 다음 동작이다).
+      const all = buckets(), collapse = autoCollapsed(rowCount(all));
+      const open = !all.some(x => bucketOpen(x, openState, collapse));
+      for (const x of all) openState.set(x.room?.id ?? 'none', open);
+      render();
+      return;
+    }
     if (b.dataset.select) { ui.set({ selection: { type: 'item', id: b.dataset.select } }); return; }
     if (b.dataset.hide) { setItemFlag(store, [b.dataset.hide], 'hidden'); return; }
     if (b.dataset.lock) { setItemFlag(store, [b.dataset.lock], 'locked'); return; }
@@ -106,13 +134,21 @@ export function createLayersPanel(container, { store, ui }) {
     if (ev.target.name === 'showHidden') { ui.set({ showHidden: ev.target.checked }); }
   };
   container.addEventListener('change', onChange);
+  // 검색은 타이핑마다 좁힌다(change는 확정까지 기다린다 — 그사이 목록이 옛것이다).
+  const onInput = ev => { if (ev.target.name === 'q') { query = ev.target.value; render(); } };
+  container.addEventListener('input', onInput);
   // <details>의 접힘은 사용자 기억이다: 다시 그려도 유지된다(스토어가 아니라 패널이 들고 있다 —
   // 접힘은 프로젝트 파일에 저장하지 않는다).
   const onToggle = ev => { const d = ev.target.closest?.('details[data-room]'); if (d) openState.set(d.dataset.room, d.open); };
   container.addEventListener('toggle', onToggle, true);   // toggle은 버블하지 않는다 → 캡처로 받는다
   const unsubs = [store.subscribe(render), ui.subscribe(render)];
   render();
-  return { destroy() { unsubs.forEach(u => u()); container.removeEventListener('click', onClick); container.removeEventListener('keydown', onKeyDown); container.removeEventListener('focusout', onBlur); container.removeEventListener('change', onChange); container.removeEventListener('toggle', onToggle, true); container.innerHTML = ''; } };
+  return {
+    // 레일 탭으로 패널을 여는 순간에는 스토어도 ui도 바뀌지 않아 render()가 돌지 않는다(§17.6(3)).
+    // 셸이 onPanelShow로 알려 주면 "마지막으로 스크롤한 선택" 기억을 비우고 한 번 다시 그린다.
+    reveal() { lastSel = ''; render(); },
+    destroy() { unsubs.forEach(u => u()); container.removeEventListener('click', onClick); container.removeEventListener('keydown', onKeyDown); container.removeEventListener('focusout', onBlur); container.removeEventListener('change', onChange); container.removeEventListener('input', onInput); container.removeEventListener('toggle', onToggle, true); container.innerHTML = ''; },
+  };
 }
 
 // 제품과 덕트를 한 단계로 함께 켜고 끈다(각각 기록하면 undo가 두 번 필요해진다).

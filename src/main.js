@@ -47,7 +47,8 @@ import { FP_NO_LOCK, SAVED_MANUAL, PASTE_RESULT, COPIED, COPIED_N, REPLACE_NONE,
 
 const store = createStore(createEmptyProject());
 const ui = createUiState();
-const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m), onMinimapResize: () => minimap?.requestRender(), onOpenKeymap: () => openSettingsDialog({ store, tab: 'keys' }), onExitFp: () => setMode('iso'), onToolChange: () => view.requestRender() });
+let layersPanel = null;   // 아래에서 만든다: 레일 탭을 열 때 선택 행을 보여 주려면 핸들이 필요하다(§17.6(3))
+const shell = createShell(document.getElementById('app'), { store, ui, onGizmoMode: m => view3d.setGizmoMode(m), onMinimapResize: () => minimap?.requestRender(), onOpenKeymap: () => openSettingsDialog({ store, tab: 'keys' }), onExitFp: () => setMode('iso'), onToolChange: () => view.requestRender(), onPanelShow: name => { if (name === 'layers') layersPanel?.reveal(); } });
 const viewPreset = document.getElementById('viewPreset'); // 하단 바의 2D 투영 선택(view3d가 상태를 되돌려 준다)
 let minimap = null; // view보다 먼저 선언한다(onCameraChange가 닫아서 읽는다)
 let dnd = null;     // 같은 이유로 여기서 선언한다(드래그 옵션이 닫아서 읽는다 — 배선은 startPlace 다음에 만든다)
@@ -126,7 +127,7 @@ const cancelReplace = (clickedPanel = null) => {
 ui.subscribe(() => { if (library.state.mode === 'replace' && !selectedItemIds().length) library.setMode('place'); }); // 교체 대상이 사라지면 교체 모드도 끝난다(옛 아이템을 조용히 교체하지 않게). 면 대상은 아이템 선택과 무관하므로 마감재는 그대로 둔다
 document.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => cancelReplace(b.dataset.panel)));
 createAirflowPanel(shell.els.airflow, { store, ui });
-createLayersPanel(shell.els.layers, { store, ui });
+layersPanel = createLayersPanel(shell.els.layers, { store, ui });
 createPropsPanel(shell.els.props, store, ui, { deleteSelection, itemActions, surfaceActions });
 // undo/redo/방 재검출로 선택한 객체가 사라지면 선택을 비운다(multi는 남은 것만 남긴다)
 store.subscribe(s => {

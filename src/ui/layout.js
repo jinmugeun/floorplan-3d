@@ -1,6 +1,8 @@
 // 좌·우 패널의 폭·접기·스플리터(아키텍처 §12.2). 240 px 패널은 제품 타일 두 개도 겨우 들어가
 // 이름이 잘렸다 → 기본 320 px, 드래그로 260~480 px, 레일 버튼으로 접기.
 // 폭은 프로젝트가 아니라 브라우저에 남긴다(계정이 없다 — 미니맵 높이와 같은 규칙).
+import { LAYER_CODE_HIDE_PX } from './layersHeader.js';
+
 export const PANEL_MIN = 260;
 export const PANEL_MAX = 480;
 export const PANEL_DEFAULT = { panel: 320, right: 300 };
@@ -75,8 +77,11 @@ export function createResizeWatch(el, fn, { delay = LAYOUT_DEBOUNCE_MS } = {}) {
 // 폭은 CSS 변수 하나로 다룬다: 그리드 열 정의(#layout)와 접기 클래스가 같은 변수를 읽는다.
 export function applyPanelWidths(layout, widths = PANEL_DEFAULT) {
   if (!layout?.style) return;
-  layout.style.setProperty('--panel-w', `${clamp(widths.panel ?? PANEL_DEFAULT.panel)}px`);
+  const panel = clamp(widths.panel ?? PANEL_DEFAULT.panel);
+  layout.style.setProperty('--panel-w', `${panel}px`);
   layout.style.setProperty('--right-w', `${clamp(widths.right ?? PANEL_DEFAULT.right)}px`);
+  // 좁은 패널에서는 레이어 행의 코드·크기를 숨기고 이름을 살린다(§17.6 · 감사 §33).
+  layout.querySelector('#panel')?.classList.toggle('narrow', panel < LAYER_CODE_HIDE_PX);
 }
 
 // 키보드로 옮기는 한 걸음(px). 드래그는 1 px 단위지만 방향키는 눈에 보이게 움직여야 한다.

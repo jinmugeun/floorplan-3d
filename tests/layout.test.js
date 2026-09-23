@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { PANEL_MIN, PANEL_MAX, PANEL_DEFAULT, CANVAS_MIN, RAIL_W, SPLITTER_W, LAYOUT_DEBOUNCE_MS, loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, createResizeWatch, applyPanelWidths, createSplitter, togglePanel } from '../src/ui/layout.js';
+import { LAYER_CODE_HIDE_PX } from '../src/ui/layersHeader.js';
 
 function fakeLayout() {
   const root = document.createElement('div');
@@ -48,6 +49,19 @@ describe('패널 폭', () => {
     expect(layout.style.getPropertyValue('--panel-w')).toBe('333px');
     expect(layout.style.getPropertyValue('--right-w')).toBe('289px');
     applyPanelWidths(null, PANEL_DEFAULT);        // 없는 요소에도 던지지 않는다
+  });
+
+  // §17.6(감사 §33): 좁은 패널에서는 레이어 행의 코드·크기를 숨기고 이름을 살린다.
+  // CSS 미디어 쿼리로는 할 수 없다 — 이 폭은 창 폭이 아니라 패널 폭이다.
+  test('패널이 280 px 미만이면 #panel에 narrow가 붙는다', () => {
+    const layout = fakeLayout();
+    const panel = layout.querySelector('#panel');
+    applyPanelWidths(layout, { panel: 320, right: 300 });
+    expect(panel.classList.contains('narrow')).toBe(false);
+    applyPanelWidths(layout, { panel: LAYER_CODE_HIDE_PX - 1, right: 300 });
+    expect(panel.classList.contains('narrow')).toBe(true);
+    applyPanelWidths(layout, { panel: LAYER_CODE_HIDE_PX, right: 300 });
+    expect(panel.classList.contains('narrow')).toBe(false);
   });
 });
 

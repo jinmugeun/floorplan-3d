@@ -18,7 +18,7 @@ export function gizmoBtnVisible({ mode = '2d', ortho = null, item = null } = {})
 
 // onToolChange: 옵션 바의 치수 칸이 도구 상태를 바꿨다(§16.7). 배선이 캔버스를 다시 그리게 한다 —
 // ui/는 view2d/를 import하지 않으므로(아키텍처 §9) 셸이 직접 requestRender를 부를 수는 없다.
-export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {}, onToolChange = () => {} }) {
+export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimapResize = () => {}, onOpenKeymap = () => {}, onExitFp = () => {}, onToolChange = () => {}, onPanelShow = () => {} }) {
   root.innerHTML = shellHtml({ name: store.get().name });
   const q = s => root.querySelector(s);
   const els = { canvas2d: q('#c2d'), view3d: q('#c3d'), props: q('#props'), minimap: q('#minimap canvas'), optionBar: q('#optionBar'), toolPanel: q('#panel'), topbar: q('#topbar'), banner: q('#banner'), layers: q('#layers'), library: q('#library'), materials: q('#materials'), airflow: q('#airflow') };
@@ -119,6 +119,9 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     root.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x.dataset.panel === name));
     root.querySelectorAll('#panel section').forEach(s => s.hidden = s.dataset.panel !== name);
     syncRail();
+    // 패널을 **여는 순간**은 그 패널의 render()가 돌지 않는 유일한 자리다(스토어도 ui도 그대로다).
+    // 레일 버튼도 코드 경로도 모두 여기를 지나므로 훅은 한 자리다(§17.6(3)).
+    onPanelShow(name);
   }
   // 레일 버튼: 지금 열려 있는 탭을 다시 누르면 패널을 접는다(캔버스가 넓어진다 — §12.2).
   root.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => {
