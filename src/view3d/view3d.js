@@ -63,7 +63,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   // 아이템 피커 다음에 등록한다: 아이템을 맞히지 못한 클릭이 비워 놓은 선택을 면 피커가 덮어쓴다.
   const facePicker = createFacePicker({ renderer, getCamera: () => ov.camera() ?? camera, scene, getGroup: () => group, store, ui, openMenu, surfaceActions, getMode: () => mode, requestRender, dragLatch });
   // 몸체 드래그(바닥 위 이동)와 벽 부착 제품의 슬라이드 핸들. 기즈모와 같은 빗장·트랜잭션 계약을 쓴다.
-  bodyDrag = createBodyDrag({ renderer, getCamera: () => ov.camera() ?? camera, getGroup: () => group, scene, store, ui, controls, requestRender, dragLatch, getMode: () => mode });
+  bodyDrag = createBodyDrag({ renderer, getCamera: () => ov.camera() ?? camera, getGroup: () => group, scene, store, ui, controls, requestRender, dragLatch, getMode: () => mode, isOrtho: () => ov.isActive(), onEnd: () => reattachPicker() });
   function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); reattachPicker(); scheduleLabelCull(); }
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;

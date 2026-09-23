@@ -2,7 +2,7 @@
 // §17.5(감사 §2·§6): 3D에서 선택된 아이템의 몸체를 끌면 바닥 위로 움직이고(원위치 고스트),
 // 벽 부착 제품은 벽을 따라 미끄러지는 핸들 하나로만 움직인다.
 // three 오브젝트를 만드는 부분도 WebGL은 쓰지 않는다(렌더러는 가짜 DOM 노드 하나다).
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
@@ -10,7 +10,9 @@ import { createEmptyProject, activeFloor, createItem } from '../src/state/schema
 import { addWalls, addItem, setItemFlag } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
-import { nearestWallPlacement, WALL_ATTACH_DIST } from '../src/geom/items.js';
+import { nearestWallPlacement, placeOnWall, wallAxis, isEmbed, WALL_ATTACH_DIST } from '../src/geom/items.js';
+import { openingsOnWall } from '../src/geom/openings.js';
+import { sceneSignature } from '../src/view3d/build.js';
 import { createDragLatch, GIZMO_COLORS } from '../src/view3d/pick3d.js';
 import { createBodyDrag, snapMm, dragPointOnPlane, makeGhost, slidePlacement, DRAG_SNAP_MM, DRAG_MIN_PX, GHOST_OPACITY, SLIDE_HANDLE_R, SLIDE_LIFT } from '../src/view3d/bodyDrag.js';
 
@@ -72,6 +74,38 @@ describe('3D 드래그의 순수 조각', () => {
     expect(slidePlacement(f, door, [3900.5, 1500.25])).toBeNull();
     expect(slidePlacement({ walls: [] }, door, [2500.5, 150.25])).toBeNull();
   });
+
+  // 리뷰 C-1: nearestWallPlacement에 embed를 넘기지 않으면 placeOnWall이 문·창·개구부를 벽면 앞으로
+  // (두께/2 + 깊이/2 = 120 mm) 띄운다. 벽 구멍은 t·size만 보고 제자리에 남으므로 핸들을 한 번 끄는
+  // 것만으로 문짝이 구멍에서 어긋났다. hood-wall(kind 'product')은 이 갈래를 지나지 않아 못 잡았다.
+  test('벽 슬라이드는 문·창을 벽 중심선에 남긴다 — embed 플래그(리뷰 C-1)', () => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+    const f = activeFloor(store.get());
+    const north = f.walls.find(w => w.a[1] === 0.25 && w.b[1] === 0.25);
+    const p = productById('door-swing-900');
+    const seat = nearestWallPlacement(f.walls, [1500.5, 200.25], p.size, WALL_ATTACH_DIST, { embed: true });
+    const door = createItem(p, { pos: seat.pos, wallId: seat.wallId, t: seat.t, side: seat.side, rot: seat.rot });
+    expect(isEmbed(door)).toBe(true);
+    const next = slidePlacement(f, door, [2500.5, 150.25]);
+    expect(next.t).toBeGreaterThan(door.t);
+    // pos는 (wallId, t)의 결과다: placeOnWall이 **매립으로** 앉히는 자리와 같은 점이어야 한다.
+    const want = placeOnWall(north, next.t, next.side, p.size, { embed: true });
+    expect(next.pos).toEqual([Math.round(want.pos[0]), Math.round(want.pos[1])]);
+    expect(next.pos[1]).toBe(Math.round(north.a[1]));   // 벽 중심선 위(앞으로 120 mm 나오지 않는다)
+    // 벽 구멍과 문짝이 같은 자리다(openingsOnWall은 t·size만 본다 — §17.5(2)의 어긋남이 없다).
+    const { dir } = wallAxis(north);
+    const [hole] = openingsOnWall([{ ...door, ...next }], north);
+    const uc = (hole.u0 + hole.u1) / 2;
+    expect(north.a[0] + dir[0] * uc).toBeCloseTo(want.pos[0], 6);
+    expect(north.a[1] + dir[1] * uc).toBeCloseTo(want.pos[1], 6);
+    // 매립이 아닌 벽 부착 제품은 그대로 벽면 앞에 붙는다(embed를 무조건 켜지 않았다).
+    const hood = productById('hood-wall');
+    const hs = nearestWallPlacement(f.walls, [1500.5, 200.25], hood.size, WALL_ATTACH_DIST);
+    const item = createItem(hood, { pos: hs.pos, wallId: hs.wallId, t: hs.t, side: hs.side, rot: hs.rot });
+    expect(isEmbed(item)).toBe(false);
+    expect(slidePlacement(f, item, [2500.5, 150.25]).pos[1]).not.toBe(Math.round(north.a[1]));
+  });
 });
 
 // 실제 드래그: 렌더러는 가짜 DOM 노드, 카메라는 위에서 내려보는 직교 카메라다.
@@ -114,10 +148,14 @@ describe('3D 몸체 드래그와 벽 슬라이드', () => {
     const toasts = [];
     const latch = createDragLatch();
     const controls = { enabled: true };
+    const flags = { ortho: false };   // 2D 투영 뷰(orthoView.isActive)를 켜고 끈다
+    const ends = [];                  // onEnd = 기즈모 재부착 신호(리뷰 I-2)
     const bd = createBodyDrag({
       renderer: { domElement }, getCamera: () => camera, getGroup: () => group, scene, store, ui,
       controls, dragLatch: latch, toast: m => toasts.push(m),
+      isOrtho: () => flags.ortho, onEnd: () => ends.push(1),
     });
+    made.push({ bd, domElement });
     ui.set({ selection: { type: 'item', id } });
     bd.refresh();
     // 같은 수식으로 기대값을 만든다(월드 mm).
@@ -130,8 +168,12 @@ describe('3D 몸체 드래그와 벽 슬라이드', () => {
     const ptr = (type, x, y) => domElement.dispatchEvent(new MouseEvent(type, { button: 0, clientX: x, clientY: y, bubbles: true }));
     // 오브젝트가 화면 어디에 찍히는지(핸들이 중앙에 있는지를 테스트가 직접 확인한다).
     const screenOf = obj => { const v = obj.position.clone().project(camera); return [((v.x + 1) / 2) * SIZE, ((1 - v.y) / 2) * SIZE]; };
-    return { store, ui, scene, id, bd, toasts, controls, meshY, worldAt, screenOf, ptr, item: () => activeFloor(store.get()).items.find(x => x.id === id) };
+    return { store, ui, scene, id, bd, toasts, controls, flags, ends, mesh, meshY, worldAt, screenOf, ptr, item: () => activeFloor(store.get()).items.find(x => x.id === id) };
   }
+  // 리스너·노드가 파일 안에 쌓이지 않게 정리한다(리뷰 M-8). bodyDrag는 window에도 keydown을 듣는다.
+  const made = [];
+  afterEach(() => { for (const m of made) { m.bd.destroy(); m.domElement.remove(); } made.length = 0; });
+  const key = (k, extra = {}) => new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra });
   const ghosts = scene => scene.children.filter(o => o.name === 'ghost');
   const handles = scene => scene.children.filter(o => o.name === 'slideHandle');
 
@@ -228,5 +270,123 @@ describe('3D 몸체 드래그와 벽 슬라이드', () => {
     a.store.undo();
     expect(a.item().t).toBe(t0);
     expect(a.item().pos).toEqual(from);
+  });
+
+  // 리뷰 I-1: 2D 투영(정면·평면 도면)은 편집할 수 없는 고정 뷰다 — 핸들도 드래그도 없고,
+  // setOrthoView가 걸어 둔 궤도 잠금(controls.enabled = false)을 pointerup이 되살리지 않는다.
+  test('2D 투영 뷰에서는 핸들도 드래그도 없고 고정 뷰의 잠금이 풀리지 않는다 (리뷰 I-1)', () => {
+    const a = setup({ wallItem: true, lookAtItem: true });
+    expect(handles(a.scene)).toHaveLength(1);
+    a.flags.ortho = true; a.controls.enabled = false;   // setOrthoView가 하는 그대로(orthoView.js:30)
+    a.bd.refresh();
+    expect(handles(a.scene)).toHaveLength(0);
+    const before = a.store.get(), from = [...a.item().pos];
+    a.ptr('pointerdown', 100, 100);
+    a.ptr('pointermove', 150, 100);
+    a.ptr('pointerup', 150, 100);
+    expect(a.store.get()).toBe(before);
+    expect(a.item().pos).toEqual(from);
+    expect(a.controls.enabled).toBe(false);             // 무조건 true로 되돌리지 않는다
+    a.flags.ortho = false; a.controls.enabled = true;
+    a.bd.refresh();
+    expect(handles(a.scene)).toHaveLength(1);           // 투영에서 빠져나오면 다시 선다
+  });
+
+  // 리뷰 I-2: endTransaction은 알리지 않으므로(store.js의 closeTransaction) 아무도 기즈모를 다시
+  // 붙이지 않아 화살표가 아이템이 떠난 자리에 남았다. 드래그를 실제로 커밋했을 때만 알린다.
+  test('커밋한 드래그만 기즈모 재부착을 알린다 (리뷰 I-2)', () => {
+    const a = setup();
+    a.ptr('pointerdown', 100, 100); a.ptr('pointermove', 160, 130); a.ptr('pointerup', 160, 130);
+    expect(a.ends).toHaveLength(1);
+    a.ptr('pointerdown', 100, 100); a.ptr('pointermove', 102, 101); a.ptr('pointerup', 102, 101);
+    expect(a.ends).toHaveLength(1);                     // 4 px 안의 클릭은 붙일 자리를 바꾸지 않았다
+  });
+
+  // 리뷰 I-3: TransformControls의 pointerdown이 먼저 돌아 dragging-changed가 controls를 꺼 둔다.
+  // 화살표는 아이템 몸체 위에 겹쳐 그려지므로 같은 이벤트로 몸체 드래그까지 열려 있었다.
+  test('기즈모 축 드래그가 잡은 pointerdown으로는 몸체 드래그가 열리지 않는다 (리뷰 I-3)', () => {
+    const a = setup();
+    const before = a.store.get(), from = [...a.item().pos];
+    a.controls.enabled = false;                         // pick3d.js:157이 이미 껐다
+    a.ptr('pointerdown', 100, 100);
+    a.ptr('pointermove', 160, 130);
+    a.ptr('pointerup', 160, 130);
+    expect(ghosts(a.scene)).toHaveLength(0);
+    expect(a.store.get()).toBe(before);
+    expect(a.item().pos).toEqual(from);
+    expect(a.controls.enabled).toBe(false);             // 기즈모가 쥔 상태를 건드리지 않는다
+  });
+
+  // 리뷰 I-4(§15.2의 프리뷰 계약을 3D에도): 드래그 중에는 store에 쓰지 않는다 — 10 mm마다
+  // dispatch하면 sceneSignature가 바뀌어 층 전체를 다시 짓는다(감사 §29의 480 ms/프레임).
+  test('드래그 중에는 dispatch가 0이고 놓을 때 한 번이다 — 씬 서명도 그대로 (리뷰 I-4)', () => {
+    const a = setup();
+    const before = a.store.get(), sig0 = sceneSignature(a.store.get());
+    let dispatches = 0;
+    const raw = a.store.dispatch.bind(a.store);
+    a.store.dispatch = (fn, opts) => { dispatches += 1; return raw(fn, opts); };
+    a.ptr('pointerdown', 100, 100);
+    for (const x of [120, 130, 140, 150, 160]) a.ptr('pointermove', x, 130);
+    expect(dispatches).toBe(0);                          // N번 움직여도 0
+    expect(a.store.get()).toBe(before);                  // 상태 아이덴티티가 그대로다(구독자가 깨지 않는다)
+    expect(sceneSignature(a.store.get())).toBe(sig0);    // 서명이 그대로 → 재빌드가 없다
+    const previewX = a.mesh.position.x, previewZ = a.mesh.position.z;
+    expect(previewX).not.toBeCloseTo(before.floors[0].items[0].pos[0] / 1000, 6);  // 그래도 메시는 따라왔다
+    a.ptr('pointerup', 160, 130);
+    expect(dispatches).toBe(1);                          // 커밋은 딱 한 번(트랜잭션 안)
+    expect(a.item().pos[0]).toBeCloseTo(previewX * 1000, 6);   // 미리보기 자리가 그대로 커밋된다
+    expect(a.item().pos[1]).toBeCloseTo(previewZ * 1000, 6);
+    expect(a.store.canUndo()).toBe(true);
+    a.store.undo();
+    expect(a.item().pos).toEqual(before.floors[0].items[0].pos);
+  });
+
+  // 리뷰 I-5: 2D(selectTool.js:183-196)와 같은 규칙 — 드래그 중 [Esc]·Ctrl+Z는 이동을 되돌리고
+  // 키를 소비한다(keymap이 이어서 선택을 비우거나 한 단계 더 되돌리지 않게).
+  test('[Esc]는 드래그를 취소한다 — 자리도 단계도 남지 않는다 (리뷰 I-5)', () => {
+    const a = setup();
+    const from = [...a.item().pos], before = a.store.get();
+    const seen = [];
+    const spy = ev => seen.push(ev.key);
+    window.addEventListener('keydown', spy);   // keymap과 같은 자리(window · 버블)
+    try {
+      a.ptr('pointerdown', 100, 100);
+      a.ptr('pointermove', 160, 130);
+      expect(ghosts(a.scene)).toHaveLength(1);
+      window.dispatchEvent(key('Escape'));
+      expect(a.item().pos).toEqual(from);
+      expect(a.mesh.position.x).toBeCloseTo(from[0] / 1000, 6);   // 메시도 시작 자리로
+      expect(a.mesh.position.z).toBeCloseTo(from[1] / 1000, 6);
+      expect(ghosts(a.scene)).toHaveLength(0);
+      expect(a.controls.enabled).toBe(true);
+      expect(seen).toEqual([]);                                  // 취소가 키를 소비했다
+      a.ptr('pointerup', 160, 130);                              // 이어 오는 pointerup은 아무것도 커밋하지 않는다
+      expect(a.store.get()).toBe(before);
+      expect(a.ends).toHaveLength(0);
+      // 아직 열리지 않은 드래그(클릭일 수도 있다)는 키를 삼키지 않는다 — 선택 해제가 평소대로 간다.
+      a.ptr('pointerdown', 100, 100);
+      window.dispatchEvent(key('Escape'));
+      expect(seen).toEqual(['Escape']);
+    } finally { window.removeEventListener('keydown', spy); }
+  });
+
+  test('드래그 중 Ctrl+Z도 취소다 — 앞 단계를 되돌리지 않는다 (리뷰 I-5)', () => {
+    const a = setup();
+    const from = [...a.item().pos], before = a.store.get(), canUndo = a.store.canUndo();
+    const seen = [];
+    const spy = ev => seen.push(ev.key);
+    window.addEventListener('keydown', spy);
+    try {
+      a.ptr('pointerdown', 100, 100);
+      a.ptr('pointermove', 160, 130);
+      window.dispatchEvent(key('z', { ctrlKey: true }));
+      expect(a.item().pos).toEqual(from);
+      expect(a.store.get()).toBe(before);
+      expect(a.store.canUndo()).toBe(canUndo);                   // 도면을 만든 단계는 그대로다
+      expect(ghosts(a.scene)).toHaveLength(0);
+      expect(seen).toEqual([]);                                  // keymap의 undo가 이어서 돌지 않는다
+      a.ptr('pointerup', 160, 130);
+      expect(a.store.get()).toBe(before);
+    } finally { window.removeEventListener('keydown', spy); }
   });
 });

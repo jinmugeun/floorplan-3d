@@ -376,4 +376,31 @@ describe('3D 드래그의 되돌리기 계약 (§17.5)', () => {
     expect(store.get()).toBe(before);
     expect(counter.get()).toBe(0);
   });
+
+  // 리뷰 I-4·I-5: 드래그 중에는 dispatch가 없고(뷰 로컬 프리뷰 — §15.2를 3D에도), 커밋은
+  // pointerup의 하나뿐이다. 그래서 [Esc]·Ctrl+Z 취소는 트랜잭션을 되돌리는 것으로 끝나고
+  // 히스토리에 아무것도 남기지 않는다. 키 배선과 메시 복구는 bodyDrag.test.js가 본다.
+  test('드래그 중 취소는 0단계다 — 앞 단계도 건드리지 않는다 (리뷰 I-5)', async () => {
+    const { snapMm } = await import('../src/view3d/bodyDrag.js');
+    const { updateItem } = await import('../src/state/floorOps.js');
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0.5, 0.25], [6000.5, 4000.25], 200));
+    const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000.5, 1500.25] }));
+    const pos = () => activeFloor(store.get()).items.find(i => i.id === hood).pos;
+    const counter = stepCounter(store);
+    // 드래그 한 번을 커밋한다: 트랜잭션 안의 dispatch는 놓는 순간의 하나다.
+    store.beginTransaction();
+    updateItem(store, hood, { pos: [snapMm(2100.5), snapMm(1500.25)] }, { record: false });
+    store.endTransaction();
+    expect(counter.get()).toBe(1);
+    const committed = [...pos()], after = store.get();
+    // 두 번째 드래그를 취소한다(드래그 중 dispatch가 없으므로 되돌릴 것은 트랜잭션뿐이다).
+    store.beginTransaction();
+    store.cancelTransaction();
+    expect(counter.get()).toBe(1);              // 단계가 늘지 않는다
+    expect(store.get()).toBe(after);            // 상태 아이덴티티도 그대로다(씬을 다시 짓지 않는다)
+    expect(pos()).toEqual(committed);
+    store.undo();
+    expect(pos()).toEqual([2000.5, 1500.25]);   // 취소한 드래그는 히스토리에 없다
+  });
 });
