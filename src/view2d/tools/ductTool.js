@@ -2,18 +2,25 @@
 // (완료할 때 addDuct 한 번 = 되돌림 한 단계).
 import { activeFloor } from '../../state/schema.js';
 import { createDuct } from '../../state/ductSchema.js';
-import { addDuct } from '../../state/ductOps.js';
-import { snapToEquipment, segmentQuad, DUCT_SNAP_TOL } from '../../geom/ducts.js';
+import { addDuct, ductById } from '../../state/ductOps.js';
+import { snapToEquipment, segmentQuad, ductLength, DUCT_SNAP_TOL } from '../../geom/ducts.js';
 import { FLOW_COLORS } from '../../vent/equipment.js';
 import { snapPoint, tolMm } from '../../geom/snap.js';
 import { drawSnapMark } from '../snapMarks.js';
 import { dist } from '../../geom/vec.js';
 import { fmtLen } from '../../util/units.js';
+import { lastDuctSystem, setLastDuctSystem } from '../../ui/prefs.js';
+import { DUCT_DRAWN, DUCT_NO_SYSTEM } from '../../ui/messages.js';
 
 export const DUCT_TOOL_DEFAULTS = { kind: 'exhaust', w: 500, h: 300, z: 2900, system: '', ortho: true };
 
-export function createDuctTool({ store, ui, view, opts: given = null, onDone = () => {} }) {
+// toast는 주입으로 받는다(placeTool·structTool과 같은 규칙): 이 파일을 도는 node 테스트가
+// document 없이 돌아야 한다.
+export function createDuctTool({ store, ui, view, opts: given = null, onDone = () => {}, toast = () => {} }) {
   const opts = given ?? { ...DUCT_TOOL_DEFAULTS };
+  // 계통 칸은 직전 값을 기억한다(§17.9(1) · 감사 §15): 빈 칸으로 그려 풍량 표에 "미지정" 줄이
+  // 생기던 자리다. 사용자가 이미 고쳐 둔 값(세션 동안 유지되는 도구 옵션)은 이긴다.
+  if (!String(opts.system ?? '').trim()) opts.system = lastDuctSystem();
   // hit은 커서 옆 마커가 읽는 스냅 종류다(§16.6). snapped(설비 id)와는 다른 것이다 —
   // snapped는 노란 고리(설비에 붙는 중)를, hit은 ■△┆⋯⊾ 마커(무엇에 물렸나)를 그린다.
   let points = [], conns = [], cursor = null, guides = [], snapped = null, hit = null;
@@ -35,13 +42,23 @@ export function createDuctTool({ store, ui, view, opts: given = null, onDone = (
   function finish() {
     if (points.length < 2) return;
     const seg = { w: Math.round(opts.w), h: Math.round(opts.h), z: Math.round(opts.z) };
+    const system = String(opts.system ?? '').trim();
     const id = addDuct(store, createDuct({
       kind: opts.kind === 'supply' ? 'supply' : 'exhaust',
-      system: String(opts.system ?? '').trim(),
+      system,
       points: points.map(q => [Math.round(q[0]), Math.round(q[1])]),
       segments: points.slice(1).map(() => ({ ...seg })),
       connections: conns.map(c => ({ point: c.point, itemId: c.itemId })),
     }));
+    // 결과를 알린다(§17.9(3) · 감사 §16). 길이는 저장된 덕트에서 다시 읽는다: 좌표를 반올림해
+    // 넣으므로 그리던 점의 합과 1 mm 어긋날 수 있다. m는 소수 첫째 자리 반올림이다.
+    const d = id ? ductById(activeFloor(store.get()), id) : null;
+    if (d) {
+      toast(DUCT_DRAWN(d.segments.length, Math.round(ductLength(d) / 100) / 10));
+      // 계통은 완성할 때만 기억한다([Esc]로 버린 값은 남기지 않는다).
+      if (system) setLastDuctSystem(system);
+      else toast(DUCT_NO_SYSTEM);   // 막지는 않는다 — 계통 없는 덕트도 정당한 상태다
+    }
     reset();
     if (id) ui.set({ selection: { type: 'duct', id, segment: null, vertex: null } });
     onDone();

@@ -165,7 +165,7 @@ const tools = {
   opening: structTool('opening'),
   guide: () => createGuideTool({ store, view, opts: toolOpts.guide }),
   measure: () => createMeasureTool({ store, opts: toolOpts.measure, view }),
-  duct: () => createDuctTool({ store, ui, view, opts: toolOpts.duct, onDone: () => setTool('select') }),
+  duct: () => createDuctTool({ store, ui, view, opts: toolOpts.duct, onDone: () => setTool('select'), toast: shell.toast }),
   place: () => createPlaceTool({ store, ui, view, product: pendingProduct, onDone: () => setTool('select'), toast: shell.toast }),
   pathArray: () => arrange.createPathTool(),
 };

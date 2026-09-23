@@ -176,3 +176,8 @@ export const CONFIRM_TEMPLATE_DELETE = name => ({ title: '템플릿 삭제', mes
 
 // 첫 5분(§16.12 · 감사 §47): 온보딩을 닫으면 다음에 누를 것을 가리킨다. 방이 생기면 사라진다.
 export const FIRST_ROOM_HINT = '왼쪽 [방 그리기 F]로 첫 방을 그려 보세요';
+
+// 덕트 피드백(§17.9 · 감사 §15·§16). 길이 단위는 ft·in 모드에서도 m다 — 덕트 물량의 계약 단위가
+// m이다(io/estimateTable.js의 lengthText와 같은 규칙).
+export const DUCT_DRAWN = (n, m) => `덕트 ${n}구간 · 총 ${m} m`;
+export const DUCT_NO_SYSTEM = '계통을 지정하지 않았습니다 — 풍량 표에 "미지정"으로 잡힙니다';

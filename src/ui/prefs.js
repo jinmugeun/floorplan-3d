@@ -10,3 +10,13 @@ export function stickyTools() {
 export function setStickyTools(on) {
   try { localStorage.setItem(STICKY_TOOLS_KEY, on ? '1' : '0'); } catch { /* 저장 불가 */ }
 }
+
+// 덕트 계통은 직전 값을 기억한다(§17.9(1) · 감사 §15). 프로젝트 파일에는 남지 않는다 —
+// 도구 옵션은 스토어가 아니므로 되돌리기 단계와도 무관하다(stickyTools와 같은 자리).
+export const DUCT_SYSTEM_KEY = 'kvp.ductSystem';
+export function lastDuctSystem() {
+  try { return localStorage.getItem(DUCT_SYSTEM_KEY) ?? ''; } catch { return ''; }
+}
+export function setLastDuctSystem(s) {
+  try { localStorage.setItem(DUCT_SYSTEM_KEY, String(s ?? '')); } catch { /* 저장 불가 */ }
+}

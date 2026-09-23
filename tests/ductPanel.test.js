@@ -118,6 +118,31 @@ describe('덕트 패널', () => {
     expect(ductPanelHtml(activeFloor(store.get()), null)).toBe('');
     expect(applyDuctField(store, { type: 'duct', id: duct().id }, { name: 'thickness' })).toBe(false);
   });
+
+  // §17.9(4)(5) · 감사 §17·§18: 댐퍼 W/H 여섯 칸이 이름 없이 나란히 놓였고, 구간 버튼에는
+  // title이 없어 어느 구간이 어디인지 눌러 봐야 알았다.
+  test('댐퍼 칸에 W·H 라벨과 title이 붙고 구간 버튼이 좌표·길이를 말한다', () => {
+    const { store, ui } = setup();
+    const f = activeFloor(store.get());
+    const html = ductPanelHtml(f, ui.get().selection, { units: 'mm' });
+    // 댐퍼: 화면에 보이는 짧은 라벨 + 마우스 툴팁(aria-label과 같은 글자)
+    expect(html).toContain('title="댐퍼 너비"');
+    expect(html).toContain('title="댐퍼 높이"');
+    expect(html).toContain('<span class="muted">W</span>');
+    expect(html).toContain('<span class="muted">H</span>');
+    // 구간 버튼: 시작 → 끝 좌표(mm 정수)와 길이
+    expect(html).toContain('title="2000, 1500 → 8001, 1500 · 6001"');
+    expect(html).toContain('title="8001, 1500 → 8001, 6000 · 4500"');
+    // 이름 없는 입력이 0개다 — 단정 범위는 **댐퍼 목록**이다(§16.5의 "title 누락 0"에 남아 있던
+    // 구멍이 그 여섯 칸이다). 단면 W/H/Z 세 칸은 `lenField → num()`으로 만들어져 title이 없지만
+    // `field()`가 낸 `<label><span>단면 너비 W</span>…`이 화면에 보이므로 §16.5를 이미 만족한다
+    // (`lenField`에 title 인자가 없어 그 셋에 붙일 수도 없다 — 패널 전체로 단정하면 늘 실패한다).
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    const unnamed = [...el.querySelectorAll('.duct-dampers input[type="number"]')].filter(i => !i.getAttribute('title'));
+    expect(unnamed).toEqual([]);
+    expect(el.querySelectorAll('.duct-dampers input[type="number"]')).toHaveLength(2);   // 댐퍼 하나 = W·H
+  });
 });
 
 // §15.14(감사 §20): 댐퍼 추가·삭제에 피드백이 전혀 없고, 행에 위치(거리)도 없었다.

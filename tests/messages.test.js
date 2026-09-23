@@ -6,6 +6,7 @@ import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO, CROSS_FLOOR
 import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, WHY_CLIPBOARD_EMPTY, WHY_MIN_POINTS, WHY_NO_ACTION } from '../src/ui/messages.js';
 import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from '../src/ui/messages.js';
 import { FIRST_ROOM_HINT } from '../src/ui/messages.js';
+import { DUCT_DRAWN, DUCT_NO_SYSTEM } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -168,4 +169,11 @@ test('템플릿 문구는 §16.10이 적은 글자 그대로다', () => {
 
 test('첫 방 안내는 §16.12가 적은 글자 그대로다', () => {
   expect(FIRST_ROOM_HINT).toBe('왼쪽 [방 그리기 F]로 첫 방을 그려 보세요');
+});
+
+// §17.9(2)(3): 덕트 물량의 계약 단위는 m다(ft·in 모드에서도 m로 알린다 — 견적 표와 같은 규칙).
+test('덕트 완성·계통 경고 문구는 §17.9가 적은 글자 그대로다', () => {
+  expect(DUCT_DRAWN(2, 12.4)).toBe('덕트 2구간 · 총 12.4 m');
+  expect(DUCT_DRAWN(1, 5)).toBe('덕트 1구간 · 총 5 m');
+  expect(DUCT_NO_SYSTEM).toBe('계통을 지정하지 않았습니다 — 풍량 표에 "미지정"으로 잡힙니다');
 });

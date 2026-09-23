@@ -13,6 +13,9 @@ import { toast } from './toast.js';
 import { DAMPER_ADDED, DAMPER_DELETED, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE } from './messages.js';
 
 const segIndex = sel => (Number.isInteger(sel?.segment) ? sel.segment : 0);
+// 구간 버튼의 마우스 툴팁(§17.9(5) · 감사 §18): 어느 구간이 도면의 어디인지 누르지 않고 안다.
+const ptText = p => `${Math.round(p[0])}, ${Math.round(p[1])}`;
+const segTitle = (d, k, units) => `${ptText(d.points[k])} → ${ptText(d.points[k + 1])} · ${fmtLen(Math.round(segmentLength(d, k)), units)}`;
 
 export function ductPanelHtml(floor, sel, { units = 'mm', showUnit = false } = {}) {
   const d = sel?.type === 'duct' ? ductById(floor, sel.id) : null;
@@ -20,15 +23,15 @@ export function ductPanelHtml(floor, sel, { units = 'mm', showUnit = false } = {
   const i = Math.min(segIndex(sel), d.segments.length - 1);
   const seg = d.segments[i];
   const segRows = d.segments.map((s, k) =>
-    `<li class="${k === i ? 'on' : ''}"><button type="button" name="ductSeg" data-i="${k}">${k + 1}구간</button>`
+    `<li class="${k === i ? 'on' : ''}"><button type="button" name="ductSeg" data-i="${k}" title="${esc(segTitle(d, k, units))}">${k + 1}구간</button>`
     + `<span class="muted">${Math.round(s.w)}×${Math.round(s.h)} · ${esc(fmtLen(Math.round(segmentLength(d, k)), units))}</span></li>`).join('');
   // 댐퍼 줄: 종류 토글 + 크기 두 칸(명세 DT-06의 "크기 입력", 아키텍처 §11.6의 "종류·크기·삭제") + 삭제.
   // 위치는 "몇 구간 몇 %"만으로는 도면에서 찾기 어렵다(감사 §20): 구간 시작에서의 거리도 적는다.
   // 단위는 같은 패널의 구간 줄과 같은 fmtLen을 쓴다 — 원시 mm를 찍으면 ft·in 모드에서 틀린다.
   const damperRows = d.dampers.map((x, k) =>
     `<li><span>${esc(x.type)} · ${x.segment + 1}구간 ${Math.round(x.t * 100)}% · ${esc(fmtLen(Math.round(x.t * segmentLength(d, x.segment)), units))}</span>`
-    + `<input type="number" name="damperW" data-i="${k}" value="${Math.round(x.w)}" min="${DUCT_RANGE.w[0]}" max="${DUCT_RANGE.w[1]}" step="10" aria-label="댐퍼 너비">`
-    + `<input type="number" name="damperH" data-i="${k}" value="${Math.round(x.h)}" min="${DUCT_RANGE.h[0]}" max="${DUCT_RANGE.h[1]}" step="10" aria-label="댐퍼 높이">`
+    + `<span class="muted">W</span><input type="number" name="damperW" data-i="${k}" value="${Math.round(x.w)}" min="${DUCT_RANGE.w[0]}" max="${DUCT_RANGE.w[1]}" step="10" title="댐퍼 너비" aria-label="댐퍼 너비">`
+    + `<span class="muted">H</span><input type="number" name="damperH" data-i="${k}" value="${Math.round(x.h)}" min="${DUCT_RANGE.h[0]}" max="${DUCT_RANGE.h[1]}" step="10" title="댐퍼 높이" aria-label="댐퍼 높이">`
     + `<button type="button" name="damperType" data-i="${k}">${x.type === 'VD' ? 'FVD로' : 'VD로'}</button>`
     + `<button type="button" name="damperDelete" data-i="${k}" class="danger" aria-label="댐퍼 삭제">삭제</button></li>`).join('')
     || '<li class="muted">댐퍼가 없습니다.</li>';

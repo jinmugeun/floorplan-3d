@@ -12,14 +12,17 @@ import { RESERVED_KEYS } from '../src/ui/keyBindings.js';
 const key = k => ({ key: k, preventDefault() {} });
 const fakeView = { camera: { scale: 0.1 }, units: 'mm', COLORS: { guide: '#e8b100', dim: '#1b2430', wallSel: '#14b8c4' }, toScreen: p => [p[0] * 0.1, p[1] * 0.1], label() {} };
 
-function setup() {
+// 토스트는 주입으로 받는다(§17.9): 이 파일은 node 환경이라 document가 없다 — ui/toast.js를
+// 직접 부르면 그리기 테스트 전부가 던진다(placeTool·structTool과 같은 주입 규칙이다).
+function setup(opts = {}) {
   const store = createStore(createEmptyProject());
   const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [8000, 6000], 200));
   const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000, 1500], z: 1700 }));
   let done = 0;
-  const t = createDuctTool({ store, ui, view: fakeView, opts: { ...DUCT_TOOL_DEFAULTS }, onDone: () => { done += 1; } });
-  return { store, ui, t, hood, done: () => done, floor: () => activeFloor(store.get()) };
+  const toasts = [];
+  const t = createDuctTool({ store, ui, view: fakeView, opts: { ...DUCT_TOOL_DEFAULTS, ...opts }, onDone: () => { done += 1; }, toast: m => toasts.push(m) });
+  return { store, ui, t, hood, toasts, done: () => done, floor: () => activeFloor(store.get()) };
 }
 
 describe('덕트 그리기 도구(DT-01~03)', () => {
@@ -102,6 +105,55 @@ describe('단축키 T', () => {
     expect(TABLE.get('t')).toBe('tool:duct');
     expect(RESERVED_KEYS.some(r => r.key === 't')).toBe(false);
     expect(KEYMAP.filter(x => x.keys.includes('T'))).toHaveLength(1);   // 다른 동작이 T를 쓰지 않는다
+  });
+
+  // §17.9(3) · 감사 §16: 다 그려도 아무 말이 없었다. 2구간 · 총 5 m = 3000 + 2000 mm.
+  test('덕트를 완성하면 구간 수와 총 길이를 알린다', () => {
+    const { t, toasts, floor } = setup({ system: 'EA-1' });
+    t.onPointerDown([500.5, 500.25]);
+    t.onPointerDown([3500.5, 500.25]);
+    t.onPointerDown([3500.5, 2500.25]);
+    t.onKey(key('Enter'));
+    expect(floor().ducts).toHaveLength(1);
+    expect(toasts).toEqual(['덕트 2구간 · 총 5 m']);
+  });
+
+  test('계통이 비어 있으면 완성 토스트와 함께 경고 한 번을 더 낸다(막지는 않는다)', () => {
+    const { t, toasts, floor } = setup({ system: '' });
+    t.onPointerDown([500.5, 500.25]);
+    t.onPointerDown([3500.5, 500.25]);
+    t.onKey(key('Enter'));
+    expect(floor().ducts).toHaveLength(1);                 // 계통 없는 덕트도 정당한 상태다
+    expect(floor().ducts[0].system).toBe('');
+    expect(toasts).toEqual(['덕트 1구간 · 총 3 m', '계통을 지정하지 않았습니다 — 풍량 표에 "미지정"으로 잡힙니다']);
+  });
+
+  test('점이 하나면 완성도 토스트도 없다', () => {
+    const { t, toasts, floor, done } = setup();
+    t.onPointerDown([500.5, 500.25]);
+    expect(t.onKey(key('Enter'))).toBe(false);
+    expect(floor().ducts).toHaveLength(0);
+    expect(toasts).toEqual([]);
+    expect(done()).toBe(0);
+  });
+
+  test('ft·in 모드에서도 덕트 길이는 m로 알린다(물량의 계약 단위)', () => {
+    const { store, t, toasts } = setup({ system: 'EA-1' });
+    store.dispatch(d => { d.units = 'ftin'; }, { record: false });
+    t.onPointerDown([500.5, 500.25]);
+    t.onPointerDown([3500.5, 500.25]);
+    t.onKey(key('Enter'));
+    expect(toasts[0]).toBe('덕트 1구간 · 총 3 m');
+  });
+
+  // 완성할 때만 기억한다: 그리다 [Esc]로 버린 계통은 남기지 않는다.
+  test('[Esc]로 버린 덕트는 아무것도 알리지 않고 기억하지도 않는다', () => {
+    const { t, toasts, floor } = setup({ system: 'EA-9' });
+    t.onPointerDown([500.5, 500.25]);
+    t.onPointerDown([3500.5, 500.25]);
+    expect(t.onKey(key('Escape'))).toBe(true);
+    expect(floor().ducts).toHaveLength(0);
+    expect(toasts).toEqual([]);
   });
 });
 
