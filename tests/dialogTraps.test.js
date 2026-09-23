@@ -27,6 +27,8 @@ import { openGalleryDialog } from '../src/ui/galleryDialog.js';
 import { openRenderDialog } from '../src/ui/renderDialog.js';
 import { openRoomTemplateDialog } from '../src/ui/templateDialog.js';
 import { openSettingsDialog } from '../src/ui/settingsDialog.js';
+import { confirmDialog } from '../src/ui/confirmDialog.js';
+import { CONFIRM_SHOT_DELETE } from '../src/ui/messages.js';
 
 const opener = () => { const b = document.createElement('button'); document.body.appendChild(b); b.focus(); return b; };
 const view3d = { renderImage: () => 'data:image/png;base64,ZZZ' };
@@ -101,4 +103,23 @@ test('설정이 이미 열려 있으면 살아 있는 핸들을 돌려주고 그
   expect(document.activeElement).toBe(button);
   first.close();                                       // 같은 핸들이라 두 번 닫아도 조용하다
   expect(traps[0].destroy).toHaveBeenCalledTimes(1);
+});
+
+// §16.9: 갤러리의 [삭제]가 확인을 받게 되면서 "모달 위 모달"이 새로 생긴다. 중첩 트랩 규칙은
+// [Esc]가 **안쪽만** 닫고 포커스가 갤러리로 돌아오는 것이다(갤러리는 열린 채 남는다).
+test('갤러리 위에 겹친 확인 대화상자는 [Esc]로 안쪽만 닫힌다', async () => {
+  const button = opener();
+  const dlg = openGalleryDialog({});
+  const gallery = document.querySelector('.modal.gallery');
+  const answer = confirmDialog(CONFIRM_SHOT_DELETE);
+  const confirm = document.querySelector('.modal.confirm');
+  expect(confirm).not.toBeNull();
+  expect(confirm.contains(document.activeElement)).toBe(true);   // 안쪽이 포커스를 갖는다
+  document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(await answer).toBe(false);                              // 취소로 닫힌다
+  expect(document.querySelector('.modal.confirm')).toBeNull();
+  expect(document.querySelector('.modal.gallery')).toBe(gallery);
+  expect(gallery.contains(document.activeElement)).toBe(true);   // 포커스가 갤러리로 돌아온다
+  dlg.close();
+  expect(document.activeElement).toBe(button);
 });

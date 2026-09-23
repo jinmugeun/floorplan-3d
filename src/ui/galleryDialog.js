@@ -1,9 +1,10 @@
 // 갤러리: 저장된 렌더샷을 썸네일 격자로 보여주고 내려받기·삭제한다.
-import { listShots, deleteShot } from '../io/gallery.js';
+import { listShots, deleteShot, shotCaption } from '../io/gallery.js';
 import { downloadDataUrl } from '../io/file.js';
 import { esc } from '../util/html.js';
 import { toast } from './toast.js';
-import { GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL } from './messages.js';
+import { confirmDialog } from './confirmDialog.js';
+import { GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, CONFIRM_SHOT_DELETE } from './messages.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
 
 let current = null;   // 열려 있는 인스턴스: 다시 열 때 DOM만 떼지 않고 트랩까지 해제한다(리뷰 Minor 1)
@@ -29,9 +30,10 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
       toast(GALLERY_LOAD_FAIL);
       return;
     }
+    // 캡션은 "이름 / 해상도 이름 · 저장 시각"이다(§16.9 · 감사 §11): 크기를 두 번 적지 않는다.
     part('grid').innerHTML = shots.length ? shots.map(s => `<figure class="shot" data-shot="${esc(s.id)}">
       <img src="${esc(s.dataUrl)}" alt="${esc(s.name)}">
-      <figcaption><b>${esc(s.name)}</b><span class="muted">${s.width}×${s.height}</span></figcaption>
+      <figcaption><b>${esc(s.name)}</b><span class="muted">${esc(shotCaption(s))}</span></figcaption>
       <div class="row"><button type="button" name="down">내려받기</button><button type="button" name="del" class="danger">삭제</button></div>
     </figure>`).join('') : '<p class="hint">저장된 렌더샷이 없습니다. 상단 바의 [렌더샷]으로 만들 수 있습니다.</p>';
   }
@@ -51,6 +53,8 @@ export function openGalleryDialog({ onClose = () => {} } = {}) {
     if (!shot) return;
     if (ev.target.name === 'down') { downloadDataUrl(`${shot.name.replace(/[\/:*?"<>|]/g, '_')}.png`, shot.dataUrl); return; }
     if (ev.target.name === 'del') {
+      // 확인 없이 지우던 자리다(§16.9 · 감사 §11). 되돌릴 길이 없는 삭제이므로 확인을 받는다.
+      if (!(await confirmDialog(CONFIRM_SHOT_DELETE))) return;
       try { await deleteShot(shot.id); await render(); }
       catch { toast(GALLERY_DELETE_FAIL); }
     }

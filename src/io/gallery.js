@@ -56,3 +56,16 @@ export async function clearShots() {
   if (!db) { memory = []; return; }
   await tx(db, 'readwrite', s => s.clear());
 }
+
+// 해상도 이름(§16.9). 캡션이 짧아야 카드가 두 줄로 늘어나지 않는다 — 숫자 크기는 이름이 있는
+// 세 가지만 줄이고, 그 밖에는 숫자 그대로 적는다.
+export const SIZE_LABELS = { '3840×2160': '4K', '1920×1080': 'FHD', '1280×720': 'HD' };
+export const sizeLabel = (width, height) => SIZE_LABELS[`${width}×${height}`] ?? `${width}×${height}`;
+// "4K · 09:46". 이름(프로젝트 · 뷰)은 <b>에 따로 적으므로 여기에는 넣지 않는다(크기 중복 제거).
+export function shotCaption(shot) {
+  const size = sizeLabel(shot?.width, shot?.height);
+  const d = shot?.savedAt ? new Date(shot.savedAt) : null;
+  if (!d || Number.isNaN(d.getTime())) return size;
+  const p = n => String(n).padStart(2, '0');
+  return `${size} · ${p(d.getHours())}:${p(d.getMinutes())}`;
+}

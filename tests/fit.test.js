@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { cameraDistance, viewForMode, fitDistance, FIT_MARGIN } from '../src/view3d/fit.js';
+import { cameraDistance, viewForMode, fitDistance, FIT_MARGIN, orbitOf, reframePosition, shotPosition } from '../src/view3d/fit.js';
 
 test('small or empty floors get the minimum distance', () => {
   expect(cameraDistance(0)).toBe(10);
@@ -100,4 +100,39 @@ test('width·depth를 주지 않으면 extent를 양변으로 써 보수적(더 
   const square = fitDistance(33800, opt);
   expect(square).toBeGreaterThan(exact);                      // 잘리는 쪽이 아니라 남는 쪽으로 틀린다
   expect(occupancy(square, { ...opt, width: 33800, depth: 29600 }).fill).toBeLessThan(1 - 2 * FIT_MARGIN);
+});
+
+// §16.9(감사 §10): 화면 종횡비로 맞춰 둔 거리를 16:9 출력에 그대로 쓰면 모델이 프레임의 절반만 쓴다.
+// 방향(고도·방위)은 그대로 두고 거리만 출력 종횡비에 맞춘다.
+test('orbitOf·reframePosition은 방향을 지키고 거리만 바꾼다', () => {
+  // frameScene의 배치식: pos = target + r(−cosEl·sinAz, sinEl, cosEl·cosAz). 고도 35°·방위 47°·r 26 m.
+  const el = (35 * Math.PI) / 180, az = (47 * Math.PI) / 180, r = 26;
+  const target = { x: 1.5, y: 0, z: -2.25 };
+  const position = {
+    x: target.x - r * Math.cos(el) * Math.sin(az),
+    y: target.y + r * Math.sin(el),
+    z: target.z + r * Math.cos(el) * Math.cos(az),
+  };
+  const o = orbitOf(position, target);
+  expect(o.radius).toBeCloseTo(26, 6);
+  expect(o.elevation).toBeCloseTo(35, 6);
+  expect(o.azimuth).toBeCloseTo(47, 6);
+  const p = reframePosition(position, target, 13);
+  expect(orbitOf(p, target).radius).toBeCloseTo(13, 6);
+  expect(orbitOf(p, target).elevation).toBeCloseTo(35, 6);
+  expect(orbitOf(p, target).azimuth).toBeCloseTo(47, 6);
+  // 목표와 같은 자리면(반지름 0) 위치를 건드리지 않는다(0으로 나누지 않는다).
+  expect(reframePosition(target, target, 10)).toEqual({ x: target.x, y: target.y, z: target.z });
+});
+
+test('shotPosition은 정사각 화면의 프레이밍을 16:9 출력 거리로 바꾼다', () => {
+  const target = { x: 0, y: 0, z: 0 };
+  const el = (35 * Math.PI) / 180;
+  const square = fitDistance(33800, { aspect: 1, fov: 60, elevation: 35, azimuth: 0, height: 3500, width: 33800, depth: 29600 });
+  const position = { x: 0, y: square * Math.sin(el), z: square * Math.cos(el) };
+  const wide = shotPosition({ position, target, extentMm: 33800, aspect: 1280 / 720, fov: 60, height: 3500, width: 33800, depth: 29600 });
+  const r = orbitOf(wide, target).radius;
+  // 가로가 넓어지면 세로가 빡빡한 쪽이 되어 거리가 줄거나 같다 — 늘어나지는 않는다.
+  expect(r).toBeLessThanOrEqual(square + 1e-9);
+  expect(r).toBeCloseTo(fitDistance(33800, { aspect: 1280 / 720, fov: 60, elevation: 35, azimuth: 0, height: 3500, width: 33800, depth: 29600 }), 6);
 });

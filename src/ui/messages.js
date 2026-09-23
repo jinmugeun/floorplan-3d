@@ -154,3 +154,7 @@ export const WHY_MIN_POINTS = '점이 2개뿐';
 // 다섯 항목(재질 교체·타일 배치·마감재 편집기로 이동·도면 뷰 전환·템플릿 적용하기)은
 // main.js가 넘기는 actions가 없으면 꺼진다 — 사용자에게는 "고장"이 아니라 "여기서는 아님"이다.
 export const WHY_NO_ACTION = '이 화면에서 쓸 수 없음';
+
+// 렌더샷·갤러리(§16.9 · 감사 §9·§11).
+export const SHOT_BUSY = '렌더 중입니다';
+export const CONFIRM_SHOT_DELETE = { title: '렌더샷 삭제', message: '이 렌더샷을 갤러리에서 지울까요?', ok: '삭제', danger: true };

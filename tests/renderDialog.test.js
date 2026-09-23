@@ -43,6 +43,28 @@ describe('렌더샷 대화상자', () => {
     document.querySelector('.modal.render [name="render"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(v.calls[0]).toEqual({ width: 1920, height: 1080, preset: null });
   });
+
+  test('[렌더]를 두 번 눌러도 한 장만 만든다(§16.9 · 감사 §9)', async () => {
+    const v = fakeView3d();
+    openRenderDialog({ store: createStore(createEmptyProject()), view3d: v });
+    const btn = document.querySelector('.modal.render [name="render"]');
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));   // 잠긴 동안의 두 번째 클릭
+    await vi.waitFor(async () => expect(await listShots()).toHaveLength(1));
+    expect(v.calls).toHaveLength(1);
+  });
+
+  test('렌더가 파일을 자동으로 내려받지 않는다(§16.9)', async () => {
+    const names = [];
+    const realClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () { names.push(this.download); };
+    try {
+      openRenderDialog({ store: createStore(createEmptyProject()), view3d: fakeView3d() });
+      document.querySelector('.modal.render [name="render"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await vi.waitFor(async () => expect(await listShots()).toHaveLength(1));
+    } finally { HTMLAnchorElement.prototype.click = realClick; }
+    expect(names).toEqual([]);                                       // 버튼을 눌러야만 내려받는다
+  });
 });
 
 describe('갤러리 대화상자', () => {
@@ -53,8 +75,11 @@ describe('갤러리 대화상자', () => {
     await vi.waitFor(() => expect(root.querySelectorAll('[data-shot]')).toHaveLength(1));
     expect(root.querySelector('h2').textContent).toBe('갤러리');
     expect(root.querySelector('[data-shot] img').getAttribute('src')).toBe('data:image/png;base64,AAA');
-    expect(root.textContent).toContain('1280×720');
+    expect(root.textContent).toContain('HD ·');                      // §16.9: "HD · HH:MM" 캡션
     root.querySelector('[data-shot] [name="del"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    // §16.9: 삭제는 확인을 받는다.
+    await vi.waitFor(() => expect(document.querySelector('.modal.confirm')).not.toBeNull());
+    document.querySelector('.modal.confirm [name="ok"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await vi.waitFor(async () => expect(await listShots()).toHaveLength(0));
     await vi.waitFor(() => expect(root.textContent).toContain('저장된 렌더샷이 없습니다'));
   });
@@ -76,7 +101,8 @@ test('렌더 전에는 내려받기가 숨어 있고 렌더 뒤에 내려받기�
   modal.querySelector('[name="render"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await new Promise(r => setTimeout(r, 0));
   expect(modal.querySelector('[name="download"]').hidden).toBe(false);
-  // m-10: 자동 저장 경로와 수동 버튼이 같은 파일명을 쓴다(예전에는 버튼만 `-WxH`가 빠졌다).
+  // m-10: 파일명은 `-WxH`를 갖는다(§16.9로 자동 다운로드가 사라졌으므로 이 이름을 쓰는 곳은
+  // [내려받기] 버튼 하나다).
   const names = [];
   const realClick = HTMLAnchorElement.prototype.click;
   HTMLAnchorElement.prototype.click = function () { names.push(this.download); };

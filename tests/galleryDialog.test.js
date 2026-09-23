@@ -2,7 +2,9 @@
 // 갤러리 대화상자: Esc로 즉시 닫히는지, 목록/삭제 실패를 안내하는지 확인한다(리뷰 Important 1·2).
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../src/io/gallery.js', () => ({
+// shotCaption(§16.9)은 진짜 구현을 그대로 쓴다 — 이 파일이 보는 것은 목록·삭제의 실패 경로다.
+vi.mock('../src/io/gallery.js', async importOriginal => ({
+  ...(await importOriginal()),
   listShots: vi.fn(),
   deleteShot: vi.fn(),
 }));
@@ -40,6 +42,8 @@ describe('갤러리 대화상자 오류 처리', () => {
     const root = document.querySelector('.modal.gallery');
     await vi.waitFor(() => expect(root.querySelectorAll('[data-shot]')).toHaveLength(1));
     root.querySelector('[data-shot] [name="del"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => expect(document.querySelector('.modal.confirm')).not.toBeNull());
+    document.querySelector('.modal.confirm [name="ok"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await vi.waitFor(() => expect(document.querySelector('.toast')?.textContent).toBe('삭제하지 못했습니다'));
     expect(root.querySelectorAll('[data-shot]')).toHaveLength(1);
   });
@@ -55,6 +59,9 @@ describe('갤러리 삭제 뒤 재렌더', () => {
     const button = root.querySelector('[data-shot] [name="del"]');
     button.focus();
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    // §16.9: 삭제 앞에 확인 대화상자가 겹친다 — 확인을 누르고 나서 목록이 다시 그려진다.
+    await vi.waitFor(() => expect(document.querySelector('.modal.confirm')).not.toBeNull());
+    document.querySelector('.modal.confirm [name="ok"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await vi.waitFor(() => expect(root.querySelectorAll('[data-shot]')).toHaveLength(0));
     expect(document.activeElement).toBe(document.body);   // 누른 버튼이 사라졌다
     return root;

@@ -5,7 +5,7 @@ import { activeFloor } from '../state/schema.js';
 import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPACITY } from './build.js';
 import { hiddenWallIds, cutawayMeshStyle, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
-import { cameraDistance, fitDistance } from './fit.js';
+import { cameraDistance, fitDistance, shotPosition } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
 import { applyPerfMode } from './perfMode.js';
 import { headingDeg, toWorldXY } from './camera.js';
@@ -162,6 +162,10 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
       cam = shot;
       showAllWalls();                       // 정면·평면 도면은 컷어웨이로 벽을 지우지 않는다
     }
+    // 출력 종횡비로 다시 프레이밍한다(§16.9 · 감사 §10): 방향은 그대로 두고 거리만 바꾼다.
+    // 프리셋(정면·평면…)은 orthoViewParams가 이미 aspect를 받으므로 이 길을 타지 않는다.
+    const home = !preset && cam === camera && cam.isPerspectiveCamera ? camera.position.clone() : null;
+    if (home) { const b = bounds(); camera.position.copy(shotPosition({ position: camera.position, target: controls.target, extentMm: b.extent, aspect: width / height, fov: camera.fov, height: activeFloor(store.get()).height, width: b.size[0], depth: b.size[1] })); }
     const prevAspect = cam.isPerspectiveCamera ? cam.aspect : null;
     renderer.setPixelRatio(1);
     renderer.setSize(width, height, false);
@@ -174,6 +178,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     }
     renderer.render(scene, cam);
     const url = renderer.domElement.toDataURL('image/png');
+    if (home) camera.position.copy(home);   // 화면 카메라는 건드리지 않은 것으로 되돌린다
     if (prevAspect !== null) { cam.aspect = prevAspect; cam.updateProjectionMatrix(); }
     renderer.setPixelRatio(prevRatio);
     renderer.setSize(prev.x, prev.y, false);

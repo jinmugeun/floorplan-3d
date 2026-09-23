@@ -55,3 +55,32 @@ export function fitDistance(extentMm, {
 
 // 2D/3D가 같은 이름으로 갖는 동작(화면 맞추기·줌)은 현재 모드의 뷰로 보낸다.
 export const viewForMode = (mode, view2d, view3d) => (mode === '2d' ? view2d : view3d);
+
+// three 좌표(미터, y 위)의 카메라 자리를 고도·방위·거리로 읽는다(§16.9). 정의는 frameScene의
+// 배치식과 같다: pos = target + r(−cosEl·sinAz, sinEl, cosEl·cosAz).
+// 순수 함수라 three 없이 { x, y, z }만 읽는다(camera.js와 같은 규칙).
+export function orbitOf(position, target) {
+  const dx = position.x - target.x, dy = position.y - target.y, dz = position.z - target.z;
+  const radius = Math.hypot(dx, dy, dz);
+  if (!(radius > 0)) return { elevation: 90, azimuth: 0, radius: 0 };
+  const elevation = (Math.asin(Math.min(1, Math.max(-1, dy / radius))) * 180) / Math.PI;
+  const azimuth = (Math.atan2(-dx, dz) * 180) / Math.PI;
+  return { elevation, azimuth, radius };
+}
+
+// 방향은 그대로 두고 거리만 바꾼 카메라 자리. 반지름이 0이면(목표와 같은 자리) 그대로 돌려준다.
+export function reframePosition(position, target, radius) {
+  const dx = position.x - target.x, dy = position.y - target.y, dz = position.z - target.z;
+  const r = Math.hypot(dx, dy, dz);
+  if (!(r > 0)) return { x: position.x, y: position.y, z: position.z };
+  const k = radius / r;
+  return { x: target.x + dx * k, y: target.y + dy * k, z: target.z + dz * k };
+}
+
+// 렌더샷 한 장을 위한 카메라 자리: 지금 보고 있는 방향을 지키고 **출력 종횡비**로 거리를 다시 잡는다.
+// (§16.9 · 감사 §10: 화면이 정사각이면 16:9 출력에서 좌우 여백이 프레임의 1/4씩 남았다.)
+export function shotPosition({ position, target, extentMm, aspect = 1, fov = 60, height = 0, width = 0, depth = 0 }) {
+  const o = orbitOf(position, target);
+  const r = fitDistance(extentMm, { aspect, fov, elevation: o.elevation, azimuth: o.azimuth, height, width, depth });
+  return reframePosition(position, target, r);
+}

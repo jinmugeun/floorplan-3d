@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { addShot, listShots, deleteShot, clearShots, GALLERY_DB } from '../src/io/gallery.js';
+import { addShot, listShots, deleteShot, clearShots, GALLERY_DB, sizeLabel, shotCaption, SIZE_LABELS } from '../src/io/gallery.js';
 
 beforeEach(async () => { await clearShots(); });
 
@@ -31,4 +31,15 @@ describe('갤러리 저장소(메모리 대체)', () => {
     await expect(addShot({ name: 'x' })).rejects.toThrow('이미지가 없습니다');
     expect(await listShots()).toEqual([]);
   });
+});
+
+// §16.9(감사 §11): 캡션이 크기를 두 번 적고 저장 시각이 없었다("… 1280×7201280×720").
+test('캡션은 해상도 이름과 저장 시각이다', () => {
+  expect(SIZE_LABELS['3840×2160']).toBe('4K');
+  expect(sizeLabel(3840, 2160)).toBe('4K');
+  expect(sizeLabel(1920, 1080)).toBe('FHD');
+  expect(sizeLabel(1280, 720)).toBe('HD');
+  expect(sizeLabel(800, 600)).toBe('800×600');          // 목록에 없는 크기는 숫자로 적는다
+  expect(shotCaption({ width: 3840, height: 2160, savedAt: new Date(2026, 8, 22, 9, 46).toISOString() })).toBe('4K · 09:46');
+  expect(shotCaption({ width: 1280, height: 720, savedAt: '' })).toBe('HD');   // 시각을 모르면 크기만
 });

@@ -4,6 +4,7 @@ import { addShot } from '../io/gallery.js';
 import { downloadDataUrl, filenameFor } from '../io/file.js';
 import { openGalleryDialog } from './galleryDialog.js';
 import { focusTrap, reopenOpener } from './dialogBase.js';
+import { SHOT_BUSY } from './messages.js';
 
 export const RENDER_SIZES = [[1280, 720], [1920, 1080], [3840, 2160]];
 export const RENDER_VIEWS = [['', '현재 카메라'], ['front', '정면'], ['back', '배면'], ['left', '좌측'], ['right', '우측'], ['top', '평면']];
@@ -41,22 +42,34 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
   // 붙은 이름을 쓰는데 버튼만 안 붙은 이름을 써서, 같은 그림이 두 이름으로 내려왔다(m-10).
   let last = null;   // { url, filename }
 
+  // 렌더 중에는 버튼을 잠근다(§16.9 · 감사 §9): 예전에는 두 번 누르면 갤러리 항목 2개와
+  // 다운로드 2개가 생겼다. 규칙은 specDialog의 run()과 같다.
+  let busy = false;
+  const buttons = () => [...root.querySelectorAll('[name="render"], [name="download"], [name="gallery"]')];
   async function render() {
-    const [w, h] = st.size.split('×').map(Number);
-    let url;
-    try { url = view3d.renderImage({ width: w, height: h, preset: st.view || null }); }
-    catch (e) { part('msg').textContent = `렌더에 실패했습니다: ${e.message}`; return; }
-    const img = part('preview'); img.src = url; img.hidden = false;
-    const name = `${store.get().name} ${RENDER_VIEWS.find(v => v[0] === st.view)?.[1] ?? ''} ${w}×${h}`.replace(/\s+/g, ' ').trim();
+    if (busy) { part('msg').textContent = SHOT_BUSY; return; }
+    busy = true;
+    buttons().forEach(b => { b.disabled = true; });
     try {
-      const shot = await addShot({ name, dataUrl: url, width: w, height: h });
-      part('msg').textContent = '갤러리에 저장했습니다.';
-      onSaved(shot);
-    } catch (e) { part('msg').textContent = `갤러리에 저장하지 못했습니다: ${e.message}`; }
-    const filename = filenameFor(store.get()).replace(/\.json$/, `-${w}x${h}.png`);
-    downloadDataUrl(filename, url);
-    last = { url, filename };
-    root.querySelector('[name="download"]').hidden = false;
+      const [w, h] = st.size.split('×').map(Number);
+      let url;
+      try { url = view3d.renderImage({ width: w, height: h, preset: st.view || null }); }
+      catch (e) { part('msg').textContent = `렌더에 실패했습니다: ${e.message}`; return; }
+      const img = part('preview'); img.src = url; img.hidden = false;
+      // 이름에 크기를 넣지 않는다(§16.9 · 감사 §11): 갤러리 캡션이 해상도 이름과 시각을 따로 적는다.
+      const name = `${store.get().name} ${RENDER_VIEWS.find(v => v[0] === st.view)?.[1] ?? ''}`.replace(/\s+/g, ' ').trim();
+      try {
+        const shot = await addShot({ name, dataUrl: url, width: w, height: h });
+        part('msg').textContent = '갤러리에 저장했습니다. [내려받기]로 파일을 받을 수 있습니다.';
+        onSaved(shot);
+      } catch (e) { part('msg').textContent = `갤러리에 저장하지 못했습니다: ${e.message}`; }
+      // 자동 다운로드를 하지 않는다(§16.9): 버튼과 자동 저장이 같은 그림을 두 번 내려받았다.
+      last = { url, filename: filenameFor(store.get()).replace(/\.json$/, `-${w}x${h}.png`) };
+      root.querySelector('[name="download"]').hidden = false;
+    } finally {
+      busy = false;
+      buttons().forEach(b => { b.disabled = false; });
+    }
   }
   root.addEventListener('click', ev => {
     if (ev.target.name === 'close') { close(); return; }
