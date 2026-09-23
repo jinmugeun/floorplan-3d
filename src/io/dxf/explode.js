@@ -58,7 +58,8 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
             const arc = Math.abs(b) > 1e-9 ? bulgeToArc(p0, p1, b) : null;
             if (!arc) { out.segs.push({ a: apply(m, p0), b: apply(m, p1), layer, src: e.type, depth, block: blockName }); continue; }
             // 규칙 ③: 호에서 나온 선분은 src에 ':bulge'를 달아 벽 후보에서 빠지게 한다
-            // (조경 곡선·라운드 코너는 벽이 아니다. 실파일의 bulge 폴리라인은 1개뿐이다).
+            // (조경 곡선·라운드 코너는 벽이 아니다). 실측: :bulge 선분 34,495개 = 전체 선분의
+            // **49.1 %**다 — 있으나 마나 한 장치가 아니라 필수 필터다(최종 리뷰 M-3).
             const nSeg = arcSteps(arc.sweep, steps);
             let prev = p0;
             for (let s = 1; s <= nSeg; s++) {
@@ -91,7 +92,9 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
           const sx = e.xscale ?? 1, sy = e.yscale ?? 1;
           const local = mat(e.x ?? 0, e.y ?? 0, sx, sy, e.a0 ?? 0);
           const mm = matMul(m, local);
-          out.inserts.push({ name: e.name, pos: apply(m, [e.x ?? 0, e.y ?? 0]), rot: (e.a0 ?? 0) + rotOf(m), scale: [sx * scaleOf(m), sy * scaleOf(m)], layer, depth, mirrored: mirrored(mm), block: blockName });
+          // rot은 **합성 행렬**에서 읽는다(M-4): 거울은 각을 더하지 않고 φ − θ로 보내므로
+          // (e.a0 + rotOf(m))은 거울 부모 아래에서 어긋난다(규칙 ④의 ARC 각과 같은 이유다).
+          out.inserts.push({ name: e.name, pos: apply(m, [e.x ?? 0, e.y ?? 0]), rot: rotOf(mm), scale: [sx * scaleOf(m), sy * scaleOf(m)], layer, depth, mirrored: mirrored(mm), block: blockName });
           const b = doc.blocks?.get(e.name);
           if (!b) { bump(out.skipped, `missing-block:${e.name}`); break; }
           if (depth >= maxDepth) { bump(out.skipped, 'maxDepth'); break; }   // 규칙 ⑤(실측 최대 깊이 4)

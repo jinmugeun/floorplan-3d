@@ -145,3 +145,20 @@ test('중첩 INSERT 안의 문자·원호도 같은 행렬로 옮겨진다', () 
   expect(t.h).toBeCloseTo(600, 6);
   expect(t.layer).toBe('TEXT2');
 });
+
+
+// 최종 리뷰 M-4: INSERT의 rot은 **합성 행렬**의 각이다. 거울은 각을 더하지 않고 φ − θ로 보내므로
+// (e.a0 + rotOf(m))은 거울 부모 아래에서 어긋난다(실파일 INSERT 659개 중 67개가 그 자리다).
+test('거울 부모 아래 INSERT의 rot은 합성 행렬의 각이다', () => {
+  const nested = outer => ({
+    blocks: new Map([block('OUT', [insert('IN', '0', 0, 0, { a0: 30 })]), block('IN', [line('WAL', 0, 0, 100.5, 0)])]),
+    entities: [insert('OUT', 'WAL', 0.5, 0.25, outer)],
+  });
+  const mirror = explode(nested({ xscale: -1, yscale: 1 })).inserts.find(i => i.name === 'IN');
+  expect(mirror.mirrored).toBe(true);
+  expect(mirror.rot).toBeCloseTo(150, 6);                        // 예전 값은 30 + 180 = 210(60° 어긋났다)
+  // 거울이 아니면 두 식이 같다 — 값이 바뀌지 않는다.
+  const plain = explode(nested({ xscale: 1, yscale: 1, a0: 20 })).inserts.find(i => i.name === 'IN');
+  expect(plain.mirrored).toBe(false);
+  expect(plain.rot).toBeCloseTo(50, 6);
+});

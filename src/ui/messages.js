@@ -254,6 +254,9 @@ export const DXF_LAYERS_GUESSED = '벽 레이어를 찾지 못해 도형으로 �
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
 export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
 export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;
+// §18.4가 약속한 한 줄. 도면의 실명을 방에 못 붙인 수 = 닫히지 않은 공간의 수다
+// (toProject.js의 stats.unmatchedNames). 끊긴 끝점 수와 짝이다 — 같은 결함의 두 얼굴이다.
+export const DXF_UNMATCHED = n => `닫히지 않은 공간 ${n}곳`;
 export const DXF_NUMS = (walls, rooms, areaM2) => `벽 ${walls} · 방 ${rooms} · 면적 ${areaM2} m²`;
 export const DXF_HEAD = (title, wM, hM, unit, insunits, ver) => `${title} · ${wM} m × ${hM} m · ${unit} (INSUNITS=${insunits}) · ${ver}`;
 // 진행 막대 4단계. phase → 단계 매핑도 여기 한 곳이다(워커가 보내는 phase 이름이 정본이다).

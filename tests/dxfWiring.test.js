@@ -330,3 +330,28 @@ test('가져온 층보다 앞의 층을 지워도 안내는 살아남는다', ()
   overlay(ctx, { toScreen: p => p });
   expect(ctx.calls.length).toBeGreaterThan(0);                          // 여전히 그린다
 });
+
+
+// 최종 리뷰 I-4: 끊긴 끝점을 고치는 유일한 방법이 **벽 도구를 켜는 것**이라, 도구 힌트가 이 안내를
+// 이기면 고치려고 도구를 켠 순간 문장도 [보기]도 사라진다 — §18.10이 "자르지 않는다"고 못 박은 안내다.
+test('벽 도구를 켜도 끊긴 끝점 안내와 [보기]가 남는다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  const hint = '첫 점을 클릭하세요 (1/2)';
+  const banner = createBanner({ store, ui, el, tool: () => ({ hint }) });
+  banner.render(ui.get());
+  expect(el.textContent).toContain(hint);              // 안내가 없으면 도구 힌트가 그대로다
+  ui.set({ openEnds: { pts: [[0.5, 0.25], [1.5, 2.5]], index: 0 } });
+  banner.render(ui.get());
+  expect(el.hidden).toBe(false);
+  expect(el.textContent).toContain(DXF_OPEN_ENDS(2));   // 도구를 켜도 결론이 먼저다
+  expect(el.querySelector('#btnOpenEnds')).not.toBeNull();
+  expect(el.textContent).not.toContain(hint);           // 배너는 한 번에 하나다
+  ui.set({ openEnds: null });
+  banner.render(ui.get());
+  expect(el.textContent).toContain(hint);               // 안내가 끝나면 도구 힌트가 돌아온다
+  banner.destroy();
+  el.remove();
+});

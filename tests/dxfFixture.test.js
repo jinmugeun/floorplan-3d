@@ -79,17 +79,29 @@ test('벽 추출 결과가 기대값과 같고 최소 보증을 넘는다', () =
   expect(extracted.guessed).toBe(false);
   // 사전 검토 C-2: 문 자리는 원호가 아니라 면선 쌍의 틈이 알려 준다(Task 9가 이것을 앉힌다).
   expect(extracted.gaps.length).toBeGreaterThanOrEqual(8);   // 하한은 여유를 둔다(실측 10 · Task 8 리뷰 I-2)
-  expect(extracted.gaps.every(g => g.width >= 600 && g.width <= 1500)).toBe(true);
+  // M-5(최종 리뷰): 예전 줄은 openingGaps가 GAP_RANGE로 걸러 낸 결과를 같은 리터럴로 다시 재는
+  // 동어반복이라 회귀 가치가 0이었다. 대신 그 필터가 **말하지 않는 것**을 본다: 틈은 서로 다른
+  // 자리에 하나씩이고(같은 자리에 둘이면 opening-pass가 겹쳐 앉는다) 전부 ROI 상자 안의 점이다.
+  const gapKeys = extracted.gaps.map(g => `${g.p[0].toFixed(1)},${g.p[1].toFixed(1)}`);
+  expect(new Set(gapKeys).size).toBe(extracted.gaps.length);
+  const { x0, y0, x1, y1 } = extracted.roi;
+  expect(extracted.gaps.every(g => g.p[0] >= x0 && g.p[0] <= x1 && g.p[1] >= y0 && g.p[1] <= y1)).toBe(true);
 });
 
-test('만들어진 프로젝트가 normalizeProject를 통과하고 한글 실명이 방 이름으로 들어간다', () => {
+test('만들어진 프로젝트가 normalizeProject를 통과하고 매칭 안 된 한글 실명이 unmatchedNames로 나온다', () => {
   const { project } = built;
   expect(project).toEqual(normalizeProject(project));
   expect(project.floors[0].height).toBe(3500);
   expect(project.floors[0].walls.every(w => w.height === 3500)).toBe(true);
   expect(project.name).toBe('경산 사동중');                       // 높이 980 mm 제목 문자(레이어 TEXT2)
+  // M-6(최종 리뷰): 이 픽스처에서 이름이 붙는 방은 **0개**다 — 실명 셋이 전부 방 폴리곤 밖이라
+  // 그대로 unmatchedNames로 나온다. 옛 단언(`named.length + unmatched.length >= 2`)은 0 + 3으로
+  // 통과해 제목이 말하는 성질을 하나도 검사하지 않았다(이름이 붙는 성질 자체는 dxfProject.test.js가
+  // 합성 데이터로 덮는다). 여기서 못 박는 것은 §18.4의 "닫히지 않은 공간"이 세는 바로 그 신호다.
   const named = project.floors[0].rooms.filter(r => /[가-힣]/.test(r.name));
-  expect(named.length + built.stats.unmatchedNames.length).toBeGreaterThanOrEqual(2);
+  expect(named).toHaveLength(0);
+  expect(built.stats.unmatchedNames.length).toBeGreaterThanOrEqual(2);
+  expect(built.stats.unmatchedNames.every(n => /[가-힣]/.test(n))).toBe(true);
 });
 
 // 사전 검토 C-2: 이 도면에 스윙 호가 0개이므로 개구부는 **벽 틈**에서 나온다.

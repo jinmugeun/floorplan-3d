@@ -31,6 +31,7 @@ export function createDxfClient({ workerFactory = defaultWorkerFactory } = {}) {
   const ensure = () => {
     if (worker) return worker;
     worker = workerFactory();
+    const w = worker;   // 이 핸들러 짝의 워커(아래 onerror가 늦게 와도 남의 워커를 죽이지 않게).
     worker.onmessage = ev => {
       const m = ev.data ?? {};
       if (m.type === 'progress') { onProgress(m); return; }
@@ -43,6 +44,8 @@ export function createDxfClient({ workerFactory = defaultWorkerFactory } = {}) {
     // 영원히 멈춘다 — 참조를 버려 alive()를 false로 만들고, 큐에 남은 요청도 같은 오류로 거절한다.
     // (그 뒤 새 요청은 상태 없는 새 워커를 만들고, extract라면 not-dxf로 정직하게 실패한다.)
     worker.onerror = e => {
+      // 버린 워커의 늦은 onerror 한 방이 **살아 있는 새 워커**를 terminate하면 안 된다(최종 리뷰 M-1).
+      if (worker !== w) return;
       const err = fail('oom', e?.message);
       const dead = worker; worker = null;
       try { dead?.terminate(); } catch { /* 이미 죽었으면 그만이다 */ }

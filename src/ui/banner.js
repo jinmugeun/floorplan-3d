@@ -45,6 +45,18 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
     if (s.soloRoom) return `단일 공간 모드 ${exitSolo}`;
     const clashes = collisionCount();
     if (clashes) return esc(collisionText(clashes));
+    // 가져온 도면에서 벽이 이어지지 않은 자리(§18.6). 도구 안내보다 **앞**에 둔다(최종 리뷰 I-4):
+    // 끊긴 끝점을 고치는 유일한 방법이 벽 도구를 켜는 것이라, 뒤에 두면 고치려고 도구를 켠 순간
+    // 문장도 [보기] 버튼도 사라진다 — 이 기능의 결론이 정확히 필요한 순간에만 안 보이게 된다.
+    // 이 안내는 §18.10이 "자르지 않는다"고 못 박은 하나다: 이 도면은 원리적으로 자동으로 닫히지
+    // 않으므로(식당–조리실 경계가 배식대다) 고칠 자리를 보여 주는 것이 기능의 결론이다.
+    // 안내는 **가져온 그 층**의 것이다(Task 13 재검토 I-4): 다른 층에서는 감춘다(지우지는 않는다 —
+    // 돌아오면 다시 보인다). 층은 번호가 아니라 id로 가린다 — 앞 층을 지워도 어긋나지 않는다(m-8).
+    // ui/는 view2d/를 import할 수 없으므로 이 한 줄은 view2d/openEnds2d.js의 같은 판정과 짝이다:
+    // 둘을 함께 고친다. floor를 적지 않은 안내(옛 호출자)는 층을 가리지 않는다.
+    if (s.openEnds?.pts?.length && (!s.openEnds.floor || activeFloor(store.get())?.id === s.openEnds.floor)) {
+      return `<span class="hint">${esc(DXF_OPEN_ENDS(s.openEnds.pts.length))}</span> <button type="button" id="btnOpenEnds">${esc(DXF_OPEN_ENDS_VIEW)}</button>`;
+    }
     // 누를 수 있는 것만 버튼이다(§16.5 · 감사 §39). onHintClick을 구현한 도구(덕트·경로 배열·배치·
     // 구조물)에서는 "메시지를 누르면 취소"가 실제로 동작하므로 버튼이고 — 키보드로도 닿아야 한다 —
     // 그러지 않는 도구(벽·방·삭제·보조선·측정)에서는 <span>이다: 예전에는 링크처럼 보이는 탭 스톱이
@@ -54,16 +66,6 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
       return typeof t.onHintClick === 'function'
         ? `<button type="button" class="hint" data-action="hintCancel">${esc(t.hint)}</button>`
         : `<span class="hint">${esc(t.hint)}</span>`;
-    }
-    // 가져온 도면에서 벽이 이어지지 않은 자리(§18.6). 도구 안내보다 뒤에 둔다 — 지금 하는 일이
-    // 먼저다. 이 안내는 §18.10이 "자르지 않는다"고 못 박은 하나다: 이 도면은 원리적으로 자동으로
-    // 닫히지 않으므로(식당–조리실 경계가 배식대다) 고칠 자리를 보여 주는 것이 기능의 결론이다.
-    // 안내는 **가져온 그 층**의 것이다(Task 13 재검토 I-4): 다른 층에서는 감춘다(지우지는 않는다 —
-    // 돌아오면 다시 보인다). 층은 번호가 아니라 id로 가린다 — 앞 층을 지워도 어긋나지 않는다(m-8).
-    // ui/는 view2d/를 import할 수 없으므로 이 한 줄은 view2d/openEnds2d.js의 같은 판정과 짝이다:
-    // 둘을 함께 고친다. floor를 적지 않은 안내(옛 호출자)는 층을 가리지 않는다.
-    if (s.openEnds?.pts?.length && (!s.openEnds.floor || activeFloor(store.get())?.id === s.openEnds.floor)) {
-      return `<span class="hint">${esc(DXF_OPEN_ENDS(s.openEnds.pts.length))}</span> <button type="button" id="btnOpenEnds">${esc(DXF_OPEN_ENDS_VIEW)}</button>`;
     }
     // 온보딩을 닫은 뒤의 첫 방 유도(§16.12 · 감사 §47). 방이 없는 동안만 보이고, 첫 방이 생기면
     // app/firstRoomFit.js의 래치가 플래그를 끈다 — 그래서 새로 더한 빈 층에서 되살아나지 않는다.

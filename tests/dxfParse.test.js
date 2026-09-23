@@ -142,3 +142,31 @@ test('onProgress는 0으로 시작해 1로 끝나고, ENTITIES가 비어도 죽�
   expect(empty.entities).toEqual([]);
   expect(empty.counts.blocks).toBe(0);
 });
+
+
+// 최종 리뷰 M-2: 블록 폐포의 씨앗은 **모델스페이스** INSERT뿐이다. explode가 `!e.paper`로 거르는
+// INSERT까지 씨앗으로 쓰면 아무도 쓰지 않는 블록 정의를 파싱한다(실파일은 페이퍼스페이스 0개).
+test('페이퍼스페이스 INSERT(코드 67)는 블록 폐포의 씨앗이 아니다', () => {
+  const eol = text().slice(-2);                     // 이 파일의 픽스처와 같은 줄 끝(CRLF)
+  const src = [
+    '0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1032', '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'BLOCKS',
+    '0', 'BLOCK', '2', 'M', '8', '0', '10', '0', '20', '0', '70', '0',
+    '0', 'LINE', '8', 'WAL', '10', '0.5', '20', '0.25', '11', '100.5', '21', '0.25',
+    '0', 'ENDBLK',
+    '0', 'BLOCK', '2', 'P', '8', '0', '10', '0', '20', '0', '70', '0',
+    '0', 'LINE', '8', 'WAL', '10', '0.5', '20', '0.25', '11', '200.5', '21', '0.25',
+    '0', 'ENDBLK',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'ENTITIES',
+    '0', 'INSERT', '2', 'M', '8', '0', '10', '0', '20', '0',
+    '0', 'INSERT', '2', 'P', '8', '0', '67', '1', '10', '0', '20', '0',
+    '0', 'ENDSEC', '0', 'EOF',
+  ].join(eol) + eol;
+  const d = parseDxf(src);
+  expect(d.entities.filter(e => e.type === 'INSERT').map(e => [e.name, !!e.paper])).toEqual([['M', false], ['P', true]]);
+  expect(d.counts.blocks).toBe(2);
+  expect(d.counts.blocksUsed).toBe(1);                           // M만 도달한다
+  expect(d.blocks.get('M').entities).toHaveLength(1);
+  expect(d.blocks.get('P').entities).toEqual([]);                // 페이퍼스페이스 블록은 파싱하지 않는다
+});

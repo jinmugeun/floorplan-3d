@@ -2,9 +2,9 @@
 // §18.6의 검토 대화상자. 워커는 가짜를 주입하고(node에서 진짜 워커를 띄우지 않는다),
 // 캔버스는 tests/view2d.test.js의 Proxy 스텁 관례를 그대로 쓴다(jsdom에는 캔버스가 없다).
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { openDxfDialog } from '../src/ui/dxfDialog.js';
-import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
-import { DXF_HEIGHT_KEY, DXF_TRACE_KEY } from '../src/ui/prefs.js';
+import { openDxfDialog, DXF_THICKNESS_RANGE } from '../src/ui/dxfDialog.js';
+import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
+import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH } from '../src/ui/messages.js';
@@ -379,4 +379,65 @@ test('폴백이면 추정 레이어가 체크리스트에 미리 켜진다', asy
   expect(on).toEqual(['A-WALL']);
   expect(q('notice').textContent).toBe(DXF_LAYERS_GUESSED);
   expect(q('notice').hidden).toBe(false);
+});
+
+
+// 최종 리뷰 I-1: <input min max>는 타이핑을 막지 않고 이 대화상자에는 폼 제출도 없다. 범위 밖 값은
+// 워커로도 설정으로도 가지 않는다 — 층고 99999는 normalizeProject를 빠져나가 room.height 하나만
+// 99999로 남고(floor·wall만 8000으로 잘린다) 3D 천장이 100 m로 선다.
+test('범위 밖 층고·두께는 추출 옵션과 설정에 닿기 전에 잘린다', async () => {
+  const onImported = vi.fn(async () => true);
+  const { w, q } = open({ file: fileOf(), onImported });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  const lastOpts = () => w.posted.filter(m => m.type === 'extract').at(-1).opts;
+  q('height').value = '99999';
+  q('thickness').value = '-50';
+  q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(lastOpts()).toMatchObject({ height: DXF_HEIGHT_RANGE[1], thickness: DXF_THICKNESS_RANGE[0] });
+  expect(lastOpts().height).toBe(8000);
+  expect(lastOpts().thickness).toBe(50);
+  w.emit(EXTRACTED);
+  await flush();
+  // 반대쪽 경계도 같은 규칙이다.
+  q('height').value = '10';
+  q('thickness').value = '99999';
+  q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(lastOpts()).toMatchObject({ height: DXF_HEIGHT_RANGE[0], thickness: DXF_THICKNESS_RANGE[1] });
+  w.emit(EXTRACTED);
+  await flush();
+  // 설정도 잘린 값으로 남는다 — setDxfHeight는 범위 밖을 조용히 버려 "층고를 기억한다"가 깨졌다.
+  q('height').value = '99999';
+  q('import').click();
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem(DXF_HEIGHT_KEY)).toBe(String(DXF_HEIGHT_RANGE[1]));
+});
+
+// 최종 리뷰 I-2(§18.4): stats.unmatchedNames는 "어느 공간이 안 닫혔나"를 알려 주는 유일한 신호다.
+test('닫히지 않은 공간 수를 검토 화면에 적는다', async () => {
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, unmatchedNames: ['조리실', '세척실'] } });
+  await flush();
+  expect(q('unmatched').textContent).toBe(DXF_UNMATCHED(2));
+  expect(q('unmatched').textContent).toBe('닫히지 않은 공간 2곳');
+  expect(q('unmatched').hidden).toBe(false);
+  // 하나도 없으면 줄 자체가 없다(EXTRACTED의 unmatchedNames는 빈 배열이다).
+  q('trace').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250);
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  expect(q('unmatched').hidden).toBe(true);
+  expect(q('unmatched').textContent).toBe('');
 });

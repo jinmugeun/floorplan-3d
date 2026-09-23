@@ -9,10 +9,18 @@ import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED,
-  DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP } from './messages.js';
+  DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP } from './messages.js';
 
 const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
+// §18.6이 글자로 정한 `기본 두께` 범위(층고 쪽 정본은 설정에도 남는 prefs.js의 DXF_HEIGHT_RANGE다).
+export const DXF_THICKNESS_RANGE = [50, 1000];
+// 범위를 화면에만 적어 두면 지켜지지 않는다(최종 리뷰 I-1): <input min max>는 타이핑을 막지 않고
+// 이 대화상자에는 폼 제출도 없다. 층고 99999는 normalizeProject를 **빠져나간다** — floor.height와
+// wall.height만 8000으로 잘리고 room.height는 detectRooms의 `prev?.height`가 그대로 물려받아
+// 3D 천장이 100 m로 선다. 음수 두께는 windowSpans의 밴드를 줄여 미리보기 폴리곤의 법선을 뒤집는다.
+// 그래서 워커·설정에 닿기 전에 여기서 자른다(setDxfHeight는 범위 밖 값을 조용히 버린다).
+const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 
 export function openDxfDialog({ file = null, workerFactory, onImported = async () => true, onCancel = () => {}, toast = () => {} } = {}) {
   const root = document.createElement('div');
@@ -32,7 +40,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
       <div class="dxf-col"><canvas name="preview" width="560" height="420" aria-label="추출 미리보기"></canvas></div>
       <div class="dxf-col dxf-opts">
         <label>층고 <input type="number" name="height" min="${DXF_HEIGHT_RANGE[0]}" max="${DXF_HEIGHT_RANGE[1]}" step="10" value="${dxfHeight()}"> mm</label>
-        <label>기본 두께 <input type="number" name="thickness" min="50" max="1000" step="10" value="200"> mm</label>
+        <label>기본 두께 <input type="number" name="thickness" min="${DXF_THICKNESS_RANGE[0]}" max="${DXF_THICKNESS_RANGE[1]}" step="10" value="200"> mm</label>
         <label>단위 <select name="units">${UNITS.map(([n, v]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select></label>
         <label><input type="checkbox" name="preset" checked> 벽만 남기기</label>
         <label><input type="checkbox" name="openFaces" checked> 창·문 레이어의 긴 선도 벽면으로 쓰기</label>
@@ -41,6 +49,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
         <label><input type="checkbox" name="trace"${dxfTrace() ? ' checked' : ''}> 원 도면을 배경으로 남기기</label>
         <p class="dxf-nums" name="nums"></p>
         <p class="warn" name="warn" hidden></p>
+        <p class="warn" name="unmatched" hidden></p>
         <p class="muted" name="hist"></p>
         <p class="muted tiny" name="ms"></p>
       </div>
@@ -50,6 +59,9 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   </div>`;
   document.body.appendChild(root);
   const q = n => root.querySelector(`[name="${n}"]`);
+  // 층고·두께는 **읽는 자리에서** 자른다(위 clampTo의 주석) — 워커로도 설정으로도 잘린 값만 간다.
+  const heightMm = () => clampTo(Number(q('height').value) || 3500, DXF_HEIGHT_RANGE);
+  const thicknessMm = () => clampTo(Number(q('thickness').value) || 200, DXF_THICKNESS_RANGE);
   const client = createDxfClient({ workerFactory });
   let summary = null, initial = new Set(), checked = new Set(), last = null, timer = 0, closed = false, importing = false;
 
@@ -85,6 +97,11 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     const warn = q('warn'), n = stats.openEnds?.length ?? 0;
     warn.textContent = n ? DXF_OPEN_END_COUNT(n) : '';
     warn.hidden = !n;
+    // §18.4: 도면의 실명을 방 폴리곤에 못 붙였다는 것은 그 공간이 닫히지 않았다는 뜻이다 —
+    // 사용자가 "어느 공간이 안 닫혔나"를 아는 유일한 신호라 끊긴 끝점 바로 아래에 수를 적는다(I-2).
+    const un = q('unmatched'), u = stats.unmatchedNames?.length ?? 0;
+    un.textContent = u ? DXF_UNMATCHED(u) : '';
+    un.hidden = !u;
     q('hist').textContent = (stats.thickness ?? []).slice(0, 4).map(([mm, c]) => `${mm} mm×${c}`).join(' · ');
     q('ms').textContent = [summary?.ms, stats.ms].filter(Boolean).flatMap(o => Object.entries(o)).map(([k, v]) => `${k} ${v}ms`).join(' · ');
     if (stats.guessed) notice(DXF_LAYERS_GUESSED);
@@ -98,8 +115,8 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     progress(3);
     client.extract({
       layers: [...checked],
-      thickness: Number(q('thickness').value) || 200,
-      height: Number(q('height').value) || 3500,
+      thickness: thicknessMm(),
+      height: heightMm(),
       scale: Number(q('units').value) || summary.unitScale,
       useOpeningFaces: q('openFaces').checked,
       autoNames: q('autoNames').checked,
@@ -153,7 +170,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
       if (bg) project.background = bg;
       else toast(DXF_TRACE_SKIPPED);
     }
-    setDxfHeight(Number(q('height').value));
+    setDxfHeight(heightMm());
     setDxfTrace(q('trace').checked);
     try {
       const ok = await onImported({ project, stats });

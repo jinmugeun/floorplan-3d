@@ -185,3 +185,22 @@ test('worker.js는 DOM·ui를 import하지 않고 Worker를 최상위에서 만�
   // 모듈 최상위에서 만들면 node 테스트가 import만으로 죽는다 — 반드시 함수 안이다.
   expect(client.split('\n').find(l => l.includes('new Worker('))).toMatch(/=>/);
 });
+
+
+// 최종 리뷰 M-1: 죽은 워커 A의 늦은 onerror 한 방이 **살아 있는 새 워커 B**를 terminate하면 안 된다.
+test('버린 워커의 늦은 onerror는 새 워커를 건드리지 않는다', async () => {
+  const made = [];
+  const client = createDxfClient({ workerFactory: () => { const w = new FakeWorker(); made.push(w); return w; } });
+  const p = client.parse(new ArrayBuffer(4));
+  made[0].onerror({ message: 'out of memory' });                 // A가 죽는다
+  await expect(p).rejects.toMatchObject({ code: 'oom' });
+  expect(client.alive()).toBe(false);
+  const q = client.parse(new ArrayBuffer(4));                    // 새 워커 B가 선다
+  expect(made).toHaveLength(2);
+  expect(client.alive()).toBe(true);
+  made[0].onerror({ message: 'late' });                          // A의 늦은 한 방
+  expect(client.alive()).toBe(true);                             // B는 살아 있다
+  expect(made[1].terminated).toBe(0);
+  made[1].emit({ type: 'parsed', summary: { ver: 'AC1032' } });
+  await expect(q).resolves.toEqual({ ver: 'AC1032' });           // B의 요청이 그대로 끝난다
+});

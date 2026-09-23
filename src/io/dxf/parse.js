@@ -121,7 +121,9 @@ export function parseDxf(txt, { onProgress = () => {} } = {}) {
   // 2패스: 모델스페이스 INSERT에서 시작해 블록 참조의 전이 폐포를 닫고, 도달한 정의만 파싱한다.
   const entities = entFrom >= 0 && entTo > entFrom ? parseEntities(entFrom, entTo) : [];
   const reached = new Set();
-  const stack = entities.filter(e => e.type === 'INSERT' && e.name).map(e => e.name);
+  // 씨앗은 **모델스페이스** INSERT뿐이다(M-2): explode도 `!e.paper`로 거르므로, 페이퍼스페이스
+  // INSERT(코드 67)까지 씨앗으로 쓰면 아무도 쓰지 않는 블록 정의를 파싱한다(실파일은 0개라 영향 0).
+  const stack = entities.filter(e => e.type === 'INSERT' && e.name && !e.paper).map(e => e.name);
   while (stack.length) {
     const n = stack.pop();
     if (reached.has(n) || !blocks.has(n)) continue;

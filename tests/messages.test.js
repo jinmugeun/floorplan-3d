@@ -250,6 +250,7 @@ test('DXF 알림·진행 문구는 §18.6이 적은 글자 그대로다', async 
   expect(m.DXF_IMPORTED(213, 52)).toBe('벽 213개 · 방 52개를 가져왔습니다');
   expect(m.DXF_OPEN_ENDS(53)).toBe('벽이 이어지지 않은 곳이 53군데 있습니다');
   expect(m.DXF_OPEN_END_COUNT(53)).toBe('⚠ 끊긴 끝점 53개');
+  expect(m.DXF_UNMATCHED(3)).toBe('닫히지 않은 공간 3곳');            // §18.4가 약속한 한 줄(최종 리뷰 I-2)
   expect(m.DXF_NUMS(213, 52, '249.7')).toBe('벽 213 · 방 52 · 면적 249.7 m²');
   expect(m.DXF_HEAD('경산 사동중', '44.0', '25.9', 'mm', 4, 'AC1032')).toBe('경산 사동중 · 44.0 m × 25.9 m · mm (INSUNITS=4) · AC1032');
   expect([m.DXF_STEP_READ, m.DXF_STEP_PARSE(1009), m.DXF_STEP_WALLS, m.DXF_STEP_ROOMS])
