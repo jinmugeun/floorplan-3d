@@ -9,6 +9,7 @@ export const FIT_MARGIN = 0.08;
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const mm = v => Math.max(0, Number(v) || 0) / 1000;
+const sm = v => (Number(v) || 0) / 1000;   // 부호를 살린 mm→m(목표 어긋남은 음수가 된다)
 
 // 카메라의 화면 축(단위벡터). 고도·방위의 정의는 view3d의 배치식과 같다:
 //   pos = target + r · dir,  dir = (−cosEl·sinAz, sinEl, cosEl·cosAz)
@@ -35,18 +36,22 @@ function camAxes(el, az) {
 // 8꼭짓점 × 2축의 최댓값이 답이다 — 종횡비 반영(§15.4)과 여백 8% 고정이 한 식에서 함께 성립한다
 // (평면·ISO·좁은 뷰포트·작은 도면 모두 화면 점유가 정확히 k다).
 // width·depth(mm)를 주면 직사각형 도면을 그대로 쓰고, 없으면 extent를 양변으로 둔다(보수적 = 더 멀리).
+// offsetMm은 **목표가 bbox 기준점(가로·세로 중앙 · 바닥 y=0)에서 벗어난 양**(three 축 순서 x,y,z · mm)이다:
+// 절두체는 목표를 향해 중심이 잡히므로 꼭짓점도 목표 기준으로 넣어야 한다. 오른쪽 드래그 팬은 목표를
+// 얼마든지 옮기고(view3d의 MOUSE.PAN), 그 어긋남을 빼놓으면 벗어난 쪽이 잘렸다(리뷰 I-2).
 export function fitDistance(extentMm, {
-  aspect = 1, fov = 60, elevation = 90, azimuth = 0, height = 0, width = 0, depth = 0, margin = FIT_MARGIN,
+  aspect = 1, fov = 60, elevation = 90, azimuth = 0, height = 0, width = 0, depth = 0, margin = FIT_MARGIN, offsetMm = null,
 } = {}) {
   const ext = mm(extentMm);
   const hx = (mm(width) || ext) / 2, hz = (mm(depth) || ext) / 2, hy = mm(height);
+  const ox = sm(offsetMm?.[0]), oy = sm(offsetMm?.[1]), oz = sm(offsetMm?.[2]);
   const el = (Math.min(90, Math.max(1, Number(elevation) || 1)) * Math.PI) / 180;
   const { dir, right, up } = camAxes(el, ((Number(azimuth) || 0) * Math.PI) / 180);
   const k = 1 - 2 * Math.min(0.45, Math.max(0, Number(margin) || 0));   // 양쪽 여백을 뺀 실사용 비율
   const tanV = Math.tan((Math.min(170, Math.max(1, Number(fov) || 60)) * Math.PI) / 360);
   const tanH = tanV * Math.max(0.1, Number(aspect) || 1);
   let r = 6;                            // 빈·작은 도면에서도 카메라가 바닥에 처박히지 않는 최소 거리
-  for (const x of [-hx, hx]) for (const y of [0, hy]) for (const z of [-hz, hz]) {
+  for (const x of [-hx - ox, hx - ox]) for (const y of [-oy, hy - oy]) for (const z of [-hz - oz, hz - oz]) {
     const v = [x, y, z], back = dot(v, dir);
     r = Math.max(r, Math.abs(dot(v, up)) / (tanV * k) + back, Math.abs(dot(v, right)) / (tanH * k) + back);
   }
@@ -77,10 +82,28 @@ export function reframePosition(position, target, radius) {
   return { x: target.x + dx * k, y: target.y + dy * k, z: target.z + dz * k };
 }
 
-// 렌더샷 한 장을 위한 카메라 자리: 지금 보고 있는 방향을 지키고 **출력 종횡비**로 거리를 다시 잡는다.
+// "현재 카메라" 렌더샷의 재프레이밍을 해도 되는 상황인가(§16.9 · 리뷰 I-1).
+// - preset(정면·평면…)은 orthoViewParams가 이미 출력 종횡비를 받는다.
+// - 화면 카메라가 아니거나 원근이 아니면(2D 투영의 ortho2) 거리·궤도 개념이 없다.
+// - controls가 꺼진 상태(1인칭 · projection:'ortho')에서는 controls.target이 마지막 궤도 목표에
+//   남아 있어 궤도를 잘못 읽고, 회전은 1인칭 시선 그대로여서 화면과 무관한 그림이 저장됐다.
+export function canReframeShot({ preset = null, isScreenCamera = false, isPerspective = false, controlsEnabled = false } = {}) {
+  return !preset && !!isScreenCamera && !!isPerspective && !!controlsEnabled;
+}
+
+// 렌더샷 한 장을 위한 카메라 자리: 방향과 **사용자의 줌**을 지키고 화면↔출력 종횡비 차이만 보정한다.
+//   r_new = r_cur × fitDistance(출력 비율) / fitDistance(화면 비율)
 // (§16.9 · 감사 §10: 화면이 정사각이면 16:9 출력에서 좌우 여백이 프레임의 1/4씩 남았다.)
-export function shotPosition({ position, target, extentMm, aspect = 1, fov = 60, height = 0, width = 0, depth = 0 }) {
+// 도면 전체로 다시 맞추지 않는다(리뷰 I-4): 그러면 후드 한 대를 확대해 둔 화면에서 주방 전체가
+// 나와 "현재 카메라"라는 이름과 어긋난다 — 고치려던 WYSIWYG 결함을 방향만 바꿔 남기는 셈이다.
+// center는 bbox 기준점(가로·세로 중앙 · 바닥)의 three 좌표(m)다 — 목표가 팬으로 벗어난 만큼을 반영한다(I-2).
+export function shotPosition({
+  position, target, center = null, extentMm, aspect = 1, screenAspect = 0, fov = 60, height = 0, width = 0, depth = 0,
+}) {
   const o = orbitOf(position, target);
-  const r = fitDistance(extentMm, { aspect, fov, elevation: o.elevation, azimuth: o.azimuth, height, width, depth });
-  return reframePosition(position, target, r);
+  const offsetMm = center ? [(target.x - center.x) * 1000, (target.y - center.y) * 1000, (target.z - center.z) * 1000] : null;
+  const base = { fov, elevation: o.elevation, azimuth: o.azimuth, height, width, depth, offsetMm };
+  const out = fitDistance(extentMm, { ...base, aspect });
+  const screen = fitDistance(extentMm, { ...base, aspect: Number(screenAspect) > 0 ? screenAspect : aspect });
+  return reframePosition(position, target, screen > 0 ? (o.radius * out) / screen : o.radius);
 }

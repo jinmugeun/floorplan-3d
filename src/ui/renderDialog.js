@@ -1,4 +1,4 @@
-// 렌더샷: 해상도와 뷰를 골라 오프스크린으로 한 장 렌더하고, 갤러리에 저장하면서 내려받는다.
+// 렌더샷: 해상도와 뷰를 골라 오프스크린으로 한 장 렌더해 갤러리에 저장하고, [내려받기]로 파일을 받는다.
 // 클라우드 렌더는 범위 밖이라 실시간 three 렌더를 고해상도로 한 장 뽑는 것으로 갈음한다.
 import { addShot } from '../io/gallery.js';
 import { downloadDataUrl, filenameFor } from '../io/file.js';
@@ -38,8 +38,8 @@ export function openRenderDialog({ store, view3d, onSaved = () => {}, onClose = 
     root.remove(); trap.destroy(); onClose();
   };
   const self = { close };
-  // 방금 렌더한 이미지와 **그때의 파일명**(내려받기 버튼이 쓴다 — §14.10). 자동 저장 경로는 `-WxH`가
-  // 붙은 이름을 쓰는데 버튼만 안 붙은 이름을 써서, 같은 그림이 두 이름으로 내려왔다(m-10).
+  // 방금 렌더한 이미지와 **그때의 파일명**(내려받기 버튼이 쓴다 — §14.10).
+  // 자동 내려받기는 §16.9에서 없앴다(사용자 클릭만) — 이름이 두 갈래로 갈리던 m-10도 함께 사라졌다.
   let last = null;   // { url, filename }
 
   // 렌더 중에는 버튼을 잠근다(§16.9 · 감사 §9): 예전에는 두 번 누르면 갤러리 항목 2개와

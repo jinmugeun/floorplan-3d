@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { cameraDistance, viewForMode, fitDistance, FIT_MARGIN, orbitOf, reframePosition, shotPosition } from '../src/view3d/fit.js';
+import { cameraDistance, viewForMode, fitDistance, FIT_MARGIN, orbitOf, reframePosition, shotPosition, canReframeShot } from '../src/view3d/fit.js';
 
 test('small or empty floors get the minimum distance', () => {
   expect(cameraDistance(0)).toBe(10);
@@ -50,7 +50,8 @@ const unit = a => { const n = Math.hypot(...a); return [a[0] / n, a[1] / n, a[2]
 
 // 화면 점유: 1.0이 프레임 경계다(세로·가로 각각 max|오프셋| / (깊이 · tan)).
 // 여백 비율 m이면 점유 = 1 − 2m가 되어야 한다(양쪽에 m씩 남는다).
-function occupancy(r, { fov, aspect, elevation, azimuth, width, depth, height, plan = false }) {
+// offset(m)은 목표가 bbox 기준점에서 벗어난 양이다(팬) — 목표를 원점에 두고 꼭짓점을 −offset만큼 옮긴다.
+function occupancy(r, { fov, aspect, elevation, azimuth, width, depth, height, plan = false, offset = [0, 0, 0] }) {
   // 카메라 위치: 평면 모드는 목표 바로 위(+z 0.01은 lookAt이 퇴화하지 않게 하는 실제 코드의 값).
   const el = (elevation * Math.PI) / 180, az = (azimuth * Math.PI) / 180;
   const pos = plan
@@ -60,7 +61,7 @@ function occupancy(r, { fov, aspect, elevation, azimuth, width, depth, height, p
   const tanV = Math.tan((fov * Math.PI) / 360), tanH = tanV * aspect;
   let fillV = 0, fillH = 0, front = Infinity;
   for (const cx of [-width / 2000, width / 2000]) for (const cy of [0, height / 1000]) for (const cz of [-depth / 2000, depth / 2000]) {
-    const v = [cx - pos[0], cy - pos[1], cz - pos[2]];
+    const v = [cx - offset[0] - pos[0], cy - offset[1] - pos[1], cz - offset[2] - pos[2]];
     const z = -dot3(v, zA);                                   // 카메라 앞쪽 깊이
     front = Math.min(front, z);
     fillV = Math.max(fillV, Math.abs(dot3(v, yA)) / (z * tanV));
@@ -125,14 +126,62 @@ test('orbitOf·reframePosition은 방향을 지키고 거리만 바꾼다', () =
   expect(reframePosition(target, target, 10)).toEqual({ x: target.x, y: target.y, z: target.z });
 });
 
-test('shotPosition은 정사각 화면의 프레이밍을 16:9 출력 거리로 바꾼다', () => {
-  const target = { x: 0, y: 0, z: 0 };
-  const el = (35 * Math.PI) / 180;
-  const square = fitDistance(33800, { aspect: 1, fov: 60, elevation: 35, azimuth: 0, height: 3500, width: 33800, depth: 29600 });
-  const position = { x: 0, y: square * Math.sin(el), z: square * Math.cos(el) };
-  const wide = shotPosition({ position, target, extentMm: 33800, aspect: 1280 / 720, fov: 60, height: 3500, width: 33800, depth: 29600 });
-  const r = orbitOf(wide, target).radius;
-  // 가로가 넓어지면 세로가 빡빡한 쪽이 되어 거리가 줄거나 같다 — 늘어나지는 않는다.
-  expect(r).toBeLessThanOrEqual(square + 1e-9);
-  expect(r).toBeCloseTo(fitDistance(33800, { aspect: 1280 / 720, fov: 60, elevation: 35, azimuth: 0, height: 3500, width: 33800, depth: 29600 }), 6);
+// 리뷰 I-2: fitDistance는 bbox가 **목표를 중심으로** 놓여 있다고 가정했는데, 오른쪽 드래그 팬은
+// 목표를 얼마든지 옮긴다(view3d의 MOUSE.PAN). 벗어난 만큼이 식에 없어 그쪽이 프레임 밖으로 잘렸다.
+test('fitDistance는 팬으로 벗어난 목표(소수 좌표)를 반영해 잘리지 않는다', () => {
+  const k = 1 - 2 * FIT_MARGIN;
+  const c = { width: 33800, depth: 29600, height: 3500, fov: 60, aspect: 1, elevation: 35, azimuth: 47 };
+  const offset = [2.5, 4.75, -2.35];                          // 화면 위 축으로 약 5.8 m 팬한 상태(m)
+  const offsetMm = offset.map(v => v * 1000);
+  const naive = fitDistance(33800, c);                        // 목표가 중앙이라고 가정한 거리
+  const fixed = fitDistance(33800, { ...c, offsetMm });
+  expect(occupancy(naive, { ...c, offset }).fill).toBeGreaterThan(1);   // 예전 거리는 실제로 잘린다(1.03)
+  expect(fixed).toBeGreaterThan(naive);                       // 벗어난 만큼 더 물러난다
+  const { fill, front } = occupancy(fixed, { ...c, offset });
+  expect(front, '카메라 앞쪽').toBeGreaterThan(0);
+  expect(fill, '8꼭짓점이 프레임 안').toBeLessThanOrEqual(k + 1e-9);
+  expect(fill, '그러면서 꽉 채운다').toBeGreaterThan(k - 1e-6);
+  // 목표가 중앙이면(offsetMm 없음/0) 예전 결과와 한 치도 다르지 않다.
+  expect(fitDistance(33800, { ...c, offsetMm: [0, 0, 0] })).toBe(naive);
+});
+
+// 리뷰 I-1: 1인칭(controls.enabled === false)은 같은 원근 카메라를 쓰면서 controls.target을 마지막
+// 궤도 목표에 남겨 둔다 → 궤도를 잘못 읽고 화면과 무관한 그림이 저장됐다. 프리셋·2D 투영도 제외한다.
+test('canReframeShot은 프리셋·1인칭·2D 투영에서 재프레이밍을 막는다', () => {
+  const ok = { preset: null, isScreenCamera: true, isPerspective: true, controlsEnabled: true };
+  expect(canReframeShot(ok)).toBe(true);
+  expect(canReframeShot({ ...ok, preset: 'front' })).toBe(false);       // orthoViewParams가 이미 aspect를 받는다
+  expect(canReframeShot({ ...ok, isScreenCamera: false })).toBe(false); // 2D 투영의 ortho2 카메라
+  expect(canReframeShot({ ...ok, isPerspective: false })).toBe(false);  // projection: 'ortho'
+  expect(canReframeShot({ ...ok, controlsEnabled: false })).toBe(false); // 1인칭
+  expect(canReframeShot()).toBe(false);
+});
+
+// 리뷰 I-4: "현재 카메라"가 도면 전체 맞춤 거리로 덮어쓰면 후드 한 대를 확대해 둔 화면에서 주방
+// 전체가 나온다. 사용자의 줌을 지키고 **화면↔출력 종횡비 차이만** 보정한다.
+test('shotPosition은 줌을 지키고 화면↔출력 종횡비 차이만 보정한다', () => {
+  const target = { x: 1.5, y: 0.75, z: -2.25 }, center = { x: 1.5, y: 0, z: -2.25 };  // 0.75 m 팬한 목표
+  const el = (35 * Math.PI) / 180, az = (47 * Math.PI) / 180, r0 = 12;
+  const position = {
+    x: target.x - r0 * Math.cos(el) * Math.sin(az),
+    y: target.y + r0 * Math.sin(el),
+    z: target.z + r0 * Math.cos(el) * Math.cos(az),
+  };
+  const dims = { extentMm: 33800, fov: 60, height: 3500, width: 33800, depth: 29600 };
+  const screenAspect = 16 / 9;
+  // 화면과 같은 비율로 내보내면 거리가 한 치도 바뀌지 않는다(12 m 줌이 그대로 남는다).
+  expect(orbitOf(shotPosition({ position, target, center, ...dims, aspect: 16 / 9, screenAspect }), target).radius).toBeCloseTo(12, 9);
+  // 1:1로 내보내면 가로가 좁아져 **딱 fit 비율만큼**(1.0815배) 물러난다.
+  const opts = { fov: 60, elevation: 35, azimuth: 47, height: 3500, width: 33800, depth: 29600, offsetMm: [0, 750, 0] };
+  const ratio = fitDistance(33800, { ...opts, aspect: 1 }) / fitDistance(33800, { ...opts, aspect: 16 / 9 });
+  expect(ratio).toBeGreaterThan(1);
+  const sq = orbitOf(shotPosition({ position, target, center, ...dims, aspect: 1, screenAspect }), target);
+  expect(sq.radius).toBeCloseTo(12 * ratio, 9);
+  expect(sq.elevation).toBeCloseTo(35, 6);                    // 방향은 그대로다
+  expect(sq.azimuth).toBeCloseTo(47, 6);
+  // 도면 전체 맞춤 거리(45.8 m)로 덮어쓰지 않는다 — 이것이 I-4가 되돌린 결정이다.
+  expect(fitDistance(33800, { ...opts, aspect: 16 / 9 })).toBeGreaterThan(40);
+  expect(sq.radius).toBeLessThan(20);
+  // screenAspect를 주지 않으면 출력 비율과 같다고 보아 거리를 건드리지 않는다(줌 보존이 기본값).
+  expect(orbitOf(shotPosition({ position, target, center, ...dims, aspect: 1 }), target).radius).toBeCloseTo(12, 9);
 });

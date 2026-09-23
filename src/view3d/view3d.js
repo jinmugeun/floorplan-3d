@@ -5,7 +5,7 @@ import { activeFloor } from '../state/schema.js';
 import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPACITY } from './build.js';
 import { hiddenWallIds, cutawayMeshStyle, soloMeshVisible } from './cutaway.js';
 import { endpoints } from '../geom/walls.js';
-import { cameraDistance, fitDistance, shotPosition } from './fit.js';
+import { cameraDistance, fitDistance, shotPosition, canReframeShot } from './fit.js';
 import { sunPosition, nightFactor } from './sun.js';
 import { applyPerfMode } from './perfMode.js';
 import { headingDeg, toWorldXY } from './camera.js';
@@ -162,28 +162,31 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
       cam = shot;
       showAllWalls();                       // 정면·평면 도면은 컷어웨이로 벽을 지우지 않는다
     }
-    // 출력 종횡비로 다시 프레이밍한다(§16.9 · 감사 §10): 방향은 그대로 두고 거리만 바꾼다.
-    // 프리셋(정면·평면…)은 orthoViewParams가 이미 aspect를 받으므로 이 길을 타지 않는다.
-    const home = !preset && cam === camera && cam.isPerspectiveCamera ? camera.position.clone() : null;
-    if (home) { const b = bounds(); camera.position.copy(shotPosition({ position: camera.position, target: controls.target, extentMm: b.extent, aspect: width / height, fov: camera.fov, height: activeFloor(store.get()).height, width: b.size[0], depth: b.size[1] })); }
+    // 화면↔출력 종횡비 차이만큼 거리를 보정한다(§16.9 · 감사 §10): 방향과 사용자의 줌은 그대로 둔다.
+    // 조건·수학은 fit.js에 있다(이 파일의 300줄 상한): 프리셋·1인칭·2D 투영은 타지 않는다(리뷰 I-1).
+    const home = canReframeShot({ preset, isScreenCamera: cam === camera, isPerspective: cam.isPerspectiveCamera, controlsEnabled: controls.enabled }) ? camera.position.clone() : null;
     const prevAspect = cam.isPerspectiveCamera ? cam.aspect : null;
-    renderer.setPixelRatio(1);
-    renderer.setSize(width, height, false);
-    if (cam.isPerspectiveCamera) { cam.aspect = width / height; cam.updateProjectionMatrix(); }
-    else if (cam.isOrthographicCamera) {
-      // 현재 카메라가 직교(2D 투영 ortho2, 또는 projection: 'ortho')이면 절두체가 화면 비율로 잡혀 있다.
-      // 세로 폭(halfH)은 유지하고 가로 폭만 목표 비율로 다시 잡아 오프스크린 버퍼에서 늘어나지 않게 한다.
-      const halfH = (cam.top - cam.bottom) / 2, halfW = halfH * (width / height);
-      cam.left = -halfW; cam.right = halfW; cam.updateProjectionMatrix();
+    // 렌더가 던져도(컨텍스트 소실 · 오염된 캔버스) 화면이 렌더샷 상태로 남지 않게 되돌리기는 finally에 있다(리뷰 I-3).
+    try {
+      if (home) { const b = bounds(); camera.position.copy(shotPosition({ position: home, target: controls.target, center: toThree([b.center[0], b.center[1], 0]), extentMm: b.extent, aspect: width / height, screenAspect: (container.clientWidth || 1) / (container.clientHeight || 1), fov: camera.fov, height: activeFloor(store.get()).height, width: b.size[0], depth: b.size[1] })); }
+      renderer.setPixelRatio(1);
+      renderer.setSize(width, height, false);
+      if (cam.isPerspectiveCamera) { cam.aspect = width / height; cam.updateProjectionMatrix(); }
+      else if (cam.isOrthographicCamera) {
+        // 현재 카메라가 직교(2D 투영 ortho2, 또는 projection: 'ortho')이면 절두체가 화면 비율로 잡혀 있다.
+        // 세로 폭(halfH)은 유지하고 가로 폭만 목표 비율로 다시 잡아 오프스크린 버퍼에서 늘어나지 않게 한다.
+        const halfH = (cam.top - cam.bottom) / 2, halfW = halfH * (width / height);
+        cam.left = -halfW; cam.right = halfW; cam.updateProjectionMatrix();
+      }
+      renderer.render(scene, cam);
+      return renderer.domElement.toDataURL('image/png');
+    } finally {
+      if (home) camera.position.copy(home);   // 화면 카메라는 건드리지 않은 것으로 되돌린다
+      if (prevAspect !== null) { cam.aspect = prevAspect; cam.updateProjectionMatrix(); }
+      renderer.setPixelRatio(prevRatio);
+      renderer.setSize(prev.x, prev.y, false);
+      resize(); requestRender();             // 다음 프레임에 평소 상태로 되돌린다(직교 절두체도 여기서 다시 잡힌다)
     }
-    renderer.render(scene, cam);
-    const url = renderer.domElement.toDataURL('image/png');
-    if (home) camera.position.copy(home);   // 화면 카메라는 건드리지 않은 것으로 되돌린다
-    if (prevAspect !== null) { cam.aspect = prevAspect; cam.updateProjectionMatrix(); }
-    renderer.setPixelRatio(prevRatio);
-    renderer.setSize(prev.x, prev.y, false);
-    resize(); requestRender();               // 다음 프레임에 평소 상태로 되돌린다
-    return url;
   }
   function setMode(m, opts = {}) {
     ov.clearOrthoView(); // 모드 버튼을 누르면 투영에서 빠져나온다(하단 바 선택도 비운다)
