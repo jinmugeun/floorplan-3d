@@ -25,6 +25,11 @@ export function createStore(initial, { limit = 100 } = {}) {
     endTransaction: closeTransaction,
     cancelTransaction() { if (!tx) return; state = tx.snapshot; tx = null; notify(); },
     replace(next, { record: rec = true } = {}) { if (rec) record(); state = next; notify(); },
+    // 프로젝트 교체(샘플·템플릿·복원·새로 만들기·불러오기)는 **단계가 0개인 동작**이다(§17.3):
+    // 되돌릴 길은 되돌리기가 아니라 자동 저장본과 시작 화면이다. replace의 계약은 늘리지 않는다 —
+    // "기록하지 않는다"와 "앞의 기록을 버린다"는 뜻이 다르고, 둘을 옵션 하나로 묶으면 자동 저장
+    // 복원이 조용히 히스토리를 지우는 쪽으로 새기 쉽다. 부르는 쪽이 두 줄을 나란히 쓴다.
+    resetHistory() { tx = null; past.length = 0; future.length = 0; },
     // 열린 트랜잭션이 있으면 먼저 한 단계로 확정하고 나서 되돌린다(드래그 도중 undo → 드래그 시작점으로).
     undo() { closeTransaction(); if (!past.length) return false; future.push(state); state = past.pop(); notify(); return true; },
     redo() { closeTransaction(); if (!future.length) return false; past.push(state); state = future.pop(); notify(); return true; },

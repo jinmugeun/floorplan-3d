@@ -34,14 +34,14 @@ test('buildSampleProject yields 11 detected rooms with names, types and a sane t
   expect(f.walls.every(w => w.thickness === spec.thickness)).toBe(true);
 });
 
-test('loading the sample replaces the project and can be undone', () => {
+test('loading the sample replaces the project and leaves no undo step', () => {
   const store = createStore(createEmptyProject());
   loadSample(store);
   expect(activeFloor(store.get()).rooms).toHaveLength(11);
   expect(store.get().name).toBe(spec.name);
-  store.undo();
-  expect(activeFloor(store.get()).rooms).toHaveLength(0);
-  expect(activeFloor(store.get()).ducts).toHaveLength(0);
+  expect(store.canUndo()).toBe(false);            // §17.3: 프로젝트 교체는 되돌릴 단계가 아니다
+  expect(store.undo()).toBe(false);
+  expect(activeFloor(store.get()).rooms).toHaveLength(11);
 });
 
 test('every wall piece is axis aligned and no two pieces are duplicated', () => {
@@ -169,12 +169,13 @@ test('바닥 설비가 서로 겹치지 않고 샘플이 빠르게 만들어진�
   expect(performance.now() - t0).toBeLessThan(100);          // 시작 화면이 샘플을 즉시 띄운다
 });
 
-test('샘플 불러오기가 설비 39개·덕트 10개를 한 단계로 넣는다', () => {
+test('샘플 불러오기가 설비 39개·덕트 10개를 되돌릴 단계 없이 넣는다', () => {
   const store = createStore(createEmptyProject());
   loadSample(store);
   expect(activeFloor(store.get()).items).toHaveLength(39);
   expect(activeFloor(store.get()).ducts).toHaveLength(10);
+  expect(store.canUndo()).toBe(false);            // §17.3
   store.undo();
-  expect(activeFloor(store.get()).items).toHaveLength(0);
-  expect(activeFloor(store.get()).ducts).toHaveLength(0);
+  expect(activeFloor(store.get()).items).toHaveLength(39);
+  expect(activeFloor(store.get()).ducts).toHaveLength(10);
 });

@@ -136,6 +136,25 @@ describe('store', () => {
     s.dispatch(d => { d.n = 1; }); s.undo();
     expect(calls).toBe(2);
   });
+  // §17.3: 프로젝트를 갈아 끼우는 일은 **단계가 0개인 동작**이다 — 기록하지 않는 것만으로는
+  // 모자라고(앞에 쌓인 단계가 남아 Ctrl+Z가 옛 프로젝트로 돌아간다) 히스토리를 그 자리에서 비운다.
+  test('resetHistory는 열린 트랜잭션과 undo·redo 스택을 모두 비운다(상태는 그대로)', () => {
+    const s = createStore({ n: 0 });
+    s.dispatch(d => { d.n = 1; });
+    s.dispatch(d => { d.n = 2; });
+    s.undo();
+    expect(s.canUndo()).toBe(true);
+    expect(s.canRedo()).toBe(true);
+    s.beginTransaction();
+    s.dispatch(d => { d.n = 9; }, { record: false });
+    s.resetHistory();
+    expect(s.get().n).toBe(9);              // 상태는 건드리지 않는다
+    expect(s.canUndo()).toBe(false);
+    expect(s.canRedo()).toBe(false);
+    s.endTransaction();                     // 열린 트랜잭션도 비워졌으므로 단계가 생기지 않는다
+    expect(s.canUndo()).toBe(false);
+    expect(s.undo()).toBe(false);
+  });
 });
 
 describe('ui state', () => {

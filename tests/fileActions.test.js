@@ -111,3 +111,16 @@ test('불러오기를 확인하면 교체 전에 자동 저장하고, 취소하�
   expect(no.log).toEqual([]);                                 // 취소는 아무것도 저장하지 않는다
   expect(activeFloor(no.store.get()).walls).toHaveLength(4);
 });
+
+// §17.3: 불러오기도 같은 계약이다 — 이미 { record: false }였지만 앞에 쌓인 단계가 남아 있었다.
+test('파일을 열면 앞에 쌓인 되돌리기 단계도 사라진다', async () => {
+  const { store, acts } = setup();
+  addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  expect(store.canUndo()).toBe(true);
+  const src = createStore(createEmptyProject());
+  addWalls(src, rectWalls([0.5, 0.25], [2000.5, 1500.25], 150));
+  await acts.loadFile(fileOf(serializeProject(src.get())));
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+  expect(store.canUndo()).toBe(false);
+  expect(store.canRedo()).toBe(false);
+});

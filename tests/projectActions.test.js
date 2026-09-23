@@ -92,3 +92,30 @@ test('새로 만들기 뒤 표시는 "저장 이력 없음"이다("자동 저장
   expect(document.getElementById('savedAt').textContent).not.toContain('자동 저장됨');
   expect(d.isDirty()).toBe(false);
 });
+
+// §17.3(감사 §21): 샘플·복원·템플릿·새로 만들기 — 어느 경로로 프로젝트를 갈아 끼워도
+// 되돌리기 스택은 비어 있어야 한다. 네 경로를 한 표로 못 박는다.
+test('프로젝트를 갈아 끼우는 네 경로는 되돌릴 단계를 남기지 않는다', async () => {
+  const restored = createEmptyProject('복원본');
+  const a = setup({ dirty: false, restored });
+  const cases = [
+    ['sample', '[data-start="sample"]'],
+    ['restore', '[data-start="restore"]'],
+    ['template', '[data-template="builtin-studio"]'],
+  ];
+  for (const [name, sel] of cases) {
+    // 교체 전에 되돌릴 단계를 실제로 쌓아 둔다(이것이 남아 있으면 Ctrl+Z가 옛 도면으로 간다).
+    addWalls(a.store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+    expect(a.store.canUndo()).toBe(true);
+    a.showStart({ restore: restored });
+    document.querySelector(sel).click();
+    await flush();
+    expect([name, a.store.canUndo(), a.store.canRedo()]).toEqual([name, false, false]);
+    document.body.innerHTML = '';
+  }
+  // 새로 만들기는 작업 중이면 확인창을 지난다. dirty:false이므로 곧바로 비운다.
+  addWalls(a.store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+  await a.actions.newProject();
+  expect(a.store.canUndo()).toBe(false);
+  expect(a.store.canRedo()).toBe(false);
+});

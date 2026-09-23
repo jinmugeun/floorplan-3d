@@ -311,3 +311,19 @@ describe('마감재 오프셋·각도 칸도 같은 계약을 지킨다 (리뷰 
     expect(matIn(store).scale).toEqual([300, 300]);
   });
 });
+
+// §17.3: "한 동작 = 한 단계"의 예외가 아니라 **단계가 0개인 동작**이다. 여섯 칸 계약과 같은 자리에
+// 못 박아 둔다 — 이 파일이 되돌리기 불변식의 정본이다.
+describe('프로젝트 교체는 되돌릴 단계가 0개다 (§17.3)', () => {
+  test('샘플을 열면 히스토리가 비고 Ctrl+Z가 도면을 지우지 않는다', async () => {
+    const { loadSample } = await import('../src/samples/gangdang.js');
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0.5, 0.25], [4000.5, 3000.25], 200));
+    loadSample(store);
+    store.resetHistory();
+    expect(store.canUndo()).toBe(false);
+    expect(store.undo()).toBe(false);
+    expect(activeFloor(store.get()).rooms).toHaveLength(11);
+    expect(activeFloor(store.get()).items).toHaveLength(39);
+  });
+});
