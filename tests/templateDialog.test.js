@@ -8,6 +8,9 @@ import { productById } from '../src/products/catalog.js';
 import { openRoomTemplateDialog, placementMessage } from '../src/ui/templateDialog.js';
 import { updateRoom } from '../src/state/floorOps.js';
 import { createUiState } from '../src/state/uistate.js';
+import { ROOM_TEMPLATES, itemsInRoom } from '../src/templates/roomTemplates.js';
+import { previewShapes, drawPreview, PREVIEW_PX } from '../src/ui/templatePreview.js';
+import { createPropsPanel } from '../src/ui/propsPanel.js';
 
 // items를 주면 대화상자를 열기 **전에** 방 안쪽(중심선 6000.5×4000.25의 가운데)에 놓는다:
 // killCount()가 세는 대상이라 경고 줄("기존 제품 N개를 지웁니다")이 렌더에 나타난다.
@@ -115,18 +118,25 @@ describe('템플릿 대화상자', () => {
     expect(min.value).toBe('');
     expect(max.value).toBe('');
     expect(a.root.querySelector('[name="roomType"]').value).toBe('');
-    expect(a.root.querySelectorAll('[data-template]').length).toBeGreaterThanOrEqual(narrowed);
+    expect(narrowed).toBeLessThan(ROOM_TEMPLATES.length);            // 기본 필터가 실제로 좁혔다
+    expect(a.root.querySelectorAll('[data-template]').length).toBe(ROOM_TEMPLATES.length);   // 전체로 푼다(m-5)
   });
 
-  test('적용하면 그 방이 선택되고 포커스가 속성 패널로 간다(감사 §17)', () => {
+  // 리뷰 I-3·m-3: 예전 테스트는 버튼 하나만 든 가짜 #props를 심어 "#props의 첫 포커스 요소는
+  // 늘 #floorBar의 층 select다"라는 사실을 구조적으로 못 잡았다. 여기서는 **실제 패널**을 띄운다.
+  test('적용하면 그 방이 선택되고 포커스가 층 select가 아닌 공간 이름 칸으로 간다(감사 §17 · 리뷰 I-3)', () => {
+    const a = setup();
     const props = document.createElement('div');
     props.id = 'props';
-    props.innerHTML = '<button type="button" name="delete">방 삭제</button>';
     document.body.appendChild(props);
-    const a = setup();
+    createPropsPanel(props, a.store, a.ui);
+    expect(props.querySelector('select[name="floorSelect"]')).not.toBeNull();   // 첫 포커스 요소가 그것이다
     a.root.querySelector('[data-template] [name="add"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(a.ui.get().selection).toEqual({ type: 'room', id: a.roomId });
-    expect(document.activeElement).toBe(props.querySelector('[name="delete"]'));
+    // 층 select에 앉으면 방향키 한 번으로 활성 층이 조용히 바뀐다 — 거기 있으면 안 된다.
+    expect(document.activeElement).not.toBe(props.querySelector('select[name="floorSelect"]'));
+    expect(document.activeElement).toBe(props.querySelector('input[name="name"]'));
+    expect(a.ui.get().focusField).toBeNull();          // propsPanel이 한 번 쓰고 비운다
     props.remove();
   });
 
@@ -151,4 +161,50 @@ test('적용 뒤 공간 타입이 템플릿의 roomType으로 채워진다', () 
   card.querySelector('[name="apply"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   expect(activeFloor(store.get()).rooms[0].type).toBe('cook');
   dlg.close();
+});
+
+// 리뷰 I-2: 미리보기가 avoid 없이 그려져 잠긴 제품이 있는 방에서 [적용] 결과와 1.5 m씩 갈라졌다.
+// jsdom은 2D 컨텍스트를 주지 않아 drawPreview가 조용히 지나간다 — 기록용 ctx를 끼워 카드가 실제로
+// 그린 도형을 꺼내고, [적용] 뒤 방에 남은 제품들로 같은 그림을 그려 **연산 단위로** 비교한다.
+function recordPreviews() {
+  const seen = new Map();                                   // canvas.dataset.tpl → 연산 문자열[]
+  const orig = HTMLCanvasElement.prototype.getContext;
+  const n = v => Math.round(v * 100) / 100;
+  HTMLCanvasElement.prototype.getContext = function () {
+    const ops = [];
+    seen.set(this.dataset.tpl ?? '', ops);
+    return {
+      clearRect() {}, beginPath() {}, closePath() {}, fill() {}, stroke() {}, strokeRect() {},
+      moveTo: (x, y) => ops.push(`M ${n(x)} ${n(y)}`),
+      lineTo: (x, y) => ops.push(`L ${n(x)} ${n(y)}`),
+      fillRect: (x, y, w, h) => ops.push(`R ${n(x)} ${n(y)} ${n(w)} ${n(h)}`),
+    };
+  };
+  return { seen, restore: () => { HTMLCanvasElement.prototype.getContext = orig; } };
+}
+
+test('미리보기가 잠긴 제품을 피해 그려 [적용] 결과와 같다(리뷰 I-2)', () => {
+  const rec = recordPreviews();
+  try {
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0, 0], [6000.5, 4000.25], 200));
+    const roomId = activeFloor(store.get()).rooms[0].id;
+    updateRoom(store, roomId, { type: 'cook' });
+    // 잠긴 제품은 [적용]이 남기므로 배치가 그것을 피해 밀린다 — 예전 미리보기는 빈 방에 그렸다.
+    addItem(store, createItem(productById('worktable-1800'), { pos: [1260, 860], locked: true }));
+    const dlg = openRoomTemplateDialog({ store, roomId });
+    const root = document.querySelector('.modal.templates');
+    const preview = rec.seen.get('cook-basic');
+    expect(preview?.length).toBeGreaterThan(0);              // 기록용 ctx로 실제로 그렸다
+    expect(preview.some(op => op.startsWith('R '))).toBe(true);
+
+    root.querySelector('[data-template="cook-basic"] [name="apply"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const f = activeFloor(store.get());
+    const room = f.rooms.find(r => r.id === roomId);
+    const after = document.createElement('canvas');
+    after.dataset.tpl = 'after';
+    drawPreview(after, previewShapes(room, itemsInRoom(f, room), { size: PREVIEW_PX }));
+    expect(rec.seen.get('after')).toEqual(preview);         // 카드 그림 = [적용]이 만든 방
+    dlg.close();
+  } finally { rec.restore(); }
 });

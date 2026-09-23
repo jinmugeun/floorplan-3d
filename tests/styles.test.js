@@ -177,3 +177,18 @@ test('층 바는 아래 간격만 갖고 패널 맨 위에 붙어 있다(sticky)
   expect(bar).toMatch(/background:\s*var\(--panel\)/);     // 불투명해야 지나가는 본문이 비치지 않는다
   expect(CSS).toMatch(/#right\s*\{[^}]*overflow:\s*auto/); // sticky가 걸리는 스크롤 컨테이너
 });
+
+// 리뷰 I-1: `.tpl-card canvas[data-tpl]`가 width/height를 선언하지 않아 `.modal canvas { width: 100% }`가
+// 그대로 먹었다 — 특이도가 높아도 **선언하지 않은 속성은 이길 수 없다**(브라우저 측정 212×212 px).
+// 96 px 비트맵이 2.2배로 늘어나 1 px 외곽선이 뭉개지던 자리다. canvas.swatch(48 px)의 선례를 따른다.
+test('템플릿 미리보기 캔버스는 화면에서도 96 px 정사각이다(리뷰 I-1)', () => {
+  const box = rule('.tpl-card canvas[data-tpl]');
+  expect(box).toMatch(/width:\s*96px/);
+  expect(box).toMatch(/height:\s*96px/);
+  expect(box).toMatch(/flex:\s*0 0 auto/);      // .tpl-card가 flex 컬럼이라 이것이 없으면 늘어난다
+  expect(box).toMatch(/cursor:\s*default/);     // .modal canvas의 crosshair는 "여기 그릴 수 있다"는 거짓말이다
+  // 이겨야 하는 상대가 실제로 폭 100%를 주는 규칙이라는 것도 함께 못 박는다(선례: canvas.swatch).
+  expect(CSS).toMatch(/\.modal canvas \{[^}]*width:\s*100%/);
+  // m-1: `:not(.primary)`만으로는 .danger(0,1,0)의 빨간 테두리까지 덮어 [삭제]가 [이름 변경]과 같아진다.
+  expect(CSS).toContain('.start-card.tpl.user .row button:not(.primary):not(.danger)');
+});

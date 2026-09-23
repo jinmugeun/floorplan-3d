@@ -1,5 +1,5 @@
 // 방 하나에 템플릿을 적용하는 대화상자(오늘의집 "템플릿 적용하기").
-import { ROOM_TEMPLATES, filterTemplates, applyRoomTemplate, placeTemplate, templateById, replaceableInRoom } from '../templates/roomTemplates.js';
+import { ROOM_TEMPLATES, filterTemplates, applyRoomTemplate, placeTemplate, templateById, replaceableInRoom, itemsInRoom } from '../templates/roomTemplates.js';
 import { ROOM_TYPES } from './propsPanel.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
@@ -30,8 +30,7 @@ export function openRoomTemplateDialog({ store, ui = null, roomId, onClose = () 
   // 자리다. 면적 두 칸에 방 면적을 넣으면 filterTemplates의 "범위가 겹치면 통과" 규칙이
   // 그 면적을 담는 템플릿만 남긴다. [필터 초기화]가 이 기본값을 푼다.
   const area = Math.round((room.area ?? 0) * 10) / 10;
-  const initial = { roomType: room.type && room.type !== 'none' ? room.type : '', use: '', minArea: area || '', maxArea: area || '', budget: '' };
-  const st = { ...initial };
+  const st = { roomType: room.type && room.type !== 'none' ? room.type : '', use: '', minArea: area || '', maxArea: area || '', budget: '' };
 
   const root = document.createElement('div');
   root.className = 'modal templates';
@@ -52,27 +51,35 @@ export function openRoomTemplateDialog({ store, ui = null, roomId, onClose = () 
   const part = n => root.querySelector(`[data-part="${n}"]`);
   const nOrNull = v => (String(v).trim() === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
-  // 이 방에 그 템플릿을 놓아 보고 결과를 축소 평면으로 그린다(§16.10). 실제 배치 함수를 쓰므로
-  // 카드가 보여 주는 것이 곧 [적용]의 결과다(그림과 결과가 갈라질 자리가 없다).
-  const shapesFor = id => {
-    const f = activeFloor(store.get());
-    const r = f.rooms.find(x => x.id === roomId);
-    const t = templateById(id);
-    if (!r || !t) return null;
-    return previewShapes(r, placeTemplate(f, r, t), { size: PREVIEW_PX });
+  // [적용]이 남길 것(문·창·개구부와 잠긴 제품)과 지울 개수를 한 계산에서 낸다 —
+  // applyRoomTemplate과 같은 replaceableInRoom 하나를 지나므로 경고 줄이 세는 수, 미리보기가
+  // 피하는 것, 실제로 지워지는 것이 갈라질 자리가 없다.
+  const applyPlan = () => {
+    const floor = activeFloor(store.get());
+    const r = floor.rooms.find(x => x.id === roomId) ?? null;
+    if (!r) return { floor, room: null, keep: [], kill: 0 };
+    const kill = new Set(replaceableInRoom(floor, r).map(it => it.id));
+    return { floor, room: r, keep: itemsInRoom(floor, r).filter(it => !kill.has(it.id)), kill: kill.size };
   };
-  // [적용]이 지울 제품 수(문·창·개구부와 잠긴 제품은 남는다 — applyRoomTemplate과 같은 규칙).
-  const killCount = () => {
-    const f = activeFloor(store.get());
-    const r = f.rooms.find(x => x.id === roomId);
-    return r ? replaceableInRoom(f, r).length : 0;
+  let plan = { floor: null, room: null, keep: [], kill: 0 };   // 이번 렌더가 본 계획(render가 채운다)
+  // 이 방에 그 템플릿을 놓아 보고 결과를 축소 평면으로 그린다(§16.10). [적용]과 **같은 avoid**를
+  // 주고 남을 것도 함께 그리므로 카드가 보여 주는 것이 곧 [적용]의 결과다(리뷰 I-2: avoid를 비워
+  // 두면 잠긴 제품이 있는 방에서 그림이 1.5 m씩 밀렸다). 다만 벽 제품은 applyRoomTemplate의
+  // seatCopies에서 t가 겹치면 떨어지므로 그림에만 남을 수 있고, [기존 제품 유지하고 추가]는
+  // 아무것도 지우지 않아 결과가 그림보다 붐빈다 — 그림은 [적용] 기준이다.
+  const shapesFor = id => {
+    const t = templateById(id);
+    if (!plan.room || !t) return null;
+    const made = placeTemplate(plan.floor, plan.room, t, { avoid: plan.keep });
+    return previewShapes(plan.room, [...plan.keep, ...made], { size: PREVIEW_PX });
   };
   function render() {
     const list = filterTemplates(ROOM_TEMPLATES, {
       roomType: st.roomType || null, use: st.use || null,
       minArea: nOrNull(st.minArea), maxArea: nOrNull(st.maxArea), budget: nOrNull(st.budget),
     });
-    const kill = killCount();
+    plan = applyPlan();
+    const kill = plan.kill;
     // 파괴적인 쪽을 보조 색으로 내리고(§16.10 · 감사 §15) 무엇을 잃는지 한 줄로 먼저 말한다.
     const warn = kill > 0 ? `<span class="error">${TEMPLATE_REPLACE_WARN(kill)}</span>` : '';
     part('cards').innerHTML = list.length ? list.map(t => `<div class="tpl-card" data-template="${t.id}">
@@ -107,10 +114,12 @@ export function openRoomTemplateDialog({ store, ui = null, roomId, onClose = () 
     const { placed, skipped, moved } = applyRoomTemplate(store, roomId, card.dataset.template, { replace: ev.target.name === 'apply' });
     toast(placementMessage(placed.length, skipped, moved));
     close();
-    // 포커스가 BODY로 떨어지던 자리다(감사 §17): 그 방을 고르고 속성 패널로 들여보낸다.
+    // 포커스가 BODY로 떨어지던 자리다(감사 §17): 그 방을 고르고 속성 패널의 공간 이름 칸으로
+    // 들여보낸다. #props의 첫 포커스 요소는 늘 #floorBar의 층 select라 그것을 id로 더듬으면
+    // 방금 템플릿을 적용한 사용자가 ↓ 한 번으로 층을 바꾼다(리뷰 I-3). 인가된 경로는
+    // ui.focusField다 — propsPanel이 렌더 뒤 [name="name"]을 잡아 주고 재렌더에도 살아남는다.
     // 대화상자를 연 컨텍스트 메뉴 항목은 이미 사라져 reopenOpener가 되돌릴 자리가 없다.
-    ui?.set?.({ selection: { type: 'room', id: roomId } });
-    document.getElementById('props')?.querySelector('select, input, button')?.focus();
+    ui?.set?.({ selection: { type: 'room', id: roomId }, focusField: 'name' });
   });
   const onEdit = ev => {
     const name = ev.target.name;
