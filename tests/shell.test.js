@@ -996,7 +996,10 @@ test('옵션 바의 치수 칸이 도구와 이어진다', () => {
   expect(calls).toContain('render');
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   expect(committed).toBe(1);
-  // 캔버스에서 타이핑한 값은 refreshTool()로 칸에 되돌아온다.
+  // 캔버스에서 타이핑한 값은 refreshTool()로 칸에 되돌아온다. 칸이 처음 생긴 순간 포커스를 받으므로
+  // (§17.8(1)) 캔버스로 타이핑하려면 먼저 캔버스를 클릭한 상태여야 한다(§17.8(2)가 포커스를 돌려준다) —
+  // 포커스가 칸에 남아 있으면 syncDimBar가 그 칸을 건너뛴다(타이핑 중인 글자를 지우지 않는 규칙).
+  root.querySelector('#c2d').dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
   typed = '5000';
   shell.refreshTool();
   expect(root.querySelector('#optionDims [name="dim:len"]').value).toBe('5000');
@@ -1016,6 +1019,29 @@ function dimStub() {
   };
   return s;
 }
+
+// §17.8(1)(2): 첫 점을 찍으면 치수 칸이 포커스를 받고, 다음 점을 클릭하면 캔버스로 돌아온다.
+// 돌아오지 않으면 캔버스의 숫자·[Enter]·[Esc] 경로가 칸에 갇혀 죽는다.
+test('치수 칸은 처음 생길 때 한 번 포커스를 받고 캔버스 클릭이 풀어 준다', () => {
+  document.activeElement?.blur?.();                      // 같은 jsdom 문서다: 앞선 테스트가 남긴 포커스를 치운다
+  const { shell, root } = mountShell();
+  const s = dimStub();
+  let drawing = false;
+  const tool = { ...s.tool, dims: () => (drawing ? { fields: [{ key: 'len', text: '3000', mm: 3000, active: true }] } : null) };
+  shell.setOptionBar(tool);
+  expect(root.querySelector('#optionDims [name="dim:len"]')).toBeNull();
+  drawing = true;
+  shell.refreshTool();                                   // 첫 점을 찍은 프레임(view2d의 onHint가 부른다)
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  expect(document.activeElement).toBe(el);
+  el.blur();
+  shell.refreshTool();                                   // 마우스를 움직이는 다음 프레임
+  expect(document.activeElement).not.toBe(el);           // 다시 훔치지 않는다
+  el.focus();
+  root.querySelector('#c2d').dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }));
+  expect(document.activeElement).not.toBe(el);           // 다음 점 클릭 = 포커스 복귀
+  shell.destroy();
+});
 
 // 리뷰 C-1: [Enter] 확정 뒤에도 포커스가 칸에 남아(셸이 preventDefault를 한다) syncDimBar가 그 칸을
 // 건너뛰므로 낡은 글자가 남았다 → 이어 타이핑한 숫자가 뒤에 붙어 45003000(45 m 벽)이 놓였다.

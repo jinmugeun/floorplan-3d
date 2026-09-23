@@ -1,7 +1,7 @@
 import { activeFloor } from '../state/schema.js';
 import { toast } from './toast.js';
 import { createShellPopovers } from './shellPopovers.js';
-import { optionBarHtml, applyOptionInput, syncDimBar } from './optionBar.js';
+import { optionBarHtml, applyOptionInput, syncDimBar, autoFocusDim } from './optionBar.js';
 import { loadPanelWidths, savePanelWidth, fitPanelWidths, autoCollapse, applyPanelWidths, createSplitter, togglePanel, createResizeWatch } from './layout.js';
 import { trackFields, isDuplicateCommit } from './fieldUtils.js';
 import { shellHtml } from './shellHtml.js';
@@ -162,6 +162,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   const syncDims = () => {
     syncDimBar(els.optionBar, currentTool, { units: units() });
     els.optionBar.hidden = !currentTool?.dims?.() && !els.optionBar.querySelector('input, select');
+    // 칸이 처음 생긴 프레임에만 한 번 포커스를 준다(§17.8(1)). hidden을 먼저 풀어야 focus가 먹는다.
+    autoFocusDim(els.optionBar, currentTool);
   };
   // 배너(문구 우선순위·드래그 중 행 고정)는 ui/banner.js 한 곳에 있다: 이 파일이 300줄 규칙에 닿아
   // "더하기 전에 나눈다"대로 덩어리째 옮겼다. 셸은 구독에서 render()만 부른다.
@@ -183,6 +185,11 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   // 칸이 곧 활성 칸이다(캔버스의 [Tab]과 같은 상태를 가리킨다 — §16.7).
   els.optionBar.addEventListener('input', ev => { const k = dimKey(ev.target); if (k && currentTool?.setDim?.(k, ev.target.value)) onToolChange(); });
   els.optionBar.addEventListener('focusin', ev => { const k = dimKey(ev.target); if (k) { currentTool?.focusDim?.(k); syncDims(); onToolChange(); } });
+  // 다음 점을 클릭하는 순간 포커스를 캔버스 쪽으로 돌려준다(§17.8(2) · 감사 §57): 치수 칸이 키를
+  // 계속 먹으면 캔버스의 숫자·[Enter]·[Esc] 경로가 죽는다. 캡처 단계라 도구의 pointerdown보다
+  // 먼저 돌고, 칸이 비워지므로 이어지는 syncDims의 autoFocusDim도 "빈 상태 → 하나" 조건에
+  // 걸리지 않는다(한 번이 지켜진다).
+  els.canvas2d.addEventListener('pointerdown', () => { const a = document.activeElement; if (dimKey(a)) a.blur(); }, true);
   // 길이 입력은 change뿐 아니라 [Enter]로도 반영한다(값을 고치고 Enter만 누르면 그대로였다 — §12.5).
   // 같은 경로를 쓰도록 change 이벤트를 직접 쏜다(ft·in 되돌리기 규칙까지 그대로 적용된다). 뒤이어 오는
   // 네이티브 change는 isDuplicateCommit이 한 번 삼킨다(§16.1). select는 INPUT이 아니라 애초에 걸리지

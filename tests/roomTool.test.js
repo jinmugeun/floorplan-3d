@@ -160,3 +160,18 @@ test('같은 사각형을 다시 확정해도 빈 되돌림 단계가 생기지 
   expect(store.canUndo()).toBe(undoable);
   expect(activeFloor(store.get()).walls).toHaveLength(4);
 });
+
+// §17.8(3): 방 도구의 캔버스 [Enter]도 칸 경로(commitDims)와 같은 확정을 쓴다 — 두 입구가 한 함수다.
+test('방 도구의 캔버스 [Enter]는 commitDims와 같은 사각형을 놓는다', () => {
+  const store = createStore(createEmptyProject());
+  const t = createRoomTool({ store, onDone() {} });
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([3000.5, 2000.25]);
+  expect(t.onKey({ key: 'Enter', preventDefault() {} })).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(4);
+  expect(t.getPreview()).toBeNull();                       // 확정하면 도구가 비워진다
+  expect(store.undo()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  // 그리던 사각형이 없으면 [Enter]를 소비하지 않는다(키맵이 다른 쓰임을 갖는다).
+  expect(t.onKey({ key: 'Enter', preventDefault() {} })).toBe(false);
+});

@@ -202,3 +202,15 @@ test('소수 좌표 보조선 옆을 클릭해도 하나로 남는다(리뷰 M-1
   expect(activeFloor(store.get()).guides).toHaveLength(1);
   expect(activeFloor(store.get()).guides[0].pos).toBe(1500.5);   // 원래 소수 좌표가 그대로다
 });
+
+// §17.8(3): 보조선의 캔버스 [Enter]도 칸 경로와 같다 — 글자를 치지 않아도 보이는 좌표로 확정한다.
+test('보조선의 캔버스 [Enter]는 보이는 좌표로 확정하고, 확정할 값이 없으면 소비하지 않는다', () => {
+  const store = createStore(createEmptyProject());
+  const t = createGuideTool({ store, view: fakeView });
+  expect(t.onKey(key('Enter'))).toBe(false);          // 커서도, 놓은 보조선도 없다
+  t.onPointerMove([1500.5, 800.25]);
+  expect(t.onKey(key('Enter'))).toBe(true);
+  expect(activeFloor(store.get()).guides).toEqual([{ id: expect.any(String), type: 'v', pos: 1501 }]);
+  expect(store.undo()).toBe(true);
+  expect(activeFloor(store.get()).guides).toHaveLength(0);
+});

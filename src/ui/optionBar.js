@@ -157,3 +157,29 @@ export function syncDimBar(root, tool, { units = 'mm' } = {}) {
   }
   return true;
 }
+
+// 칸 수의 "직전 프레임" 기억. root(=옵션 바 노드)마다 따로 센다: 셸이 여러 개 떠 있는 테스트에서
+// 래치가 섞이지 않게 한다. WeakMap이라 노드가 사라지면 함께 사라진다.
+const dimCount = new WeakMap();
+
+// 그리는 동안 치수 칸이 포커스를 갖는다(§17.8(1) · 감사 §57). 주는 순간은 하나다:
+// **칸이 0개에서 하나 이상으로 바뀐 프레임**(= 첫 점을 찍어 칸이 처음 생긴 순간).
+// 그리고 사람이 이미 어떤 입력 칸에 글자를 치고 있으면 훔치지 않는다.
+// 다음 점을 클릭하면 셸이 blur하고(§17.8(2)) 그 뒤 프레임은 이 조건에 걸리지 않으므로
+// 마우스를 움직이는 내내 포커스를 다시 가져가지 않는다.
+export function autoFocusDim(root, tool, doc = document) {
+  const host = root?.querySelector?.('#optionDims');
+  if (!host) return false;
+  const fields = tool?.dims?.()?.fields ?? [];
+  const before = dimCount.get(root) ?? 0;
+  dimCount.set(root, fields.length);
+  if (!fields.length || before > 0) return false;
+  const active = doc?.activeElement;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA')) return false;
+  const f = fields.find(x => x.active) ?? fields[0];
+  const el = host.querySelector(`[name="dim:${f.key}"]`);
+  if (!el) return false;
+  el.focus();
+  el.select?.();          // 첫 숫자가 기존 값을 덮어쓴다(이어 붙지 않게 — 리뷰 C-1과 같은 이유)
+  return true;
+}

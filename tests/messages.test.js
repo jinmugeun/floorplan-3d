@@ -7,6 +7,7 @@ import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WH
 import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from '../src/ui/messages.js';
 import { FIRST_ROOM_HINT, WALL_ITEM_SLIDE_HINT } from '../src/ui/messages.js';
 import { DUCT_DRAWN, DUCT_NO_SYSTEM } from '../src/ui/messages.js';
+import { DRAW_CHAIN_HINT, TYPED_DIM_HINT } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -180,4 +181,12 @@ test('덕트 완성·계통 경고 문구는 §17.9가 적은 글자 그대로�
 
 test('벽 부착 제품 안내는 §17.5가 적은 글자 그대로다', () => {
   expect(WALL_ITEM_SLIDE_HINT).toBe('벽에 붙는 제품입니다 — 벽을 따라서만 움직입니다 (3D에서는 주황 핸들)');
+});
+
+// §17.8(4) · 감사 §52: 배너 한 줄에 [Enter]가 두 번 나오고 뜻이 달랐다.
+test('그리기 배너의 [Enter]는 한 번이고 [Esc]는 "그리기 끝"이다', () => {
+  expect(DRAW_CHAIN_HINT).toBe('다음 점을 클릭 · 길이를 타이핑하고 [Enter] 확정 · [Esc] 그리기 끝');
+  expect(DRAW_CHAIN_HINT).toContain(TYPED_DIM_HINT);                 // 타이핑 안내는 한 곳에서 온다
+  expect(DRAW_CHAIN_HINT.match(/\[Enter\]/g)).toHaveLength(1);
+  expect(DRAW_CHAIN_HINT).not.toContain('취소');                      // 놓인 구간을 지우지 않는다
 });

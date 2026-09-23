@@ -61,9 +61,21 @@ export function createGuideTool({ store, view, opts: given = null }) {
     // 컨트롤러 결정을 같은 UI의 이 칸만 어기고 있었다 — typed가 비면 onKey가 false를 돌려주고
     // 셸이 아무것도 하지 않아, 늘 좌표가 적혀 있는 칸이 §16.5가 없애기로 한 죽은 입구가 됐다.
     // setPos가 같은 축·같은 좌표의 보조선을 이미 집어 가므로 빈 되돌림 단계도 생기지 않는다.
+    // §17.8(3)부터 캔버스 [Enter]도 이 함수를 지난다: onKey를 되부르지 않도록 파싱을 여기로 옮겼다.
+    // 타이핑한 글자가 있으면 커서가 없어도(칸에 직접 좌표를 넣은 경로) 그 값으로 확정한다 —
+    // dims()를 먼저 요구하면 그 경로가 죽는다(리뷰 I-3의 "놓기 전 확정"이 그 경로다).
     commitDims() {
-      if (typed === '') { const d = this.dims(); if (!d) return false; setPos(d.fields[0].mm); return true; }
-      return this.onKey({ key: 'Enter', preventDefault() {} });
+      if (typed !== '') {
+        const v = parseLen(typed, units());
+        typed = '';
+        if (v === null || !Number.isFinite(v)) return true;   // 읽을 수 없는 입력은 버린다(칸은 모델 값으로 돌아온다)
+        setPos(Math.round(v));
+        return true;
+      }
+      const d = this.dims();
+      if (!d) return false;                                 // 커서도, 놓은 보조선도 없으면 확정할 값이 없다
+      setPos(d.fields[0].mm);
+      return true;
     },
     onPointerDown(p0) {
       // 지우기는 스냅 **전** 원좌표로 판정한다(리뷰 C-1): 스냅이 먼저 붙으면 거리가 0이 되어 히트 영역이
@@ -85,13 +97,7 @@ export function createGuideTool({ store, view, opts: given = null }) {
       // 음수 좌표는 어느 단위에서나 있으므로 '-'는 따로 통과시킨다.
       if (ev.key === '-' || typedChar(units()).test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
-      if (ev.key === 'Enter' && typed) {
-        const v = parseLen(typed, units());
-        typed = '';
-        if (v === null || !Number.isFinite(v)) return true;   // 읽을 수 없는 입력은 버린다(칸은 모델 값으로 돌아온다)
-        setPos(Math.round(v));
-        return true;
-      }
+      if (ev.key === 'Enter') return this.commitDims();       // §17.8(3): 캔버스와 칸이 한 함수다
       return false;
     },
     draw(ctx, v) { if (typed) v.label(`${typed}|`, v.toWorld([ctx.canvas.clientWidth / 2, 40]), { bg: '#fff', color: v.COLORS.dim }); drawSnapMark(ctx, v, this.getSnap()); },

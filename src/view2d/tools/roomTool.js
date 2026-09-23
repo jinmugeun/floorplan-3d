@@ -48,7 +48,8 @@ export function createRoomTool({ store, view = null, onDone = () => {}, opts: gi
       if (typedChar(store.get().units).test(ev.key)) { typed[typed.field] += ev.key; return true; }
       if (ev.key === 'Backspace') { typed[typed.field] = typed[typed.field].slice(0, -1); return true; }
       if (ev.key === 'Tab') { ev.preventDefault(); typed.field = typed.field === 'w' ? 'h' : 'w'; return true; }
-      if (ev.key === 'Enter') { commit(measured().end); return true; }
+      // §17.8(3): 캔버스와 칸이 같은 확정을 쓴다(방 도구는 체인이 없어 확정이 곧 완료다).
+      if (ev.key === 'Enter') return this.commitDims();
       return false;
     },
     getPreview() { if (!start) return null; const d = measured(); return { start, end: d.end, w: d.w, h: d.h, typed: { ...typed } }; },

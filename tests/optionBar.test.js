@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, test, expect } from 'vitest';
-import { optionBarHtml, applyOptionInput, dimBarHtml, dimBarSignature, syncDimBar, OPTION_LABELS, OPTION_TITLES, OPTION_RANGE, rangeOf, DIM_LABELS, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
+import { optionBarHtml, applyOptionInput, dimBarHtml, dimBarSignature, syncDimBar, autoFocusDim, OPTION_LABELS, OPTION_TITLES, OPTION_RANGE, rangeOf, DIM_LABELS, LEN_OPTS, unitLabel } from '../src/ui/optionBar.js';
 import { DUCT_RANGE } from '../src/state/ductSchema.js';
 import { fmtLen } from '../src/util/units.js';
 
@@ -246,5 +246,45 @@ describe('옵션 바의 범위·되돌림 계약', () => {
     const html = dimBarHtml(guide, { units: 'ftin' });
     expect(html).toContain('data-mm="1219"');
     expect(html).toContain('좌표 (ft·in)');
+  });
+});
+
+
+// §17.8(1): 그리는 동안 치수 칸이 포커스를 갖는다(오늘의집 규칙) — 칸이 **처음 생긴 프레임에만**
+// 한 번 준다. 그리는 내내 매 프레임 훔치면 캔버스의 숫자·[Esc] 경로가 죽는다.
+describe('그리는 동안 치수 칸 자동 포커스', () => {
+  const mount = () => { const d = document.createElement('div'); document.body.appendChild(d); d.innerHTML = '<span id="optionDims"></span>'; return d; };
+  const toolWith = fields => ({ name: 'wall', opts: {}, dims: () => (fields ? { fields } : null) });
+  const len = (text = '3000') => [{ key: 'len', text, mm: 3000, active: true }];
+
+  test('칸이 0개에서 1개 이상이 된 프레임에만 포커스를 준다', () => {
+    const root = mount();
+    const empty = toolWith(null), drawing = toolWith(len());
+    syncDimBar(root, empty, { units: 'mm' });
+    expect(autoFocusDim(root, empty)).toBe(false);            // 칸이 없다
+    syncDimBar(root, drawing, { units: 'mm' });
+    expect(autoFocusDim(root, drawing)).toBe(true);
+    const el = root.querySelector('[name="dim:len"]');
+    expect(document.activeElement).toBe(el);
+    el.blur();
+    expect(autoFocusDim(root, drawing)).toBe(false);           // 같은 그리기 동안에는 다시 훔치지 않는다
+    expect(document.activeElement).not.toBe(el);
+    expect(autoFocusDim(document.createElement('div'), drawing)).toBe(false);   // #optionDims가 없으면 아무 일도 없다
+  });
+
+  test('입력 칸에 포커스가 있으면 훔치지 않고, 그렇지 않으면 활성 칸을 고른다', () => {
+    const w = { name: 'room', opts: {}, dims: () => ({ fields: [{ key: 'w', text: '1000', mm: 1000, active: false }, { key: 'h', text: '2000', mm: 2000, active: true }] }) };
+    const root = mount();
+    const other = document.createElement('input');
+    document.body.appendChild(other);
+    other.focus();
+    syncDimBar(root, w, { units: 'mm' });
+    expect(autoFocusDim(root, w)).toBe(false);                 // 사람이 다른 칸에 글자를 치는 중이다
+    expect(document.activeElement).toBe(other);
+    other.blur();
+    const root2 = mount();                                     // 래치는 root마다 따로 센다
+    syncDimBar(root2, w, { units: 'mm' });
+    expect(autoFocusDim(root2, w)).toBe(true);
+    expect(document.activeElement.name).toBe('dim:h');          // 활성 칸(typed.field)이 곧 포커스다
   });
 });

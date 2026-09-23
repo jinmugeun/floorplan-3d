@@ -5,7 +5,7 @@ import { snapPoint, tolMm } from '../../geom/snap.js';
 import { drawSnapMark } from '../snapMarks.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
 import { fmtLen, parseLen, typedChar } from '../../util/units.js';
-import { TYPED_DIM_HINT } from '../../ui/messages.js';
+import { DRAW_CHAIN_HINT } from '../../ui/messages.js';
 
 export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
 
@@ -28,10 +28,22 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
     return store.get() !== before;
   };
   const finish = () => { const had = points.length > 0; reset(); if (had) onDone(); return had; };
+  // 타이핑한 길이로 한 구간을 확정한다(§17.8). 읽을 수 없는 값(파싱 실패·0 이하)은 버리지 않고
+  // 그대로 두어 사용자가 고칠 수 있게 하고, [Enter]는 먹은 것으로 친다(체인을 끝내지 않는다).
+  const commitTyped = () => {
+    const len = parseLen(typed, store.get().units);
+    if (len != null && len > 0) {
+      const d = norm(sub(cursor, last()));
+      const e = add(last(), mul(d, len));
+      if (addSegment(last(), e)) points.push(e);
+      typed = '';
+    }
+    return true;
+  };
   return {
     name: 'wall', opts,
     // 단계 안내(§14.7).
-    get hint() { return last() ? `다음 점을 클릭 · ${TYPED_DIM_HINT} · [Enter] 완료 · [Esc] 취소` : '첫 점을 클릭하세요 (1/2)'; },
+    get hint() { return last() ? DRAW_CHAIN_HINT : '첫 점을 클릭하세요 (1/2)'; },
     onPointerDown(p) {
       const r = snap(p); cursor = r.point; guides = r.guides; hit = r.hit;
       // 고리 닫기 판정도 같은 허용치를 쓴다(§16.6: 확대하면 좁아진다 — 예전에는 고정 150 mm였다).
@@ -47,15 +59,9 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
       if (!last()) return false;
       if (typedChar(store.get().units).test(ev.key)) { typed += ev.key; return true; }
       if (ev.key === 'Backspace') { typed = typed.slice(0, -1); return true; }
-      if (ev.key === 'Enter') {
-        if (typed) {
-          const len = parseLen(typed, store.get().units);
-          if (len != null && len > 0) { const d = norm(sub(cursor, last())); const e = add(last(), mul(d, len)); if (addSegment(last(), e)) points.push(e); typed = ''; }
-          // 파싱 실패(null) 또는 0 이하면 Enter를 무시한다 — typed는 그대로 두고 사용자가 고칠 수 있게 한다.
-        }
-        else finish();
-        return true;
-      }
+      // §17.8(3): 캔버스의 [Enter]도 칸의 [Enter]와 같은 일을 한다 — 보이는 값을 확정하고,
+      // 확정할 것이 없을 때(커서가 마지막 점 위) 체인을 끝낸다. 그래서 [Enter] 두 번 = 확정 + 완료다.
+      if (ev.key === 'Enter') { if (this.commitDims()) return true; return finish(); }
       return false;
     },
     getPreview() { return { points: [...points], cursor, guides, typed }; },
@@ -71,14 +77,14 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
     dimSig() { const d = this.dims(); return d ? d.fields.map(f => `${f.key}:${f.text}:1`).join('|') : ''; },
     setDim(key, text) { if (key !== 'len' || !last()) return false; typed = String(text ?? ''); return true; },
     focusDim() {},                                    // 칸이 하나뿐이라 옮길 자리가 없다
-    // 리뷰 I-6: 손대지 않은 칸의 [Enter]는 **칸에 보이는 길이로 한 구간을 확정**한다(체인을 끝내지
-    // 않는다). 배너가 "길이를 타이핑하고 [Enter]"라고 말하고 칸에 3000이 적혀 있는 화면에서, 같은
-    // 키가 프리뷰 구간을 버리고 그리기를 끝내면 보이는 값과 결과가 어긋난다. 캔버스 [Enter]의
-    // "완료"는 그대로다 — 이 경로는 옵션 바 칸에서만 온다. 보이는 값을 typed에 문자열로 싣지 않고
-    // 프리뷰 구간을 그대로 놓는다: 스냅된 끝점과 ft·in 왕복 오차를 함께 피한다.
+    // 칸에 보이는 길이로 한 구간을 확정한다(체인을 끝내지 않는다). 보이는 값을 typed에 문자열로
+    // 싣지 않고 프리뷰 구간을 그대로 놓는다: 스냅된 끝점과 ft·in 왕복 오차를 함께 피한다.
+    // §17.8(3)부터 캔버스 [Enter]도 이 함수를 지난다(두 입구가 한 함수다) — onKey를 되부르지
+    // 않도록 타이핑 확정은 commitTyped로 꺼내 두었다(되부르면 무한 재귀다).
     commitDims() {
-      if (typed !== '') return this.onKey({ key: 'Enter', preventDefault() {} });
-      if (!last() || !cursor || !addSegment(last(), cursor)) return false;
+      if (!last() || !cursor) return false;
+      if (typed !== '') return commitTyped();
+      if (!addSegment(last(), cursor)) return false;
       points.push(cursor);
       return true;
     },

@@ -127,7 +127,7 @@ test('벽 도구는 단계에 따라 안내가 바뀐다', () => {
   const t = createWallTool({ store, onDone() {} });
   expect(t.hint).toBe('첫 점을 클릭하세요 (1/2)');
   t.onPointerDown([0.5, 0.25]);
-  expect(t.hint).toBe('다음 점을 클릭 · 길이를 타이핑하고 [Enter] · [Enter] 완료 · [Esc] 취소');   // §16.7: 타이핑 안내 한 줄
+  expect(t.hint).toBe('다음 점을 클릭 · 길이를 타이핑하고 [Enter] 확정 · [Esc] 그리기 끝');   // §17.8(4): [Enter]가 한 번이다
   t.onKey({ key: 'Escape', preventDefault() {} });
   expect(t.hint).toBe('첫 점을 클릭하세요 (1/2)');
   // 그리는 중의 첫 [Esc]는 도구가 소비하고(체인만 지운다), 체인이 없으면 소비하지 않는다 → 키맵이 선택으로(결정 19b).
@@ -191,14 +191,61 @@ test('손대지 않은 치수 칸의 [Enter]는 보이는 길이로 확정한다
   expect(t.commitDims()).toBe(false);
 });
 
-// 캔버스의 [Enter]는 여전히 "완료"다(§16.7): 칸 경로(commitDims)만 위처럼 갈라진다.
-test('캔버스의 [Enter]는 버퍼가 비어 있으면 그리기를 끝낸다', () => {
+// §17.8(3): [Enter]는 한 가지다 — 보이는 프리뷰 구간을 확정하고, 확정할 것이 없으면 체인을 끝낸다.
+// 마우스를 움직이지 않은 채 누르는 두 번째 [Enter]가 예전의 "완료"를 그대로 대신한다.
+test('캔버스의 [Enter]는 프리뷰 구간을 확정하고 두 번째가 그리기를 끝낸다', () => {
   const store = createStore(createEmptyProject());
   let done = 0;
   const t = createWallTool({ store, onDone: () => done++ });
   t.onPointerDown([0.5, 0.25]);
   t.onPointerMove([3000.5, 0.25]);
   expect(t.onKey(key('Enter'))).toBe(true);
-  expect(activeFloor(store.get()).walls).toHaveLength(0);
+  expect(activeFloor(store.get()).walls).toHaveLength(1);
+  expect(done).toBe(0);                               // 체인은 이어진다
+  expect(t.getPreview().points).toHaveLength(2);
+  expect(t.onKey(key('Enter'))).toBe(true);           // 커서가 마지막 점이라 확정할 구간이 없다 → 완료
+  expect(activeFloor(store.get()).walls).toHaveLength(1);
   expect(done).toBe(1);
+  expect(t.getPreview().points).toHaveLength(0);
+  expect(store.undo()).toBe(true);                    // 구간 하나가 한 단계다(체인 종료는 단계가 아니다)
+  expect(activeFloor(store.get()).walls).toHaveLength(0);
+});
+
+// 타이핑한 길이의 [Enter]는 예전 그대로다(칸 경로와 캔버스 경로가 같은 함수를 지난다).
+test('타이핑한 길이의 [Enter]는 그 길이로 확정하고 체인을 이어 간다', () => {
+  const store = createStore(createEmptyProject());
+  let done = 0;
+  const t = createWallTool({ store, onDone: () => done++ });
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([3000.5, 0.25]);
+  for (const c of '4500') expect(t.onKey(key(c))).toBe(true);
+  expect(t.onKey(key('Enter'))).toBe(true);
+  const w = activeFloor(store.get()).walls;
+  expect(w).toHaveLength(1);
+  expect(Math.round(Math.hypot(w[0].b[0] - w[0].a[0], w[0].b[1] - w[0].a[1]))).toBe(4500);
+  expect(t.getPreview().typed).toBe('');
+  expect(done).toBe(0);
+  // 파싱 실패(읽을 수 없는 값)는 버리지 않고 그대로 둔다([Enter]를 먹되 체인을 끝내지 않는다).
+  // 글자는 typedChar(`/^[0-9.]$/`)가 **받는** 것이어야 한다: 한글은 onKey가 아예 거절해 typed가
+  // 빈 채로 남고, 그러면 [Enter]가 프리뷰 구간 확정 경로(commitDims)로 빠져 1500 mm 겹친 벽이
+  // 놓이고 normalizeWalls가 그것을 쪼개 벽이 2개가 된다. `...`은 받아들여지고 parseLen이 null이다.
+  for (const c of '...') expect(t.onKey(key(c))).toBe(true);
+  expect(t.onKey(key('Enter'))).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(1);
+  expect(t.getPreview().typed).toBe('...');            // 버리지 않고 그대로 둔다(사용자가 고친다)
+  expect(done).toBe(0);
+});
+
+// §17.8(4): 배너가 "[Esc] 그리기 끝"이라고 적는 이유 — 이미 놓인 구간은 [Esc]가 지우지 않는다.
+test('[Esc]는 그리기를 끝내고 이미 놓인 구간은 남긴다', () => {
+  const store = createStore(createEmptyProject());
+  let done = 0;
+  const t = createWallTool({ store, onDone: () => done++ });
+  t.onPointerDown([0.5, 0.25]);
+  t.onPointerMove([3000.5, 0.25]);
+  t.onKey(key('Enter'));
+  expect(t.onKey(key('Escape'))).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(1);   // "취소"가 아니라 "그리기 끝"이다
+  expect(done).toBe(1);
+  expect(t.getPreview().points).toHaveLength(0);
 });
