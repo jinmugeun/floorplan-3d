@@ -3,7 +3,7 @@
 // 캔버스는 tests/view2d.test.js의 Proxy 스텁 관례를 그대로 쓴다(jsdom에는 캔버스가 없다).
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { openDxfDialog } from '../src/ui/dxfDialog.js';
-import { DXF_ERRORS, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
+import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
@@ -222,6 +222,8 @@ test('[벽 후보만]·[전체]·[자동 판정 되돌리기]와 250 ms 디바�
 });
 
 test('오류 코드 다섯이 §18.6의 문구를 그대로 띄운다', async () => {
+  // 띄우는 문장마다 워커가 보낸 원문을 콘솔에 남긴다(Task 10 리뷰) — 여기서 조용히 받아 센다.
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   for (const code of ['not-dxf', 'binary', 'dwg', 'no-walls', 'oom']) {
     const { w, q } = open({ file: fileOf() });
     await flush();
@@ -232,6 +234,8 @@ test('오류 코드 다섯이 §18.6의 문구를 그대로 띄운다', async ()
     expect(q('import').disabled).toBe(true);
     document.body.innerHTML = '';
   }
+  expect(warn.mock.calls.map(c => c.join(' '))).toEqual(['not-dxf', 'binary', 'dwg', 'no-walls', 'oom'].map(c => 'dxf: ' + c));
+  warn.mockRestore();
 });
 
 test('[가져오기]는 onImported를 한 번 부르고 트레이스를 배경으로 붙인다', async () => {
@@ -275,4 +279,104 @@ test('트레이스가 한도를 넘으면 배경 없이 알리고, onImported가
   expect(toast).toHaveBeenCalledWith(DXF_TRACE_SKIPPED);
   expect(document.getElementById('dxfDialog')).not.toBe(null);   // 취소했으므로 열린 채다
   expect(onImported).toHaveBeenCalledTimes(1);
+});
+
+// ── 리뷰 F-1…F-5가 연 다섯 자리. 전부 사용자가 실제로 밟는 경로다.
+
+// F-1: 두 번째 클릭은 래치가 막는다(disabled만으로는 dispatchEvent가 그냥 지나간다).
+test('[가져오기]를 빠르게 두 번 눌러도 onImported는 한 번이다', async () => {
+  let done;
+  const onImported = vi.fn(() => new Promise(r => { done = r; }));
+  const { w, q } = open({ file: fileOf(), onImported });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  q('import').click();
+  q('import').dispatchEvent(new MouseEvent('click', { bubbles: true }));   // disabled를 우회해도 막힌다
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(q('import').disabled).toBe(true);                                  // 기다리는 동안 잠겨 있다
+  expect(document.getElementById('dxfDialog')).not.toBe(null);
+  done(true);
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(document.getElementById('dxfDialog')).toBe(null);
+});
+
+// F-2: 밀려난 요청(superseded)은 오류가 아니다 — 파싱 쪽 catch도 추출 쪽과 같은 그물을 쓴다.
+test('파일을 잇달아 세 번 떨어뜨려도 거짓 오류가 뜨지 않는다', async () => {
+  const { w, q, root } = open();
+  const drop = name => root.dispatchEvent(Object.assign(new Event('drop', { bubbles: true }), { dataTransfer: { files: [fileOf(name)] } }));
+  drop('a.dxf'); drop('b.dxf'); drop('c.dxf');
+  await flush();
+  expect(q('error').hidden).toBe(true);                                     // 예전에는 "도면이 너무 큽니다"
+  expect(q('progress').hidden).toBe(false);                                 // 진행 막대도 살아 있다
+  expect(w.posted.filter(m => m.type === 'parse').map(m => m.fileName)).toEqual(['a.dxf']);   // b는 큐에서 밀렸다
+  w.emit({ type: 'parsed', summary: SUMMARY });                             // a의 응답 → 밀려 있던 c가 나간다
+  await flush();
+  expect(w.posted.filter(m => m.type === 'parse').map(m => m.fileName)).toEqual(['a.dxf', 'c.dxf']);
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, title: '마지막 도면' } });
+  await flush();
+  expect(q('error').hidden).toBe(true);
+  expect(q('head').textContent).toContain('마지막 도면');                   // 마지막 파일이 화면의 정본이다
+});
+
+// F-3: 거절을 삼키면 "버튼이 먹지 않는" 화면이 된다(Task 14의 saveNow가 localStorage 한도를 넘는 경우).
+test('onImported가 거절하면 오류 줄을 띄우고 대화상자를 열어 둔다', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const onImported = vi.fn(async () => { throw new Error('quota exceeded'); });
+  const { w, q } = open({ file: fileOf(), onImported });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  q('import').click();
+  await flush();
+  expect(q('error').textContent).toBe(DXF_IMPORT_FAILED);
+  expect(q('error').hidden).toBe(false);
+  expect(document.getElementById('dxfDialog')).not.toBe(null);
+  expect(q('import').disabled).toBe(false);                                 // 래치가 풀려 다시 누를 수 있다
+  expect(warn).toHaveBeenCalledTimes(1);
+  expect(warn.mock.calls[0].join(' ')).toContain('quota exceeded');         // 원인은 콘솔에 남는다
+  warn.mockRestore();
+});
+
+// F-4: 프리셋 칸은 상태를 비추는 거울이다 — 어긋나면 다음 클릭이 라벨과 반대로 움직인다.
+test('"벽만 남기기" 칸은 지금 체크 집합을 그대로 비춘다', async () => {
+  const { w, q, root } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const boxes = () => [...root.querySelectorAll('input[name="layer"]')];
+  const on = () => boxes().filter(b => b.checked).map(b => b.value).sort();
+  expect(q('preset').checked).toBe(true);
+  q('all').click();
+  expect(q('preset').checked).toBe(false);                                  // 전체가 켜졌으니 "벽만"이 아니다
+  q('preset').checked = true;
+  q('preset').dispatchEvent(new Event('change', { bubbles: true }));
+  expect(on()).toEqual([...wallOnly(ROWS)].sort());                         // 한 번에 기본 집합으로 돌아온다
+  expect(q('preset').checked).toBe(true);
+  const one = boxes().find(b => b.value === 'WAL');
+  one.checked = false;
+  one.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(q('preset').checked).toBe(false);                                  // 벽 하나를 꺼도 기본 집합이 아니다
+});
+
+// F-5(§18.6): 알림이 "체크를 확인해 주세요"라고 하면 확인할 체크가 켜져 있어야 한다.
+test('폴백이면 추정 레이어가 체크리스트에 미리 켜진다', async () => {
+  const rows = [...ROWS, row('A-WALL', 'other', 900)];
+  const { w, q, root } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, layers: rows, checked: [] } });
+  await flush();
+  expect([...root.querySelectorAll('input[name="layer"]')].filter(b => b.checked)).toHaveLength(0);
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, guessed: true, guessedLayers: ['A-WALL'] } });
+  await flush();
+  const on = [...root.querySelectorAll('input[name="layer"]')].filter(b => b.checked).map(b => b.value);
+  expect(on).toEqual(['A-WALL']);
+  expect(q('notice').textContent).toBe(DXF_LAYERS_GUESSED);
+  expect(q('notice').hidden).toBe(false);
 });

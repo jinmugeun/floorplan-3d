@@ -8,7 +8,7 @@ import { traceBackground } from '../io/dxf/trace.js';
 import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
-import { DXF_ERRORS, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED,
+import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP } from './messages.js';
 
 const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
@@ -51,9 +51,15 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   document.body.appendChild(root);
   const q = n => root.querySelector(`[name="${n}"]`);
   const client = createDxfClient({ workerFactory });
-  let summary = null, initial = new Set(), checked = new Set(), last = null, timer = 0, closed = false;
+  let summary = null, initial = new Set(), checked = new Set(), last = null, timer = 0, closed = false, importing = false;
 
-  const showError = code => { const e = q('error'); e.textContent = code ? (DXF_ERRORS[code] ?? DXF_ERRORS.oom) : ''; e.hidden = !code; };
+  const setError = text => { const e = q('error'); e.textContent = text ?? ''; e.hidden = !text; };
+  const showError = code => setError(code ? (DXF_ERRORS[code] ?? DXF_ERRORS.oom) : null);
+  // 화면 문장은 코드마다 한 줄이라 원인이 지워진다 — 함께 온 message는 콘솔에 남긴다(Task 10 리뷰).
+  // 조용히 넘기는 두 코드는 오류가 아니다: 사용자가 닫았거나(cancelled), 더 최근 요청이 이 요청을
+  // 밀어냈다(superseded · 사전 검토 C-5 — 이것을 걸러내지 않으면 연속 드롭이 거짓 오류를 띄운다).
+  const warnErr = e => console.warn('dxf:', e?.message ?? e);
+  const quiet = e => e?.code === 'cancelled' || e?.code === 'superseded';
   const notice = msg => { const e = q('notice'); e.textContent = msg ?? ''; e.hidden = !msg; };
   const stepLabel = (s, blocks) => (s === 1 ? DXF_STEP_READ : s === 2 ? DXF_STEP_PARSE(blocks ?? summary?.blocks ?? 0) : s === 3 ? DXF_STEP_WALLS : DXF_STEP_ROOMS);
   const progress = (s, blocks) => {
@@ -63,7 +69,13 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   };
   const onProgress = m => { if (!closed) progress(DXF_PHASE_STEP[m.phase] ?? 1, m.blocks); };
   const unitName = v => UNITS.find(([, x]) => x === v)?.[0] ?? 'mm';
-  const renderLayers = () => { q('layers').innerHTML = summary ? layerListHtml(summary.layers, checked) : ''; };
+  // "벽만 남기기"는 모드가 아니라 **필터 프리셋**이다(§18.6): 칸은 지금 체크 집합이 기본 집합과
+  // 같은지를 그대로 비춘다 — [전체]나 개별 체크 뒤에도 거짓을 말하지 않는다(리뷰 F-4).
+  const syncPreset = () => {
+    const def = wallOnly(summary?.layers ?? []);
+    q('preset').checked = checked.size === def.size && [...def].every(n => checked.has(n));
+  };
+  const renderLayers = () => { q('layers').innerHTML = summary ? layerListHtml(summary.layers, checked) : ''; syncPreset(); };
 
   const render = () => {
     if (!last) return;
@@ -94,9 +106,16 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
       openings: q('openings').checked,
       trace: q('trace').checked,
     }, { onProgress })
-      .then(m => { if (closed) return; last = m; progress(0); render(); q('import').disabled = false; })
-      // superseded = 더 최근 요청이 이 요청을 밀어냈다(사전 검토 C-5). 오류가 아니다.
-      .catch(e => { if (!closed && e.code !== 'cancelled' && e.code !== 'superseded') { progress(0); showError(e.code); } });
+      .then(m => {
+        if (closed) return;
+        last = m;
+        // §18.6: 폴백(추정)이면 그 벽을 낸 레이어를 **체크리스트에 미리 켠다** — 알림은 "체크를
+        // 확인해 주세요"라고 하는데 켜진 줄이 하나도 없으면 확인할 것이 없다(리뷰 F-5).
+        const guessed = m.stats?.guessed ? (m.stats.guessedLayers ?? []) : [];
+        if (guessed.length) { for (const n of guessed) { checked.add(n); initial.add(n); } renderLayers(); }
+        progress(0); render(); q('import').disabled = false;
+      })
+      .catch(e => { if (!closed && !quiet(e)) { progress(0); warnErr(e); showError(e.code); } });
   };
   const schedule = () => { clearTimeout(timer); timer = setTimeout(runExtract, DEBOUNCE); };
 
@@ -115,14 +134,18 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
       renderLayers();
       notice(summary.manySheets ? DXF_MANY_SHEETS : summary.unitsGuessed ? DXF_UNITS_GUESS : null);
       runExtract();
-    } catch (e) { if (!closed && e.code !== 'cancelled') { progress(0); showError(e.code); } }
+    } catch (e) { if (!closed && !quiet(e)) { progress(0); warnErr(e); showError(e.code); } }
   }
 
   const close = () => { if (closed) return; closed = true; clearTimeout(timer); client.cancel(); root.remove(); trap.destroy(); };
   const cancel = () => { if (closed) return; close(); onCancel(); };
 
   async function doImport() {
-    if (!last || closed) return;
+    // 두 번 눌러도 한 번이다(리뷰 F-1): 두 번째 클릭은 래치가 막고 버튼은 기다리는 동안 잠긴다.
+    // 막지 않으면 교체도 토스트도 두 번이고, 2048 px 래스터가 두 번 돌아 §18.9의 300 ms를 넘는다.
+    if (!last || closed || importing) return;
+    importing = true;
+    q('import').disabled = true;
     const { project, stats, trace } = last;
     if (q('trace').checked && trace?.segs?.length) {
       // 래스터는 **메인 스레드**에서 한 번만 한다(워커 OffscreenCanvas를 쓰지 않는 이유는 §18.6).
@@ -132,8 +155,18 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     }
     setDxfHeight(Number(q('height').value));
     setDxfTrace(q('trace').checked);
-    const ok = await onImported({ project, stats });
-    if (ok !== false) close();
+    try {
+      const ok = await onImported({ project, stats });
+      if (ok !== false) close();
+    } catch (e) {
+      // 호출자가 실패하면(자동 저장이 localStorage 한도를 넘는 등) 대화상자는 열린 채 이유를 말한다 —
+      // 삼킨 거절은 오류 줄도 없이 "버튼이 먹지 않는" 화면이 된다(리뷰 F-3).
+      warnErr(e);
+      setError(DXF_IMPORT_FAILED);
+    } finally {
+      importing = false;
+      if (!closed) q('import').disabled = false;
+    }
   }
 
   q('file').addEventListener('change', ev => load(ev.target.files?.[0] ?? file));
@@ -149,9 +182,10 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     const cb = ev.target.closest?.('input[name="layer"]');
     if (!cb) return;
     if (cb.checked) checked.add(cb.value); else checked.delete(cb.value);
+    syncPreset();
     schedule();
   });
-  // "벽만 남기기"는 모드가 아니라 **필터 프리셋**이다(§18.6): 끄면 전체 목록이 그대로 열린다.
+  // 켜면 기본 집합, 끄면 전체 — 라벨이 시키는 그대로다(끄면 전체 목록이 그대로 열린다).
   q('preset').addEventListener('change', () => {
     checked = q('preset').checked ? wallOnly(summary?.layers ?? []) : allOn(summary?.layers ?? []);
     renderLayers(); schedule();
