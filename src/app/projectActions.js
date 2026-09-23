@@ -11,7 +11,7 @@ import { openBackgroundDialog } from '../ui/backgroundDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
 import { promptDialog } from '../ui/promptDialog.js';
 import { projectIsEmpty, confirmLeave } from './topbar.js';
-import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED } from '../ui/messages.js';
+import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN } from '../ui/messages.js';
 
 export function createProjectActions({ store, ui, view, toast = () => {}, restored = null, isDirty = () => true, markSaved = () => {}, saveNow = () => {} }) {
   // 자동 저장본은 브라우저 대화상자로 묻지 않는다: 시작 화면의 "이어서 작업" 카드로 제안한다(§12.5).
@@ -36,7 +36,7 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
     const taken = new Set([...listTemplates(), ...BUILTIN_TEMPLATES].map(t => String(t.name).trim()));
     const name = await promptDialog({
       title: '템플릿으로 저장', label: '템플릿 이름', value: store.get().name, ok: '저장',
-      validate: t => (!t.trim() ? '이름을 입력해주세요' : taken.has(t.trim()) ? '같은 이름의 템플릿이 있습니다' : null),
+      validate: t => (!t.trim() ? NAME_REQUIRED : taken.has(t.trim()) ? TEMPLATE_NAME_TAKEN : null),
     });
     if (name === null) return;
     const saved = saveTemplate(name, store.get());

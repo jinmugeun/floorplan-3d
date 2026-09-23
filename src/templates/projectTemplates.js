@@ -49,6 +49,19 @@ export const listTemplates = () => readAll()
   .sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1));
 export const deleteTemplate = id => writeAll(readAll().filter(t => t.id !== id));
 
+// 이름 변경(§16.10 · 감사 §18). 이름은 템플릿의 열쇠나 다름없으므로(saveTemplate이 같은 이름을
+// 덮어쓴다) 이미 쓰는 이름으로는 바꾸지 않는다. 빈 이름도 거절한다. 바꿨으면 true.
+export function renameTemplate(id, name) {
+  const next = String(name ?? '').trim();
+  if (!next) return false;
+  const all = readAll();
+  const mine = all.find(t => t.id === id);
+  if (!mine) return false;
+  if (all.some(t => t.id !== id && t.name === next)) return false;
+  if (BUILTIN_TEMPLATES.some(t => t.name === next)) return false;
+  return writeAll(all.map(t => (t.id === id ? { ...t, name: next, project: { ...t.project, name: next } } : t)));
+}
+
 // 사용자 템플릿도 migrate를 지나야 한다: 옛 스키마로 저장해 둔 것이 그대로 앱에 들어가지 않게 한다.
 // project 필드가 손상돼 있으면(수동 조작 등) migrate()가 던질 수 있다 — 그 항목만 건너뛰고 null을 돌려준다.
 export function templateProject(id) {

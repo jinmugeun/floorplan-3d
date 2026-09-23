@@ -1,6 +1,9 @@
-import { allTemplateCards } from '../templates/projectTemplates.js';
+import { allTemplateCards, deleteTemplate, renameTemplate, listTemplates, BUILTIN_TEMPLATES } from '../templates/projectTemplates.js';
 import { esc } from '../util/html.js';
 import { focusTrap } from './dialogBase.js';
+import { confirmDialog } from './confirmDialog.js';
+import { promptDialog } from './promptDialog.js';
+import { CONFIRM_TEMPLATE_DELETE, TEMPLATE_RENAME, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from './messages.js';
 
 const CARDS = [
   { key: 'empty', title: '빈 프로젝트', desc: '빈 화면에서 방과 벽을 직접 그립니다.' },
@@ -15,24 +18,54 @@ const restoreCard = p => ({ key: 'restore', title: '이어서 작업', desc: `�
 
 // 프로젝트가 비어 있을 때 띄우는 시작 오버레이.
 export function openStartScreen({ store, restored = null, onEmpty = () => {}, onUpload = () => {}, onSample = () => {}, onTemplate = () => {}, onRestore = () => {}, onClose = () => {} }) {
-  const templates = allTemplateCards().filter(c => !HIDDEN.has(c.id));
   const cards = restored ? [restoreCard(restored), ...CARDS] : CARDS;
   const root = document.createElement('div');
   root.id = 'startScreen';
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', '시작하기');
+  // 내장 템플릿 카드는 버튼 하나다. **저장한** 템플릿 카드는 열기 + [이름 변경]·[삭제] 세 버튼이라
+  // 버튼 안에 버튼을 넣을 수 없어 div로 감싼다(§16.10 · 감사 §18).
+  const tplCard = c => (c.user
+    ? `<div class="start-card tpl user">
+        <button type="button" class="start-open" data-template="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>
+        <div class="row"><button type="button" data-tpl-rename="${esc(c.id)}">이름 변경</button><button type="button" data-tpl-delete="${esc(c.id)}" class="danger">삭제</button></div>
+      </div>`
+    : `<button type="button" class="start-card tpl" data-template="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>`);
+  const templatesHtml = () => {
+    const list = allTemplateCards().filter(c => !HIDDEN.has(c.id));
+    return list.length
+      ? list.map(tplCard).join('')
+      : '<p class="hint">저장한 템플릿이 없습니다. 더보기 메뉴의 "템플릿으로 저장"으로 만들 수 있습니다.</p>';
+  };
   root.innerHTML = `<div class="start-card-row">
     <h1>주방 환기 3D 플래너</h1>
     <div class="start-cards">${cards.map(c => `<button type="button" class="start-card${c.key === 'restore' ? ' restore' : ''}" data-start="${c.key}"><b>${esc(c.title)}</b><span>${esc(c.desc)}</span></button>`).join('')}</div>
     <h2 class="start-sub">템플릿</h2>
-    <div class="start-cards">${templates.length
-      ? templates.map(c => `<button type="button" class="start-card tpl" data-template="${esc(c.id)}"><b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>`).join('')
-      : '<p class="hint">저장한 템플릿이 없습니다. 더보기 메뉴의 "템플릿으로 저장"으로 만들 수 있습니다.</p>'}</div>
+    <div class="start-cards" data-part="templates">${templatesHtml()}</div>
   </div>`;
   document.body.appendChild(root);
+  const refreshTemplates = () => { root.querySelector('[data-part="templates"]').innerHTML = templatesHtml(); };
+  // 검증은 renameTemplate과 같은 규칙을 본다(저장한 템플릿·내장 템플릿과 이름이 겹치면 막는다). 저장은 하지 않는다.
+  const renameCheck = (id, name) => !listTemplates().some(t => t.id !== id && t.name === name)
+    && !BUILTIN_TEMPLATES.some(t => t.name === name);
   // 어느 길로 닫혀도(카드·템플릿·Esc·close()) 한 번만 알린다 — 온보딩이 시작 화면 위에 겹쳐 뜨지 않게.
   const close = () => { if (!root.parentNode) return; root.remove(); trap.destroy(); onClose(); };
   const handlers = { empty: onEmpty, upload: onUpload, sample: onSample, restore: onRestore };
-  root.addEventListener('click', ev => {
+  root.addEventListener('click', async ev => {
+    const del = ev.target.closest('[data-tpl-delete]');
+    if (del) {
+      const id = del.dataset.tplDelete;
+      const name = listTemplates().find(t => t.id === id)?.name ?? '';
+      if (await confirmDialog(CONFIRM_TEMPLATE_DELETE(name))) { deleteTemplate(id); refreshTemplates(); }
+      return;
+    }
+    const ren = ev.target.closest('[data-tpl-rename]');
+    if (ren) {
+      const id = ren.dataset.tplRename;
+      const cur = listTemplates().find(t => t.id === id)?.name ?? '';
+      const next = await promptDialog({ ...TEMPLATE_RENAME, value: cur, validate: t => (!t.trim() ? NAME_REQUIRED : t.trim() !== cur && !renameCheck(id, t.trim()) ? TEMPLATE_NAME_TAKEN : null) });
+      if (next !== null && renameTemplate(id, next)) refreshTemplates();
+      return;
+    }
     const tpl = ev.target.closest('[data-template]');
     if (tpl) { close(); onTemplate(tpl.dataset.template); return; }
     const b = ev.target.closest('[data-start]');

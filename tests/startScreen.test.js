@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { test, expect } from 'vitest';
+import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { openStartScreen } from '../src/ui/startScreen.js';
@@ -105,4 +105,33 @@ test('시작 화면은 Tab을 안에 가두고 닫으면 포커스를 되돌린�
   expect(document.activeElement).toBe(cards[0]);      // 뒤쪽 앱으로 나가지 않는다
   s.close();
   expect(document.activeElement).toBe(back);
+});
+
+// §16.10: 저장한 템플릿을 시작 화면에서 지우고 이름을 바꾼다(감사 §18).
+test('사용자 템플릿 카드에 [이름 변경]·[삭제]가 있다', async () => {
+  localStorage.clear();
+  document.body.innerHTML = '';
+  const { saveTemplate, listTemplates } = await import('../src/templates/projectTemplates.js');
+  saveTemplate('내 방 템플릿', createEmptyProject('내 방'));
+  const store = createStore(createEmptyProject());
+  openStartScreen({ store });
+  const overlay = document.querySelector('#startScreen');
+  const card = overlay.querySelector('.start-card.tpl.user');
+  expect(card).not.toBeNull();
+  expect(card.querySelector('[data-template]')).not.toBeNull();     // 카드 본문은 여전히 열기다
+  // 이름 변경: promptDialog가 뜨고 확인하면 목록이 바뀐다.
+  card.querySelector('[data-tpl-rename]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const prompt = document.querySelector('.modal.prompt');
+  expect(prompt).not.toBeNull();
+  prompt.querySelector('[name="text"]').value = '바꾼 이름';
+  prompt.querySelector('[name="ok"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await vi.waitFor(() => expect(listTemplates()[0].name).toBe('바꾼 이름'));
+  await vi.waitFor(() => expect(document.querySelector('#startScreen').textContent).toContain('바꾼 이름'));
+  // 삭제: confirmDialog를 지나야 지워진다.
+  document.querySelector('.start-card.tpl.user [data-tpl-delete]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const confirm = document.querySelector('.modal.confirm');
+  expect(confirm.textContent).toContain('되돌릴 수 없습니다');
+  confirm.querySelector('[name="ok"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await vi.waitFor(() => expect(listTemplates()).toHaveLength(0));
+  await vi.waitFor(() => expect(document.querySelector('#startScreen').querySelector('.start-card.tpl.user')).toBeNull());
 });

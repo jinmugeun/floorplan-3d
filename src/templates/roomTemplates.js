@@ -233,6 +233,11 @@ export function placeTemplate(floor, room, template, { avoid = [], stats = null 
 
 const HOLES = ['door', 'window', 'opening'];
 
+// 템플릿 [적용]이 지우는 것들(§16.10). 문·창·개구부는 건축 요소라서, 잠긴 아이템은 사용자가
+// 지키라고 한 것이라서 남긴다(2B의 잠금 규칙). 경고 줄이 세는 수와 실제로 지워지는 수가
+// 갈라지지 않게 판정은 이 한 함수만 지난다 — HOLES는 계속 비공개다.
+export const replaceableInRoom = (floor, room) => itemsInRoom(floor, room).filter(it => !HOLES.includes(it.kind) && !it.locked);
+
 // replace = true면 그 방 안 가구를 지우고 새로 놓는다(문·창·개구부는 건축 요소라 남긴다). 트랜잭션 1단계.
 // 반환 { placed: 놓인 아이템 id[], skipped: 빠진 개수, moved: 벽에서 당겨 온 개수 }.
 export function applyRoomTemplate(store, roomId, templateId, { replace = true } = {}) {
@@ -242,7 +247,7 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
   if (!room || !t) return { placed: [], skipped: 0, moved: 0 };
   const mine = itemsInRoom(f, room);
   // 문·창·개구부는 건축 요소라서, 잠긴 아이템은 사용자가 지키라고 한 것이라서 남긴다(2B의 잠금 규칙).
-  const kill = replace ? new Set(mine.filter(it => !HOLES.includes(it.kind) && !it.locked).map(it => it.id)) : new Set();
+  const kill = replace ? new Set(replaceableInRoom(f, room).map(it => it.id)) : new Set();
   const stats = { moved: 0, skipped: 0 };
   const made = placeTemplate(f, room, t, { avoid: mine.filter(it => !kill.has(it.id)), stats });
   const placed = [];

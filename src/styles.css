@@ -239,3 +239,14 @@ button.primary, .primary { background: var(--accent); color: var(--on-accent); b
    선언까지 같아져 죽은 규칙이 되었으므로 지웠다(m-4). 빈 경고 줄은 margin만 남기므로 함께 숨긴다 —
    예전에는 `.modal.prompt`·`.mat-editor`만 :empty를 숨겨 다른 자리의 빈 <p class="error">가 8 px를 먹었다. */
 .error { color: var(--exhaust); margin: 0 0 8px; font-size: 12px; } .error:empty { display: none; }
+
+/* 축소 평면(§16.10)은 96 px 정사각이고 카드 안에서 가운데 정렬한다. */
+.tpl-card canvas[data-tpl] { align-self: center; background: #f4f6f8; border: 1px solid var(--line); border-radius: 4px; }
+.tpl-card .error { margin: 0; }
+/* 저장한 템플릿 카드는 열기 버튼 + 관리 버튼 두 개다(§16.10). 카드 자신은 버튼이 아니라 상자다. */
+.start-card.tpl.user { display: flex; flex-direction: column; gap: 8px; cursor: default; }
+.start-card.tpl.user:hover { border-color: var(--line); background: #fff; }
+.start-open { display: flex; flex-direction: column; gap: 6px; text-align: left; border: 0; background: none; padding: 0; font: inherit; cursor: pointer; }
+.start-open b { font-size: 14px; } .start-open span { color: var(--muted); font-size: 12px; }
+.start-card.tpl.user .row { display: flex; gap: 6px; }
+.start-card.tpl.user .row button:not(.primary) { flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font-family: inherit; margin: 0; }

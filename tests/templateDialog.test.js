@@ -7,15 +7,21 @@ import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { openRoomTemplateDialog, placementMessage } from '../src/ui/templateDialog.js';
 import { updateRoom } from '../src/state/floorOps.js';
+import { createUiState } from '../src/state/uistate.js';
 
-function setup() {
+// items를 주면 대화상자를 열기 **전에** 방 안쪽(중심선 6000.5×4000.25의 가운데)에 놓는다:
+// killCount()가 세는 대상이라 경고 줄("기존 제품 N개를 지웁니다")이 렌더에 나타난다.
+// 기본값은 빈 배열이다 — 기존 테스트(`Esc로 닫고 아무것도 바꾸지 않는다`)가 items 0을 단정한다.
+function setup({ items = [] } = {}) {
   const store = createStore(createEmptyProject());
+  const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [6000.5, 4000.25], 200));
   const roomId = activeFloor(store.get()).rooms[0].id;
   updateRoom(store, roomId, { type: 'cook' });
-  const dlg = openRoomTemplateDialog({ store, roomId });
+  const placed = items.map(id => addItem(store, createItem(productById(id), { pos: [2000.5, 1500.25] })));
+  const dlg = openRoomTemplateDialog({ store, ui, roomId });
   const root = document.querySelector('.modal.templates');
-  return { store, roomId, dlg, root, floor: () => activeFloor(store.get()) };
+  return { store, ui, roomId, dlg, root, placed, floor: () => activeFloor(store.get()) };
 }
 const click = (root, sel) => root.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
 const set = (root, sel, v) => { const el = root.querySelector(sel); el.value = String(v); el.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -27,7 +33,7 @@ describe('템플릿 대화상자', () => {
     const a = setup();
     expect(a.root.querySelector('[name="roomType"]').value).toBe('cook');
     const cards = [...a.root.querySelectorAll('[data-template]')];
-    expect(cards.length).toBeGreaterThanOrEqual(2);
+    expect(cards.length).toBe(1);        // 기본 면적 필터가 22 m²를 담는 cook-basic 한 장만 남긴다(§16.10)
     expect(cards[0].textContent).toContain('m²');
     expect(cards[0].textContent).toContain('개');
     expect(cards[0].textContent).toContain('가열조리실');   // 용도만이 아니라 공간 타입도 보여 준다
@@ -65,7 +71,10 @@ describe('템플릿 대화상자', () => {
     addWalls(store, rectWalls([0, 0], [1600.5, 1200.25], 200));
     const roomId = activeFloor(store.get()).rooms[0].id;
     openRoomTemplateDialog({ store, roomId });
-    click(document.querySelector('.modal.templates'), `[data-template="cook-basic"] [name="apply"]`);
+    const root = document.querySelector('.modal.templates');
+    // 실면적 1.4 m²라 기본 면적 필터가 cook-basic(8~30 m²)도 걸러 낸다: 먼저 필터를 푼다(§16.10).
+    click(root, '[name="filterReset"]');
+    click(root, `[data-template="cook-basic"] [name="apply"]`);
     expect(document.querySelector('.toast').textContent).toContain('개 건너뜀');
   });
 
@@ -74,6 +83,51 @@ describe('템플릿 대화상자', () => {
     const old = addItem(a.store, createItem(productById('sofa-3'), { pos: [3000, 2000] }));
     click(a.root, '[data-template="cook-basic"] [name="add"]');
     expect(a.floor().items.some(i => i.id === old)).toBe(true);
+  });
+
+  test('카드에 96 px 미리보기 캔버스와 [취소]가 있다(§16.10 · 감사 §14)', () => {
+    const a = setup();
+    const card = a.root.querySelector('[data-template]');
+    const canvas = card.querySelector('canvas[data-tpl]');
+    expect(canvas).not.toBeNull();
+    expect(canvas.width).toBe(96);
+    expect(a.root.querySelector('[name="cancel"]').textContent).toBe('취소');
+  });
+
+  test('파괴적 [적용]은 보조 색이고 지워질 개수를 말한다(감사 §15)', () => {
+    const a = setup({ items: ['sofa-3'] });               // 방 안에 지워질 제품 하나 → killCount() = 1
+    const card = a.root.querySelector('[data-template]');
+    const apply = card.querySelector('[name="apply"]');
+    expect(apply.classList.contains('primary')).toBe(false);
+    expect(card.querySelector('[name="add"]').classList.contains('primary')).toBe(true);
+    expect(card.textContent).toContain('기존 제품 1개를 지웁니다');
+  });
+
+  test('방 면적·타입이 기본 필터이고 [필터 초기화]가 그것을 푼다(감사 §16)', () => {
+    const a = setup();
+    const min = a.root.querySelector('[name="minArea"]'), max = a.root.querySelector('[name="maxArea"]');
+    // 방 면적이 두 칸의 기본값이다 → 그 면적을 담는 템플릿만 남는다.
+    const area = Number(min.value);
+    expect(area).toBeGreaterThan(0);
+    expect(Number(max.value)).toBe(area);
+    const narrowed = a.root.querySelectorAll('[data-template]').length;
+    a.root.querySelector('[name="filterReset"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(min.value).toBe('');
+    expect(max.value).toBe('');
+    expect(a.root.querySelector('[name="roomType"]').value).toBe('');
+    expect(a.root.querySelectorAll('[data-template]').length).toBeGreaterThanOrEqual(narrowed);
+  });
+
+  test('적용하면 그 방이 선택되고 포커스가 속성 패널로 간다(감사 §17)', () => {
+    const props = document.createElement('div');
+    props.id = 'props';
+    props.innerHTML = '<button type="button" name="delete">방 삭제</button>';
+    document.body.appendChild(props);
+    const a = setup();
+    a.root.querySelector('[data-template] [name="add"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(a.ui.get().selection).toEqual({ type: 'room', id: a.roomId });
+    expect(document.activeElement).toBe(props.querySelector('[name="delete"]'));
+    props.remove();
   });
 
   test('Esc로 닫고 아무것도 바꾸지 않는다', () => {

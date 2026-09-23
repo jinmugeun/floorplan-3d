@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
-import { BUILTIN_TEMPLATES, saveTemplate, listTemplates, deleteTemplate, templateProject, allTemplateCards, TEMPLATE_KEY } from '../src/templates/projectTemplates.js';
+import { BUILTIN_TEMPLATES, saveTemplate, listTemplates, deleteTemplate, renameTemplate, templateProject, allTemplateCards, TEMPLATE_KEY } from '../src/templates/projectTemplates.js';
 
 beforeEach(() => localStorage.clear());
 
@@ -76,6 +76,19 @@ describe('프로젝트 템플릿', () => {
     localStorage.setItem(TEMPLATE_KEY, JSON.stringify([{ id: 'bad1', name: '깨진 것', savedAt: new Date().toISOString(), project: 42 }]));
     expect(() => templateProject('bad1')).not.toThrow();
     expect(templateProject('bad1')).toBeNull();
+  });
+
+  // §16.10(감사 §18): deleteTemplate 호출자가 0이었고 이름을 바꿀 길도 없었다.
+  test('renameTemplate은 이름을 바꾸고 중복은 거절한다', () => {
+    localStorage.clear();
+    const a = saveTemplate('내 방 A', createEmptyProject('A'));
+    saveTemplate('내 방 B', createEmptyProject('B'));
+    expect(renameTemplate(a.id, '내 방 C')).toBe(true);
+    expect(listTemplates().map(t => t.name).sort()).toEqual(['내 방 B', '내 방 C']);
+    expect(renameTemplate(a.id, '내 방 B')).toBe(false);          // 같은 이름은 쓰지 않는다
+    expect(renameTemplate(a.id, '   ')).toBe(false);              // 빈 이름도 거절한다
+    expect(renameTemplate('없는id', '무엇')).toBe(false);
+    expect(listTemplates().find(t => t.id === a.id).name).toBe('내 방 C');
   });
 
   test('용량 초과 등으로 localStorage.setItem이 던지면 saveTemplate이 null을 돌려준다', () => {

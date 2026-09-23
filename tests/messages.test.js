@@ -4,6 +4,7 @@ import { COLLISION_BANNER, COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, LAS
 import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOVE, COPIED, COPIED_N, ARRAY_TOO_MANY, ARRAY_MULTI_WARN, LOADED, RESTORED, JSON_EXPORTED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, REPLACE_NONE, REPLACE_DONE, MATERIAL_REPLACED, STRUCTURES_SHOWN, PLAN_LOCKED, SPLIT_REGIONS_RESET, OPENING_NEEDS_WALL, KEYS_RESET, KEYS_LOADED, KEY_TAKEN, POPUP_BLOCKED, SHOT_SAVED, GALLERY_LOAD_FAIL, GALLERY_DELETE_FAIL, SPEC_IMAGES_FAIL, SPEC_FAIL } from '../src/ui/messages.js';
 import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from '../src/ui/messages.js';
 import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, WHY_CLIPBOARD_EMPTY, WHY_MIN_POINTS, WHY_NO_ACTION } from '../src/ui/messages.js';
+import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -149,4 +150,12 @@ test('층 간 undo/redo 토스트는 각자 방향에 맞는 문구를 쓴다', 
   expect(main).toContain('const redoAction = withFloorNote(() => store.redo(), CROSS_FLOOR_REDO);');
   // 문구를 만드는 함수를 인자로 받는다: 한쪽만 고쳐 다시 갈라지는 일을 막는다.
   expect(main).toContain('if (name) shell.toast(msg(name));');
+});
+
+test('템플릿 문구는 §16.10이 적은 글자 그대로다', () => {
+  expect(TEMPLATE_REPLACE_WARN(5)).toBe('기존 제품 5개를 지웁니다');
+  expect(TEMPLATE_FILTER_RESET).toBe('필터 초기화');
+  expect(CONFIRM_TEMPLATE_DELETE('내 방').message).toContain('"내 방" 템플릿을 지웁니다');
+  expect(TEMPLATE_NAME_TAKEN).toBe('같은 이름의 템플릿이 있습니다');
+  expect(NAME_REQUIRED).toBe('이름을 입력해주세요');
 });
