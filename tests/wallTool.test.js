@@ -2,6 +2,7 @@ import { test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor } from '../src/state/schema.js';
 import { createWallTool } from '../src/view2d/tools/wallTool.js';
+import { DRAW_CHAIN_HINT, DRAW_DIR_HINT } from '../src/ui/messages.js';
 
 const key = k => ({ key: k, preventDefault() {} });
 
@@ -276,4 +277,25 @@ test('방향이 없는 프레임의 타이핑은 사라지지 않고 방향이 �
   expect(store.undo()).toBe(true);
   expect(activeFloor(store.get()).walls).toHaveLength(0);
   expect(store.canUndo()).toBe(false);                // 되돌림은 한 단계뿐이다
+});
+
+// 재리뷰 NEW-1: 리뷰 C-1의 가드는 타이핑을 지키지만 아무 말도 하지 않았다 — 사용자는
+// "길이를 타이핑하고 [Enter] 확정"이라 적힌 배너를 보며 3500을 치고 [Enter]를 누르는데
+// 벽도, 단계도, 한마디도 없다. 그 프레임만 배너가 사실(방향이 먼저다)을 말한다.
+test('길이만 넣고 방향이 없는 프레임은 배너가 방향을 가리킨다(재리뷰 NEW-1)', () => {
+  const store = createStore(createEmptyProject());
+  const t = createWallTool({ store, onDone() {} });
+  expect(t.hint).toBe('첫 점을 클릭하세요 (1/2)');
+  t.onPointerDown([0.5, 0.25]);                       // 첫 점: 커서가 곧 마지막 점이다(방향이 없다)
+  expect(t.hint).toBe(DRAW_CHAIN_HINT);               // 아직 아무것도 치지 않았다 — 평소의 한 줄
+  for (const c of '3500') t.onKey(key(c));
+  expect(t.getPreview().typed).toBe('3500');
+  expect(t.hint).toBe(DRAW_DIR_HINT);                 // 길이는 있고 방향이 없는 그 프레임만 다른 말을 한다
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(0);   // 말이 사실이다: 벽도 단계도 없다
+  expect(store.canUndo()).toBe(false);
+  t.onPointerMove([1000.5, 0.25]);                    // 방향이 생기면 평소의 한 줄로 돌아온다
+  expect(t.hint).toBe(DRAW_CHAIN_HINT);
+  expect(t.commitDims()).toBe(true);
+  expect(activeFloor(store.get()).walls).toHaveLength(1);
 });

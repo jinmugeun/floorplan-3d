@@ -183,9 +183,8 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
   });
   // 치수 칸은 타이핑마다 도구 버퍼에 들어가고(캔버스 프리뷰가 그 값으로 따라온다), 포커스가 옮겨 간
   // 칸이 곧 활성 칸이다(캔버스의 [Tab]과 같은 상태를 가리킨다 — §16.7).
-  let dimTouched = false;   // 이번 포커스 동안 사람이 이 칸에 글자를 쳤는가(리뷰 I-1: [Esc]의 뜻이 여기서 갈린다)
-  els.optionBar.addEventListener('input', ev => { const k = dimKey(ev.target); if (!k) return; dimTouched = true; if (currentTool?.setDim?.(k, ev.target.value)) onToolChange(); });
-  els.optionBar.addEventListener('focusin', ev => { const k = dimKey(ev.target); if (k) { dimTouched = false; currentTool?.focusDim?.(k); syncDims(); onToolChange(); } });
+  els.optionBar.addEventListener('input', ev => { const k = dimKey(ev.target); if (!k) return; if (currentTool?.setDim?.(k, ev.target.value)) onToolChange(); });
+  els.optionBar.addEventListener('focusin', ev => { const k = dimKey(ev.target); if (k) { currentTool?.focusDim?.(k); syncDims(); onToolChange(); } });
   // 다음 점을 클릭하는 순간 포커스를 캔버스 쪽으로 돌려준다(§17.8(2) · 감사 §57): 치수 칸이 키를
   // 계속 먹으면 캔버스의 숫자·[Enter]·[Esc] 경로가 죽는다. 캡처 단계라 도구의 pointerdown보다
   // 먼저 돈다. **왼쪽 버튼만** 본다(리뷰 M-1): 오른쪽 클릭(맥락 메뉴)·가운데 드래그(패닝)는
@@ -206,9 +205,12 @@ export function createShell(root, { store, ui, onGizmoMode = () => {}, onMinimap
     // 빈 버퍼 = 마우스 실측으로 복귀 = 이 칸의 "없던 일"이다. 도구는 취소하지 않는다(§16.7).
     // 손대지 않은 칸이면 그 [Esc]를 도구에도 넘긴다(리뷰 I-1): 되돌릴 글자가 없어 눈에 보이는 변화가
     // 없으므로, 배너가 약속한 "[Esc] 그리기 끝"이 자동 포커스가 기본이 된 뒤로 첫 누름에 거짓이었다.
+    // "손대지 않았다"는 **도구에게 묻는다**(재리뷰 OPEN-1): 셸이 들던 dimTouched 플래그는 focusin에서만
+    // 풀려, 칸의 [Enter]로 확정해 버퍼가 비어도 true로 남았다 — 배너가 권하는 흐름(타이핑 → [Enter] →
+    // [Esc])에서 다시 [Esc] 두 번이 됐다. f.typed는 확정과 함께 사라지므로 늘 지금 사실이다.
     if (ev.key === 'Escape' && dk) {
       ev.preventDefault();                            // keymap의 revertField가 한 번 더 돌지 않게 한다
-      const untouched = !dimTouched;
+      const untouched = !currentTool?.dims?.()?.fields.find(x => x.key === dk)?.typed;
       currentTool?.setDim?.(dk, '');
       ev.target.blur();                               // 포커스가 없어야 syncDims가 이 칸을 다시 채운다
       if (untouched) currentTool?.onKey?.({ key: 'Escape', preventDefault() {} });

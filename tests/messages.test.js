@@ -7,7 +7,7 @@ import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WH
 import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from '../src/ui/messages.js';
 import { FIRST_ROOM_HINT, WALL_ITEM_SLIDE_HINT } from '../src/ui/messages.js';
 import { DUCT_DRAWN, DUCT_NO_SYSTEM } from '../src/ui/messages.js';
-import { DRAW_CHAIN_HINT, TYPED_DIM_HINT } from '../src/ui/messages.js';
+import { DRAW_CHAIN_HINT, TYPED_DIM_HINT, DRAW_DIR_HINT } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -189,4 +189,10 @@ test('그리기 배너의 [Enter]는 한 번이고 [Esc]는 "그리기 끝"이�
   expect(DRAW_CHAIN_HINT).toContain(TYPED_DIM_HINT);                 // 타이핑 안내는 한 곳에서 온다
   expect(DRAW_CHAIN_HINT.match(/\[Enter\]/g)).toHaveLength(1);
   expect(DRAW_CHAIN_HINT).not.toContain('취소');                      // 놓인 구간을 지우지 않는다
+});
+
+// 재리뷰 NEW-1: 길이는 넣었는데 방향이 없는 프레임의 한 줄. 같은 대괄호 표기이고 [Enter]도 한 번이다.
+test('방향 안내 문구는 §17.8이 적은 글자 그대로다', () => {
+  expect(DRAW_DIR_HINT).toBe('길이를 넣었습니다 — 마우스로 방향을 정한 뒤 [Enter]');
+  expect(DRAW_DIR_HINT.match(/\[Enter\]/g)).toHaveLength(1);
 });

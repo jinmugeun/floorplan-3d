@@ -179,10 +179,16 @@ export function autoFocusDim(root, tool, doc = document) {
   const host = root?.querySelector?.('#optionDims');
   if (!host) return false;
   const fields = tool?.dims?.()?.fields ?? [];
-  const ready = fields.some(f => f.mm > 0);
+  // 0이 아니면 확정할 값이다(재리뷰 NEW-3): 벽·방의 mm는 길이(음수가 없다)지만 보조선의 mm는 **절대
+  // 좌표**라 x = -500 자리에서는 mm > 0이 영영 참이 되지 않아 §17.8(1)이 일어나지 않았다.
+  const ready = fields.some(f => f.mm !== 0);
   const before = dimReady.get(root) ?? false;
   dimReady.set(root, ready);
   if (!ready || before) return false;
+  // 캔버스에 숫자를 치던 중이면 훔치지 않는다(재리뷰 NEW-2): 래치는 코너마다 다시 열리므로, 3을 치고
+  // 마우스를 움직인 프레임에 포커스를 가져가며 el.select()가 버퍼를 통째로 고르면 다음 숫자가 이어
+  // 붙지 않고 덮어쓴다("먼저 치고 나중에 방향" 흐름의 뒷부분이 깎인다).
+  if (fields.some(f => f.typed)) return false;
   const active = doc?.activeElement;
   if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA')) return false;
   const f = fields.find(x => x.active) ?? fields[0];

@@ -1134,6 +1134,67 @@ test('확정할 것이 없으면 칸의 [Enter]도 도구로 흘러간다(리뷰
   shell.destroy();
 });
 
+// 재리뷰 OPEN-1: "손대지 않았다"를 셸이 플래그(dimTouched)로 들면 focusin에서만 풀려, 칸의 [Enter]로
+// 확정해 버퍼가 비어도 true로 남았다 — 배너가 스스로 권하는 흐름(길이를 타이핑 → [Enter] → [Esc])에서
+// 다시 [Esc] 두 번이 됐다. 이제 도구에게 묻는다(f.typed는 확정과 함께 사라진다).
+test('확정한 뒤의 첫 [Esc]도 도구로 흘러 그리기를 끝낸다(재리뷰 OPEN-1)', () => {
+  const { shell, root } = mountShell();
+  const s = dimStub();
+  const keys = [];
+  const tool = { ...s.tool, onKey: ev => { keys.push(ev.key); return true; } };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  el.focus();
+  el.value = '3500'; el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  expect(s.committed).toEqual(['3500']);            // 벽이 놓였다(버퍼가 비고 칸은 모델 값으로 돌아온다)
+  expect(s.typed).toBe('');
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(keys).toEqual(['Escape']);                 // [Esc] 한 번으로 체인이 끝난다
+  shell.destroy();
+});
+
+// 재리뷰 NEW-2: 래치는 코너마다 다시 열린다 — 캔버스에 숫자를 치던 중 마우스를 움직이면 그 프레임에
+// 포커스를 가져가며 select()가 버퍼를 통째로 골라, 다음 숫자가 이어 붙지 않고 덮어썼다("먼저 치고
+// 나중에 방향" 흐름의 뒷부분이 깎인다).
+test('캔버스에 치는 중이면 자동 포커스가 훔쳐 가지 않는다(재리뷰 NEW-2)', () => {
+  const { shell, root } = mountShell();
+  let typed = '', measured = 0;
+  const tool = {
+    name: 'wall', opts: { thickness: 200 }, hint: '다음 점을 클릭',
+    dims: () => ({ fields: [{ key: 'len', text: typed || String(measured), mm: measured, active: true, typed: typed !== '' }] }),
+    dimSig: () => `len:${typed || String(measured)}:1`,
+    setDim(k, v) { typed = v; return true; },
+  };
+  shell.setOptionBar(tool);                         // 첫 점을 찍은 프레임: 실측이 0이라 래치가 닫혀 있다
+  const el = root.querySelector('#optionDims [name="dim:len"]');
+  expect(document.activeElement).not.toBe(el);
+  typed = '3';                                      // 캔버스에서 숫자를 치기 시작했다(도구 버퍼로 들어간다)
+  measured = 2000; shell.refreshTool();             // 마우스가 움직여 확정할 값이 생긴 프레임
+  expect(document.activeElement).not.toBe(el);      // 치던 글자를 select()가 덮어쓰지 않는다
+  expect(el.value).toBe('3');                       // 칸은 그 버퍼를 그대로 비춘다
+  shell.destroy();
+});
+
+// 재리뷰 NEW-3: 래치가 mm > 0이었다. 벽·방의 mm는 길이라 옳지만 보조선의 mm는 **절대 좌표**라
+// x = -500 자리에서는 §17.8(1)이 아예 일어나지 않았다.
+test('음수 좌표의 치수 칸도 자동 포커스를 받는다(재리뷰 NEW-3)', () => {
+  const { shell, root } = mountShell();
+  let mm = 0;
+  const tool = {
+    name: 'guide', opts: {}, hint: '보조선을 놓을 자리를 클릭',
+    dims: () => ({ fields: [{ key: 'pos', text: String(mm), mm, active: true, typed: false }] }),
+    dimSig: () => `pos:${mm}:1`,
+    setDim() { return true; },
+  };
+  shell.setOptionBar(tool);
+  const el = root.querySelector('#optionDims [name="dim:pos"]');
+  expect(document.activeElement).not.toBe(el);      // 정확히 0인 자리는 그대로 남는다(칸을 직접 클릭한다)
+  mm = -500; shell.refreshTool();
+  expect(document.activeElement).toBe(el);          // 음수 좌표도 확정할 값이다
+  shell.destroy();
+});
+
 // 리뷰 I-2·I-7: 범위는 도구를 함께 보고(덕트 단면 h는 3000), 잘림은 조용히 일어나지 않는다.
 test('옵션 바에서 잘린 값은 칸에 되돌아오고 안내가 뜬다(리뷰 I-2·I-7)', () => {
   const { shell, root } = mountShell();

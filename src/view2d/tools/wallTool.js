@@ -5,7 +5,7 @@ import { snapPoint, tolMm } from '../../geom/snap.js';
 import { drawSnapMark } from '../snapMarks.js';
 import { add, sub, mul, norm, perp, dist } from '../../geom/vec.js';
 import { fmtLen, parseLen, typedChar } from '../../util/units.js';
-import { DRAW_CHAIN_HINT } from '../../ui/messages.js';
+import { DRAW_CHAIN_HINT, DRAW_DIR_HINT } from '../../ui/messages.js';
 
 export const WALL_TOOL_DEFAULTS = { reference: 'center', thickness: 200, snap: true, ortho: true };
 
@@ -43,8 +43,15 @@ export function createWallTool({ store, view = null, onDone = () => {}, opts: gi
   };
   const api = {
     name: 'wall', opts,
-    // 단계 안내(§14.7).
-    get hint() { return last() ? DRAW_CHAIN_HINT : '첫 점을 클릭하세요 (1/2)'; },
+    // 단계 안내(§14.7). 길이를 넣었는데 방향이 아직 없는 프레임만 다른 말을 한다(재리뷰 NEW-1):
+    // 그 [Enter]는 commitTyped의 가드에 걸려 타이핑만 지키고 벽도 단계도 만들지 않는데, 배너가
+    // "길이를 타이핑하고 [Enter] 확정"이라고 말하고 있으면 왜 안 되는지가 어디에도 없다.
+    // 배너는 dimSig가 바뀔 때마다 다시 그려지므로(typed가 곧 칸의 글자다) 추가 배선이 없다.
+    get hint() {
+      if (!last()) return '첫 점을 클릭하세요 (1/2)';
+      if (typed !== '' && cursor && dist(cursor, last()) < 10) return DRAW_DIR_HINT;
+      return DRAW_CHAIN_HINT;
+    },
     onPointerDown(p) {
       const r = snap(p); cursor = r.point; guides = r.guides; hit = r.hit;
       // 고리 닫기 판정도 같은 허용치를 쓴다(§16.6: 확대하면 좁아진다 — 예전에는 고정 150 mm였다).
