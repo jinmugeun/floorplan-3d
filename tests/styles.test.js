@@ -192,3 +192,15 @@ test('템플릿 미리보기 캔버스는 화면에서도 96 px 정사각이다(
   // m-1: `:not(.primary)`만으로는 .danger(0,1,0)의 빨간 테두리까지 덮어 [삭제]가 [이름 변경]과 같아진다.
   expect(CSS).toContain('.start-card.tpl.user .row button:not(.primary):not(.danger)');
 });
+
+// §16.12: 시작 화면 카드의 축소 도면도 크기를 스스로 선언한다 — 선언하지 않으면 캔버스 기본 상자
+// (300×150 CSS px)가 96 px 비트맵을 늘린다(.tpl-card canvas[data-tpl]와 같은 규칙 · 리뷰 I-1의 선례).
+test('시작 화면 축소 도면 캔버스도 화면에서 96 px 정사각이다(§16.12)', () => {
+  const box = rule('.start-card canvas[data-tpl]');
+  expect(box).toMatch(/width:\s*96px/);
+  expect(box).toMatch(/height:\s*96px/);
+  expect(box).toMatch(/flex:\s*0 0 auto/);        // .start-card·.start-open이 flex 컬럼이라 없으면 늘어난다
+  expect(box).toMatch(/align-self:\s*center/);    // 가로는 stretch 대신 가운데에 둔다
+  // 커서는 선언하지 않는다: 카드가 버튼이므로 pointer를 물려받아야 "누르면 열린다"가 참이다.
+  expect(box).not.toMatch(/cursor:/);
+});

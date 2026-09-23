@@ -252,5 +252,9 @@ button.primary, .primary { background: var(--accent); color: var(--on-accent); b
 .start-open b { font-size: 14px; } .start-open span { color: var(--muted); font-size: 12px; }
 .start-card.tpl.user .row { display: flex; gap: 6px; }
 .start-card.tpl.user .row button:not(.primary):not(.danger) { flex: 1; padding: 4px 6px; font-size: 11px; border: 1px solid var(--line); background: #fff; border-radius: 4px; cursor: pointer; font-family: inherit; margin: 0; }
-/* 시작 화면 카드의 축소 도면(§16.12)은 96 px 정사각이고 글자 위에 놓인다. */
-.start-card canvas[data-tpl] { align-self: center; background: #f4f6f8; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 2px; }
+/* 시작 화면 카드의 축소 도면(§16.12)은 96 px 정사각이고 글자 위에 놓인다. 크기를 **스스로**
+   선언한다(.tpl-card canvas[data-tpl]와 같은 이유 — Task 10 리뷰 I-1): 선언하지 않으면 캔버스의
+   기본 상자(300×150 CSS px)나 다른 규칙의 width가 96 px 비트맵을 늘려 1 px 외곽선이 뭉개진다.
+   커서는 선언하지 않는다: 카드 자체가 버튼이라 .start-card(또는 .start-open)의 pointer를 물려받아야
+   "누르면 열린다"가 참이 된다. */
+.start-card canvas[data-tpl] { width: 96px; height: 96px; flex: 0 0 auto; align-self: center; background: #f4f6f8; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 2px; }
