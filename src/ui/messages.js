@@ -230,3 +230,8 @@ export const MATERIAL_APPLIED = name => `"${name}"을 발랐습니다`;
 // 경로 배열을 못 쓰는 두 이유(계획 8 이월 M-5: ui/itemMenu.js에 있던 것을 문구 한 곳으로 옮긴다).
 export const PATH_2D_HINT = '2D에서 사용';
 export const PATH_FP_HINT = '1인칭 위치를 먼저 찍거나 [Esc]로 취소해주세요';
+
+// 끊긴 끝점은 이 기능의 결론이다(§18.10: 시간이 모자라도 자르지 않는다). 배너와 대화상자가
+// 같은 사실을 다른 자리에서 말한다 — 배너는 문장, 대화상자는 수치다.
+export const DXF_OPEN_ENDS = n => `벽이 이어지지 않은 곳이 ${n}군데 있습니다`;
+export const DXF_OPEN_ENDS_VIEW = '보기';

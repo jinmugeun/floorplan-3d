@@ -4,7 +4,7 @@
 import { esc } from '../util/html.js';
 import { activeFloor } from '../state/schema.js';
 import { memoCollisions } from '../geom/collide.js';
-import { COLLISION_BANNER, COLLISION_BANNER_QUIET, FP_BANNER, FP_EXIT, FIRST_ROOM_HINT } from './messages.js';
+import { COLLISION_BANNER, COLLISION_BANNER_QUIET, FP_BANNER, FP_EXIT, FIRST_ROOM_HINT, DXF_OPEN_ENDS, DXF_OPEN_ENDS_VIEW } from './messages.js';
 
 // 드래그가 끝났다고 볼 이벤트. lostpointercapture까지 받아 두면 캡처가 풀리는 경로도 놓치지 않는다.
 export const DRAG_END_EVENTS = ['pointerup', 'pointercancel', 'lostpointercapture'];
@@ -55,6 +55,12 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
         ? `<button type="button" class="hint" data-action="hintCancel">${esc(t.hint)}</button>`
         : `<span class="hint">${esc(t.hint)}</span>`;
     }
+    // 가져온 도면에서 벽이 이어지지 않은 자리(§18.6). 도구 안내보다 뒤에 둔다 — 지금 하는 일이
+    // 먼저다. 이 안내는 §18.10이 "자르지 않는다"고 못 박은 하나다: 이 도면은 원리적으로 자동으로
+    // 닫히지 않으므로(식당–조리실 경계가 배식대다) 고칠 자리를 보여 주는 것이 기능의 결론이다.
+    if (s.openEnds?.pts?.length) {
+      return `<span class="hint">${esc(DXF_OPEN_ENDS(s.openEnds.pts.length))}</span> <button type="button" id="btnOpenEnds">${esc(DXF_OPEN_ENDS_VIEW)}</button>`;
+    }
     // 온보딩을 닫은 뒤의 첫 방 유도(§16.12 · 감사 §47). 방이 없는 동안만 보이고, 첫 방이 생기면
     // app/firstRoomFit.js의 래치가 플래그를 끈다 — 그래서 새로 더한 빈 층에서 되살아나지 않는다.
     // §17.12(5) · 감사 §47: 가리키는 곳을 누를 수 있게 한다(§16.5가 만든 hint 버튼 경로 그대로).
@@ -72,6 +78,13 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
     el.innerHTML = next;
     if (next.includes('btnExitSolo')) el.querySelector('#btnExitSolo').onclick = () => ui.set({ soloRoom: null });
     if (next.includes('btnExitFp')) el.querySelector('#btnExitFp').onclick = () => onExitFp();
+    // [보기]는 index를 1 올리기만 한다(ui/는 뷰를 모른다). 카메라를 옮기는 쪽은
+    // view2d/openEnds2d.js다. 문구가 그대로라 다음 render는 위 `next === last`에서 멈추고,
+    // 그래서 이 핸들러와 버튼 포커스가 살아 있다.
+    if (next.includes('btnOpenEnds')) el.querySelector('#btnOpenEnds').onclick = () => {
+      const oe = ui.get().openEnds;
+      if (oe?.pts?.length) ui.set({ openEnds: { ...oe, index: (oe.index ?? 0) + 1 } });
+    };
   }
   // 왜 "미루기"를 골랐나(Task 8 리뷰 Important 1): #banner는 #canvasWrap의 레이아웃 행이라 비면 행이
   // 접히고(계획 4) 캔버스가 그만큼 커진다. 그래서 제품을 끄는 중에 충돌이 생기거나 풀리면 캔버스
