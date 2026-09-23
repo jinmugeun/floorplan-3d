@@ -94,7 +94,12 @@ export function mountPreviews(root, shapesFor) {
 // 새 그리기 코드를 만들지 않는다 — drawPreview가 받는 shape 배열로 만든다.
 export function placeholderShapes(kind, { size = PREVIEW_PX, pad = 8 } = {}) {
   const a = pad, b = size - pad;
-  if (kind === 'upload') return { outline: [[a, a], [b, a], [b, b], [a, b]], rooms: [], walls: [[[a, a], [b, b]], [[a, b], [b, a]]], boxes: [] };
+  if (kind === 'upload') {
+    // 사진 틀 + 대각선 둘. 틀은 rooms에도 넣어야 그려진다: drawPreview의 `shapes.rooms ?? [outline]`은
+    // 빈 **배열**을 통과시키므로(?? 는 null·undefined만 본다) rooms: []이면 틀이 사라진다.
+    const frame = [[a, a], [b, a], [b, b], [a, b]];
+    return { outline: frame, rooms: [frame], walls: [[[a, a], [b, b]], [[a, b], [b, a]]], boxes: [] };
+  }
   const step = (b - a) / 4, walls = [];
   for (let i = 0; i <= 4; i++) { walls.push([[a + i * step, a], [a + i * step, b]]); walls.push([[a, a + i * step], [b, a + i * step]]); }
   return { outline: [], rooms: [], walls, boxes: [] };

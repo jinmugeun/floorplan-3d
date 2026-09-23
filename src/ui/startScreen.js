@@ -45,7 +45,7 @@ export function openStartScreen({ store, restored = null, restoredAt = null, onE
     if (id === 'sample') {
       // §17.12(1)은 "buildSampleProject()의 **활성 층**"이라고 적었다. 지금 샘플은 층이 하나이고
       // activeFloor도 0이라 결과는 같지만, 규칙을 그대로 적어 두면 층이 늘어도 유지된다(M-12).
-      try { const p = buildSampleProject(); sampleFloor ??= p.floors?.[p.activeFloor ?? 0] ?? null; return sampleFloor ? projectShapes(sampleFloor) : null; }
+      try { if (!sampleFloor) { const p = buildSampleProject(); sampleFloor = p.floors?.[p.activeFloor ?? 0] ?? null; } return sampleFloor ? projectShapes(sampleFloor) : null; }
       catch { return null; }
     }
     if (id === 'empty' || id === 'upload') return placeholderShapes(id);
