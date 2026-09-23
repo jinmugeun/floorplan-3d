@@ -46,7 +46,8 @@ export function hiddenWallIds(floor, camPos, elevationDeg, view) {
     // 도면 중심보다 카메라 쪽 절반에 있는 벽만 숨긴다(§17.1 개정 · 리뷰 I-3). 축 정렬 도면을 기본
     // iso(방위 47°·고도 35°)에서 보면 남북 벽도 동서 벽도 |cos| ≈ 0.7이라, 이 반쪽 규칙이 없으면
     // 내벽이 한꺼번에 사라져 3D가 밑동 윤곽(평면도)만 남는다. 먼 쪽 절반은 배경 골격으로 선다.
-    if (dot(sub(mid, c), sub(camXY, c)) <= 0) continue;
+    // 동점(중점 = 도면 중심 · 대칭 두 방의 칸막이)은 먼 쪽이 아니다 → 아래 법선 판정으로 넘긴다(재리뷰 N-1).
+    if (dot(sub(mid, c), sub(camXY, c)) < 0) continue;
     // CUTAWAY_EDGE_COS보다 비스듬히 보이는 벽(≈78° 이상)은 가리는 것이 없으므로 남긴다 —
     // 도면의 골격이 다 사라지지 않게 하는 둘째 안전장치다.
     if (Math.abs(dot(norm(wallNormal(w)), norm(toCam))) >= CUTAWAY_EDGE_COS) out.add(w.id);

@@ -133,6 +133,21 @@ test('기본 iso 카메라에서 내벽은 절반만 숨고 먼 쪽은 선다', 
   expect(hiddenWallIds(f, isoCam(f), 35, view).has(far.id)).toBe(false);
 });
 
+// 재리뷰 N-1: 대칭 두 방의 칸막이는 중점이 도면 중심과 **같아** dot = 0이다. 동점을 "먼 쪽"으로 읽으면
+// 그 벽은 어느 방위에서도 잘리지 않는다(72방위 프로브에서 0건). 동점은 법선 판정으로 넘겨야 한다.
+test('대칭 두 방의 칸막이(중점 = 도면 중심)는 카메라를 마주보면 잘린다', () => {
+  const xs = [0.5, 4000.5, 8000.5], ys = [0.25, 3000.25], walls = [];
+  for (const y of ys) for (let k = 0; k < 2; k++) walls.push(makeWall({ a: [xs[k], y], b: [xs[k + 1], y] }));
+  for (const x of xs) walls.push(makeWall({ a: [x, ys[0]], b: [x, ys[1]] }));
+  const f = { walls, rooms: detectRooms(walls) };
+  const divider = f.walls.find(w => w.a[0] === 4000.5 && w.b[0] === 4000.5);
+  expect(wallOwners(f, divider)).toHaveLength(2);
+  expect(floorCenter(f.walls)).toEqual([4000.5, 1500.25]);       // 칸막이 중점과 같다 → dot = 0
+  const hits = [47, 90, 137, 227, 270, 317].filter(az => hiddenWallIds(f, isoCam(f, az), 35, view).has(divider.id));
+  expect(hits.length).toBeGreaterThan(0);                          // 마주보는 방위에서는 잘린다
+  expect(hiddenWallIds(f, isoCam(f, 0), 35, view).has(divider.id)).toBe(false);   // 정면(법선과 직각)에서는 선다
+});
+
 // 리뷰 I-2 · §17.1(isExteriorWall = 소유 방 ≤ 1): 어느 방에도 속하지 않은 벽(방이 아직 닫히지 않은,
 // 그리는 중인 벽)도 외벽이다 — 한쪽 판정이라 한 방향에서만 숨는다. 양쪽 판정이었을 때는 어느 각도에서나
 // 사라져 "그리던 벽이 3D에서 없어진다"가 됐고, 둘러싼 방이 없으니 지워서 얻는 픽률도 0이다.
