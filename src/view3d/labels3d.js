@@ -20,7 +20,7 @@ export const LABEL_DEBOUNCE_MS = 120;   // 카메라가 멈춘 뒤 이만큼 있
 export const LABEL3D_PRIORITY = ['equip', 'ductSize'];   // 설비 번호가 덕트 단면보다 높다
 export const LABEL_BOX_PX = 12;      // 카메라를 모를 때(투영 주입 등) 쓰는 상자 글자 크기
 export const LABEL_BOX_MIN_PX = 6;   // 아주 멀어도 상자가 0으로 사라지지 않게(겹침을 놓치지 않게)
-const LABEL_LIFT = 150;          // 설비 윗면·덕트 윗면에서 라벨까지(mm)
+const LABEL_LIFT = 150;          // 설비 윗면·덕트 윗면에서 라벨까지(mm) — bodyDrag.js의 SLIDE_LIFT와 같은 값(M-14)
 
 export function labelTextureSize(text) {
   const w = Math.ceil(textWidth(String(text ?? ''), LABEL_FONT_PX) + LABEL_PAD_PX);

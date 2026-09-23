@@ -327,3 +327,53 @@ describe('프로젝트 교체는 되돌릴 단계가 0개다 (§17.3)', () => {
     expect(activeFloor(store.get()).items).toHaveLength(39);
   });
 });
+
+// §17.5 · §17.14: 3D 조작도 같은 계약이다 — 한 드래그 = 한 단계, 잠긴 아이템은 0단계.
+// 기계는 bodyDrag가 갖고 있으므로 여기서는 **트랜잭션 계약만** 본다(픽셀·카메라는 bodyDrag.test.js).
+describe('3D 드래그의 되돌리기 계약 (§17.5)', () => {
+  test('몸체 드래그 한 번 = 한 단계, 벽 슬라이드 한 번 = 한 단계, 잠긴 아이템은 0단계', async () => {
+    const { snapMm, slidePlacement } = await import('../src/view3d/bodyDrag.js');
+    const { nearestWallPlacement, WALL_ATTACH_DIST } = await import('../src/geom/items.js');
+    const { updateItem, setItemFlag, movableItems, nudgeItems } = await import('../src/state/floorOps.js');
+    const store = createStore(createEmptyProject());
+    addWalls(store, rectWalls([0.5, 0.25], [6000.5, 4000.25], 200));
+    const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000.5, 1500.25] }));
+    const counter = stepCounter(store);
+
+    // 몸체 드래그: beginTransaction → 이동마다 record:false → endTransaction
+    store.beginTransaction();
+    for (const dx of [10, 20, 30]) updateItem(store, hood, { pos: [snapMm(2000.5 + dx), snapMm(1500.25)] }, { record: false });
+    store.endTransaction();
+    expect(counter.get()).toBe(1);
+    store.undo();
+    expect(activeFloor(store.get()).items.find(i => i.id === hood).pos).toEqual([2000.5, 1500.25]);
+
+    // 벽 슬라이드: 같은 계약이고 pos는 (wallId, t)의 결과다.
+    const f = activeFloor(store.get());
+    const size = [900, 200, 2100];
+    const seat = nearestWallPlacement(f.walls, [1500.5, 200.25], size, WALL_ATTACH_DIST);
+    const door = addItem(store, createItem(productById('hood-wall'), { pos: seat.pos, wallId: seat.wallId, t: seat.t, side: seat.side, rot: seat.rot }));
+    counter.reset();
+    const it = activeFloor(store.get()).items.find(i => i.id === door);
+    const next = slidePlacement(activeFloor(store.get()), it, [2500.5, 150.25]);
+    store.beginTransaction();
+    updateItem(store, door, next, { record: false });
+    store.endTransaction();
+    expect(counter.get()).toBe(1);
+    expect(activeFloor(store.get()).items.find(i => i.id === door).wallId).toBe(it.wallId);
+
+    // 잠긴 아이템: 드래그가 열리지 않으므로 트랜잭션도 없다(0단계).
+    // 판정의 자리는 **경로**다 — `updateItem/updateItems`(floorOps.js:235-244)에는 잠금 검사가
+    // 없다(잠금을 켜고 끄는 것 자체가 그 함수를 지나므로 둘 수 없다). 잠금 필터는
+    // `movableItems`(:205)·`resizeItem`(:265)과 bodyDrag의 `onDown`(`if (it.locked) { toast(…); return; }`)이
+    // 갖는다. 그래서 여기서는 **필터가 비는 것**과 **그 필터를 쓰는 이동 경로가 dispatch도
+    // 트랜잭션도 열지 않는 것**을 본다(3D 드래그의 0 px 차단 자체는 bodyDrag.test.js가 본다).
+    setItemFlag(store, [hood], 'locked');
+    counter.reset();
+    const before = store.get();
+    expect(movableItems(store.get(), [hood])).toEqual([]);   // onDown이 보는 것과 같은 규칙
+    nudgeItems(store, [hood], [10, 0]);                      // 같은 필터를 쓰는 이동 경로
+    expect(store.get()).toBe(before);
+    expect(counter.get()).toBe(0);
+  });
+});

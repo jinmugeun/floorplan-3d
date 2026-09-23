@@ -777,3 +777,21 @@ test('다른 층의 대상이 선택된 채 층을 바꾸면 선택이 풀리고
   expect(el.textContent).toContain('층 관리');
   expect(el.innerHTML.length).toBeGreaterThan(0);        // 예전에는 innerHTML 길이가 0이었다
 });
+
+// §17.5(3) · 감사 §6: 벽 부착 제품은 3D에서 기즈모가 조용히 사라졌다 — 사실과 대체 조작을 적는다.
+test('벽 부착 제품 행에 벽 슬라이드 안내가 한 줄 붙는다', async () => {
+  const { WALL_ITEM_SLIDE_HINT } = await import('../src/ui/messages.js');
+  const { nearestWallPlacement, WALL_ATTACH_DIST } = await import('../src/geom/items.js');
+  const { store, ui, el } = setupPanel();
+  const f = activeFloor(store.get());
+  const size = [900, 200, 2100];
+  const seat = nearestWallPlacement(f.walls, [1500.5, 200.25], size, WALL_ATTACH_DIST);
+  const id = addItem(store, createItem(productById('hood-wall'), { pos: seat.pos, wallId: seat.wallId, t: seat.t, side: seat.side, rot: seat.rot }));
+  ui.set({ selection: { type: 'item', id } });
+  expect(el.textContent).toContain(WALL_ITEM_SLIDE_HINT);
+  expect(el.querySelector('[name="posX"]').readOnly).toBe(true);     // pos는 (wallId, t)의 결과다
+  // 바닥에 서는 제품에는 그 줄이 없다.
+  const hood = addItem(store, createItem(productById('hood-box'), { pos: [2000.5, 1500.25] }));
+  ui.set({ selection: { type: 'item', id: hood } });
+  expect(el.textContent).not.toContain(WALL_ITEM_SLIDE_HINT);
+});

@@ -5,7 +5,7 @@ import { LOCKED_ITEM_EDIT, LOCKED_DUCT_EDIT, LOCKED_DUCT_DELETE, LOCKED_DUCT_MOV
 import { LAYERS_HIDDEN, LAYERS_SHOWN, FLOOR_ADDED, CROSS_FLOOR_UNDO, CROSS_FLOOR_REDO } from '../src/ui/messages.js';
 import { WHY_LOCKED_ITEM, WHY_LOCKED_DUCT, WHY_NO_SELECTION, WHY_NO_MATERIAL, WHY_NO_ROOM, WHY_NO_SEGMENT, WHY_NO_VERTEX, WHY_NO_CONNECTION, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, WHY_CLIPBOARD_EMPTY, WHY_MIN_POINTS, WHY_NO_ACTION } from '../src/ui/messages.js';
 import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, TEMPLATE_NAME_TAKEN, NAME_REQUIRED } from '../src/ui/messages.js';
-import { FIRST_ROOM_HINT } from '../src/ui/messages.js';
+import { FIRST_ROOM_HINT, WALL_ITEM_SLIDE_HINT } from '../src/ui/messages.js';
 import { DUCT_DRAWN, DUCT_NO_SYSTEM } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -176,4 +176,8 @@ test('덕트 완성·계통 경고 문구는 §17.9가 적은 글자 그대로�
   expect(DUCT_DRAWN(2, 12.4)).toBe('덕트 2구간 · 총 12.4 m');
   expect(DUCT_DRAWN(1, 5)).toBe('덕트 1구간 · 총 5 m');
   expect(DUCT_NO_SYSTEM).toBe('계통을 지정하지 않았습니다 — 풍량 표에 "미지정"으로 잡힙니다');
+});
+
+test('벽 부착 제품 안내는 §17.5가 적은 글자 그대로다', () => {
+  expect(WALL_ITEM_SLIDE_HINT).toBe('벽에 붙는 제품입니다 — 벽을 따라서만 움직입니다 (3D에서는 주황 핸들)');
 });

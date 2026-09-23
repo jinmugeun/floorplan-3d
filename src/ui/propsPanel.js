@@ -16,7 +16,7 @@ import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
 import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
 import { memoCollisions } from '../geom/collide.js';
-import { COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR } from './messages.js';
+import { COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, WALL_ITEM_SLIDE_HINT } from './messages.js';
 export { lenField, readLen, withUnit } from './fieldUtils.js';
 export { applyNumber };
 
@@ -87,6 +87,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${field('각도 (°)', num('rot', it.rot, 0, 360, 1))}
         ${lenField(withUnit('위치 X', units, showUnit), 'posX', it.pos[0], -1e6, 1e6, onWall, units)}
         ${lenField(withUnit('위치 Y', units, showUnit), 'posY', it.pos[1], -1e6, 1e6, onWall, units)}
+        ${onWall ? `<p class="hint">${WALL_ITEM_SLIDE_HINT}</p>` : ''}
         ${equipRowsHtml(it, { units, showUnit, floor: f })}
         <button type="button" name="delete" class="danger">제품 삭제</button>`;
     }

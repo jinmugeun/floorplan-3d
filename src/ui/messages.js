@@ -181,3 +181,7 @@ export const FIRST_ROOM_HINT = '왼쪽 [방 그리기 F]로 첫 방을 그려 �
 // m이다(io/estimateTable.js의 lengthText와 같은 규칙).
 export const DUCT_DRAWN = (n, m) => `덕트 ${n}구간 · 총 ${m} m`;
 export const DUCT_NO_SYSTEM = '계통을 지정하지 않았습니다 — 풍량 표에 "미지정"으로 잡힙니다';
+
+// 벽 부착 제품(문·창·환기캡)은 3D에서 기즈모가 붙지 않는다(유령 개구부를 막는 규칙 — §17.5).
+// 그 사실과 대체 조작을 한 줄로 알린다: 감사 §6은 "조용히 사라진다"였다.
+export const WALL_ITEM_SLIDE_HINT = '벽에 붙는 제품입니다 — 벽을 따라서만 움직입니다 (3D에서는 주황 핸들)';

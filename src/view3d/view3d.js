@@ -12,6 +12,7 @@ import { headingDeg, toWorldXY } from './camera.js';
 import { createFirstPerson } from './firstPerson.js';
 import { orthoViewParams, createItemPicker, createDragLatch } from './pick3d.js';
 import { createFacePicker } from './facePick.js';
+import { createBodyDrag } from './bodyDrag.js';
 import { createOrthoView } from './orthoView.js';
 import { cullLabels, createCameraWatch, LABEL_DEBOUNCE_MS } from './labels3d.js';
 
@@ -53,13 +54,16 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   });
   // rebuild가 picker를 읽으므로 picker를 먼저 만든다(TDZ).
   // 기즈모를 다시 붙여도 되는 상황(1인칭·투영 아님, 드래그 중 아님)에서만 붙인다.
-  const reattachPicker = () => { if (mode === 'fp' || ov.isActive()) picker.detach(); else if (!picker.isDragging()) picker.attach(ui.get().selection); };
+  let bodyDrag = null;   // 아래에서 만든다(선택·모드가 바뀔 때 핸들을 다시 세운다 — §17.5)
+  const reattachPicker = () => { if (mode === 'fp' || ov.isActive()) picker.detach(); else if (!picker.isDragging() && !bodyDrag?.isDragging()) picker.attach(ui.get().selection); bodyDrag?.refresh(); };
   // 컷어웨이가 감춘 벽을 모두 되돌린다(1인칭·투영 뷰는 벽을 숨기지 않는다). 밑동 윤곽만 계속 숨긴다.
   const showAllWalls = () => group?.children.forEach(m => { if (m.userData.wallId) m.visible = m.name !== 'wallFoot'; });
   const dragLatch = createDragLatch(); // 기즈모 드래그가 끝난 클릭은 두 피커 모두 무시한다
   const picker = createItemPicker({ renderer, getCamera: () => ov.camera() ?? camera, controls, scene, store, ui, getGroup: () => group, getMode: () => mode, requestRender, openMenu, itemActions, dragLatch });
   // 아이템 피커 다음에 등록한다: 아이템을 맞히지 못한 클릭이 비워 놓은 선택을 면 피커가 덮어쓴다.
   const facePicker = createFacePicker({ renderer, getCamera: () => ov.camera() ?? camera, scene, getGroup: () => group, store, ui, openMenu, surfaceActions, getMode: () => mode, requestRender, dragLatch });
+  // 몸체 드래그(바닥 위 이동)와 벽 부착 제품의 슬라이드 핸들. 기즈모와 같은 빗장·트랜잭션 계약을 쓴다.
+  bodyDrag = createBodyDrag({ renderer, getCamera: () => ov.camera() ?? camera, getGroup: () => group, scene, store, ui, controls, requestRender, dragLatch, getMode: () => mode });
   function rebuild() { if (group) { scene.remove(group); disposeGroup(group); } group = buildFloorGroup(activeFloor(store.get()), store.get().view); scene.add(group); if (mode === 'fp') group?.children.forEach(mm => { if (mm.name === 'ceiling') mm.visible = true; }); reattachPicker(); scheduleLabelCull(); }
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
@@ -284,5 +288,5 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
   rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender, setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }
