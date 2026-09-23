@@ -118,9 +118,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #keymapTable { width: 100%; border-collapse: collapse; } #keymapTable th, #keymapTable td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); font-weight: 400; } #keymapTable thead th { color: var(--muted); font-size: 11px; }
 #props input[type=color] { width: 100%; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
 #startScreen { position: fixed; inset: 0; z-index: 70; background: rgba(23,32,44,.55); display: grid; place-items: center; }
-.start-card-row { background: var(--panel); border-radius: 12px; padding: 24px 28px; width: min(760px, 94vw); }
+.start-card-row { background: var(--panel); border-radius: 12px; padding: 24px 28px; width: min(880px, 94vw); }
 .start-card-row h1 { font-size: 18px; margin: 0 0 16px; }
-.start-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.start-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }   /* 동작 카드 넷(빈 도면·불러오기·DXF·샘플)이 한 줄 — 계획 10 */
 .start-card { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; font: inherit; }
 .start-card:hover { border-color: var(--accent); background: #f5f8ff; } .start-card b { font-size: 14px; } .start-card span { color: var(--muted); font-size: 12px; }
 @media (max-width: 720px) { .start-cards { grid-template-columns: 1fr; } }
