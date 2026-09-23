@@ -1,0 +1,139 @@
+{
+ "header": {
+  "ver": "AC1032",
+  "codepage": "ANSI_949",
+  "encoding": "utf-8",
+  "insunits": 4
+ },
+ "counts": {
+  "blocks": 3,
+  "blocksUsed": 2,
+  "entities": 10,
+  "blockEntities": 1626
+ },
+ "layers": [
+  [
+   "WIN",
+   "opening",
+   520,
+   false
+  ],
+  [
+   "04창호",
+   "opening",
+   385,
+   false
+  ],
+  [
+   "급식기구",
+   "equip",
+   200,
+   false
+  ],
+  [
+   "SYM",
+   "other",
+   200,
+   false
+  ],
+  [
+   "기존",
+   "wall",
+   191,
+   false
+  ],
+  [
+   "WAL-2",
+   "wall",
+   85,
+   false
+  ],
+  [
+   "WAL",
+   "wall",
+   27,
+   false
+  ],
+  [
+   "FIN",
+   "wall",
+   14,
+   false
+  ],
+  [
+   "CEN",
+   "grid",
+   8,
+   true
+  ],
+  [
+   "0",
+   "other",
+   0,
+   false
+  ],
+  [
+   "TEXT2",
+   "text",
+   0,
+   true
+  ]
+ ],
+ "checked": [
+  "FIN",
+  "WAL",
+  "WAL-2",
+  "기존"
+ ],
+ "extract": {
+  "faces": 109,
+  "pairs": 112,
+  "accepted": 16,
+  "gaps": 12,
+  "guessed": false
+ },
+ "project": {
+  "walls": 14,
+  "rooms": 3,
+  "areaM2": 20,
+  "openEnds": 1,
+  "thickness": [
+   [
+    200,
+    3
+   ],
+   [
+    235,
+    3
+   ],
+   [
+    225,
+    2
+   ],
+   [
+    425,
+    2
+   ],
+   [
+    95,
+    1
+   ],
+   [
+    150,
+    1
+   ],
+   [
+    275,
+    1
+   ],
+   [
+    360,
+    1
+   ]
+  ],
+  "size": [
+   8182,
+   8122
+  ]
+ }
+}
