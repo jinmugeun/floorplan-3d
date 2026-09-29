@@ -97,6 +97,31 @@ test('bulge 선분은 src에 :bulge를 달고 분할 수 공식을 따른다', (
   expect(explode(doc, { arcSteps: 4 }).segs).toHaveLength(4);
 });
 
+// 2026-09-29: 실파일의 여닫이문(WID 레이어 DR-900·DR-1800 블록)은 문 궤적을 ARC가 아니라 **폴리선 bulge**로
+// 그렸다 — ARC만 보던 문 판정이 전부 놓쳤다. bulge 호는 선분으로 쪼개는 것과 별개로 polyArcs에도 남긴다.
+test('bulge 호는 polyArcs에 월드 좌표의 중심·반지름·반시계 시작/끝 각으로 남는다(거울 INSERT 포함)', () => {
+  // 블록 안: (900.5, 0.25)→(0.5, 900.25)를 잇는 90° 호(bulge = tan(22.5°)) — 중심 (0.5, 0.25)에서 반시계로 돈다
+  const b = Math.tan(Math.PI / 8);
+  const leaf = { type: 'LWPOLYLINE', layer: 'WID', pts: [[900.5, 0.25], [0.5, 900.25]], bulges: [b], closed: false };
+  const doc = { blocks: new Map([block('DR-900', [leaf])]), entities: [insert('DR-900', 'WID', 1000.5, 2000.25)] };
+  const ex = explode(doc);
+  expect(ex.arcs).toEqual([]);                          // 레이어 통계(arcs)는 그대로다
+  expect(ex.polyArcs).toHaveLength(1);
+  const a = ex.polyArcs[0];
+  expect(a.block).toBe('DR-900');
+  expect(a.layer).toBe('WID');
+  expect(a.r).toBeCloseTo(900, 3);
+  expect(a.c[0]).toBeCloseTo(1001, 3);
+  expect(a.c[1]).toBeCloseTo(2000.5, 3);
+  expect(a.a0).toBeCloseTo(0, 3);
+  expect(a.a1).toBeCloseTo(90, 3);
+  // 거울(xscale −1)이면 호가 y축 반대편으로 가고 반시계 표현은 90°→180°다
+  const mir = explode({ blocks: doc.blocks, entities: [insert('DR-900', 'WID', 1000.5, 2000.25, { xscale: -1 })] }).polyArcs[0];
+  expect(mir.c[0]).toBeCloseTo(1000, 3);
+  expect(((mir.a0 % 360) + 360) % 360).toBeCloseTo(90, 3);
+  expect(((mir.a1 % 360) + 360) % 360).toBeCloseTo(180, 3);
+});
+
 test('깊이 초과와 없는 블록은 skipped에 센다', () => {
   const doc = {
     blocks: new Map([

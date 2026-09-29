@@ -1,5 +1,5 @@
-// 면선(face line)과 평행쌍(§18.3의 2·4·5·6·7). 프로토타입 `dxf-walls.mjs`의 largestCluster·
-// buildFaces·candidatePairs·히스토그램·탐욕 매칭을 그대로 옮기고, §18.3-7의 동점 규칙만 더했다.
+// 면선(face line)과 ROI(§18.3의 2·4). 면선에서 벽을 세우는 일은 bands.js(벽 띠 스윕)가 한다 —
+// 옛 평행쌍 탐욕 매칭(candidatePairs·thicknessModes·matchPairs)은 2026-09-29 정확도 수정에서 지웠다.
 import { DXF_PARAMS } from './params.js';
 
 const norm180 = a => { let x = a % 180; if (x < 0) x += 180; return x; };
@@ -54,16 +54,18 @@ export function largestCluster(segs, link = ROI_LINK) {
   const g = new Map();
   for (const s of ok) for (const p of [s.a, s.b]) {
     const r = find(cell(p));
-    const o = g.get(r) ?? { n: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    const o = g.get(r) ?? { n: 0, len: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
     o.n++;
     o.x0 = Math.min(o.x0, p[0]); o.x1 = Math.max(o.x1, p[0]);            // bbox는 칸이 아니라 실제 끝점이다
     o.y0 = Math.min(o.y0, p[1]); o.y1 = Math.max(o.y1, p[1]);
     g.set(r, o);
   }
-  return [...g.values()].sort((a, b) => b.n - a.n)[0];
+  // 크기 = 선분 길이의 합(같으면 끝점 수). 끝점 수로만 재면 짧은 선이 빽빽한 기호가 긴 벽 몇 개인 건물을 이긴다.
+  for (const s of ok) g.get(find(cell(s.a))).len += Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+  return [...g.values()].sort((a, b) => b.len - a.len || b.n - a.n)[0];
 }
 
-// 방향 bin → 법선 오프셋 클러스터 → 구간 투영 → 틈 ≤ faceGap으로 잇기(문·창 개구부를 건너뛴다).
+// 방향 bin → 법선 오프셋 클러스터 → 구간 투영 → 틈 ≤ faceGap(작도 이음매)으로 잇기.
 export function buildFaces(segs, P = DXF_PARAMS) {
   const bins = new Map();
   const wrap = Math.round(180 / P.angTol);
@@ -99,8 +101,7 @@ export function buildFaces(segs, P = DXF_PARAMS) {
       const off = group.reduce((a, x) => a + x.off, 0) / group.length;
       const spans = group.map(x => [x.t0, x.t1]);
       const merged = mergeIv(spans, P.faceGap);
-      // raw는 틈을 잇지 않은 원 구간이다 — faceGap으로 이어 버린 뒤에는 문 자리가 사라지므로
-      // Task 6의 openingGaps가 이것을 보고 개구부를 되찾는다(사전 검토 C-2).
+      // raw는 틈을 잇지 않은 원 구간이다 — bands.js의 wallBands가 이것으로 "그 자리에 함께 있는" 선을 센다.
       faces.push({ key, u, n, off, intervals: merged, raw: mergeIv(spans), layers: new Set(group.map(x => x.layer)), span: ivLen(merged) });
       group = [];
     };
@@ -111,67 +112,4 @@ export function buildFaces(segs, P = DXF_PARAMS) {
     flush();
   }
   return faces;
-}
-
-// 같은 방향 bin 안에서만 짝짓는다. clear = 두 면 사이에 (겹치는 구간에서) 다른 면선이 없다.
-export function candidatePairs(faces, P = DXF_PARAMS) {
-  const out = [], byKey = new Map();
-  for (const f of faces) (byKey.get(f.key) ?? byKey.set(f.key, []).get(f.key)).push(f);
-  for (const list of byKey.values()) {
-    list.sort((a, b) => a.off - b.off);
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const d = list[j].off - list[i].off;
-        if (d < P.tMin) continue;
-        if (d > P.tMax) break;
-        const ov = ivOverlap(list[i].intervals, list[j].intervals);
-        const L = ivLen(ov);
-        if (L < P.minOverlap) continue;
-        const clear = !list.slice(i + 1, j).some(f => ivLen(ivOverlap(f.intervals, ov)) > 0);
-        out.push({ A: list[i], B: list[j], d, ov, L, clear });
-      }
-    }
-  }
-  return out;
-}
-
-// 겹침 길이 가중 5 mm bin. 상위 6개가 우세 두께(점수 ×2.5), 상위 8개로 15 mm 스냅.
-export function thicknessModes(pairs, P = DXF_PARAMS) {
-  const hist = new Map();
-  for (const c of pairs) {
-    const k = Math.round(c.d / P.modeBin) * P.modeBin;
-    hist.set(k, (hist.get(k) ?? 0) + c.L);
-  }
-  const sorted = [...hist].sort((a, b) => b[1] - a[1]);
-  const modes = new Set(sorted.slice(0, P.modeTop).map(([k]) => k));
-  const modeList = sorted.slice(0, P.modeSnapTop).map(([k]) => k).sort((a, b) => a - b);
-  const snap = d => {
-    let best = d, bd = P.modeSnap;
-    for (const m of modeList) { const x = Math.abs(d - m); if (x <= bd) { bd = x; best = m; } }
-    return Math.round(best);
-  };
-  const boost = d => (modes.has(Math.round(d / P.modeBin) * P.modeBin) ? P.modeBoost : 1);
-  return { hist: sorted, modes, modeList, snap, boost };
-}
-
-// 탐욕 매칭. 점수 = 겹침 × 우세 가중. 이미 consume(40 %)을 넘게 쓰인 면은 거절한다.
-// 동점 처리(§18.3-7): 점수가 tieBand(10 %) 이내인 후보들 **사이에서만** clear인 쌍을 먼저 뽑는다.
-// 전면 규칙으로 올리지 않는 이유 — 9겹 외벽에서 "사이에 아무것도 없는 쌍"은 가장 얇은 인접 쌍이라
-// 100 mm 오판을 오히려 굳힌다(두께 오차는 §18.6의 분포 표시와 사람의 편집으로 닫는다).
-export function matchPairs(pairs, modes, P = DXF_PARAMS) {
-  const left = pairs.map(c => ({ c, score: c.L * modes.boost(c.d) })).sort((x, y) => y.score - x.score);
-  const used = new Map();
-  const usedLen = (f, iv) => ivLen(ivOverlap(used.get(f) ?? [], iv));
-  const take = (f, iv) => used.set(f, [...(used.get(f) ?? []), ...iv]);
-  const accepted = [];
-  while (left.length) {
-    let pick = 0;
-    const lim = left[0].score * (1 - P.tieBand);
-    for (let k = 0; k < left.length && left[k].score >= lim; k++) if (left[k].c.clear) { pick = k; break; }
-    const { c } = left.splice(pick, 1)[0];
-    if (usedLen(c.A, c.ov) > P.consume * c.L || usedLen(c.B, c.ov) > P.consume * c.L) continue;
-    take(c.A, c.ov); take(c.B, c.ov);
-    accepted.push(c);
-  }
-  return accepted;
 }

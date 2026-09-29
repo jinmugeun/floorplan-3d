@@ -4,7 +4,8 @@
 import { makeWall } from '../../geom/walls.js';
 import { normalizeWalls } from '../../geom/normalize.js';
 import { detectRooms, pointInPolygon } from '../../geom/rooms.js';
-import { createEmptyProject, createFloor, normalizeProject } from '../../state/schema.js';
+import { createEmptyProject, createFloor, normalizeProject, createItem } from '../../state/schema.js';
+import { productById } from '../../products/catalog.js';
 import { dropTinyComponents } from './walls.js';
 import { DXF_PARAMS } from './params.js';
 
@@ -42,20 +43,57 @@ export function makeToApp(walls, scale = 1) {
 // 방 이름(§18.4). **`detectRooms(walls)`가 낸 그 객체에 직접 넣는다** — normalizeFloor가
 // `detectRooms(walls, rooms)`로 다시 계산하면서 matchPrevRooms의 wallIds 자카드로 이름을
 // 물려주기 때문이다(직접 만든 폴리곤을 넣으면 이름이 조용히 사라진다).
-export function nameRooms(rooms, texts, toApp, { min = 200, max = 600, chars = 20 } = {}) {
-  const cand = texts
-    .filter(t => t.h >= min && t.h <= max && String(t.text ?? '').trim().length >= 1 && String(t.text).trim().length <= chars)
-    .map(t => ({ p: toApp(t.p), text: String(t.text).trim() }));
-  const used = new Set();
+//
+// 2026-09-29 정확도 수정 — 실파일에서 식당+조리실 방이 급식기구 라벨 "온장고"로, 식품창고가 "평면형"으로,
+// 계단 화살표 "DN"이 방 이름이 됐다(높이만 보고 아무 레이어의 첫 글자를 골랐다). 규칙:
+//  ① 레이어 역할(nameRoles: 레이어 → classify 역할)로 층을 나눈다 — 1층 `text`, 2층 `wall`·`other`
+//     (문자 레이어에 실명이 없는 방만), 나머지(기구·설비·치수·해치…)는 이름이 아니다. nameRoles가 없으면
+//     모든 글자가 1층이다(역할을 모르는 부르는 쪽 — 옛 동작).
+//  ② 면적·석수 라벨 "(…)" · "m²" · 계단 화살표 UP/DN · 숫자뿐 · 축선 기호(X12)는 이름이 아니다.
+//  ③ "/"로 끝나는 실명은 바로 아랫줄(≤ 2.2줄)과 한 이름이고("영양상담/영양관리실"), 글자마다 띄운
+//     실명은 붙인다("식 당" → "식당").
+//  ④ 한 방에 든 실명이 여럿이면 아래(≤ 4줄)에 면적 라벨이 붙은 것들이 전부 이름이다(면적 큰 순 · "식당·조리실" —
+//     배식대로만 나뉜 두 공간이 한 방으로 닫혔다는 뜻). 면적 라벨이 붙은 것이 없으면 방 중심에 가장
+//     가까운 하나다(설비 라벨 "청소용수전"이 이름을 가로채지 않는다).
+//  ⑤ unmatched = 어느 방에도 들지 못한 1층 실명뿐이다 — 검토 화면의 "닫히지 않은 공간 n곳"이 그 수다.
+const NAME_TIER = { text: 1, wall: 2, other: 2 };
+const AREA_LABEL = /m²|㎡|m2\b/i;
+const notName = t => /^\(.*\)$/.test(t) || AREA_LABEL.test(t) || /^(up|dn|down)$/i.test(t) || /^[\d.,\s]+$/.test(t) || /^[A-Z]{1,2}\d{1,3}$/.test(t);
+const unspace = t => (/^([가-힣] )+[가-힣]$/.test(t) ? t.replace(/ /g, '') : t);
+const centerOf = pts => [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+
+export function nameRooms(rooms, texts, toApp, { min = 200, max = 600, chars = 20, nameRoles = null } = {}) {
+  const tierOf = layer => (nameRoles ? NAME_TIER[nameRoles.get(layer)] ?? 0 : 1);
+  const all = texts.filter(t => t.h >= min && t.h <= max)
+    .map(t => ({ p: toApp(t.p), raw: String(t.text ?? '').trim(), h: t.h, tier: tierOf(t.layer) }));
+  const areas = all.filter(c => AREA_LABEL.test(c.raw));
+  let cand = all.filter(c => c.tier && c.raw.length >= 1 && c.raw.length <= chars && !notName(c.raw)).map(c => ({ ...c, text: unspace(c.raw) }));
+  // ③ 두 줄 실명(앱 좌표는 y 아래쪽이다 — 아랫줄은 y가 크다)
+  for (const c of cand) {
+    if (c.drop || !/[/·,]$/.test(c.text)) continue;
+    const next = cand.find(d => d !== c && !d.drop && d.tier === c.tier && d.p[1] > c.p[1] && d.p[1] - c.p[1] <= 2.2 * c.h && Math.abs(d.p[0] - c.p[0]) <= 4 * c.h);
+    if (next) { c.text += next.text; c.tail = next.p; next.drop = true; }
+  }
+  cand = cand.filter(c => !c.drop);
+  for (const c of cand) {
+    const q = c.tail ?? c.p;
+    const a = areas.find(x => x.p[1] > q[1] && x.p[1] - q[1] <= 4 * c.h && Math.abs(x.p[0] - q[0]) <= 4 * c.h);
+    c.area = a ? parseFloat(a.raw.replace(/[^\d.]/g, '')) || 0 : null;
+  }
   let named = 0;
   for (const room of rooms) {
-    const hit = cand.find(c => !used.has(c) && pointInPolygon(c.p, room.points));
-    if (!hit) continue;
-    used.add(hit);
-    room.name = hit.text;
+    const inside = cand.filter(c => !c.used && pointInPolygon(c.p, room.points));
+    if (!inside.length) continue;
+    const top = Math.min(...inside.map(c => c.tier));
+    const cen = centerOf(room.points);
+    const pool = inside.filter(c => c.tier === top)
+      .sort((a, b) => Math.hypot(a.p[0] - cen[0], a.p[1] - cen[1]) - Math.hypot(b.p[0] - cen[0], b.p[1] - cen[1]));
+    const withArea = pool.filter(c => c.area != null).sort((a, b) => b.area - a.area);   // 큰 공간이 앞
+    room.name = (withArea.length ? withArea : [pool[0]]).map(c => c.text).join('·').slice(0, 40);
+    for (const c of inside) c.used = true;
     named++;
   }
-  return { named, unmatched: cand.filter(c => !used.has(c)).map(c => c.text) };
+  return { named, unmatched: cand.filter(c => !c.used && c.tier === 1).map(c => c.text) };
 }
 
 // 프로젝트 이름 = ROI 안 문자 중 **높이가 가장 큰 것**(≥ 600 mm, 40자로 자름). 없으면 파일 이름,
@@ -73,17 +111,24 @@ export function drawingTitle(texts, fileName = '', titleLayers = null) {
 
 export function buildProject(raw, {
   height = DXF_PARAMS.height, scale = 1, texts = [], fileName = '', autoNames = true,
-  params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null,
+  params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null, nameRoles = null, columns = [],
 } = {}) {
   const { toApp, box, size } = makeToApp(raw, scale);
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.
   // 고립 제거를 앞에 두면 끝점이 아직 공유되지 않아 멀쩡한 벽이 통째로 잘린다.
   let walls = raw.map(w => makeWall({ a: toApp(w.a), b: toApp(w.b), thickness: Math.max(2, Math.round(w.thickness * scale)), height }));
-  walls = dropTinyComponents(normalizeWalls(walls), P.minComp);
+  walls = dropTinyComponents(normalizeWalls(walls), P.minComp, P.minCompLen);
   const rooms = detectRooms(walls);
   for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
-  const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp).unmatched : [];
-  const items = openings({ walls, rooms, toApp }) ?? [];
+  const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { nameRoles }).unmatched : [];
+  // 기둥(walls.js가 고른 닫힌 작은 사각형) → 사각 기둥. w는 u 방향 변이고, 앱은 y가 뒤집혀 각도도 뒤집힌다.
+  const colProduct = productById('column-square');
+  const colItems = colProduct ? columns.map(c => createItem(colProduct, {
+    pos: toApp(c.c), z: 0,
+    rot: ((Math.atan2(-c.u[1], c.u[0]) * 180 / Math.PI) % 360 + 360) % 360,
+    size: [Math.round(c.w * scale), Math.round(c.h * scale), height],
+  })) : [];
+  const items = [...(openings({ walls, rooms, toApp }) ?? []), ...colItems];
   const project = normalizeProject({
     ...createEmptyProject(),
     name: drawingTitle(titleTexts ?? texts, fileName, titleLayers),
@@ -100,15 +145,21 @@ export function buildProject(raw, {
   }
   const th = new Map();
   for (const w of floor.walls) th.set(w.thickness, (th.get(w.thickness) ?? 0) + 1);
+  const atColumn = p => colItems.some(c => {
+    const r = c.rot * Math.PI / 180, dx = p[0] - c.pos[0], dy = p[1] - c.pos[1];
+    return Math.abs(dx * Math.cos(r) + dy * Math.sin(r)) <= c.size[0] / 2 + 100 && Math.abs(-dx * Math.sin(r) + dy * Math.cos(r)) <= c.size[1] / 2 + 100;
+  });
   const stats = {
     walls: floor.walls.length,
     rooms: floor.rooms.length,
     areaM2: Math.round(floor.rooms.reduce((a, r) => a + r.area, 0) * 10) / 10,
-    // 차수 1 노드 = 끊긴 끝점. 이 배열이 배너·2D 마커·[보기]의 원천이다(§18.6).
-    openEnds: [...deg.values()].filter(d => d.n === 1).map(d => [...d.p]),
+    // 차수 1 노드 = 끊긴 끝점. 이 배열이 배너·2D 마커·[보기]의 원천이다(§18.6). 기둥 몸통(+100 mm) 안에서 끝나는
+    // 벽은 기둥에 닿아 있으므로 끊긴 것이 아니다(실파일 조리실 실내벽 끝).
+    openEnds: [...deg.values()].filter(d => d.n === 1 && !atColumn(d.p)).map(d => [...d.p]),
     thickness: [...th].sort((a, b) => b[1] - a[1] || a[0] - b[0]),
     unmatchedNames,
     items: floor.items.length,
+    columns: colItems.length,
     size,
   };
   return { project, stats, toApp, walls: floor.walls, rooms: floor.rooms, box, size };

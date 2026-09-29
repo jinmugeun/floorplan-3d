@@ -129,14 +129,17 @@ test('roleLayers는 역할로 걸러 내고 체크와 교집합을 낸다', () =
   expect([...roleLayers(rows, 'wall')]).toEqual(['WAL']);
 });
 
-test('DXF_PARAMS는 §18.3의 표와 글자 그대로 같고 동결되어 있다', () => {
+// 2026-09-29 벽 띠 스윕으로 바뀐 표(params.js 머리 주석이 값마다 근거를 적는다). 옛 쌍 매칭·스냅 값
+// (tMax·minOverlap·mode*·consume·tieBand·mergeGap·snap·snapFinal·bridgeOffTol·roiCell)은 지웠다.
+test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되어 있다', () => {
   expect(DXF_PARAMS).toEqual({
-    roiCell: 5000, minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 5200,
-    tMin: 90, tMax: 500, minOverlap: 1000, modeBin: 5, modeTop: 6, modeSnapTop: 8, modeBoost: 2.5,
-    modeSnap: 15, consume: 0.4, tieBand: 0.1, mergeGap: 5200, snap: 250, snapFinal: 30,
-    extend: 4000, bridge: 3000, bridgeOffTol: 90, bridgeAngTol: 2.5, passes: 3,
-    minWall: 250, minComp: 4, height: 3500, thickness: 200,
+    minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
+    tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20,
+    bridge: 3000, bridgeAngTol: 2.5, gapMin: 600,
+    colMin: 300, colMax: 1200, colAspect: 2.5, colRatio: 2, colTol: 3,
+    extend: 4000, joinMargin: 50, passes: 3, spur: 1000,
+    minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
   });
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
-  expect(Object.keys(DXF_PARAMS)).toHaveLength(28);
+  expect(Object.keys(DXF_PARAMS)).toHaveLength(31);
 });

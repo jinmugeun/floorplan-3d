@@ -85,6 +85,9 @@ function doExtract(opts = {}) {
     height: opts.height ?? DXF_PARAMS.height,
     scale, texts, fileName: meta.fileName, titleLayers: meta.titleLayers,
     autoNames: opts.autoNames !== false,
+    // 방 이름은 레이어 역할로 고른다(문자 레이어 실명 우선 · 기구 라벨은 이름이 아니다 — toProject.nameRooms).
+    nameRoles: new Map(rows.map(r => [r.name, r.role])),
+    columns: r.columns,
     // 개구부는 두 재료를 함께 쓴다: 스윙 호(ex.arcs)와 **벽 틈**(r.gaps · 사전 검토 C-2).
     openings: opts.openings === false ? () => [] : ({ walls, toApp }) =>
       buildOpenings({ ex, walls, toApp, scale, openingLayers: openRole, gaps: r.gaps }),

@@ -3,7 +3,7 @@
 //
 // 행렬은 2×3 어파인 [a, b, c, d, e, f]다: x' = a·x + c·y + e, y' = b·x + d·y + f.
 // `-0`은 접는다(사전 검토 I-1): `-sy * Math.sin(0)`이 슬롯 2에 `-0`을 내는데 vitest의 `toEqual`이
-// `-0`과 `+0`을 구분하고, mergeCollinear의 방향 키(`u.toFixed(4)`)도 "0.0000"과 "-0.0000"으로 갈린다.
+// `-0`과 `+0`을 구분하고, 방향을 문자열 키로 만드는 코드에서 "0.0000"과 "-0.0000"이 갈린다.
 const z = v => v || 0;
 export const mat = (tx = 0, ty = 0, sx = 1, sy = 1, rotDeg = 0) => {
   const r = rotDeg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
@@ -36,7 +36,9 @@ export function bulgeToArc(p0, p1, b) {
 export const arcSteps = (sweep, steps = 12) => Math.max(2, Math.ceil(steps * Math.abs(sweep) / 180));
 
 export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = () => {} } = {}) {
-  const out = { segs: [], arcs: [], circles: [], inserts: [], texts: [], hatches: [], dims: [], others: new Map(), skipped: new Map() };
+  // polyArcs: 폴리선 bulge 호(선분으로도 쪼개 segs에 넣는다). arcs(ARC 엔티티)와 따로 두는 것은 레이어
+  // 통계(classify의 arcs 수)를 바꾸지 않기 위해서다 — 문 판정만 둘을 함께 본다(openings.buildOpenings).
+  const out = { segs: [], arcs: [], polyArcs: [], circles: [], inserts: [], texts: [], hatches: [], dims: [], others: new Map(), skipped: new Map() };
   const bump = (m, k) => m.set(k, (m.get(k) ?? 0) + 1);
 
   const walk = (ents, m, depth, inherit, blockName) => {
@@ -60,6 +62,12 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
             // 규칙 ③: 호에서 나온 선분은 src에 ':bulge'를 달아 벽 후보에서 빠지게 한다
             // (조경 곡선·라운드 코너는 벽이 아니다). 실측: :bulge 선분 34,495개 = 전체 선분의
             // **49.1 %**다 — 있으나 마나 한 장치가 아니라 필수 필터다(최종 리뷰 M-3).
+            // 호 자체도 남긴다(2026-09-29 — 실파일 여닫이문 궤적이 전부 bulge였다). 각은 월드 좌표에서 다시
+            // 잰다: 거울 변환은 회전 방향을 뒤집으므로 반시계 표현의 시작·끝이 바뀐다(규칙 ④와 같은 이유).
+            const cW = apply(m, arc.c), sW = apply(m, p0), eW = apply(m, p1);
+            const angW = q => Math.atan2(q[1] - cW[1], q[0] - cW[0]) * 180 / Math.PI;
+            const ccw = (arc.sweep > 0) !== mirrored(m);
+            out.polyArcs.push({ c: cW, r: arc.r * scaleOf(m), a0: angW(ccw ? sW : eW), a1: angW(ccw ? eW : sW), layer, depth, block: blockName });
             const nSeg = arcSteps(arc.sweep, steps);
             let prev = p0;
             for (let s = 1; s <= nSeg; s++) {

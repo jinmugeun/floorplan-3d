@@ -1,10 +1,12 @@
 // 문·창(§18.4). **문은 INSERT 좌표를 쓰지 않는다**: 이 도면의 문 대부분은 블록 두 개가 도면 전체의
 // 문을 통째로 그려 한 INSERT의 bbox가 33 m × 13 m다(프로토타입이 21개 중 9개만 맞힌 원인).
 // 문 위치는 전개 후 **원호의 중심**이고, 창은 개구부 레이어의 긴 면선이 벽을 덮는 구간이다.
-// 다만 이 도면의 문은 **미닫이**라 스윙 궤적 원호가 없다(사전 검토 C-2: 04창호의 원호 1,034개는
-// 반지름 0.1~16.8 mm의 손잡이·모따기 디테일이고, 파일 전체에서 r 600~1,200 ∧ 스윕 60~110°인
-// 원호는 5개뿐이며 전부 기구 레이어다). 그래서 두 번째 신호를 둔다 — Task 6이 준 **벽 틈**(gaps)을
-// `opening-pass`로 앉힌다. 스윙 호가 있으면 그쪽이 이기고, 같은 자리에 겹쳐 놓지 않는다.
+// 이 도면의 문은 두 가지다(2026-09-29 정정 — 계획 10의 "스윙 원호가 없다"는 ARC만 센 오판이었다):
+//  ① 여닫이 6짝(양개 4 · 외짝 2): 역할 "기타"인 WID 레이어의 DR-900·DR-1800·dr-1850 블록에 있고 궤적은
+//     **폴리선 bulge**다 — 그래서 문 블록 이름(DOOR_BLOCK)과 polyArcs를 함께 본다.
+//  ② 미닫이 11짝(문_슬라이딩 포켓 900/800): 궤적이 없다(04창호의 원호 1,034개는 반지름 0.1~16.8 mm의
+//     손잡이·모따기). 이것은 **벽 틈**(gaps)이 알려 주고 `opening-pass`로 앉는다.
+// 스윙 호가 있으면 그쪽이 이기고, 같은 자리에 겹쳐 놓지 않는다.
 // 이 파일은 워커가 import하므로 DOM·ui를 건드리지 않는다.
 import { createItem } from '../../state/schema.js';
 import { productById } from '../../products/catalog.js';
@@ -31,11 +33,16 @@ const ALONG_DOT = 0.9;                     // "벽 방향과 가장 나란한 �
 const clamp01 = v => Math.max(0, Math.min(1, v));
 const normSweep = d => ((d % 360) + 360) % 360;
 
+// 문 블록 이름(2026-09-29): 실파일 여닫이문 17개는 역할 "기타"인 WID 레이어의 DR-900·DR-1800·dr-1850
+// 블록에 있었다 — 개구부 역할 레이어만 보던 판정이 전부 놓쳤다. 블록 이름이 문이면 레이어와 무관하다.
+// 이름 **앞머리**만 본다: "문"이 뒤에 붙는 주방 기구("보냉고 양문"·"소독기 단문")는 문이 아니다.
+export const DOOR_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]/i;
+
 // 원호 → 문 후보(앱 좌표). toApp·scale로 DXF 좌표계를 앱 좌표계로 옮기며 센다.
 export function doorHinges(arcs, layers, toApp = p => p, scale = 1) {
   const clusters = [];
   for (const a of arcs ?? []) {
-    if (!layers.has(a.layer)) continue;
+    if (!layers.has(a.layer) && !DOOR_BLOCK.test(a.block ?? '')) continue;
     const r = (a.r ?? 0) * scale;
     if (r < DOOR_R[0] || r > DOOR_R[1]) continue;
     const sweep = normSweep((a.a1 ?? 0) - (a.a0 ?? 0));
@@ -53,7 +60,7 @@ export function doorHinges(arcs, layers, toApp = p => p, scale = 1) {
   return clusters.map(c => ({ p: c.p, width: Math.round(c.rs.reduce((a, x) => a + x, 0) / c.rs.length / 50) * 50, ends: c.ends }));
 }
 
-// 벽 틈 → 개구부 후보(사전 검토 C-2). gaps는 walls.js의 openingGaps가 DXF 좌표로 준 { p, width }다.
+// 벽 틈 → 개구부 후보(사전 검토 C-2). gaps는 walls.js의 extractWalls가 DXF 좌표로 준 { p, width }다(같은 띠 사이 틈).
 export function gapOpenings(gaps, walls, toApp = p => p, scale = 1) {
   const out = [];
   for (const g of gaps ?? []) {
@@ -192,13 +199,16 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
     items.push(item);
     mark(wall, t, fit.width);
   };
-  for (const h of doorHinges(ex?.arcs ?? [], openingLayers, toApp, scale)) {
+  // 문 재료는 ARC 엔티티와 폴리선 bulge 호(polyArcs) 둘 다다.
+  const leaves = [];
+  for (const h of doorHinges([...(ex?.arcs ?? []), ...(ex?.polyArcs ?? [])], openingLayers, toApp, scale)) {
     const hit = nearestWall(walls, h.p);
     if (!hit) continue;
     const { wall } = hit;
     const d = [wall.b[0] - wall.a[0], wall.b[1] - wall.a[1]], L = Math.hypot(d[0], d[1]);
     if (!L) continue;
     const u = [d[0] / L, d[1] / L];
+    const tOf = p => ((p[0] - wall.a[0]) * u[0] + (p[1] - wall.a[1]) * u[1]) / L;
     // 개구부 중심 = 힌지와 "벽 방향과 가장 나란한 호 끝점"의 중점(§18.4).
     let bestEnd = null;
     for (const e of h.ends) {
@@ -208,8 +218,21 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
       if (dot >= ALONG_DOT && (!bestEnd || dot > bestEnd.dot)) bestEnd = { e, dot };
     }
     const mid = bestEnd ? [(h.p[0] + bestEnd.e[0]) / 2, (h.p[1] + bestEnd.e[1]) / 2] : h.p;
-    seat(DOOR_PRODUCTS, h.width, wall, clamp01(((mid[0] - wall.a[0]) * u[0] + (mid[1] - wall.a[1]) * u[1]) / L));
+    leaves.push({ wall, L, width: h.width, tHinge: tOf(h.p), tMid: tOf(mid) });
   }
+  // 양개문: 같은 벽 위 두 짝의 힌지 간격이 두 폭의 합(±10 %)이고 두 짝이 서로를 향해 연다 → 두 힌지의
+  // 가운데에 폭 합의 문 하나(door-double-1800). 두 짝을 따로 앉히면 한가운데 문설주가 선 문 둘이 된다.
+  const paired = new Set();
+  for (let i = 0; i < leaves.length; i++) for (let j = i + 1; j < leaves.length; j++) {
+    const A = leaves[i], B = leaves[j];
+    if (paired.has(i) || paired.has(j) || A.wall !== B.wall) continue;
+    const gap = (B.tHinge - A.tHinge) * A.L, sum = A.width + B.width;
+    if (Math.abs(Math.abs(gap) - sum) > 0.1 * sum) continue;
+    if (Math.sign(A.tMid - A.tHinge) !== Math.sign(gap) || Math.sign(B.tMid - B.tHinge) !== -Math.sign(gap)) continue;
+    paired.add(i); paired.add(j);
+    seat(DOOR_PRODUCTS, sum, A.wall, clamp01((A.tHinge + B.tHinge) / 2));
+  }
+  leaves.forEach((f, i) => { if (!paired.has(i)) seat(DOOR_PRODUCTS, f.width, f.wall, clamp01(f.tMid)); });
   // 차례가 규칙이다(Task 6 재리뷰): 스윙 호 → **창(면선)** → 벽 틈. 개구부 레이어의 면선은 그 자리가
   // 창이라는 직접 증거라 같은 자리의 일반 틈을 이긴다. 틈은 마지막 폴백이고, 이미 앉은 개구부와
   // 겹치면 놓지 않는다(사전 검토 C-2의 "같은 자리에 겹쳐 놓지 않는다").

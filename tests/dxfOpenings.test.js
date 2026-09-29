@@ -17,7 +17,7 @@ test('doorHinges는 반지름·스윕으로 거르고 100 mm 안의 원호를 �
     arc(40.5, 1500.25, 880, 5, 95),         // 같은 문의 두 번째 호(중심 40 mm 차)
     arc(2000.5, 1500.25, 300, 0, 90),       // 반지름이 작다(가구 모서리)
     arc(2400.5, 1500.25, 900, 0, 200),      // 스윕이 크다(원에 가깝다)
-    arc(2800.5, 1500.25, 900, 0, 90, 'WAL'),// 개구부 역할 레이어가 아니다
+    { ...arc(2800.5, 1500.25, 900, 0, 90, 'WAL'), block: '1f plan-1' },   // 개구부 레이어도 문 블록도 아니다
   ], OPEN);
   expect(hinges).toHaveLength(1);
   expect(hinges[0].p[0]).toBeCloseTo(0.5, 6);
@@ -25,6 +25,32 @@ test('doorHinges는 반지름·스윕으로 거르고 100 mm 안의 원호를 �
   expect(hinges[0].ends.length).toBe(4);    // 호 두 개의 끝점 넷
   // 배율은 반지름에도 곱해진다(인치 도면의 원호도 같은 창에 걸린다).
   expect(doorHinges([arc(0, 0, 35.43, 0, 90)], OPEN, p => p, 25.4)).toHaveLength(1);
+});
+
+// 2026-09-29: 실파일 여닫이문 17개는 역할 "기타"인 WID 레이어의 DR-900·DR-1800 블록 안에 있었다.
+test('문 이름 블록(DR-900·door·문) 안의 원호는 레이어 역할과 무관하게 문 궤적이다', () => {
+  const inDoor = (cx, cy, name) => ({ c: [cx, cy], r: 900, a0: 0, a1: 90, layer: 'WID', depth: 1, block: name });
+  const hinges = doorHinges([
+    inDoor(0.5, 1500.25, 'DR-900'), inDoor(3000.5, 1500.25, 'dr-1850'), inDoor(6000.5, 1500.25, 'DOOR_SGL'), inDoor(7500.5, 1500.25, '문_여닫이 900'),
+    inDoor(9000.5, 1500.25, '식탁-4인'), inDoor(10500.5, 1500.25, '보냉고 양문1260-800'), inDoor(12000.5, 1500.25, '소독기 단문 1200-750'),
+  ], OPEN);
+  // 가구·주방 기구 블록의 원호는 문이 아니다("양문"·"단문"이 이름 뒤에 붙은 기구 포함)
+  expect(hinges.map(h => Math.round(h.p[0]))).toEqual([1, 3001, 6001, 7501]);
+});
+
+test('같은 벽에서 마주 보는 두 짝(힌지 간격 = 두 반지름의 합)은 양개문 하나다', () => {
+  // 벽 y 1500 위 x −900~900 개구부: 왼쪽 힌지(−900)는 0°→90°, 오른쪽 힌지(900)는 90°→180°로 돈다
+  const leaf = (cx, a0, a1) => ({ c: [cx, 1400.25], r: 900, a0, a1, layer: 'WID', depth: 1, block: 'DR-1800' });
+  const items = buildOpenings({ ex: exOf({ arcs: [leaf(-899.5, 270, 360), leaf(900.5, 180, 270)] }), walls: [WALL], openingLayers: OPEN });
+  expect(items).toHaveLength(1);
+  expect(items[0].productId).toBe('door-double-1800');
+  expect(items[0].t).toBeCloseTo(0.5, 3);
+  // 한 짝뿐이면 여닫이 900이다
+  const single = buildOpenings({ ex: exOf({ arcs: [leaf(-899.5, 270, 360)] }), walls: [WALL], openingLayers: OPEN });
+  expect(single.map(i => i.productId)).toEqual(['door-swing-900']);
+  // polyArcs(폴리선 bulge 호)도 같은 문 재료다
+  const poly = buildOpenings({ ex: { ...exOf(), polyArcs: [leaf(-899.5, 270, 360), leaf(900.5, 180, 270)] }, walls: [WALL], openingLayers: OPEN });
+  expect(poly.map(i => i.productId)).toEqual(['door-double-1800']);
 });
 
 test('nearestWall은 900 mm 안의 가장 가까운 벽을 주고 t를 클램프한다', () => {

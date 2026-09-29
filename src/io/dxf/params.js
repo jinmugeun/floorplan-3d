@@ -3,10 +3,29 @@
 // 값의 근거는 전부 실측이다: 90 mm 미만을 자르는 것은 FIN 마감선의 25 mm 봉우리가 혼자 80.5 m라서,
 // 개구부 레이어 면선의 하한이 700 mm인 것은 커튼월 구간에서 WAL·기존 면선이 끊기고 WIN 창틀선이
 // 그 구간의 벽면을 대신 그리기 때문이다(그 항을 빼면 외곽이 닫히지 않는다).
+//
+// 2026-09-29 정확도 수정(벽 띠 스윕): 옛 "면선 쌍 + 5.2 m 면선 잇기 + 250 mm 무게중심 스냅"을 버렸다.
+// 5.2 m 잇기는 외벽 안쪽 기둥 면끼리 이어 없는 벽을 만들었고(실파일 95·500 mm 유령 벽), 쌍 짓기는
+// 여러 겹으로 그린 벽 하나에 평행 중심선을 2~4개 냈으며, 스냅이 그 끝점을 한 점으로 모아 벽 31개를
+// 최대 227 mm 기울였다. 지금은 **한 자리에 함께 있는 면선들**이 한 벽 띠이고(bandGap·bandMax),
+// 틈은 같은 띠끼리만 잇고(bridge·bandTol), 끝점은 **자기 축 위에서만** 움직인다(extend).
+//  - faceGap 20: 작도 이음매만 잇는다(문·창 틈은 띠 단계의 bridge가 잇는다).
+//  - bandGap 520: 한 벽 안 이웃 선 간격의 상한(가장 두꺼운 구조체 500 + 여유). 복도(≥ 600)는 넘는다.
+//  - cavityMin 150: 이 이상 틈이 레이어가 겹치지 않는 두 선 사이에 있고 양쪽이 모두 벽이면 벽 사이 공간이다(두 벽).
+//  - bandMax 700: 한 띠의 폭 상한 — 넘으면 바로 앞 구간의 띠와 가장 잘 이어지는 틈에서 가른다(bands.groupOffsets).
+//  - bandBreak 1000: 대표 띠와 안 겹치는 구간이 이보다 길면 다른 벽(단차)이다. 짧으면 벽기둥 부풂이다.
+//  - jogTol 20: 두께가 바뀌는 경계에서 두 중심선이 이보다 벌어지면 꺾임(jog) 벽을 두고, 안이면 한 중심선으로 맞춘다.
+//  - col*: 기둥 = 닫힌 작은 직사각형(짧은 변 ≥ 300 · 긴 변 ≤ 1200 · 종횡비 ≤ 2.5). colRatio는 기둥을
+//    못 알아본 경우의 보루 — 길이가 두께의 2배 미만인 1.2 m 미만 토막은 벽이 아니다.
+//  - spur 1000: 한 끝만 이어지고 다른 끝이 매달린 이보다 짧은 토막은 벽기둥·문틀 면에서 나온 가지다 —
+//    방을 둘러싸지 못하면서 옆 벽 끝을 먼저 붙잡아 진짜 접합을 막는다(실파일 식당 서쪽 벽).
+//  - minCompLen 3000: 벽 minComp개 미만 덩어리라도 이만큼 길면 남긴다(기둥에 가로막혀 떨어진 실제 벽).
+//  - blockShare 0.1: 벽 레이어 선 길이가 주 평면 블록의 이 비율 미만인 블록은 기호다(트럭·조경·싱크대).
 export const DXF_PARAMS = Object.freeze({
-  roiCell: 5000, minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 5200,
-  tMin: 90, tMax: 500, minOverlap: 1000, modeBin: 5, modeTop: 6, modeSnapTop: 8, modeBoost: 2.5,
-  modeSnap: 15, consume: 0.4, tieBand: 0.1, mergeGap: 5200, snap: 250, snapFinal: 30,
-  extend: 4000, bridge: 3000, bridgeOffTol: 90, bridgeAngTol: 2.5, passes: 3,
-  minWall: 250, minComp: 4, height: 3500, thickness: 200,
+  minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
+  tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20,
+  bridge: 3000, bridgeAngTol: 2.5, gapMin: 600,
+  colMin: 300, colMax: 1200, colAspect: 2.5, colRatio: 2, colTol: 3,
+  extend: 4000, joinMargin: 50, passes: 3, spur: 1000,
+  minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
 });

@@ -86,34 +86,45 @@
   "기존"
  ],
  "extract": {
-  "faces": 109,
-  "pairs": 112,
-  "accepted": 16,
-  "gaps": 10,
+  "faces": 105,
+  "columns": 2,
+  "gaps": 2,
   "guessed": false
  },
  "project": {
-  "walls": 8,
+  "walls": 17,
   "rooms": 1,
-  "areaM2": 2.5,
-  "openEnds": 3,
+  "areaM2": 2.7,
+  "openEnds": 4,
   "thickness": [
    [
-    235,
-    3
+    225,
+    6
    ],
    [
-    360,
-    3
+    260,
+    4
    ],
    [
-    425,
+    320,
     2
+   ],
+   [
+    325,
+    2
+   ],
+   [
+    390,
+    2
+   ],
+   [
+    515,
+    1
    ]
   ],
   "size": [
-   8173,
-   8145
+   8706,
+   8183
   ]
  }
 }

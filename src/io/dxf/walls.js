@@ -1,255 +1,117 @@
-// 중심선 → 정리 → 벽(§18.3의 8·9·10). 좌표계는 **DXF 그대로**다(mm · y 위쪽) — 앱 좌표로 옮기는
-// 것은 toProject.js가 한다. 프로토타입 `dxf-walls.mjs`의 6~7단계를 옮기면서 고친 것은 하나뿐이다:
-// closeJunctions의 반직선 파라미터를 **앞으로만** 열었다(아래 주석).
+// 면선 → 벽 띠 → 벽(§18.3 개정 · 2026-09-29 정확도 수정). 좌표계는 **DXF 그대로**다(mm · y 위쪽) —
+// 앱 좌표로 옮기는 것은 toProject.js가 한다.
+//
+// 옛 파이프라인(면선 쌍 탐욕 매칭 → 5.2 m 면선 잇기 → 250 mm 무게중심 스냅 → 연장 → 다리)을 버렸다.
+// 실파일에서 쌍 짓기는 여러 겹으로 그린 벽 하나에 평행 중심선을 2~4개 냈고(몸통이 겹치는 쌍 22개),
+// 면선 잇기는 기둥 면끼리 이어 없는 벽(지지율 20 % 미만 143 m)을 세웠으며, 스냅이 그 끝점들을 한 점으로
+// 모아 벽 31개를 최대 227 mm 기울이고 1 m² 미만 조각 방 23개를 만들었다. 지금은
+//  ① bands.js가 **그 자리에 함께 있는 면선 무리**로 벽 띠를 세우고(기둥은 먼저 뺀다),
+//  ② 같은 띠끼리만 틈을 이으며(문·창),
+//  ③ joinEnds가 끝점을 **자기 축 위에서만** 늘이거나 줄인다 — 벽 선이 옆으로 움직이는 단계가 없다.
 import { DXF_PARAMS } from './params.js';
-import { largestCluster, ROI_LINK, buildFaces, candidatePairs, thicknessModes, matchPairs, ivOverlap, mergeIv } from './faces.js';
+import { largestCluster, ROI_LINK, buildFaces } from './faces.js';
+import { wallBands, bandRuns, wallsOfRuns } from './bands.js';
+import { findColumns, findPilasters, mergeColumns } from './columns.js';
 
 const len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 const FALLBACK_MIN_SEG = 300;   // §18.3 폴백: 레이어 필터를 뺀 경로의 최소 선분 길이
-export const GAP_RANGE = [600, 1500];   // 개구부로 볼 벽 틈의 폭(mm) — 문 900·통로 1200이 이 안이다
+const FALLBACK_MODES = 6;       // 폴백에서 남길 우세 두께 계급 수(5 mm 계급 · 길이 가중)
 
-// 8. 겹침 구간마다 중앙 오프셋 선 + 두께. 우세 두께가 아예 없는 도면(폴백)이나 범위를 벗어난
-// 값은 대화상자의 `기본 두께`를 쓴다.
-export function centerlines(accepted, modes, P = DXF_PARAMS, fallback = DXF_PARAMS.thickness) {
-  const out = [];
-  for (const c of accepted) {
-    const u = c.A.u, n = c.A.n, off = (c.A.off + c.B.off) / 2;
-    const snapped = modes.modeList.length ? modes.snap(c.d) : fallback;
-    const thickness = snapped >= P.tMin && snapped <= P.tMax ? snapped : fallback;
-    for (const [t0, t1] of c.ov) {
-      if (t1 - t0 < P.minWall) continue;
-      out.push({ a: [u[0] * t0 + n[0] * off, u[1] * t0 + n[1] * off], b: [u[0] * t1 + n[0] * off, u[1] * t1 + n[1] * off], thickness, u, n, off });
-    }
-  }
-  return out;
-}
-
-// 9. 방향·오프셋(6 mm)·두께(25 mm 계급)가 같고 틈 ≤ mergeGap이면 하나로.
-export function mergeCollinear(list, P = DXF_PARAMS) {
-  const key = w => `${w.u.map(v => v.toFixed(4)).join(',')}|${Math.round(w.off / P.offTol)}|${Math.round(w.thickness / 25)}`;
-  const g = new Map();
-  for (const w of list) (g.get(key(w)) ?? g.set(key(w), []).get(key(w))).push(w);
-  const out = [];
-  for (const arr of g.values()) {
-    const u = arr[0].u, n = arr[0].n;
-    const off = arr.reduce((a, w) => a + w.off, 0) / arr.length;
-    const total = arr.reduce((a, w) => a + len(w.a, w.b), 0);
-    const th = Math.round(arr.reduce((a, w) => a + w.thickness * len(w.a, w.b), 0) / (total || 1));
-    const iv = arr.map(w => [w.a[0] * u[0] + w.a[1] * u[1], w.b[0] * u[0] + w.b[1] * u[1]])
-      .map(([p, q]) => [Math.min(p, q), Math.max(p, q)]).sort((a, b) => a[0] - b[0]);
-    const m = [];
-    for (const [s0, s1] of iv) {
-      const last = m[m.length - 1];
-      if (last && s0 - last[1] <= P.mergeGap) last[1] = Math.max(last[1], s1);
-      else m.push([s0, s1]);
-    }
-    for (const [s0, s1] of m) out.push({ a: [u[0] * s0 + n[0] * off, u[1] * s0 + n[1] * off], b: [u[0] * s1 + n[0] * off, u[1] * s1 + n[1] * off], thickness: th, u, n, off });
-  }
-  return out;
-}
-
-// 9-②. **같은 벽을 두 번 그린** 중심선을 하나로 접는다. 이 도면은 벽 하나를 레이어 둘(기존 + WAL·
-// FIN)이 겹쳐 그리고, 두꺼운 벽은 면선 쌍이 둘 잡혀 몇 mm~100 mm 떨어진 중심선이 쌍으로 나온다.
-// 그대로 두면 2D에서는 4902×3 mm 같은 유령 방이 되고(실측 55개 방 중 37개가 2 m² 미만이었다)
-// 3D에서는 벽이 두 겹으로 선다. 자리는 mergeCollinear **다음** · snapEndpoints **앞**이다:
-//  ① 중심선이 아직 u·n·off를 들고 있어 판정이 투영 셋(평행·오프셋·구간 겹침)으로 끝난다.
-//  ② 끝점 스냅·접합이 유령 벽을 먼저 붙잡아 가짜 방의 뼈대를 세우기 전이다.
-// 165~560 mm 떨어진 **진짜 이중벽**(이 도면의 공동)은 sep 밖이라 그대로 둘로 남는다.
-export const DUP_SEP = 100;
-const frame = w => {
-  if (w.u && w.n) return [w.u, w.n];
-  const d = [w.b[0] - w.a[0], w.b[1] - w.a[1]], L = Math.hypot(d[0], d[1]) || 1;
-  const u = [d[0] / L, d[1] / L];
-  return [u, [-u[1], u[0]]];
-};
-const proj = (w, u) => {
-  const p = w.a[0] * u[0] + w.a[1] * u[1], q = w.b[0] * u[0] + w.b[1] * u[1];
-  return p <= q ? [p, q] : [q, p];
-};
-// 겹치면 합친 중심선, 아니면 null. 기준 틀은 **긴 쪽**의 u·n이다(짧은 토막의 각도 오차를 끌고
-// 오지 않는다). 두께는 큰 값 — 두 번 그린 한 벽이므로 얇은 쪽은 마감선이다.
-const fuse = (w, v, sep, sinTol) => {
-  const [A, B] = len(w.a, w.b) >= len(v.a, v.b) ? [w, v] : [v, w];
-  const [u, n] = frame(A), [ub] = frame(B);
-  if (Math.abs(u[0] * ub[1] - u[1] * ub[0]) > sinTol) return null;          // 평행(angTol)이 아니다
-  const offOf = x => ((x.a[0] + x.b[0]) * n[0] + (x.a[1] + x.b[1]) * n[1]) / 2;
-  const oA = offOf(A), oB = offOf(B);
-  if (Math.abs(oA - oB) > sep) return null;                                 // 진짜 이중벽이다
-  const sA = proj(A, u), sB = proj(B, u), LA = sA[1] - sA[0], LB = sB[1] - sB[0];
-  if (Math.min(sA[1], sB[1]) - Math.max(sA[0], sB[0]) < 0.5 * Math.min(LA, LB)) return null;
-  const off = (oA * LA + oB * LB) / (LA + LB || 1);                         // 길이 가중 평균
-  const t0 = Math.min(sA[0], sB[0]), t1 = Math.max(sA[1], sB[1]);           // 구간은 합집합
-  return { ...A, a: [u[0] * t0 + n[0] * off, u[1] * t0 + n[1] * off], b: [u[0] * t1 + n[0] * off, u[1] * t1 + n[1] * off], thickness: Math.max(A.thickness, B.thickness), u, n, off };
-};
-export function dedupeParallel(list, sep = DUP_SEP, P = DXF_PARAMS) {
-  const sinTol = Math.sin(P.angTol * Math.PI / 180);
-  let cur = list;
-  for (;;) {                                  // 셋 이상의 사슬이 하나로 접힐 때까지 되돈다
-    const out = [], dead = new Set();
-    let hit = false;
-    for (let i = 0; i < cur.length; i++) {
-      if (dead.has(i)) continue;
-      let w = cur[i];
-      for (let j = i + 1; j < cur.length; j++) {
-        if (dead.has(j)) continue;
-        const m = fuse(w, cur[j], sep, sinTol);
-        if (!m) continue;
-        dead.add(j); w = m; hit = true;
-      }
-      out.push(w);
-    }
-    if (!hit) return out;
-    cur = out;
-  }
-}
-
-// 10-①. 끝점 클러스터 → 무게중심 스냅.
-export function snapEndpoints(list, tol) {
-  const clusters = [];
-  for (const w of list) for (const p of [w.a, w.b]) {
-    let c = clusters.find(q => len(q.c, p) <= tol);
-    if (!c) { c = { c: [p[0], p[1]], pts: [] }; clusters.push(c); }
-    c.pts.push(p);
-    c.c = [c.pts.reduce((a, x) => a + x[0], 0) / c.pts.length, c.pts.reduce((a, x) => a + x[1], 0) / c.pts.length];
-  }
-  const map = p => clusters.find(q => len(q.c, p) <= tol)?.c ?? p;
-  return list.map(w => ({ ...w, a: [...map(w.a)], b: [...map(w.b)] }));
-}
-
-// 10-②. 매달린 끝을 **자기 방향으로** 연장해 이웃 벽의 무한직선과 만나게 한다(T·L 닫기).
-// 뒤로 여는 폭은 살짝 지나친 끝을 되당길 만큼(두께 + snap)뿐이다: 프로토타입처럼 −4,000까지 열면
-// 매달린 끝이 반대편 벽 직선으로 수천 mm 점프해 벽이 minWall 아래로 줄어 사라진다. 폭을 묶는 것만으로는
-// 모자란다(리뷰 F2) — 200 mm 벽 두 줄 사이에 낀 400 mm 가벽은 450 mm 안쪽으로 당겨져도 minWall
-// 아래로 줄어 지워진다. 그래서 **뒤로 당기는 후보는 벽이 minWall 이상으로 남을 때만** 받는다
-// (닫지 못한 접합은 끊긴 끝점으로 §18.6이 사람에게 보여 준다 — 벽을 지우는 것보다 낫다).
-export function closeJunctions(list, P = DXF_PARAMS) {
+// 매달린 끝마다 **자기 방향 직선**이 다른 벽 중심선과 만나는 점으로 연장(≤ extend)하거나 되당긴다
+// (≤ 상대 두께/2 + 내 두께 + joinMargin — 살짝 지나친 끝). 받는 조건: 교점이 상대 벽 몸통 안(양끝 ± 내 두께/2 +
+// joinMargin)이고, 되당겨도 벽이 minWall 이상 남는다(리뷰 F2 — 두 바 사이 가벽을 지우지 않는다).
+// 교점이 상대 벽 끝 밖이면(L 모서리) 상대 끝도 매달려 있을 때만 그 점까지 함께 늘인다.
+// 가장 가까운 교점이 이긴다. 끝이 옮겨 가는 점은 늘 자기 직선 위다 — 벽이 기울 수 없다.
+export function joinEnds(list, P = DXF_PARAMS) {
   const out = list.map(w => ({ ...w, a: [...w.a], b: [...w.b] }));
-  const shared = p => out.filter(w => len(w.a, p) < 1 || len(w.b, p) < 1).length;
-  for (const w of out) {
-    for (const end of ['a', 'b']) {
-      const p = w[end];
-      if (shared(p) >= 2) continue;
-      const d0 = [w.b[0] - w.a[0], w.b[1] - w.a[1]], L0 = Math.hypot(d0[0], d0[1]);
-      if (!L0) continue;
-      const dir = end === 'b' ? [d0[0] / L0, d0[1] / L0] : [-d0[0] / L0, -d0[1] / L0];
-      const back = -(w.thickness + P.snap);
-      let best = null;
-      for (const o of out) {
-        if (o === w) continue;
-        const e = [o.b[0] - o.a[0], o.b[1] - o.a[1]];
-        const den = dir[0] * e[1] - dir[1] * e[0];
-        if (Math.abs(den) < 1e-9) continue;                        // 평행
-        const s = ((o.a[0] - p[0]) * e[1] - (o.a[1] - p[1]) * e[0]) / den;
-        if (s < back || s > P.extend) continue;
-        if (s < 0 && L0 + s < P.minWall) continue;                 // 뒤로 당겨 minWall 아래로 줄면 지워진다
-        const q = [p[0] + dir[0] * s, p[1] + dir[1] * s];
-        const t = ((q[0] - o.a[0]) * e[0] + (q[1] - o.a[1]) * e[1]) / (e[0] * e[0] + e[1] * e[1]);
-        const marg = (o.thickness + w.thickness) / 2 / Math.hypot(e[0], e[1]);
-        if (t < -marg || t > 1 + marg) continue;                   // 이웃 벽의 몸통 밖이면 접합이 아니다
-        if (!best || Math.abs(s) < best.cost) best = { cost: Math.abs(s), q };
-      }
-      if (best) { w[end][0] = best.q[0]; w[end][1] = best.q[1]; }
-    }
-  }
-  return out;
-}
-
-// 10-③. 마주보는 매달린 끝 두 개를 벽으로 잇는다(개구부 틈 메우기 — 앱 모델에서 문은 "벽에 뚫린
-// 구멍"이므로 벽은 개구부를 지나 이어져야 한다).
-export function bridgeGaps(list, P = DXF_PARAMS) {
-  const out = list.map(w => ({ ...w, a: [...w.a], b: [...w.b] }));
-  const cosTol = Math.cos(P.bridgeAngTol * Math.PI / 180);
   const key = p => `${Math.round(p[0])},${Math.round(p[1])}`;
   for (let pass = 0; pass < P.passes; pass++) {
     const deg = new Map();
     for (const w of out) for (const p of [w.a, w.b]) deg.set(key(p), (deg.get(key(p)) ?? 0) + 1);
-    const ends = [];
-    for (const w of out) for (const e of ['a', 'b']) {
-      if ((deg.get(key(w[e])) ?? 0) >= 2) continue;
-      const o = e === 'a' ? w.b : w.a, p = w[e], L = len(p, o);
-      if (!L) continue;
-      ends.push({ w, p, dir: [(p[0] - o[0]) / L, (p[1] - o[1]) / L] });
-    }
-    const taken = new Set(), added = [];
-    for (let i = 0; i < ends.length; i++) {
-      if (taken.has(i)) continue;
-      const A = ends[i];
+    let moved = false;
+    for (const w of out) for (const end of ['a', 'b']) {
+      const p = w[end];
+      if ((deg.get(key(p)) ?? 0) > 1) continue;
+      const o = end === 'a' ? w.b : w.a, L0 = len(p, o);
+      if (!L0) continue;
+      const dir = [(p[0] - o[0]) / L0, (p[1] - o[1]) / L0];
       let best = null;
-      for (let j = 0; j < ends.length; j++) {
-        if (i === j || taken.has(j) || ends[j].w === A.w) continue;
-        const B = ends[j], g = len(A.p, B.p);
-        if (g < 1 || g > P.bridge) continue;
-        const u = [(B.p[0] - A.p[0]) / g, (B.p[1] - A.p[1]) / g];
-        if (u[0] * A.dir[0] + u[1] * A.dir[1] < cosTol) continue;          // 정면으로 마주보는가
-        if (-(u[0] * B.dir[0] + u[1] * B.dir[1]) < cosTol) continue;
-        const perp = Math.abs((B.p[0] - A.p[0]) * -A.dir[1] + (B.p[1] - A.p[1]) * A.dir[0]);
-        if (perp > P.bridgeOffTol) continue;
-        if (!best || g < best.g) best = { j, g, B };
+      for (const v of out) {
+        if (v === w) continue;
+        const e = [v.b[0] - v.a[0], v.b[1] - v.a[1]], Lv = Math.hypot(e[0], e[1]);
+        if (!Lv) continue;
+        const den = dir[0] * e[1] - dir[1] * e[0];
+        if (Math.abs(den) < 1e-6 * Lv) continue;                      // 평행
+        const s = ((v.a[0] - p[0]) * e[1] - (v.a[1] - p[1]) * e[0]) / den;
+        if (s < -(v.thickness / 2 + w.thickness + P.joinMargin) || s > P.extend) continue;
+        if (s < 0 && L0 + s < P.minWall) continue;
+        const q = [p[0] + dir[0] * s, p[1] + dir[1] * s];
+        const t = ((q[0] - v.a[0]) * e[0] + (q[1] - v.a[1]) * e[1]) / (Lv * Lv);
+        const marg = (w.thickness / 2 + P.joinMargin) / Lv;
+        if (t < -marg || t > 1 + marg) continue;                      // 상대 벽 몸통 밖이면 접합이 아니다
+        const tip = t < 0 ? 'a' : t > 1 ? 'b' : null;
+        if (tip && (deg.get(key(v[tip])) ?? 0) > 1) continue;         // 이미 이어진 상대 끝은 끌지 않는다
+        if (!best || Math.abs(s) < best.cost) best = { cost: Math.abs(s), q, v, tip };
       }
-      if (!best) continue;
-      taken.add(i); taken.add(best.j);
-      added.push({ a: [...A.p], b: [...best.B.p], thickness: Math.round((A.w.thickness + best.B.w.thickness) / 2), bridged: true });
+      if (!best || best.cost < 1e-9) continue;
+      w[end] = [...best.q];
+      if (best.tip) best.v[best.tip] = [...best.q];
+      moved = true;
     }
-    if (!added.length) break;
-    out.push(...added);
+    if (!moved) break;
   }
   return out;
 }
 
+// 가지 치기: 한 끝만 다른 벽에 닿고(끝점 공유 또는 T자로 몸통 위) 다른 끝이 매달린 spur 미만 토막을
+// 지운다. 벽기둥 윤곽·문틀 면이 남긴 가지는 방을 둘러싸지 못하면서, 옆 벽 끝을 먼저 붙잡아 그 끝이
+// 진짜 벽까지 늘어나지 못하게 막는다 — 지운 뒤 joinEnds를 한 번 더 돌리면 그 끝이 제자리를 찾는다.
+export function pruneSpurs(list, P = DXF_PARAMS) {
+  const key = p => `${Math.round(p[0])},${Math.round(p[1])}`;
+  let cur = list;
+  for (let pass = 0; pass < P.passes; pass++) {
+    const deg = new Map();
+    for (const w of cur) for (const p of [w.a, w.b]) deg.set(key(p), (deg.get(key(p)) ?? 0) + 1);
+    const onBody = (p, self) => cur.some(v => v !== self && distToSeg(p, v.a, v.b) < 1);
+    const attached = (p, self) => (deg.get(key(p)) ?? 0) > 1 || onBody(p, self);
+    const next = cur.filter(w => !(len(w.a, w.b) < P.spur && attached(w.a, w) !== attached(w.b, w)));
+    if (next.length === cur.length) break;
+    cur = next;
+  }
+  return cur;
+}
+
+const distToSeg = (p, a, b) => {
+  const d = [b[0] - a[0], b[1] - a[1]], L2 = d[0] * d[0] + d[1] * d[1];
+  const t = L2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / L2)) : 0;
+  return Math.hypot(p[0] - a[0] - d[0] * t, p[1] - a[1] - d[1] * t);
+};
+
 // 벽 네트워크의 작은 고립 덩어리를 버린다. normalizeWalls가 T접합을 쪼갠 **뒤에** 부른다
 // (그래야 끝점이 실제로 공유된다 — toProject.js가 그 순서를 지킨다).
-export function dropTinyComponents(list, minWalls = DXF_PARAMS.minComp) {
+export function dropTinyComponents(list, minWalls = DXF_PARAMS.minComp, minLen = Infinity) {
   const key = p => `${Math.round(p[0])},${Math.round(p[1])}`;
   const par = new Map();
   const find = x => { while (par.get(x) !== x) { par.set(x, par.get(par.get(x))); x = par.get(x); } return x; };
   for (const w of list) for (const p of [w.a, w.b]) if (!par.has(key(p))) par.set(key(p), key(p));
   for (const w of list) { const a = find(key(w.a)), b = find(key(w.b)); if (a !== b) par.set(a, b); }
-  const cnt = new Map();
-  for (const w of list) { const r = find(key(w.a)); cnt.set(r, (cnt.get(r) ?? 0) + 1); }
-  return list.filter(w => (cnt.get(find(key(w.a))) ?? 0) >= minWalls);
+  const cnt = new Map(), total = new Map();
+  for (const w of list) { const r = find(key(w.a)); cnt.set(r, (cnt.get(r) ?? 0) + 1); total.set(r, (total.get(r) ?? 0) + len(w.a, w.b)); }
+  // 벽 수가 적어도 길면 남긴다(minLen) — 기둥에 가로막혀 본 네트워크와 떨어진 실제 벽이다.
+  return list.filter(w => { const r = find(key(w.a)); return (cnt.get(r) ?? 0) >= minWalls || (total.get(r) ?? 0) >= minLen; });
 }
 
-// 개구부 틈(§18.4의 두 번째 신호 · 사전 검토 C-2). 이 도면의 문은 **미닫이**라 스윙 궤적 원호가
-// 아예 없다(파일 전체에서 반지름 600~1,200 mm ∧ 스윕 60~110°인 원호는 5개뿐이고 전부 기구 레이어다).
-// 대신 벽을 이루는 면선 쌍이 **둘 다 비는 구간**이 문·통로다: buildFaces가 faceGap(5,200 mm)으로
-// 이어 놓기 전의 raw 구간을 보고, 벽의 겹침 구간(c.ov) 안에서 **두 면선 모두** 덮이지 않은
-// 600~1,500 mm 토막을 찾는다. "하나라도 비는" 구간을 쓰면(리뷰 F1) 한쪽 면선만 끊긴 작도 오류가
-// 벽에 있지도 않은 문이 된다 — 바깥 면선이 멀쩡한데 안쪽만 900 mm 끊기면 유령 문 하나, 끊긴 자리가
-// 어긋나면 유령 문 둘이 나온다.
-const holes = (cov, s0, s1) => {   // 덮인 구간 cov(오름차순) 기준으로 [s0, s1] 안에서 비어 있는 토막들
-  const out = [];
-  let t = s0;
-  for (const [a, b] of cov) {
-    if (b <= s0) continue;
-    if (a >= s1) break;
-    if (a > t) out.push([t, a]);
-    t = Math.max(t, b);
-  }
-  if (t < s1) out.push([t, s1]);
-  return out;
+// 두께 분포(5 mm 계급 · 길이 가중, 큰 것부터) — 검토 화면의 분포 줄과 폴백의 우세 두께가 쓴다.
+const thicknessHist = runs => {
+  const h = new Map();
+  for (const r of runs) { const k = Math.round((r.hi - r.lo) / 5) * 5; h.set(k, (h.get(k) ?? 0) + (r.t1 - r.t0)); }
+  return [...h].sort((a, b) => b[1] - a[1]);
 };
-export function openingGaps(accepted, P = DXF_PARAMS) {
-  const out = [];
-  for (const c of accepted) {
-    const u = c.A.u, n = c.A.n, off = (c.A.off + c.B.off) / 2;
-    const covA = mergeIv(c.A.raw ?? c.A.intervals), covB = mergeIv(c.B.raw ?? c.B.intervals);
-    for (const [s0, s1] of c.ov) {
-      // 면선마다의 빈 토막을 구해 **교집합**을 낸다 — 그것이 둘 다 비는 구간이다. 폭은 양끝 포함으로 잰다.
-      for (const [t0, t1] of ivOverlap(holes(covA, s0, s1), holes(covB, s0, s1))) {
-        const width = t1 - t0;
-        if (width < GAP_RANGE[0] || width > GAP_RANGE[1]) continue;
-        const m = (t0 + t1) / 2;
-        out.push({ p: [u[0] * m + n[0] * off, u[1] * m + n[1] * off], width });
-      }
-    }
-  }
-  return out;
-}
 
 // 2~10단계를 한 줄로. 결과 좌표는 DXF 그대로다.
 export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new Set(), liveLayers = null, params: P = DXF_PARAMS, thickness = DXF_PARAMS.thickness } = {}) {
   const live = liveLayers ? ex.segs.filter(s => liveLayers.has(s.layer)) : ex.segs;
-  const roi = largestCluster(live, ROI_LINK);   // 연결성 기반(C-7) — P.roiCell은 더 이상 쓰지 않는다
+  const roi = largestCluster(live, ROI_LINK);   // 연결성 기반(C-7)
   const inRoi = p => !roi || (p[0] >= roi.x0 && p[0] <= roi.x1 && p[1] >= roi.y0 && p[1] <= roi.y1);
   const usable = s => inRoi(s.a) && inRoi(s.b) && !s.src?.endsWith(':bulge');   // 조경 곡선·라운드 코너는 벽이 아니다
   let cand = ex.segs.filter(s => usable(s) && (
@@ -261,22 +123,101 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
     guessed = true;
     cand = live.filter(s => usable(s) && len(s.a, s.b) >= FALLBACK_MIN_SEG);
   }
-  const faces = buildFaces(cand, P);
-  const pairs = candidatePairs(faces, P);
-  const modes = thicknessModes(pairs, P);
-  // 폴백 경로에서는 우세 봉우리에 걸린 쌍만 남긴다(모든 평행선을 벽으로 보지 않게).
-  const usePairs = guessed ? pairs.filter(c => modes.modes.has(Math.round(c.d / P.modeBin) * P.modeBin)) : pairs;
-  const accepted = matchPairs(usePairs, modes, P);
-  const guessedLayers = new Set();
-  if (guessed) for (const c of accepted) for (const f of [c.A, c.B]) for (const n of f.layers) guessedLayers.add(n);
-  let walls = mergeCollinear(centerlines(accepted, modes, P, thickness), P).filter(w => len(w.a, w.b) >= P.minWall);
-  walls = dedupeParallel(walls, DUP_SEP, P);   // 두 번 그린 벽을 접고 나서 스냅·접합으로 간다
-  for (let pass = 0; pass < P.passes; pass++) {
-    walls = snapEndpoints(walls, P.snap);
-    walls = closeJunctions(walls, P);
-    walls = bridgeGaps(walls, P);
-    walls = walls.filter(w => len(w.a, w.b) >= P.minWall);
+  const rects = findColumns(cand, P);
+  const colSegs = new Set(rects.flatMap(c => c.segs));
+  // 주 평면 블록: 벽 레이어 선 길이가 가장 많은 블록. 그 blockShare 미만인 블록의 벽 레이어 선은 기호다
+  // (실파일: 도면에 그린 트럭 "탑차"가 벽 6개가 됐다). 기호 블록의 선은 기둥 찾기에만 쓴다.
+  const wallish = s => guessed || wallLayers.has(s.layer);
+  const byBlock = new Map();
+  for (const s of cand) if (wallish(s)) byBlock.set(s.block, (byBlock.get(s.block) ?? 0) + len(s.a, s.b));
+  const major = Math.max(0, ...byBlock.values());
+  const symbol = s => wallish(s) && (byBlock.get(s.block) ?? 0) < P.blockShare * major;
+  const faces = buildFaces(cand.filter((s, i) => !colSegs.has(i) && !symbol(s)), P);
+  const byKey = new Map();
+  for (const f of faces) (byKey.get(f.key) ?? byKey.set(f.key, []).get(f.key)).push(f);
+  const pieces = [], jogs = [], gaps = [];
+  for (const list of byKey.values()) {
+    const { u, n } = list[0];
+    const br = wallsOfRuns(bandRuns(wallBands(list, P), P), P);
+    const perChain = new Map();
+    for (const r of br.sections) perChain.set(r.chain, (perChain.get(r.chain) ?? 0) + 1);
+    for (const r of br.sections) {
+      const L = r.t1 - r.t0, th = r.hi - r.lo;
+      // 짧은 토막 거르기는 **홀로 선** 구간에만 한다 — 꺾임으로 이어진 구간을 지우면 꺾임이 매달린다.
+      if (perChain.get(r.chain) === 1 && (L < P.minWall || (L < P.colRatio * th && L < P.colMax))) continue;   // 못 알아본 기둥·벽기둥 토막
+      pieces.push({ ...r, u, n, layers: layersOf(list, r) });
+    }
+    for (const j of br.jogs) jogs.push({ ...j, u, n });
+    for (const g of br.gaps) { const o = openingOf(list, g, P); if (o) gaps.push({ p: [u[0] * o.t + n[0] * g.off, u[1] * o.t + n[1] * g.off], width: o.width }); }
   }
-  walls = snapEndpoints(walls, P.snapFinal).filter(w => len(w.a, w.b) >= P.minWall);
-  return { walls: walls.map(w => ({ a: w.a, b: w.b, thickness: w.thickness })), gaps: openingGaps(accepted, P), roi, faces, pairs, accepted, hist: modes.hist, guessed, guessedLayers };
+  const hist = thicknessHist(pieces);
+  // 폴백에서는 우세 두께 계급에 드는 띠만 남긴다(기구·가구의 평행선을 벽으로 보지 않게).
+  const modes = new Set(hist.slice(0, FALLBACK_MODES).map(([k]) => k));
+  const kept = guessed ? pieces.filter(r => modes.has(Math.round((r.hi - r.lo) / 5) * 5)) : pieces;
+  const guessedLayers = new Set();
+  if (guessed) for (const r of kept) for (const l of r.layers) guessedLayers.add(l);
+  const thOf = mm => { const th = Math.round(mm / 5) * 5; return th >= P.tMin ? th : thickness; };
+  let walls = kept.map(r => {
+    const off = (r.lo + r.hi) / 2;
+    return {
+      a: [r.u[0] * r.t0 + r.n[0] * off, r.u[1] * r.t0 + r.n[1] * off],
+      b: [r.u[0] * r.t1 + r.n[0] * off, r.u[1] * r.t1 + r.n[1] * off],
+      thickness: thOf(r.hi - r.lo),
+    };
+  });
+  // 꺾임(두께가 바뀌는 경계): 두 구간 중심선을 잇는 짧은 수직 벽. 끝점은 두 구간 끝과 같은 식으로 계산해
+  // 정확히 겹친다(joinEnds가 건드리지 않는다). minWall보다 짧아도 남긴다 — 지우면 벽이 끊긴다.
+  for (const j of jogs) walls.push({ a: [j.u[0] * j.t + j.n[0] * j.c0, j.u[1] * j.t + j.n[1] * j.c0], b: [j.u[0] * j.t + j.n[0] * j.c1, j.u[1] * j.t + j.n[1] * j.c1], thickness: thOf(j.th), jog: true });
+  walls = joinEnds(pruneSpurs(joinEnds(walls, P), P), P).filter(w => w.jog || len(w.a, w.b) >= P.minWall)
+    .map(({ a, b, thickness: th }) => ({ a, b, thickness: th }));
+  // 벽기둥(ㄷ자): 두 열린 끝이 모두 벽 몸통(± 30 mm)에 닿거나 **다른 벽 선의 끝과 이어져야** 한다 — 허공의 ㄷ자는
+  // 기구·기호다. (실파일 식당 벽기둥은 창 아래 오목한 벽 안쪽 단에 붙어 벽 띠에서 200 mm 넘게 떨어져 있다.)
+  const onWall = p => walls.some(w => distToSeg(p, w.a, w.b) <= w.thickness / 2 + 30);
+  const endKey = p => `${Math.round(p[0] / P.colTol)},${Math.round(p[1] / P.colTol)}`;
+  const ends = new Map();
+  cand.forEach((s, i) => { for (const p of [s.a, s.b]) { const k2 = endKey(p); (ends.get(k2) ?? ends.set(k2, []).get(k2)).push(i); } });
+  const linked = (p, own) => (ends.get(endKey(p)) ?? []).some(i => !own.includes(i) && len(cand[i].a, cand[i].b) >= 1);
+  const us = findPilasters(cand, colSegs, P);
+  const okU = new Set(us.filter(pl => pl.open.every(p => onWall(p) || linked(p, pl.segs))));
+  // 기둥 자리의 틈은 개구부가 아니다(벽선이 기둥 면에서 끊겼다가 이어진 것이다).
+  const atColumn = p => [...rects, ...us].some(c => len(c.c, p) <= Math.max(c.w, c.h) / 2 + 50);
+  // 세울 기둥: 벽에 닿은 사각형과, 떨어져 있어도 그와 같은 크기(10 mm 계급)인 사각형 — 크기가 다른 떨어진
+  // 사각형은 설비 뚜껑·기호일 수 있어 세우지 않는다.
+  const sizeKey = c => `${Math.round(Math.min(c.w, c.h) / 10)},${Math.round(Math.max(c.w, c.h) / 10)}`;
+  const touches = c => walls.some(w => distToSeg(c.c, w.a, w.b) <= w.thickness / 2 + Math.max(c.w, c.h) / 2 + 100);
+  const touching = rects.filter(touches);
+  const modules = new Set(touching.map(sizeKey));
+  // 한 자리에 겹쳐 그린 윤곽(구조체 사각형·ㄷ자·마감 라이닝)은 바깥 윤곽의 기둥 하나다 — 인정된 윤곽이 하나라도 든 묶음만.
+  const columns = mergeColumns([
+    ...rects.map(c => ({ ...c, ok: touching.includes(c) || modules.has(sizeKey(c)) })),
+    ...us.map(c => ({ ...c, ok: okU.has(c) })),
+  ]);
+  return { walls, gaps: gaps.filter(g => !atColumn(g.p)), columns, roi, faces, hist, guessed, guessedLayers };
+}
+
+// run을 낸 면선의 레이어들(폴백의 guessedLayers — 사람이 확인할 체크 줄).
+function layersOf(faces, r) {
+  const out = new Set();
+  for (const f of faces) {
+    if (f.off < r.lo - 1 || f.off > r.hi + 1) continue;
+    if (!(f.raw ?? []).some(([a, b]) => b > r.t0 && a < r.t1)) continue;
+    for (const l of f.layers) out.add(l);
+  }
+  return out;
+}
+
+// 틈이 개구부인가(리뷰 F1 · 사전 검토 C-2): 띠 안(lo..hi)의 어떤 면선도 덮지 않는 **가장 긴 빈 구간**이
+// gapMin 이상이어야 한다. 한쪽 면선만 끊긴 작도 오류는 다른 쪽 선이 덮고 있어 문이 아니다.
+function openingOf(faces, g, P) {
+  const cov = [];
+  for (const f of faces) {
+    if (f.off < g.lo - P.offTol || f.off > g.hi + P.offTol) continue;
+    for (const [a, b] of f.raw ?? []) if (b > g.t0 && a < g.t1) cov.push([Math.max(a, g.t0), Math.min(b, g.t1)]);
+  }
+  cov.sort((x, y) => x[0] - y[0]);
+  let t = g.t0, best = null;
+  const hole = (a, b) => { if (b - a > 0 && (!best || b - a > best.width)) best = { t: (a + b) / 2, width: b - a }; };
+  for (const [a, b] of cov) { if (a > t) hole(t, a); t = Math.max(t, b); }
+  hole(t, g.t1);
+  return best && best.width >= P.gapMin ? best : null;
 }

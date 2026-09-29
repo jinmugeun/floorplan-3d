@@ -26,7 +26,8 @@ const openRole = roleLayers(rows, 'opening');
 const live = new Set(rows.filter(r => !r.off).map(r => r.name));
 const titleLayers = new Set(rows.filter(r => r.role === 'text' || r.role === 'other').map(r => r.name));
 const extracted = extractWalls(ex, { wallLayers: checked, openFaceLayers: openRole, liveLayers: live, thickness: 200 });
-const built = buildProject(extracted.walls, { height: 3500, texts: ex.texts, fileName: 'plan-1f-corner.dxf', titleLayers });
+// 워커와 같이 레이어 역할로 방 이름을 고른다(toProject.nameRooms · 2026-09-29).
+const built = buildProject(extracted.walls, { height: 3500, texts: ex.texts, fileName: 'plan-1f-corner.dxf', titleLayers, nameRoles: new Map(rows.map(r => [r.name, r.role])) });
 
 test('픽스처는 저장소에 들어갈 크기다', () => {
   expect(raw.length).toBeLessThanOrEqual(200 * 1024);
@@ -68,7 +69,7 @@ test('레이어 판정과 기본 체크가 기대값과 같고 꺼진 레이어 
 });
 
 test('벽 추출 결과가 기대값과 같고 최소 보증을 넘는다', () => {
-  expect({ faces: extracted.faces.length, pairs: extracted.pairs.length, accepted: extracted.accepted.length, gaps: extracted.gaps.length, guessed: extracted.guessed })
+  expect({ faces: extracted.faces.length, columns: extracted.columns.length, gaps: extracted.gaps.length, guessed: extracted.guessed })
     .toEqual(expected.extract);
   const { stats } = built;
   expect({ walls: stats.walls, rooms: stats.rooms, areaM2: stats.areaM2, openEnds: stats.openEnds.length, thickness: stats.thickness, size: stats.size })
@@ -77,8 +78,13 @@ test('벽 추출 결과가 기대값과 같고 최소 보증을 넘는다', () =
   expect(stats.walls).toBeGreaterThanOrEqual(8);
   expect(stats.rooms).toBeGreaterThanOrEqual(1);
   expect(extracted.guessed).toBe(false);
-  // 사전 검토 C-2: 문 자리는 원호가 아니라 면선 쌍의 틈이 알려 준다(Task 9가 이것을 앉힌다).
-  expect(extracted.gaps.length).toBeGreaterThanOrEqual(8);   // 하한은 여유를 둔다(실측 10 · Task 8 리뷰 I-2)
+  // 사전 검토 C-2: 미닫이 문 자리는 원호가 아니라 **두 면선이 모두 빈** 틈이 알려 준다(Task 9가 앉힌다).
+  // 2026-09-29: 옛 하한 8(실측 10)은 겹친 평행 중심선마다 같은 틈을 다시 센 수였다 — 지금 실측은 2다.
+  expect(extracted.gaps.length).toBeGreaterThanOrEqual(2);
+  // 실데이터 회귀 보루: 이 도면의 벽은 전부 축에 맞는다 — 옛 무게중심 스냅은 실파일 벽 31개를 기울였다.
+  const skew = w => { const a = Math.abs(Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]) * 180 / Math.PI) % 90; return Math.min(a, 90 - a); };
+  expect(built.walls.filter(w => skew(w) > 0.05)).toEqual([]);
+  expect(extracted.columns.length).toBeGreaterThanOrEqual(1);          // 벽에 붙은 기둥은 벽이 아니라 기둥이다
   // M-5(최종 리뷰): 예전 줄은 openingGaps가 GAP_RANGE로 걸러 낸 결과를 같은 리터럴로 다시 재는
   // 동어반복이라 회귀 가치가 0이었다. 대신 그 필터가 **말하지 않는 것**을 본다: 틈은 서로 다른
   // 자리에 하나씩이고(같은 자리에 둘이면 opening-pass가 겹쳐 앉는다) 전부 ROI 상자 안의 점이다.
@@ -94,12 +100,13 @@ test('만들어진 프로젝트가 normalizeProject를 통과하고 매칭 안 �
   expect(project.floors[0].height).toBe(3500);
   expect(project.floors[0].walls.every(w => w.height === 3500)).toBe(true);
   expect(project.name).toBe('경산 사동중');                       // 높이 980 mm 제목 문자(레이어 TEXT2)
-  // M-6(최종 리뷰): 이 픽스처에서 이름이 붙는 방은 **0개**다 — 실명 셋이 전부 방 폴리곤 밖이라
-  // 그대로 unmatchedNames로 나온다. 옛 단언(`named.length + unmatched.length >= 2`)은 0 + 3으로
+  // M-6(최종 리뷰): 이 픽스처에서 이름이 붙는 방은 **0개**다 — 실명이 전부 방 폴리곤 밖이라(픽스처가
+  // 영양상담실 아래 벽을 잘라 냈다) 그대로 unmatchedNames로 나온다. 두 줄 실명은 한 이름이다(2026-09-29). 옛 단언(`named.length + unmatched.length >= 2`)은 0 + 3으로
   // 통과해 제목이 말하는 성질을 하나도 검사하지 않았다(이름이 붙는 성질 자체는 dxfProject.test.js가
   // 합성 데이터로 덮는다). 여기서 못 박는 것은 §18.4의 "닫히지 않은 공간"이 세는 바로 그 신호다.
   const named = project.floors[0].rooms.filter(r => /[가-힣]/.test(r.name));
   expect(named).toHaveLength(0);
+  expect(built.stats.unmatchedNames).toContain('영양상담/영양관리실');
   expect(built.stats.unmatchedNames.length).toBeGreaterThanOrEqual(2);
   expect(built.stats.unmatchedNames.every(n => /[가-힣]/.test(n))).toBe(true);
 });

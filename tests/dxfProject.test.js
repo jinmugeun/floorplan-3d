@@ -149,6 +149,75 @@ test('벽이 하나도 없으면 빈 층을 만들고 통계도 0이다', () => 
   expect(project.name).toBe('empty');
 });
 
+// 2026-09-29 정확도 수정: 실파일에서 식당+조리실 방이 급식기구 라벨 "온장고"로, 식품창고가 "평면형"으로,
+// 계단 화살표 "DN"이 방 이름이 됐다 — 높이만 보고 **아무 레이어의 첫 글자**를 골랐기 때문이다.
+const lay = (x, y, h, text, layer) => ({ p: [x, y], h, text, layer, depth: 0, block: null });
+const ROLES = new Map([['TEXT', 'text'], ['급식-재사용', 'equip'], ['급식-기구구입', 'equip'], ['기존', 'wall']]);
+
+test('방 이름은 문자 레이어의 실명이 이기고, 기구 라벨·계단 화살표·면적 라벨·축선 기호는 이름이 아니다', () => {
+  const texts = [
+    lay(3100.5, 2200.25, 270, '온장고', '급식-재사용'),          // 방 한가운데의 기구 라벨
+    lay(2000.5, 3000.25, 203, '평면형', '급식-기구구입'),
+    lay(4000.5, 1500.25, 225, 'DN', '기존'),
+    lay(2500.5, 2600.25, 300, '식품창고', 'TEXT'),
+    lay(2600.5, 2100.25, 250, '(14.53m²)', 'TEXT'),
+    lay(5000.5, 3500.25, 300, 'X12', 'TEXT'),
+  ];
+  const { project, stats } = buildProject(rect(100.5, 200.25, 6100.5, 4200.25), { texts, nameRoles: ROLES });
+  expect(project.floors[0].rooms[0].name).toBe('식품창고');
+  expect(stats.unmatchedNames).toEqual([]);
+  // 문자 레이어 실명이 없으면 벽 레이어의 글자까지 본다(계단 화살표는 빼고) — 기구 라벨은 끝까지 이름이 아니다.
+  const ramp = buildProject(rect(100.5, 200.25, 6100.5, 4200.25), { texts: [lay(3100.5, 2200.25, 225, '경사로', '기존'), lay(3100.5, 1200.25, 225, 'DN', '기존')], nameRoles: ROLES });
+  expect(ramp.project.floors[0].rooms[0].name).toBe('경사로');
+  const equip = buildProject(rect(100.5, 200.25, 6100.5, 4200.25), { texts: [lay(3100.5, 2200.25, 270, '온장고', '급식-재사용')], nameRoles: ROLES });
+  expect(equip.project.floors[0].rooms[0].name).toBe('');
+});
+
+test('두 줄 실명과 글자 사이를 띄운 실명을 한 이름으로 읽는다', () => {
+  // DXF는 y 위쪽이다 — 둘째 줄은 600 mm 아래에 있다
+  const texts = [lay(2000.5, 2800.25, 300, '영양상담/', 'TEXT'), lay(2000.5, 2200.25, 300, '영양관리실', 'TEXT'), lay(2100.5, 1500.25, 250, '(41.31m²)', 'TEXT')];
+  const { project, stats } = buildProject(rect(100.5, 200.25, 6100.5, 4200.25), { texts, nameRoles: ROLES });
+  expect(project.floors[0].rooms[0].name).toBe('영양상담/영양관리실');
+  expect(stats.unmatchedNames).toEqual([]);
+  const hall = buildProject(rect(100.5, 200.25, 6100.5, 4200.25), { texts: [lay(3000.5, 2200.25, 300, '식 당', 'TEXT')], nameRoles: ROLES });
+  expect(hall.project.floors[0].rooms[0].name).toBe('식당');
+});
+
+test('면적 라벨이 붙은 실명 둘이 한 방에 들면 둘 다 이름이 되고, 면적 없는 설비 라벨은 빠진다', () => {
+  // 식당과 조리실은 벽이 아니라 배식대로 나뉜다 — 한 방으로 닫히면 그 사실이 이름에 드러나야 한다
+  const texts = [
+    lay(3000.5, 3000.25, 300, '식 당', 'TEXT'), lay(3100.5, 2400.25, 300, '(366석)', 'TEXT'), lay(3000.5, 1860.25, 250, '(386.12m²)', 'TEXT'),
+    lay(9000.5, 3000.25, 300, '조리실', 'TEXT'), lay(9000.5, 2500.25, 250, '(102.30m²)', 'TEXT'),
+    lay(1500.5, 3500.25, 300, '청소용수전', 'TEXT'),
+  ];
+  const { project, stats } = buildProject(rect(100.5, 200.25, 12100.5, 4200.25), { texts, nameRoles: ROLES });
+  expect(project.floors[0].rooms[0].name).toBe('식당·조리실');
+  // 방 안에 든 글자는 모두 자리를 찾았다 — "닫히지 않은 공간"은 방 밖에 남은 실명뿐이다
+  expect(stats.unmatchedNames).toEqual([]);
+  const out = buildProject(rect(100.5, 200.25, 12100.5, 4200.25), { texts: [...texts, lay(99999, 99999, 300, '홀', 'TEXT')], nameRoles: ROLES });
+  expect(out.stats.unmatchedNames).toEqual(['홀']);
+});
+
+// 2026-09-29: 기둥(닫힌 작은 사각형)은 벽이 아니라 앱의 사각 기둥으로 선다 — 크기·방향·층고를 도면에서 가져온다.
+test('기둥은 사각 기둥 아이템이 되고 크기·방향·높이를 도면에서 받는다', () => {
+  // DXF 좌표(y 위쪽): 벽 사각형 모서리 안쪽에 500×700 기둥, 긴 변이 y 방향
+  const columns = [{ c: [1350.5, 1450.25], u: [0, 1], w: 700, h: 500 }];
+  const { project, stats } = buildProject(rect(100.5, 200.25, 6100.5, 4200.25), { height: 3500, columns });
+  const cols = project.floors[0].items.filter(i => i.productId === 'column-square');
+  expect(cols).toHaveLength(1);
+  expect(cols[0].kind).toBe('column');
+  expect(cols[0].size).toEqual([700, 500, 3500]);
+  expect(Math.abs(((cols[0].rot % 180) + 180) % 180 - 90)).toBeLessThan(1e-6);   // 긴 변이 세로
+  // 벽 사각형 중심(3100.5, 2200.25)이 원점이고 y가 뒤집힌다
+  expect(cols[0].pos).toEqual([-1750, 750]);
+  expect(stats.columns).toBe(1);
+  // 기둥에 닿아 끝나는 벽 끝은 끊긴 끝점이 아니다(실파일 조리실 실내벽 끝) — 배너·빨간 ✚에서 뺀다
+  const stub = { a: [1350.5, 1100.25], b: [6100.5, 1100.25], thickness: 200 };      // 오른쪽 벽에서 기둥 몸통(y 1100~1800) 안까지
+  const withCol = buildProject([...rect(100.5, 200.25, 6100.5, 4200.25), stub], { height: 3500, columns: [{ c: [1350.5, 1450.25], u: [0, 1], w: 700, h: 500 }] });
+  const without = buildProject([...rect(100.5, 200.25, 6100.5, 4200.25), stub], { height: 3500 });
+  expect(without.stats.openEnds.length - withCol.stats.openEnds.length).toBe(1);
+});
+
 test('닫힌 방 두 개가 벽 하나를 공유해도 각각 이름을 받는다', () => {
   const walls = [
     ...rect(0.5, 0.25, 8000.5, 4000.25),
