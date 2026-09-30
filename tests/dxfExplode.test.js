@@ -54,6 +54,24 @@ test('깊이 3 중첩 INSERT의 행렬이 합성되고 레이어 0이 상속된�
   expect(ex.skipped.size).toBe(0);
 });
 
+// 2026-09-30: 창·문 블록 INSERT 하나 = 개구부 하나다. 블록 로컬 좌표가 base에서 수십 km 떨어져 있어 INSERT 점은
+// 쓸 수 없으므로(실파일 DR-1800) 전개된 도형이 **어느 INSERT에서 왔는지** 달아 인서트별 월드 도형을 모은다.
+test('전개된 도형은 바로 위 INSERT 번호(ins)를, INSERT는 부모 INSERT 번호(parent)를 단다', () => {
+  const doc = {
+    blocks: new Map([
+      block('PLAN', [insert('WIN-900', '0', 100.5, 0), insert('WIN-900', '0', 2000.5, 0), line('WAL', 0, 0, 5000.5, 0)]),
+      block('WIN-900', [line('WIN', 0, 0, 900.5, 0), { type: 'ARC', layer: 'WIN', x: 0, y: 0, r: 900, a0: 0, a1: 90 }, insert('HANDLE', '0', 450.5, 0)]),
+      block('HANDLE', [line('WIN', 0, 0, 30.5, 0)]),
+    ]),
+    entities: [insert('PLAN', '0', 0, 0), line('WAL', 0, -500.25, 100.5, -500.25)],
+  };
+  const ex = explode(doc);
+  expect(ex.inserts.map(i => [i.name, i.parent])).toEqual([['PLAN', undefined], ['WIN-900', 0], ['HANDLE', 1], ['WIN-900', 0], ['HANDLE', 3]]);
+  const insOf = s => [s.block, s.ins];
+  expect(ex.segs.map(insOf)).toEqual([['WIN-900', 1], ['HANDLE', 2], ['WIN-900', 3], ['HANDLE', 4], ['PLAN', 0], ['*Model_Space', undefined]]);
+  expect(ex.arcs.map(a => a.ins)).toEqual([1, 3]);
+});
+
 test('블록 base point는 INSERT 점으로 보정된다(규칙 ②)', () => {
   const doc = {
     blocks: new Map([block('D', [line('WAL', 10.5, 20.25, 110.5, 20.25)], [10.5, 20.25])]),

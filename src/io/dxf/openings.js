@@ -1,6 +1,7 @@
-// 문·창(§18.4). **문은 INSERT 좌표를 쓰지 않는다**: 이 도면의 문 대부분은 블록 두 개가 도면 전체의
-// 문을 통째로 그려 한 INSERT의 bbox가 33 m × 13 m다(프로토타입이 21개 중 9개만 맞힌 원인).
-// 문 위치는 전개 후 **원호의 중심**이고, 창은 개구부 레이어의 긴 면선이 벽을 덮는 구간이다.
+// 문·창(§18.4). 차례가 규칙이다: ① 창·문 블록 INSERT(blockOpenings.js — 2026-09-30, 인서트마다 **전개된 월드
+// 도형**을 모아 자리·종류·폭을 읽는다. INSERT 점과 블록 로컬 bbox는 쓰지 않는다: 블록 로컬 좌표가 base에서
+// 수십만 mm 떨어져 있어 bbox가 33 m × 13 m로 나왔다 — 프로토타입이 21개 중 9개만 맞힌 원인) → ② 문 원호의
+// 중심 → ③ 개구부 레이어의 긴 면선이 벽을 덮는 구간(창) → ④ 벽 틈. 뒤 경로는 앞 경로가 앉힌 자리를 비켜 간다.
 // 이 도면의 문은 두 가지다(2026-09-29 정정 — 계획 10의 "스윙 원호가 없다"는 ARC만 센 오판이었다):
 //  ① 여닫이 6짝(양개 4 · 외짝 2): 역할 "기타"인 WID 레이어의 DR-900·DR-1800·dr-1850 블록에 있고 궤적은
 //     **폴리선 bulge**다 — 그래서 문 블록 이름(DOOR_BLOCK)과 polyArcs를 함께 본다.
@@ -12,6 +13,9 @@ import { createItem } from '../../state/schema.js';
 import { productById } from '../../products/catalog.js';
 import { placeOnWall } from '../../geom/items.js';
 import { DXF_PARAMS } from './params.js';
+import { DOOR_BLOCK, OPEN_BLOCK, blockOpenings } from './blockOpenings.js';
+
+export { DOOR_BLOCK, OPEN_BLOCK };
 
 export const DOOR_PRODUCTS = [['door-swing-900', 900], ['door-swing-1000', 1000], ['door-slide-1500', 1500], ['door-double-1800', 1800]];
 export const WINDOW_PRODUCTS = [['window-fix-600', 600], ['window-slide-1200', 1200], ['window-slide-1800', 1800]];
@@ -33,12 +37,8 @@ const ALONG_DOT = 0.9;                     // "벽 방향과 가장 나란한 �
 const clamp01 = v => Math.max(0, Math.min(1, v));
 const normSweep = d => ((d % 360) + 360) % 360;
 
-// 문 블록 이름(2026-09-29): 실파일 여닫이문 17개는 역할 "기타"인 WID 레이어의 DR-900·DR-1800·dr-1850
-// 블록에 있었다 — 개구부 역할 레이어만 보던 판정이 전부 놓쳤다. 블록 이름이 문이면 레이어와 무관하다.
-// 이름 **앞머리**만 본다: "문"이 뒤에 붙는 주방 기구("보냉고 양문"·"소독기 단문")는 문이 아니다.
-export const DOOR_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]/i;
-// 창·문 블록 이름(walls.js가 긴 연장·다리의 "문·창 자리" 근거로 쓴다). 실파일: win-900-3 · WIN-1500 · dr-1850 · 문_슬라이딩 포켓 900.
-export const OPEN_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]|^(win|window|w)[-_ ]?\d{3,4}|^window|^창[-_ ]/i;
+// 문 블록 이름(DOOR_BLOCK)·창·문 블록 이름(OPEN_BLOCK)은 blockOpenings.js에 있다(2026-09-29: 실파일 여닫이문
+// 17개는 역할 "기타"인 WID 레이어의 DR-900·DR-1800·dr-1850 블록에 있었다 — 블록 이름이 문이면 레이어와 무관하다).
 
 // 원호 → 문 후보(앱 좌표). toApp·scale로 DXF 좌표계를 앱 좌표계로 옮기며 센다.
 export function doorHinges(arcs, layers, toApp = p => p, scale = 1) {
@@ -173,6 +173,14 @@ export function windowSpans(segs, layers, walls, P = DXF_PARAMS) {
   return out;
 }
 
+// 블록 개구부의 제품: 여닫이는 폭이 가장 가까운 여닫이문, 포켓 미닫이는 미닫이문, 창은 900 미만 고정창 · 1500
+// 이하 1200 미닫이창 · 그 위 1800 미닫이창(높이·sill이 그 제품 값이다). 폭은 제품 폭이 아니라 블록 폭으로 앉는다.
+function blockProduct(kind, width) {
+  if (kind === 'pocket') return 'door-slide-1500';
+  if (kind === 'window') return width < 900 ? 'window-fix-600' : width <= 1500 ? 'window-slide-1200' : 'window-slide-1800';
+  return DOOR_PRODUCTS.filter(([id]) => id !== 'door-slide-1500').reduce((m, e) => (Math.abs(e[1] - width) < Math.abs(m[1] - width) ? e : m))[0];
+}
+
 // 높이·sill은 **카탈로그 기본값 그대로**다 — 도면에 입면 정보가 전혀 없다. 폭만 실측으로 덮어쓴다.
 // 제품마다 값이 다르다(사전 검토 I-9): 문 z 0 · h 2100 / `window-slide-*` z 900 · h 1200 /
 // **`window-fix-600`은 z 1200 · h 600** / `opening-pass` z 0 · h 2100.
@@ -201,7 +209,23 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
     items.push(item);
     mark(wall, t, fit.width);
   };
-  // 문 재료는 ARC 엔티티와 폴리선 bulge 호(polyArcs) 둘 다다.
+  // ① 창·문 블록: 종류로 제품을 고르고 폭은 블록 그대로다(벽보다 넓으면 벽 안으로 줄인다).
+  for (const o of blockOpenings(ex, walls, toApp)) {
+    // 자리가 정확하므로 옮기지 않는다: 벽 끝(여유 OPENING_EDGE)을 넘는 쪽만 잘라 50 mm 단위로 내리고 반대쪽
+    // 문설주는 제자리에 둔다(옮기면 문설주가 치수에서 어긋나고 이웃 개구부와 겹쳐 통째로 빠졌다).
+    const L = wallLen(o.wall), c = o.t * L, half = o.width / 2;
+    const u0 = Math.max(c - half, OPENING_EDGE), u1 = Math.min(c + half, L - OPENING_EDGE);
+    const whole = u1 - u0 >= o.width - 1;
+    const width = whole ? Math.round(o.width) : Math.floor((u1 - u0) / 50) * 50;
+    if (width < OPENING_MIN) continue;
+    const t = (whole ? c : c - half < OPENING_EDGE ? u1 - width / 2 : u0 + width / 2) / L;
+    if (clash(o.wall, t, width)) continue;
+    const item = makeItem(blockProduct(o.kind, width), width, o.wall, t);
+    if (!item) continue;
+    items.push(item);
+    mark(o.wall, t, width);
+  }
+  // ② 문 재료는 ARC 엔티티와 폴리선 bulge 호(polyArcs) 둘 다다.
   const leaves = [];
   for (const h of doorHinges([...(ex?.arcs ?? []), ...(ex?.polyArcs ?? [])], openingLayers, toApp, scale)) {
     const hit = nearestWall(walls, h.p);

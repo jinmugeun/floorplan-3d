@@ -108,6 +108,7 @@ function repOf(parts, P) {
     t0: parts[0].t0, t1: parts[parts.length - 1].t1,
     lo: rep.reduce((a, p) => a + p.lo * (p.t1 - p.t0), 0) / W,
     hi: rep.reduce((a, p) => a + p.hi * (p.t1 - p.t0), 0) / W,
+    op: !solid.length && parts.some(p => p.op),   // 벽 몸통 구간 없이 창틀이 낀 run(창 자리) — sectionsOf가 이웃 띠를 따르게 한다
   };
 }
 
@@ -184,7 +185,7 @@ export function chainRuns(runs, P = DXF_PARAMS, evidence = null) {
     c.end = Math.max(c.end, r.t1);
     if (r.t1 - r.t0 > c.rep.t1 - c.rep.t0) c.rep = r;
   }
-  const out = chains.map(c => c.runs.map(({ t0, t1, lo, hi }) => ({ t0, t1, lo, hi })));
+  const out = chains.map(c => c.runs.map(({ t0, t1, lo, hi, op }) => ({ t0, t1, lo, hi, op })));
   if (!evidence) return out;
   const stub = r => { const L = r.t1 - r.t0, th = r.hi - r.lo; return L < P.minWall || (L < P.colRatio * th && L < P.colMax); };
   // 건너편이 온전한 벽일 때만 뗀다 — 토막끼리 이어진 줄(픽스처 화장실 칸 앞면: 면선 하나 + 230 mm 문틀 조각들)은
@@ -229,10 +230,14 @@ export function sectionsOf(chain, P = DXF_PARAMS) {
   for (let pass = 0; pass < 4; pass++) {
     let changed = false;
     rs.forEach((r, i) => {
-      const hugs = [rs[i - 1], rs[i + 1]].filter(x => x && contains(r, x) && !contains(x, r));
+      const hugs = [rs[i - 1], rs[i + 1]].filter(x => x && !x.op && contains(r, x) && !contains(x, r));   // 창틀 run은 벽 띠가 아니다
       if (r.t1 - r.t0 < P.bandBreak && hugs.length) { changed = adopt(r, hugs.reduce(longer)) || changed; return; }
       const L = hostOn(i, -1), R = hostOn(i, 1);
-      if (L && R) changed = adopt(r, longer(L, R)) || changed;
+      if (L && R) { changed = adopt(r, longer(L, R)) || changed; return; }
+      // 창틀만 남은 run(op)은 창틀이 벽 면 밖으로 조금 삐져나와 품기지 않아도 겹치는 이웃 벽 run 중 긴 쪽을 따른다
+      // (2026-09-30 영양상담실 벽: 창틀 11 mm 돌출로 창 900 자리가 제 두께의 벽 토막이 됐다).
+      const near = r.op ? [rs[i - 1], rs[i + 1]].filter(x => x && !x.op && compatible(x, r, P)) : [];
+      if (near.length) changed = adopt(r, near.reduce(longer)) || changed;
     });
     if (!changed) break;
   }

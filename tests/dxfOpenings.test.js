@@ -1,5 +1,6 @@
-// §18.4. 이 도면의 문은 INSERT 하나가 도면 전체의 문을 담은 블록이라 INSERT 좌표를 쓸 수 없다 —
-// 문 위치는 전개 후 **원호의 중심**이다. 좌표는 전부 앱 좌표(mm · y 남쪽)이고 소수를 섞는다.
+// §18.4. 블록 로컬 좌표가 base에서 멀리 떨어져 있어 INSERT 점은 쓸 수 없다 — 창·문 블록은 인서트마다 전개 도형을
+// 모아 읽고(tests/dxfBlockOpenings.test.js), 여기서는 그 뒤 경로(문 원호의 중심 · 창 면선 · 벽 틈)를 본다.
+// 좌표는 전부 앱 좌표(mm · y 남쪽)이고 소수를 섞는다.
 import { test, expect } from 'vitest';
 import { doorHinges, gapOpenings, dedupeGaps, windowSpans, nearestWall, productForWidth, buildOpenings, DOOR_PRODUCTS, WINDOW_PRODUCTS, OPENING_FALLBACK, OPENING_MATCH_DIST } from '../src/io/dxf/openings.js';
 import { DXF_PARAMS as P } from '../src/io/dxf/params.js';

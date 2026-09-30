@@ -41,13 +41,15 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
   const out = { segs: [], arcs: [], polyArcs: [], circles: [], inserts: [], texts: [], hatches: [], dims: [], others: new Map(), skipped: new Map() };
   const bump = (m, k) => m.set(k, (m.get(k) ?? 0) + 1);
 
-  const walk = (ents, m, depth, inherit, blockName) => {
+  // ins: 도형을 낸 바로 위 INSERT의 out.inserts 번호(모델 공간은 없음). INSERT는 parent로 부모 INSERT 번호를 단다 —
+  // 창·문 블록 하나의 월드 도형을 모으는 데 쓴다(openings의 블록 개구부 · 2026-09-30).
+  const walk = (ents, m, depth, inherit, blockName, ins) => {
     for (const e of ents) {
       // 규칙 ①: 블록 안 레이어가 '0'인 엔티티는 INSERT의 레이어를 상속한다.
       const layer = (!e.layer || e.layer === '0') && inherit ? inherit : (e.layer || '0');
       switch (e.type) {
         case 'LINE':
-          out.segs.push({ a: apply(m, [e.x ?? 0, e.y ?? 0]), b: apply(m, [e.x2 ?? 0, e.y2 ?? 0]), layer, src: 'LINE', depth, block: blockName });
+          out.segs.push({ a: apply(m, [e.x ?? 0, e.y ?? 0]), b: apply(m, [e.x2 ?? 0, e.y2 ?? 0]), layer, src: 'LINE', depth, block: blockName, ins });
           break;
         case 'LWPOLYLINE':
         case 'POLYLINE': {
@@ -58,7 +60,7 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
             const p0 = pts[k], p1 = pts[(k + 1) % n];
             const b = e.bulges?.[k] || 0;
             const arc = Math.abs(b) > 1e-9 ? bulgeToArc(p0, p1, b) : null;
-            if (!arc) { out.segs.push({ a: apply(m, p0), b: apply(m, p1), layer, src: e.type, depth, block: blockName }); continue; }
+            if (!arc) { out.segs.push({ a: apply(m, p0), b: apply(m, p1), layer, src: e.type, depth, block: blockName, ins }); continue; }
             // 규칙 ③: 호에서 나온 선분은 src에 ':bulge'를 달아 벽 후보에서 빠지게 한다
             // (조경 곡선·라운드 코너는 벽이 아니다). 실측: :bulge 선분 34,495개 = 전체 선분의
             // **49.1 %**다 — 있으나 마나 한 장치가 아니라 필수 필터다(최종 리뷰 M-3).
@@ -67,13 +69,13 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
             const cW = apply(m, arc.c), sW = apply(m, p0), eW = apply(m, p1);
             const angW = q => Math.atan2(q[1] - cW[1], q[0] - cW[0]) * 180 / Math.PI;
             const ccw = (arc.sweep > 0) !== mirrored(m);
-            out.polyArcs.push({ c: cW, r: arc.r * scaleOf(m), a0: angW(ccw ? sW : eW), a1: angW(ccw ? eW : sW), layer, depth, block: blockName });
+            out.polyArcs.push({ c: cW, r: arc.r * scaleOf(m), a0: angW(ccw ? sW : eW), a1: angW(ccw ? eW : sW), layer, depth, block: blockName, ins });
             const nSeg = arcSteps(arc.sweep, steps);
             let prev = p0;
             for (let s = 1; s <= nSeg; s++) {
               const ang = (arc.a0 + arc.sweep * s / nSeg) * Math.PI / 180;
               const q = [arc.c[0] + arc.r * Math.cos(ang), arc.c[1] + arc.r * Math.sin(ang)];
-              out.segs.push({ a: apply(m, prev), b: apply(m, q), layer, src: `${e.type}:bulge`, depth, block: blockName });
+              out.segs.push({ a: apply(m, prev), b: apply(m, q), layer, src: `${e.type}:bulge`, depth, block: blockName, ins });
               prev = q;
             }
           }
@@ -89,12 +91,12 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
           out.arcs.push({
             c: apply(m, [e.x ?? 0, e.y ?? 0]), r: (e.r ?? 0) * scaleOf(m),
             a0: flip ? rr - s1 : s0 + rr, a1: flip ? rr - s0 : s1 + rr,
-            layer, depth, block: blockName,
+            layer, depth, block: blockName, ins,
           });
           break;
         }
         case 'CIRCLE':
-          out.circles.push({ c: apply(m, [e.x ?? 0, e.y ?? 0]), r: (e.r ?? 0) * scaleOf(m), layer, depth, block: blockName });
+          out.circles.push({ c: apply(m, [e.x ?? 0, e.y ?? 0]), r: (e.r ?? 0) * scaleOf(m), layer, depth, block: blockName, ins });
           break;
         case 'INSERT': {
           const sx = e.xscale ?? 1, sy = e.yscale ?? 1;
@@ -102,18 +104,19 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
           const mm = matMul(m, local);
           // rot은 **합성 행렬**에서 읽는다(M-4): 거울은 각을 더하지 않고 φ − θ로 보내므로
           // (e.a0 + rotOf(m))은 거울 부모 아래에서 어긋난다(규칙 ④의 ARC 각과 같은 이유다).
-          out.inserts.push({ name: e.name, pos: apply(m, [e.x ?? 0, e.y ?? 0]), rot: rotOf(mm), scale: [sx * scaleOf(m), sy * scaleOf(m)], layer, depth, mirrored: mirrored(mm), block: blockName });
+          const id = out.inserts.length;
+          out.inserts.push({ name: e.name, pos: apply(m, [e.x ?? 0, e.y ?? 0]), rot: rotOf(mm), scale: [sx * scaleOf(m), sy * scaleOf(m)], layer, depth, mirrored: mirrored(mm), block: blockName, parent: ins });
           const b = doc.blocks?.get(e.name);
           if (!b) { bump(out.skipped, `missing-block:${e.name}`); break; }
           if (depth >= maxDepth) { bump(out.skipped, 'maxDepth'); break; }   // 규칙 ⑤(실측 최대 깊이 4)
-          walk(b.entities, matMul(mm, mat(-b.base[0], -b.base[1], 1, 1, 0)), depth + 1, layer, e.name);  // 규칙 ②
+          walk(b.entities, matMul(mm, mat(-b.base[0], -b.base[1], 1, 1, 0)), depth + 1, layer, e.name, id);  // 규칙 ②
           break;
         }
         case 'TEXT': case 'MTEXT':
-          out.texts.push({ p: apply(m, [e.x ?? 0, e.y ?? 0]), h: (e.r ?? 0) * scaleOf(m), text: e.text ?? '', layer, depth, block: blockName });
+          out.texts.push({ p: apply(m, [e.x ?? 0, e.y ?? 0]), h: (e.r ?? 0) * scaleOf(m), text: e.text ?? '', layer, depth, block: blockName, ins });
           break;
-        case 'HATCH': out.hatches.push({ layer, depth, block: blockName }); break;
-        case 'DIMENSION': out.dims.push({ layer, depth, block: blockName }); break;
+        case 'HATCH': out.hatches.push({ layer, depth, block: blockName, ins }); break;
+        case 'DIMENSION': out.dims.push({ layer, depth, block: blockName, ins }); break;
         case 'ATTRIB': case 'ATTDEF': case 'SEQEND': case 'VERTEX': break;
         // SPLINE·ELLIPSE는 **세기만 하고 만들지 않는다**: 실측 5,261개가 전부 기구 윤곽선이고
         // 벽에는 하나도 없다. 제어점 폴리라인 근사는 잘못 그릴 위험이 이득보다 크다(§18.10).

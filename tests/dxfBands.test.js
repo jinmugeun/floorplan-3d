@@ -224,6 +224,23 @@ test('벽기둥 부풂(짧고 이웃 띠를 품는 구간)은 이웃 띠를 따�
   expect(r.sections[0].hi).toBeCloseTo(295.25, 6);
 });
 
+// 2026-09-30 실파일 영양상담실 벽(325): 창틀(WIN)이 벽 면 밖으로 11 mm 삐져나와 창 자리 run(225)이 벽 띠에 품기지
+// 않았고, 창 900 자리가 제 두께의 벽 토막(꺾임 둘)이 되어 창 블록이 800으로 줄었다. 창틀만 남은 run(op)은 겹치는
+// 이웃 벽 run 중 긴 쪽의 띠를 따른다.
+test('창틀만 남은 run은 벽 면 밖으로 조금 삐져나와도 겹치는 이웃 벽 띠를 따른다', () => {
+  const pier = run(0.5, 1350.5, 0.25, 325.25), win = { ...run(1403.5, 2198.5, -10.75, 214.25), op: true }, joint = run(2250.5, 4000.5, 0.25, 513.25);
+  const r = wallsOfRuns([pier, win, joint], P);
+  expect(r.sections).toHaveLength(2);
+  expect(r.sections[0].t1).toBeCloseTo(2250.5, 6);
+  expect(r.sections[0].hi - r.sections[0].lo).toBeCloseTo(325, 6);
+  expect(r.jogs).toHaveLength(1);
+  // 창틀 run이 아니면(벽 선이 있는 구간) 예전처럼 제 두께다
+  expect(wallsOfRuns([pier, { ...win, op: false }, joint], P).sections).toHaveLength(3);
+  // run의 op는 벽 몸통 구간이 없고 창틀이 낀 run이다(bandRuns가 단다)
+  const segs = [seg(0.5, 0.25, 900.5, 0.25, 'WIN'), seg(0.5, 225.25, 900.5, 225.25, 'WIN')];
+  expect(bandRuns(wallBands(buildFaces(segs, P), P, new Set(['WIN'])), P)[0].op).toBe(true);
+});
+
 test('끝 구간이 얇아지면(이웃에 품기지만 샌드위치가 아니다) 진짜 두께 변화다', () => {
   const r = wallsOfRuns([run(0.5, 5000.5, 0.25, 405.25), run(5100.5, 6800.5, 0.25, 200.25)], P);
   expect(r.sections).toHaveLength(2);
