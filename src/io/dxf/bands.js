@@ -11,7 +11,7 @@ import { DXF_PARAMS } from './params.js';
 
 // 활성 오프셋 → 띠들. 이웃 간격 > bandGap이면 무리가 갈리고, 폭 > bandMax인 무리는 (양쪽이 벽이 되는) 가장 큰 내부
 // 틈에서 다시 가른다. 선 하나짜리 무리와 폭 < tMin인 무리는 벽이 아니다.
-// lines: [{ off, layers }] 오프셋 순. 반환 [[lo, hi, n]].
+// lines: [{ off, layers, op }] 오프셋 순. 반환 [[lo, hi, n, op]] — op는 개구부 레이어 선만 가진 면선이 무리에 끼었는지다.
 function groupOffsets(lines, P, prev = []) {
   const out = [];
   // 앞 구간 띠들과의 가장 좋은 겹침 비율(IoU). 가르기 점수는 벽이 되는 조각들의 이 값의 합이다.
@@ -29,7 +29,7 @@ function groupOffsets(lines, P, prev = []) {
       if (g >= P.cavityMin && g > cavG && disjoint(items[j - 1], items[j]) && valid(items.slice(0, j)) && valid(items.slice(j))) { cav = j; cavG = g; }
     }
     if (cav > 0) { split(items.slice(0, cav)); split(items.slice(cav)); return; }
-    if (w <= P.bandMax) { if (items.length >= 2 && w >= P.tMin) out.push([arr[0], arr[arr.length - 1], items.length]); return; }
+    if (w <= P.bandMax) { if (items.length >= 2 && w >= P.tMin) out.push([arr[0], arr[arr.length - 1], items.length, items.some(x => x.op)]); return; }
     // 가르는 자리 = **바로 앞 구간의 띠와 가장 잘 이어지는** 틈(같으면 더 큰 틈 · 앞 구간이 없으면 가장 큰 틈).
     // 한 자리만 보고는 못 가른다 — 실측 세 사례가 모양으로는 구별되지 않는다:
     //  - 조리실 윗벽: 외벽(240) 안쪽 200 mm에 실내벽(275). 가장 큰 틈(253)은 실내벽 안쪽이다 → 외벽 띠가 이어지게.
@@ -52,9 +52,11 @@ function groupOffsets(lines, P, prev = []) {
   return out;
 }
 
-// ② 한 bin의 면선 → 띠 조각 [{ t0, t1, lo, hi, n }]. 면선마다 raw 구간(작도 이음매 faceGap만 이은)을
+// ② 한 bin의 면선 → 띠 조각 [{ t0, t1, lo, hi, n, op }]. 면선마다 raw 구간(작도 이음매 faceGap만 이은)을
 // 쓴다 — 멀리 떨어진 조각을 이어 둔 구간을 쓰면 기둥 면끼리 이어진 유령 벽이 선다.
-export function wallBands(faces, P = DXF_PARAMS) {
+// openLayers: 개구부(창·문) 레이어. 그 레이어 선만 가진 면선이 낀 조각은 op — 벽 몸통이 아니라 창틀 자리다.
+export function wallBands(faces, P = DXF_PARAMS, openLayers = new Set()) {
+  const opOf = f => f.layers?.size > 0 && [...f.layers].every(l => openLayers.has(l));
   const ev = [];
   faces.forEach((f, i) => { for (const [a, b] of mergeIv(f.raw ?? f.intervals ?? [], P.faceGap)) if (b > a) ev.push([a, 1, i], [b, -1, i]); });
   ev.sort((x, y) => x[0] - y[0] || x[1] - y[1]);            // 같은 t에서는 빠지는 것이 먼저
@@ -64,9 +66,9 @@ export function wallBands(faces, P = DXF_PARAMS) {
   for (let k = 0; k < ev.length;) {
     const t = ev[k][0];
     if (prev !== null && t - prev >= 1 && active.size >= 2) {
-      const lines = [...active.keys()].map(i => ({ off: faces[i].off, layers: faces[i].layers ?? new Set() })).sort((a, b) => a.off - b.off);
+      const lines = [...active.keys()].map(i => ({ off: faces[i].off, layers: faces[i].layers ?? new Set(), op: opOf(faces[i]) })).sort((a, b) => a.off - b.off);
       const cur = groupOffsets(lines, P, last);
-      for (const [lo, hi, n] of cur) out.push({ t0: prev, t1: t, lo, hi, n });
+      for (const [lo, hi, n, op] of cur) out.push({ t0: prev, t1: t, lo, hi, n, op });
       last = cur.map(([lo, hi]) => [lo, hi]);
     }
     while (k < ev.length && ev[k][0] === t) {
@@ -83,12 +85,24 @@ const bandKey = p => `${Math.round(p.lo / 10)},${Math.round(p.hi / 10)}`;
 const overlapOk = (a, b) => Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo) >= 0.5 * Math.min(a.hi - a.lo, b.hi - b.lo);
 
 // 대표 띠 = 길이 가중 최빈 (lo, hi) 구성(10 mm 계급) · 그 계급 조각들의 길이 가중 평균.
-function repOf(parts) {
+// 창틀이 낀 조각(op)은 벽이 개구부를 지나는 모양이라 벽 몸통 조각이 있으면 그것만 센다(2026-09-30 치수 대조 —
+// 식당 외벽은 창 자리 합이 창 사이 벽 합보다 길어 창틀 띠가 벽 두께가 됐다). 벽 몸통 = 창틀 없이 minWall 이상
+// 이어지는 구간(창 사이 벽)이다 — 창틀 끝의 수십 mm 자투리(북쪽 외벽 창 옆 26·65 mm)는 벽 몸통이 아니다.
+function repOf(parts, P) {
   const h = new Map();
-  for (const p of parts) h.set(bandKey(p), (h.get(bandKey(p)) ?? 0) + (p.t1 - p.t0));
+  const solid = [];
+  for (let i = 0; i < parts.length;) {
+    let j = i;
+    while (j < parts.length && !parts[j].op && (j === i || parts[j].t0 - parts[j - 1].t1 <= P.runJoin)) j++;
+    if (j === i) { i++; continue; }
+    if (parts[j - 1].t1 - parts[i].t0 >= P.minWall) solid.push(...parts.slice(i, j));
+    i = j;
+  }
+  const pool = solid.length ? solid : parts;
+  for (const p of pool) h.set(bandKey(p), (h.get(bandKey(p)) ?? 0) + (p.t1 - p.t0));
   let best = null;
   for (const [key, L] of h) if (!best || L > best[1]) best = [key, L];
-  const rep = parts.filter(p => bandKey(p) === best[0]);
+  const rep = pool.filter(p => bandKey(p) === best[0]);
   const W = rep.reduce((a, p) => a + p.t1 - p.t0, 0) || 1;
   return {
     t0: parts[0].t0, t1: parts[parts.length - 1].t1,
@@ -100,7 +114,7 @@ function repOf(parts) {
 // 대표 띠와 안 겹치는 구간이 bandBreak보다 길면 그 구간은 다른 벽(단차)이다 — run을 가른다.
 // 짧은 구간(벽기둥 부풂·접합부)은 run에 그대로 태운다.
 function splitRun(parts, P, depth = 0) {
-  const rep = repOf(parts);
+  const rep = repOf(parts, P);
   if (depth >= 4) return [rep];
   const segs = [];
   for (const p of parts) {

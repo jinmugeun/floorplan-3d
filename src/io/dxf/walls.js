@@ -138,7 +138,7 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   const pieces = [], jogs = [], gaps = [];
   for (const list of byKey.values()) {
     const { u, n } = list[0];
-    const br = wallsOfRuns(bandRuns(wallBands(list, P), P), P);
+    const br = wallsOfRuns(bandRuns(wallBands(list, P, openFaceLayers), P), P);
     const perChain = new Map();
     for (const r of br.sections) perChain.set(r.chain, (perChain.get(r.chain) ?? 0) + 1);
     for (const r of br.sections) {
