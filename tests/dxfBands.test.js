@@ -151,6 +151,29 @@ test('같은 띠의 run 사이 틈(문)은 한 구간으로 잇고 틈 자리를
   expect(wallsOfRuns([run(0.5, 2000.5, 0.25, 200.25), run(2400.5, 6000.5, 0.25, 200.25)], P).gaps).toEqual([]);
 });
 
+// 2026-09-30 실파일 현관: 벽(200)이 끝난 뒤 빈 바닥 2.8 m 너머의 기둥 토막(300 × 500)까지 다리를 놓아 없는 벽이
+// 섰다. 줄 **끝**의 기둥 꼴 토막(길이 < minWall 또는 < colRatio × 두께)으로 가는 다리는 틈에 문·창 근거가 있어야
+// 한다 — 두 문 사이 벽기둥(서쪽 벽 500 × 570)은 틈에 문 블록이 있어 그대로 잇는다.
+test('줄 끝의 기둥 꼴 토막으로 가는 다리는 틈에 문·창 근거가 있을 때만 놓는다', () => {
+  const runs = [run(0.5, 4775.5, 0.25, 200.25), run(7600.5, 7900.5, -149.75, 350.25)];
+  const none = wallsOfRuns(runs, P, () => false);
+  expect(none.chains).toBe(2);
+  expect(none.gaps).toEqual([]);
+  expect(wallsOfRuns([...runs].reverse(), P, () => false).chains).toBe(2);
+  const seen = [];
+  expect(wallsOfRuns(runs, P, (...a) => { seen.push(a); return true; }).chains).toBe(1);
+  expect(seen).toEqual([[4775.5, 7600.5, -149.75, 350.25]]);          // 틈 구간과 두 띠를 아우르는 폭
+  // 근거 함수가 없으면(개구부 레이어·블록이 없는 도면) 예전처럼 잇는다
+  expect(wallsOfRuns(runs, P).chains).toBe(1);
+  // 토막이 아닌 벽으로 가는 다리는 근거가 없어도 놓는다(문 기호 없는 통로 — 실파일 발판소독기 자리)
+  expect(wallsOfRuns([run(0.5, 4775.5, 0.25, 200.25), run(7600.5, 9000.5, 0.25, 200.25)], P, () => false).chains).toBe(1);
+  // 가운데 토막(양쪽에 벽이 있는 벽기둥)은 줄 끝이 아니다 — 근거 없이도 잇는다
+  expect(wallsOfRuns([...runs, run(8500.5, 12000.5, 0.25, 200.25)], P, () => false).chains).toBe(1);
+  // 토막끼리만 이어진 줄(픽스처 화장실 칸 앞면: 230 mm 문틀 조각 둘 + 25 mm)은 그 줄이 벽이다 — 떼지 않는다
+  const cubicle = [run(0.5, 230.5, 0.25, 259.25), run(993.5, 1223.5, 0.25, 259.25), run(1290.5, 1315.5, 0.25, 275.25)];
+  expect(wallsOfRuns(cubicle, P, () => false).chains).toBe(1);
+});
+
 // 2026-09-29 감사: 실파일 식당 서쪽 벽은 위·아래가 405 mm(−13483~−13078), 가운데가 320 mm(−13348~−13028)다.
 // 한 띠를 벽 전체에 씌우면 가운데가 92 mm 비껴 서고 라이닝 선이 벽 밖으로 빠진다 — 구간마다 제 띠를 쓰고
 // 경계에 꺾임(jog)을 둔다.

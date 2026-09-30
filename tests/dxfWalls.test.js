@@ -62,6 +62,50 @@ test('joinEnds는 이미 이어진 상대 끝을 끌어오지 않는다', () => 
   expect(out[2].b).toEqual([-300.5, -400.25]);
 });
 
+// 2026-09-30 실파일: 세척실 서쪽 날개벽(1.4 m, 끝 막음선이 있는 진짜 끝)이 빈 바닥 3.1 m를 건너 남쪽 외벽까지
+// 늘어나 방을 갈랐고, 현관 벽(4.6 m)은 빈 바닥 2.8 m를 건너 맞은편 벽까지 늘었다. bareReach보다 먼 연장은 그 길에
+// 문·창 근거가 있어야 한다(서쪽 벽 끝의 2.2 m 연장은 양개문 블록을 지나므로 그대로다).
+test('joinEnds: bareReach보다 먼 연장은 그 길에 문·창 근거가 있을 때만 한다', () => {
+  const wing = wall(3000.5, 3100.25, 3000.5, 4500.25);         // 1.4 m 날개벽, 아래 끝이 매달림
+  const base = wall(0.5, 0.25, 6000.5, 0.25);                  // 3.1 m 아래 가로 벽
+  expect(joinEnds([wing, base], P, () => false)[0].a).toEqual([3000.5, 3100.25]);
+  const seen = [];
+  expect(joinEnds([wing, base], P, (...a) => { seen.push(a); return true; })[0].a).toEqual([3000.5, 0.25]);
+  // 길은 내 끝 → 상대 벽 **면**(상대 몸통 안의 창·문 선은 상대 벽의 것이다) · 내 두께
+  expect(seen[0]).toEqual([[3000.5, 3100.25], [3000.5, 100.25], 200]);
+  expect(joinEnds([wing, base], P)[0].a).toEqual([3000.5, 0.25]);        // 근거 함수 없음 = 예전 그대로
+  // 벽이 길어도 같다(현관 벽 4.6 m · 2.8 m)
+  expect(joinEnds([wall(3000.5, 2800.25, 3000.5, 7400.25), base], P, () => false)[0].a).toEqual([3000.5, 2800.25]);
+  // bareReach 안의 연장은 근거 없이도 한다(짧은 벽이어도)
+  expect(joinEnds([wall(3000.5, 900.25, 3000.5, 4500.25), base], P, () => false)[0].a).toEqual([3000.5, 0.25]);
+  expect(joinEnds([wall(3000.5, 900.25, 3000.5, 1300.25), base], P, () => false)[0].a).toEqual([3000.5, 0.25]);
+  expect(P.bareReach).toBe(1000);
+});
+
+// 같은 날 식당 서쪽 벽: 405 mm 벽 몸통 안의 100 mm 모서리 띠가 그 몸통을 따라 3.9 m 늘어나 벽 안에 벽이 겹쳤다.
+// 같은 날 픽스처 화장실 칸 앞면: 면선 하나(2.75 m)만 끝까지 긋고 반대 면은 230 mm 문틀 조각뿐인 벽. 그 끝의 1.6 m
+// 연장은 벽 선이 받치므로 문·창 근거 없이도 한다(빈 바닥을 건너는 것이 아니다).
+test('extractWalls: 벽 선이 받치는 긴 연장은 문·창 근거 없이도 하고, 빈 바닥을 건너는 연장은 하지 않는다', () => {
+  const box = rectSegs({ doorGap: false, wide: true });                          // 12 m 방(200 벽) — 개구부 레이어 없음
+  const win = seg(6000.5, 50.25, 7000.5, 50.25, 'WIN');                           // 개구부 레이어가 있는 도면으로 만든다
+  const wing = [seg(2900.5, 3800.25, 2900.5, 2200.25), seg(3100.5, 3800.25, 3100.5, 2200.25), seg(2900.5, 2200.25, 3100.5, 2200.25)];
+  const run = o => extractWalls(exOf([...box, win, ...o]), { ...opts, openFaceLayers: new Set(['WIN']) });
+  const lower = r => Math.min(...r.walls.filter(w => w.a[0] === w.b[0] && Math.abs(w.a[0] - 3000.5) < 1).flatMap(w => [w.a[1], w.b[1]]));
+  expect(lower(run(wing))).toBeCloseTo(2200.25, 3);                              // 날개벽: 2.1 m 아래 벽까지 늘이지 않는다
+  expect(lower(run([...wing, seg(3100.5, 2200.25, 3100.5, 150.25)]))).toBeCloseTo(100.25, 3);   // 한쪽 면선이 받친다
+});
+
+test('joinEnds는 평행한 다른 벽의 몸통 안으로는 늘이지 않는다', () => {
+  const thick = wall(1152.5, 0.25, 1152.5, 4000.25, 405);      // x 950~1355
+  const thin = wall(1000.5, 3200.25, 1000.5, 4000.25, 100);    // x 950~1050 — thick 몸통 안
+  const base = wall(0.5, 0.25, 3000.5, 0.25);
+  const out = joinEnds([thick, thin, base], P, () => true);
+  expect(out[1].a).toEqual([1000.5, 3200.25]);
+  // 몸통 밖을 나란히 지나는 연장은 그대로다(평행 벽과 350 mm 떨어짐)
+  const beside = joinEnds([thick, wall(600.5, 3200.25, 600.5, 4000.25, 100), base], P, () => true);
+  expect(beside[1].a).toEqual([600.5, 0.25]);
+});
+
 test('pruneSpurs는 한쪽 끝이 매달린 짧은 토막만 지우고, 긴 벽·양끝이 이어진 짧은 벽은 남긴다', () => {
   const box = [wall(0.5, 0.25, 4000.5, 0.25), wall(4000.5, 0.25, 4000.5, 3000.25), wall(4000.5, 3000.25, 0.5, 3000.25), wall(0.5, 3000.25, 0.5, 0.25)];
   const spur = wall(2000.5, 0.25, 2000.5, 555.25);             // 벽기둥 면에서 나온 555 mm 토막(한 끝 매달림)

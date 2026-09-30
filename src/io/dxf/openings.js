@@ -37,6 +37,8 @@ const normSweep = d => ((d % 360) + 360) % 360;
 // 블록에 있었다 — 개구부 역할 레이어만 보던 판정이 전부 놓쳤다. 블록 이름이 문이면 레이어와 무관하다.
 // 이름 **앞머리**만 본다: "문"이 뒤에 붙는 주방 기구("보냉고 양문"·"소독기 단문")는 문이 아니다.
 export const DOOR_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]/i;
+// 창·문 블록 이름(walls.js가 긴 연장·다리의 "문·창 자리" 근거로 쓴다). 실파일: win-900-3 · WIN-1500 · dr-1850 · 문_슬라이딩 포켓 900.
+export const OPEN_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]|^(win|window|w)[-_ ]?\d{3,4}|^window|^창[-_ ]/i;
 
 // 원호 → 문 후보(앱 좌표). toApp·scale로 DXF 좌표계를 앱 좌표계로 옮기며 센다.
 export function doorHinges(arcs, layers, toApp = p => p, scale = 1) {

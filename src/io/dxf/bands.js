@@ -162,7 +162,10 @@ export function bandRuns(items, P = DXF_PARAMS) {
 const same = (a, b, P) => Math.abs(a.lo - b.lo) <= P.bandTol && Math.abs(a.hi - b.hi) <= P.bandTol;
 const compatible = (a, b, P) => same(a, b, P) ||
   Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo) >= Math.max(P.tMin, 0.5 * Math.min(a.hi - a.lo, b.hi - b.lo));
-export function chainRuns(runs, P = DXF_PARAMS) {
+// evidence(t0, t1, lo, hi): 틈(t0..t1, 띠 lo..hi)에 문·창 근거가 있는가. 주면 줄 **끝**의 기둥 꼴 토막(길이 < minWall
+// 또는 < colRatio × 두께)이 근거 없는 다리(≥ gapMin)로만 붙어 있을 때 떼어 제 줄로 둔다 — 벽 끝에서 빈 바닥 너머
+// 기둥까지 없는 벽이 서지 않게(2026-09-30 실파일 현관). 안 주면(근거를 볼 수 없는 도면) 예전처럼 잇는다.
+export function chainRuns(runs, P = DXF_PARAMS, evidence = null) {
   // t 순서로 훑으며 run을 줄에 붙인다. 호환은 줄의 **대표 run**(가장 긴 = 온전한 벽)과도 본다 — 창틀 띠와
   // 바깥 선 띠처럼 둘 다 벽의 일부인 좁은 조각이 서로는 안 겹쳐도 같은 벽이다(실파일 오른쪽 외벽).
   const chains = [];
@@ -181,7 +184,21 @@ export function chainRuns(runs, P = DXF_PARAMS) {
     c.end = Math.max(c.end, r.t1);
     if (r.t1 - r.t0 > c.rep.t1 - c.rep.t0) c.rep = r;
   }
-  return chains.map(c => c.runs.map(({ t0, t1, lo, hi }) => ({ t0, t1, lo, hi })));
+  const out = chains.map(c => c.runs.map(({ t0, t1, lo, hi }) => ({ t0, t1, lo, hi })));
+  if (!evidence) return out;
+  const stub = r => { const L = r.t1 - r.t0, th = r.hi - r.lo; return L < P.minWall || (L < P.colRatio * th && L < P.colMax); };
+  // 건너편이 온전한 벽일 때만 뗀다 — 토막끼리 이어진 줄(픽스처 화장실 칸 앞면: 면선 하나 + 230 mm 문틀 조각들)은
+  // 그 줄이 곧 벽이다.
+  const loose = (x, y) => y.t0 - x.t1 >= P.gapMin && !(stub(x) && stub(y)) &&
+    !evidence(x.t1, y.t0, Math.min(x.lo, y.lo), Math.max(x.hi, y.hi));
+  const res = [];
+  for (const ch of out) {
+    const cut = [];
+    while (ch.length >= 2 && stub(ch[ch.length - 1]) && loose(ch[ch.length - 2], ch[ch.length - 1])) cut.push([ch.pop()]);
+    while (ch.length >= 2 && stub(ch[0]) && loose(ch[0], ch[1])) cut.push([ch.shift()]);
+    res.push(ch, ...cut);
+  }
+  return res;
 }
 
 // ⑤ 한 줄의 구간화(2026-09-29 감사 — 실파일 식당 서쪽 벽은 위·아래 405 mm, 가운데 320 mm였고 한 띠를 벽 전체에
@@ -245,10 +262,10 @@ export function sectionsOf(chain, P = DXF_PARAMS) {
   return { sections: secs.map(({ t0, t1, lo, hi }) => ({ t0, t1, lo, hi })), jogs, gaps };
 }
 
-// 한 bin의 run들 → 구간·꺾임·틈(④ + ⑤).
-export function wallsOfRuns(runs, P = DXF_PARAMS) {
+// 한 bin의 run들 → 구간·꺾임·틈(④ + ⑤). evidence는 chainRuns로 간다.
+export function wallsOfRuns(runs, P = DXF_PARAMS, evidence = null) {
   const out = { sections: [], jogs: [], gaps: [], chains: 0 };
-  for (const chain of chainRuns(runs, P)) {
+  for (const chain of chainRuns(runs, P, evidence)) {
     const r = sectionsOf(chain, P);
     out.sections.push(...r.sections.map(s => ({ ...s, chain: out.chains })));
     out.jogs.push(...r.jogs);
