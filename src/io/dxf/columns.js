@@ -101,3 +101,35 @@ export function mergeColumns(list) {
   }
   return out;
 }
+
+// 기둥 라이닝(2026-09-30): 벽 마감이 기둥 둘레를 감아 돈 선은 기둥의 바깥 면이다(실파일 식당 모서리 기둥 500 × 700:
+// 기존 마감선 +25 mm와 WAL-2 세 겹 +75~95 mm가 ㄱ자로 남·동 면을 따라가고 다리 길이가 제각각이라 findPilasters의
+// 같은 다리 ㄷ자가 아니다). 기둥 면과 나란하고 면 밖 LINING_MAX 안에 있으며 그 면 구간(± LINING_MAX)을 벗어나지 않고
+// 면과 짧은 쪽의 절반 이상 겹치는 선까지 윤곽을 넓힌다 — 벽을 따라 길게 이어지는 선은 벽의 면이라 넓히지 않는다.
+const LINING_MAX = 150;
+export function growLinings(cols, segs) {
+  return cols.map(col => {
+    const u = col.u, n = [-u[1], u[0]], hw = col.w / 2, hh = col.h / 2;
+    let u0 = -hw, u1 = hw, n0 = -hh, n1 = hh;
+    // 한 축(along)을 따라가는 선: 그 축의 면 구간 [−half, half]에 국한되고 겹치며, 다른 축(across) 면 밖 LINING_MAX 안.
+    const grow = (lo, hi, off, half, across) => {
+      if (lo < -half - LINING_MAX || hi > half + LINING_MAX) return;
+      if (Math.min(hi, half) - Math.max(lo, -half) < 0.5 * Math.min(hi - lo, 2 * half)) return;
+      if (off > across && off <= across + LINING_MAX) return ['+', off];
+      if (off < -across && off >= -across - LINING_MAX) return ['-', off];
+    };
+    for (const s of segs) {
+      const a = [s.a[0] - col.c[0], s.a[1] - col.c[1]], b = [s.b[0] - col.c[0], s.b[1] - col.c[1]];
+      const au = a[0] * u[0] + a[1] * u[1], bu = b[0] * u[0] + b[1] * u[1], an = a[0] * n[0] + a[1] * n[1], bn = b[0] * n[0] + b[1] * n[1];
+      if (Math.abs(an - bn) < 2) {                          // u를 따라가는 선 → n 쪽 면
+        const g = grow(Math.min(au, bu), Math.max(au, bu), (an + bn) / 2, hw, hh);
+        if (g?.[0] === '+') n1 = Math.max(n1, g[1]); else if (g) n0 = Math.min(n0, g[1]);
+      } else if (Math.abs(au - bu) < 2) {                   // n을 따라가는 선 → u 쪽 면
+        const g = grow(Math.min(an, bn), Math.max(an, bn), (au + bu) / 2, hh, hw);
+        if (g?.[0] === '+') u1 = Math.max(u1, g[1]); else if (g) u0 = Math.min(u0, g[1]);
+      }
+    }
+    const cu = (u0 + u1) / 2, cn = (n0 + n1) / 2;
+    return { ...col, c: [col.c[0] + u[0] * cu + n[0] * cn, col.c[1] + u[1] * cu + n[1] * cn], w: u1 - u0, h: n1 - n0 };
+  });
+}

@@ -11,7 +11,7 @@
 import { DXF_PARAMS } from './params.js';
 import { largestCluster, ROI_LINK, buildFaces } from './faces.js';
 import { wallBands, bandRuns, wallsOfRuns } from './bands.js';
-import { findColumns, findPilasters, mergeColumns } from './columns.js';
+import { findColumns, findPilasters, mergeColumns, growLinings } from './columns.js';
 import { openingEvidence, faceSupport } from './evidence.js';
 
 const len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -221,10 +221,11 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   const touching = rects.filter(touches);
   const modules = new Set(touching.map(sizeKey));
   // 한 자리에 겹쳐 그린 윤곽(구조체 사각형·ㄷ자·마감 라이닝)은 바깥 윤곽의 기둥 하나다 — 인정된 윤곽이 하나라도 든 묶음만.
-  const columns = mergeColumns([
+  // 기둥 둘레를 감아 돈 마감·라이닝 선(ㄱ·ㄷ자, 다리 길이 제각각)은 기둥 윤곽에 넣는다.
+  const columns = growLinings(mergeColumns([
     ...rects.map(c => ({ ...c, ok: touching.includes(c) || modules.has(sizeKey(c)) })),
     ...us.map(c => ({ ...c, ok: okU.has(c) })),
-  ]);
+  ]), cand.filter(wallish));
   return { walls, gaps: gaps.filter(g => !atColumn(g.p)), columns, roi, faces, hist, guessed, guessedLayers };
 }
 
