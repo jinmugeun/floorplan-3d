@@ -1,23 +1,23 @@
 {
  "sadong": {
   "regions": 1,
-  "walls": 93,
+  "walls": 96,
   "rooms": 14,
-  "areaM2": 677.7,
-  "named": 10,
-  "unmatched": 3,
-  "openEnds": 8,
+  "areaM2": 674.1,
+  "named": 14,
+  "unmatched": 1,
+  "openEnds": 6,
   "tiny": 0,
   "dimFit": 54,
   "dimEnds": 256,
-  "areaOk": 4,
+  "areaOk": 11,
   "areaAll": 11,
   "doors": 17,
-  "windows": 29,
+  "windows": 30,
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1348
+  "ms": 1452
  },
  "sinsang-B": {
   "regions": 2,
@@ -37,7 +37,7 @@
   "passes": 19,
   "columns": 14,
   "guessed": false,
-  "ms": 935
+  "ms": 973
  },
  "sinsang-A": {
   "regions": 2,
@@ -57,7 +57,7 @@
   "passes": 22,
   "columns": 14,
   "guessed": false,
-  "ms": 914
+  "ms": 823
  },
  "naegok": {
   "regions": 1,
@@ -77,6 +77,6 @@
   "passes": 4,
   "columns": 24,
   "guessed": false,
-  "ms": 955
+  "ms": 944
  }
 }

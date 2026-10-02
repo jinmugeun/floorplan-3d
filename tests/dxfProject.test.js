@@ -244,3 +244,30 @@ test('stats.origin·scale은 DXF 좌표를 앱 좌표로 옮기는 원점과 배
   expect(built.toApp(built.stats.origin)).toEqual([0, 0]);
   expect(built.toApp([5000.5, 5000.25])).toEqual([20000, -15000]);
 });
+
+// 2026-10-02 방 구조 맞추기(reconcile.js): 벽 좌표가 맞아도 방의 구조가 설계자의 것과 다르면 면적이 어긋난다.
+test('면적 표기를 근거로 트인 공간을 구획선으로 나누고, 딸린 방을 합치고, 밖에 적힌 실명을 붙인다', () => {
+  const raw = [
+    ...rect(0, 0, 10000, 6000),
+    { a: [6000, 6000], b: [6000, 5000], thickness: 200 }, { a: [6000, 0], b: [6000, 1000], thickness: 200 },   // 식당 | 조리실 사이 벽 토막(가운데 4 m 트임)
+    { a: [10000, 0], b: [14000, 0], thickness: 200 }, { a: [14000, 0], b: [14000, 6000], thickness: 200 }, { a: [14000, 6000], b: [10000, 6000], thickness: 200 },
+    { a: [10000, 2000], b: [14000, 2000], thickness: 100 }, { a: [12000, 2000], b: [12000, 6000], thickness: 100 },   // 동쪽 4 × 6 m를 셋으로
+  ];
+  const texts = [
+    txt(2500, 3300, 300, '식당'), txt(2500, 2800, 300, '(36.00m²)'),
+    txt(7500, 3300, 300, '조리실'), txt(7500, 2800, 300, '(24.00m²)'),
+    txt(10800, 4300, 300, '전처리실'), txt(10800, 3800, 300, '(16.00m²)'),      // 왼쪽 칸 8 + 오른쪽 칸 8
+    txt(15500, 1300, 300, '창고'), txt(15500, 800, 300, '(8.00m²)'),            // 건물 밖 지시선 — 남쪽 4 × 2 m 방
+  ];
+  const { project, stats } = buildProject(raw, { texts });
+  const fl = project.floors[0], by = Object.fromEntries(fl.rooms.map(r => [r.name, Math.round(r.areaCenter * 100) / 100]));
+  expect(by).toEqual({ 식당: 36, 조리실: 24, 전처리실: 16, 창고: 8 });
+  expect([stats.dividers, stats.annexes, stats.unmatchedNames]).toEqual([1, 1, []]);
+  expect(fl.walls.filter(w => w.virtual)).toHaveLength(1);
+  expect(fl.walls.filter(w => w.noSplit)).toHaveLength(1);
+  // 다시 정규화해도(저장 → 불러오기) 구조가 그대로다
+  const again = normalizeProject(JSON.parse(JSON.stringify(project))).floors[0];
+  expect(again.rooms.map(r => r.name).sort()).toEqual(['식당', '전처리실', '조리실', '창고']);
+  // 방 이름 자동 붙이기를 끄면 구조도 건드리지 않는다
+  expect(buildProject(raw, { texts, autoNames: false }).stats.rooms).toBe(4);
+});

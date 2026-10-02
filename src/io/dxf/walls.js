@@ -8,6 +8,7 @@
 //  ① bands.js가 **그 자리에 함께 있는 면선 무리**로 벽 띠를 세우고(기둥은 먼저 뺀다),
 //  ② 같은 띠끼리만 틈을 이으며(문·창),
 //  ③ joinEnds가 끝점을 **자기 축 위에서만** 늘이거나 줄인다 — 벽 선이 옆으로 움직이는 단계가 없다.
+import { absorbLinings } from './linings.js';
 import { DXF_PARAMS } from './params.js';
 import { largestCluster, ROI_LINK, buildFaces, latticeFaces } from './faces.js';
 import { wallBands, bandRuns, wallsOfRuns } from './bands.js';
@@ -223,7 +224,7 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   // 꺾임(두께가 바뀌는 경계): 두 구간 중심선을 잇는 짧은 수직 벽. 끝점은 두 구간 끝과 같은 식으로 계산해
   // 정확히 겹친다(joinEnds가 건드리지 않는다). minWall보다 짧아도 남긴다 — 지우면 벽이 끊긴다.
   for (const j of jogs) walls.push({ a: [j.u[0] * j.t + j.n[0] * j.c0, j.u[1] * j.t + j.n[1] * j.c0], b: [j.u[0] * j.t + j.n[0] * j.c1, j.u[1] * j.t + j.n[1] * j.c1], thickness: thOf(j.th), jog: true });
-  walls = joinEnds(pruneSpurs(joinEnds(walls, P, evidence), P), P, evidence).filter(w => w.jog || len(w.a, w.b) >= P.minWall)
+  walls = absorbLinings(joinEnds(pruneSpurs(joinEnds(walls, P, evidence), P), P, evidence)).filter(w => w.jog || len(w.a, w.b) >= P.minWall)
     .map(({ a, b, thickness: th }) => ({ a, b, thickness: th }));
   // 벽기둥(ㄷ자): 두 열린 끝이 모두 벽 몸통(± 30 mm)에 닿거나 **다른 벽 선의 끝과 이어져야** 한다 — 허공의 ㄷ자는
   // 기구·기호다. (실파일 식당 벽기둥은 창 아래 오목한 벽 안쪽 단에 붙어 벽 띠에서 200 mm 넘게 떨어져 있다.)

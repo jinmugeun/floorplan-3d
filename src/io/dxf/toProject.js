@@ -9,6 +9,7 @@ import { productById } from '../../products/catalog.js';
 import { dropTinyComponents } from './walls.js';
 import { DXF_PARAMS } from './params.js';
 import { dimLines, assignRefs } from './refLines.js';
+import { addDividers, mergeAnnexes, claimOutside } from './reconcile.js';
 
 // 점 p에서 선분 a–b까지의 거리.
 const distSeg = (p, a, b) => {
@@ -70,7 +71,8 @@ const notName = t => /^\(.*\)$/.test(t) || AREA_LABEL.test(t) || /^(up|dn|down)$
 const unspace = t => (/^([가-힣] )+[가-힣]$/.test(t) ? t.replace(/ /g, '') : t);
 const centerOf = pts => [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
 
-export function nameRooms(rooms, texts, toApp, { min = 200, max = 600, chars = 20, nameRoles = null } = {}) {
+// 실명 후보: { text, p(앱 좌표), area(바로 아래 면적 표기 m² · 없으면 null), tier, h }.
+export function roomLabels(texts, toApp, { min = 200, max = 600, chars = 20, nameRoles = null } = {}) {
   const tierOf = layer => (nameRoles ? NAME_TIER[nameRoles.get(layer)] ?? 0 : 1);
   const all = texts.filter(t => t.h >= min && t.h <= max)
     .map(t => ({ p: toApp(t.p), raw: String(t.text ?? '').trim(), h: t.h, tier: tierOf(t.layer) }));
@@ -86,8 +88,13 @@ export function nameRooms(rooms, texts, toApp, { min = 200, max = 600, chars = 2
   for (const c of cand) {
     const q = c.tail ?? c.p;
     const a = areas.find(x => x.p[1] > q[1] && x.p[1] - q[1] <= 4 * c.h && Math.abs(x.p[0] - q[0]) <= 4 * c.h);
-    c.area = a ? parseFloat(a.raw.replace(/[^\d.]/g, '')) || 0 : null;
+    c.area = a ? parseFloat(a.raw.match(/\d+(?:\.\d+)?/)?.[0]) || 0 : null;
   }
+  return cand;
+}
+
+export function nameRooms(rooms, texts, toApp, opts = {}) {
+  const cand = opts.labels ?? roomLabels(texts, toApp, opts);
   let named = 0;
   for (const room of rooms) {
     const inside = cand.filter(c => !c.used && pointInPolygon(c.p, room.points));
@@ -101,6 +108,8 @@ export function nameRooms(rooms, texts, toApp, { min = 200, max = 600, chars = 2
     for (const c of inside) c.used = true;
     named++;
   }
+  // 건물 밖 지시선 끝에 적힌 실명(좁은 방): 넓이가 같은 이름 없는 방의 것이다(reconcile.js ③).
+  for (const [room, c] of claimOutside(rooms, cand)) { room.name = c.text.slice(0, 40); c.used = true; named++; }
   return { named, unmatched: cand.filter(c => !c.used && c.tier === 1).map(c => c.text) };
 }
 
@@ -138,10 +147,14 @@ export function buildProject(raw, {
   })) : [];
   // 면적 기준선(refLines.js): 벽마다 치수가 가리키는 좌표(구조체 중심 · 기둥 그리드)를 기준선으로 단다 — 방의 areaCenter가 쓴다.
   assignRefs(walls, dimLines(dims, toApp), colItems, P);
+  // 방 구조를 도면의 실명·면적 표기에 맞춘다(reconcile.js): 트인 공간의 구획선 · 한 실로 센 딸린 방.
+  const labels = autoNames ? roomLabels(texts, toApp, { nameRoles }) : [];
+  walls = addDividers(walls, labels);
+  const annexes = mergeAnnexes(walls, labels);
   const rooms = detectRooms(walls);
   for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
-  const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { nameRoles }).unmatched : [];
-  const items = [...(openings({ walls, rooms, toApp }) ?? []), ...colItems];
+  const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { labels }).unmatched : [];
+  const items = [...(openings({ walls: walls.filter(w => !w.virtual), rooms, toApp }) ?? []), ...colItems];
   const project = normalizeProject({
     ...createEmptyProject(),
     name: drawingTitle(titleTexts ?? texts, fileName, titleLayers),
@@ -174,6 +187,7 @@ export function buildProject(raw, {
     unmatchedNames,
     items: floor.items.length,
     columns: colItems.length,
+    dividers: floor.walls.filter(w => w.virtual).length, annexes,
     size,
     // DXF 좌표 → 앱 좌표의 원점·배율(앱 = (DXF − origin) × scale, y 뒤집기). 치수·면적선을 평면도와 맞댈 때 쓴다.
     origin: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2],

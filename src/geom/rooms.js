@@ -105,6 +105,7 @@ export function detectRooms(walls, prevRooms = []) {
   const getNode = p => { const k = nodeKey(p); if (!nodes.has(k)) nodes.set(k, { p: [Math.round(p[0]), Math.round(p[1])], out: [] }); return nodes.get(k); };
   const halfEdges = [], seenPairs = new Set();
   for (const w of walls) {
+    if (w.noSplit) continue;      // 방을 나누지 않는 벽(딸린 칸의 칸막이 — io/dxf/reconcile.js): 그리되 면을 가르지 않는다
     const A = getNode(w.a), B = getNode(w.b);
     if (A === B) continue;
     const pairKey = [nodeKey(A.p), nodeKey(B.p)].sort().join('|');

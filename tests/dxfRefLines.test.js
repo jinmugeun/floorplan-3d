@@ -98,3 +98,18 @@ test('assignRefs: 약한 기준선은 이어진 이웃의 강한 기준선에 �
   assignRefs([s1, s2], { x: new Map(), y: new Map([[1206, 3]]) }, [], P);
   expect([s1.axisShift, s2.axisShift]).toEqual([206, 206]);
 });
+
+// 사동중 식당 남·북: 외벽(405 · 기준선 = 기둥 그리드, 중심에서 307 안쪽)이 창 구간에서 218 mm 밖으로 물러나 얇은 창벽(230)이
+// 된다. 창벽 중심에서 그리드까지 525 mm — 제 띠(두께/2 + 2·refOut = 515) 밖이라 물려받지 못했고 식당이 7.01 m² 넓어졌다.
+// 설계자의 면적선은 벽이 물러나도 그리드를 따라 곧게 간다: **벽이 물러난 거리**(≤ 2·refOut)만 본다.
+test('inheritRefs: 살짝 물러난 창벽은 이웃 외벽의 그리드를 물려받는다 — 그리드가 제 띠에서 멀어도', () => {
+  const main = makeWall({ a: [0, 0], b: [10000, 0], thickness: 405 }); main.axisShift = 307;      // +x 방향: 왼쪽 법선 +y → 기준선 y 307
+  const jog = makeWall({ a: [10000, 0], b: [10000, -218], thickness: 230 });
+  const bay = makeWall({ a: [10000, -218], b: [17000, -218], thickness: 230 });
+  inheritRefs([main, jog, bay], P);
+  expect(bay.axisShift).toBe(525);
+  // 400 mm 넘게 물러난 벽은 다른 줄이다
+  const deep = makeWall({ a: [10000, -450], b: [17000, -450], thickness: 230 });
+  inheritRefs([main, makeWall({ a: [10000, 0], b: [10000, -450], thickness: 230 }), deep], P);
+  expect(deep.axisShift).toBeUndefined();
+});

@@ -56,7 +56,8 @@ function refOf(wall, lines, columns, P) {
 }
 
 // 기준선 없는 벽은 끝이 이어진(INHERIT_GAP 안) 나란한 이웃 벽의 기준선을 물려받는다 — 외벽이 창 옆에서 살짝 꺾여 생긴
-// 얇은 토막은 제 띠에서 그리드가 멀어 기준선을 못 찾는다. 기준선이 띠에서 2·refOut보다 멀면 물려받지 않는다.
+// 얇은 토막은 제 띠에서 그리드가 멀어 기준선을 못 찾는다. 이웃 벽이 2·refOut보다 멀리 물러나 있으면 다른 줄이라 물려받지 않는다
+// (기준선까지의 거리는 보지 않는다 — 설계자의 면적선은 벽이 물러나도 그리드를 따라 곧게 간다).
 // weak: 약한 기준선을 단 벽들 — 이웃의 강한 기준선이 있으면 그것으로 바꾼다(없으면 그대로).
 const INHERIT_GAP = 600;
 export function inheritRefs(walls, P = DXF_PARAMS, weak = new Set()) {
@@ -74,7 +75,7 @@ export function inheritRefs(walls, P = DXF_PARAMS, weak = new Set()) {
       const slo = Math.min(s.w.a[j], s.w.b[j]), shi = Math.max(s.w.a[j], s.w.b[j]);
       if (Math.max(lo, slo) - Math.min(hi, shi) > INHERIT_GAP) continue;                    // 축 방향으로 이어져 있지 않다
       const d = Math.abs(s.ref - center);
-      if (d > w.thickness / 2 + 2 * P.refOut || Math.abs(s.w.a[i] - center) > 2 * P.refOut) continue;
+      if (Math.abs(s.w.a[i] - center) > 2 * P.refOut) continue;                             // 다른 줄의 벽이다
       if (!best || d < best.d) best = { d, ref: s.ref };
     }
     if (best) { const s = Math.round((best.ref - center) * normal(w)[i]); if (s) w.axisShift = s; }
