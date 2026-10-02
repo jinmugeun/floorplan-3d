@@ -9,10 +9,13 @@
 //  ② 같은 띠끼리만 틈을 이으며(문·창),
 //  ③ joinEnds가 끝점을 **자기 축 위에서만** 늘이거나 줄인다 — 벽 선이 옆으로 움직이는 단계가 없다.
 import { DXF_PARAMS } from './params.js';
-import { largestCluster, ROI_LINK, buildFaces } from './faces.js';
+import { largestCluster, ROI_LINK, buildFaces, latticeFaces } from './faces.js';
 import { wallBands, bandRuns, wallsOfRuns } from './bands.js';
-import { findColumns, findPilasters, mergeColumns, growLinings } from './columns.js';
+import { findColumns, findPilasters, mergeColumns, growLinings, findIslands } from './columns.js';
 import { openingEvidence, faceSupport } from './evidence.js';
+import { OPEN_BLOCK } from './blockOpenings.js';
+
+const OPEN_FACE = 'open-block';   // 창·문 블록에서 온 면선의 표지 레이어(실제 레이어 이름과 겹치지 않는다)
 
 const len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 const FALLBACK_MIN_SEG = 300;   // §18.3 폴백: 레이어 필터를 뺀 경로의 최소 선분 길이
@@ -114,12 +117,19 @@ const distToSeg = (p, a, b) => {
 
 // 벽 네트워크의 작은 고립 덩어리를 버린다. normalizeWalls가 T접합을 쪼갠 **뒤에** 부른다
 // (그래야 끝점이 실제로 공유된다 — toProject.js가 그 순서를 지킨다).
-export function dropTinyComponents(list, minWalls = DXF_PARAMS.minComp, minLen = Infinity) {
+// link(w): 벽 w가 닿은 기둥들의 표지(없으면 빈 배열). 같은 기둥에 닿은 벽들은 그 기둥을 거쳐 이어진 것으로 본다.
+export function dropTinyComponents(list, minWalls = DXF_PARAMS.minComp, minLen = Infinity, link = null) {
   const key = p => `${Math.round(p[0])},${Math.round(p[1])}`;
   const par = new Map();
   const find = x => { while (par.get(x) !== x) { par.set(x, par.get(par.get(x))); x = par.get(x); } return x; };
   for (const w of list) for (const p of [w.a, w.b]) if (!par.has(key(p))) par.set(key(p), key(p));
   for (const w of list) { const a = find(key(w.a)), b = find(key(w.b)); if (a !== b) par.set(a, b); }
+  if (link) for (const w of list) for (const c of link(w)) {
+    const ck = `col:${c}`;
+    if (!par.has(ck)) par.set(ck, ck);
+    const a = find(key(w.a)), b = find(ck);
+    if (a !== b) par.set(a, b);
+  }
   const cnt = new Map(), total = new Map();
   for (const w of list) { const r = find(key(w.a)); cnt.set(r, (cnt.get(r) ?? 0) + 1); total.set(r, (total.get(r) ?? 0) + len(w.a, w.b)); }
   // 벽 수가 적어도 길면 남긴다(minLen) — 기둥에 가로막혀 본 네트워크와 떨어진 실제 벽이다.
@@ -140,9 +150,13 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   const roi = picked ?? largestCluster(live, ROI_LINK);   // 연결성 기반(C-7)
   const inRoi = p => !roi || (p[0] >= roi.x0 && p[0] <= roi.x1 && p[1] >= roi.y0 && p[1] <= roi.y1);
   const usable = s => inRoi(s.a) && inRoi(s.b) && !s.src?.endsWith(':bulge');   // 조경 곡선·라운드 코너는 벽이 아니다
-  let cand = ex.segs.filter(s => usable(s) && (
-    (wallLayers.has(s.layer) && len(s.a, s.b) >= P.minSeg) ||
-    (openFaceLayers.has(s.layer) && len(s.a, s.b) >= P.openFaceMin)));
+  // 벽 레이어에 놓인 창·문 이름 블록(2026-10-02 내곡중: 미서기단창_7800)의 선은 벽 선이 아니라 **개구부 면선**이다 —
+  // 개구부 레이어의 선과 같이 긴 것(≥ openFaceMin)만 쓰고, 표지 레이어 OPEN_FACE를 달아 창틀 띠(op)로 다룬다.
+  const inOpenBlock = s => wallLayers.has(s.layer) && OPEN_BLOCK.test(s.block ?? '');
+  const openLayers = new Set([...openFaceLayers, OPEN_FACE]);
+  let cand = ex.segs.filter(s => usable(s) && (inOpenBlock(s) || openFaceLayers.has(s.layer)
+    ? len(s.a, s.b) >= P.openFaceMin : wallLayers.has(s.layer) && len(s.a, s.b) >= P.minSeg))
+    .map(s => (inOpenBlock(s) ? { ...s, layer: OPEN_FACE } : s));
   // 폴백(§18.3): 벽 후보가 0개인 도면은 레이어 필터를 빼고 길이 ≥ 300 mm인 모든 선분으로 돈다.
   let guessed = false;
   if (!cand.length) {
@@ -158,7 +172,14 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   for (const s of cand) if (wallish(s)) byBlock.set(s.block, (byBlock.get(s.block) ?? 0) + len(s.a, s.b));
   const major = Math.max(0, ...byBlock.values());
   const symbol = s => wallish(s) && (byBlock.get(s.block) ?? 0) < P.blockShare * major;
-  const faces = buildFaces(cand.filter((s, i) => !colSegs.has(i) && !symbol(s)), P);
+  // 홀로 선 가늘고 긴 닫힌 사각형(트렌치·작업대)은 벽 재료가 아니다. 닿는지는 후보에서 빠진 짧은 벽·창틀 선까지 본다.
+  const inCand = new Set(cand);
+  const shorts = guessed ? [] : ex.segs.filter(s => usable(s) && !inCand.has(s) && (wallLayers.has(s.layer) || openFaceLayers.has(s.layer)) && !(inOpenBlock(s) && len(s.a, s.b) >= P.openFaceMin));
+  const islandSegs = new Set(findIslands(cand, colSegs, P, shorts).flatMap(c => c.segs));
+  // 규칙 간격 선 무리(계단 디딤판·해치)는 벽 재료가 아니다.
+  const drawn = buildFaces(cand.filter((s, i) => !colSegs.has(i) && !islandSegs.has(i) && !symbol(s)), P);
+  const lattice = latticeFaces(drawn, P);
+  const faces = lattice.size ? drawn.filter(f => !lattice.has(f)) : drawn;
   const byKey = new Map();
   for (const f of faces) (byKey.get(f.key) ?? byKey.set(f.key, []).get(f.key)).push(f);
   // 긴 연장·줄 끝 토막 다리의 근거: 문·창(개구부 레이어·블록)이 있거나 벽 선이 길을 받친다. 문·창 근거를 볼 수 없는
@@ -172,7 +193,7 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
     const at = (t, off) => [u[0] * t + n[0] * off, u[1] * t + n[1] * off];
     // 줄 끝 토막 다리는 문·창 근거만 본다 — 벽 선 받침은 옆 벽의 면선이 대신 설 수 있다(405 벽 안의 100 모서리 띠).
     const binEvidence = opening && ((t0, t1, lo, hi) => opening(at(t0, (lo + hi) / 2), at(t1, (lo + hi) / 2), hi - lo));
-    const br = wallsOfRuns(bandRuns(wallBands(list, P, openFaceLayers), P), P, binEvidence);
+    const br = wallsOfRuns(bandRuns(wallBands(list, P, openLayers), P), P, binEvidence);
     const perChain = new Map();
     for (const r of br.sections) perChain.set(r.chain, (perChain.get(r.chain) ?? 0) + 1);
     for (const r of br.sections) {

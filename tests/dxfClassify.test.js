@@ -135,13 +135,14 @@ test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되�
   expect(DXF_PARAMS).toEqual({
     minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
     tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20,
+    latticeMin: 5, latticePitch: 600, latticeTol: 0.3,
     bridge: 3000, bridgeAngTol: 2.5, gapMin: 600,
     colMin: 300, colMax: 1200, colAspect: 2.5, colRatio: 2, colTol: 3,
     extend: 4000, bareReach: 1000, joinMargin: 50, passes: 3, spur: 1000,
     minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
   });
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
-  expect(Object.keys(DXF_PARAMS)).toHaveLength(32);
+  expect(Object.keys(DXF_PARAMS)).toHaveLength(35);
 });
 
 // ── 2026-10-02 다른 사무소 도면 둘(신상중 · 내곡중)에서 드러난 판정 오류 ──────────────────────────

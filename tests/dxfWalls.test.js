@@ -209,6 +209,39 @@ test('dropTinyComponents는 벽 4개 미만 덩어리를 버린다', () => {
   const chase = [wall(90000.5, 0.25, 92200.5, 0.25), wall(90000.5, 0.25, 90000.5, 1700.25)];
   expect(dropTinyComponents([...box, ...chase], P.minComp, P.minCompLen)).toHaveLength(6);
   expect(dropTinyComponents([...box, wall(90000.5, 0.25, 90700.5, 0.25)], P.minComp, P.minCompLen)).toHaveLength(4);
+  // 2026-10-02: 기둥에 닿은 벽은 그 기둥을 거쳐 이어진 것이다(link(w) → 닿은 기둥들의 표지). 기둥 너머의 벽 토막이
+  // 본 네트워크의 일부가 된다 — 길이로 봐주던 것(minCompLen)을 연결로 판정한다.
+  const stub = wall(4400.5, 1500.25, 5000.5, 1500.25);                       // 본 건물 오른쪽 벽(x 4000.5)에서 400 떨어진 0.6 m 토막
+  const d2 = (p, w) => { const e = [w.b[0] - w.a[0], w.b[1] - w.a[1]], t = Math.max(0, Math.min(1, ((p[0] - w.a[0]) * e[0] + (p[1] - w.a[1]) * e[1]) / (e[0] ** 2 + e[1] ** 2))); return Math.hypot(p[0] - w.a[0] - e[0] * t, p[1] - w.a[1] - e[1] * t); };
+  const atCol = w => (d2([4200, 1500], w) <= 400 ? ['c1'] : []);            // 그 사이에 선 600 기둥
+  expect(dropTinyComponents([...box, stub], P.minComp, Infinity)).toHaveLength(4);
+  expect(dropTinyComponents([...box, stub], P.minComp, Infinity, atCol)).toHaveLength(5);
+});
+
+// 2026-10-02 내곡중: 창이 벽과 **같은 레이어의 블록**(미서기단창_7800 · 폭 5.2 m)이었다. 블록 선은 기호로 빠지고(blockShare)
+// 5.2 m 틈은 bridge(3 m)보다 넓어 북쪽 외벽이 둘로 끊겼다 — 조리실이 닫히지 않았다. 창·문 이름 블록의 긴 선은
+// 개구부 레이어의 선처럼 벽 면을 잇는다.
+test('벽 레이어에 놓인 창·문 블록의 긴 선은 끊긴 벽을 잇는다', () => {
+  const X1 = 30000.5, Y1 = 20000.25;
+  const shell = (y, cut) => (cut ? [seg(0.5, y, 10000.5, y), seg(15000.5, y, X1, y)] : [seg(0.5, y, X1, y)]);
+  const room = [...shell(0.25, true), ...shell(200.25, true), seg(0.5, Y1, X1, Y1), seg(0.5, Y1 - 200, X1, Y1 - 200),
+    seg(0.5, 0.25, 0.5, Y1), seg(200.5, 0.25, 200.5, Y1), seg(X1, 0.25, X1, Y1), seg(X1 - 200, 0.25, X1 - 200, Y1)].map(x => ({ ...x, block: 'plan' }));
+  const frame = name => [seg(10000.5, 50.25, 15000.5, 50.25), seg(10000.5, 150.25, 15000.5, 150.25)].map(x => ({ ...x, block: name }));
+  const bottom = r => r.walls.filter(w => Math.abs(w.a[1] - w.b[1]) < 1 && w.a[1] < 1000);
+  const win = extractWalls(exOf([...room, ...frame('미서기단창_5000')]), opts);
+  expect(bottom(win)).toHaveLength(1);
+  expect(L(bottom(win)[0])).toBeGreaterThan(29000);
+  expect(bottom(win)[0].thickness).toBe(200);
+  // 이름이 창·문이 아닌 블록은 예전처럼 기호다 — 벽을 잇지 않는다.
+  expect(bottom(extractWalls(exOf([...room, ...frame('TRUCK')]), opts))).toHaveLength(2);
+});
+
+// 2026-10-02 내곡중: 한 레이어 도면에서 계단 디딤판이 벽이 됐다 — 규칙 간격 선 무리(faces.latticeFaces)는 벽 재료가 아니다.
+test('extractWalls는 계단 디딤판 같은 규칙 간격 선 무리로 벽을 세우지 않는다', () => {
+  const treads = Array.from({ length: 7 }, (_, k) => seg(400.5, 800.25 + k * 280, 3100.5, 800.25 + k * 280));
+  const r = extractWalls(exOf([...rectSegs({ doorGap: false }), ...treads]), opts);
+  expect(r.walls).toHaveLength(4);
+  expect(r.walls.every(w => w.thickness === 200)).toBe(true);
 });
 
 // §18.11이 요구한 합성 도면: 900 mm 문 틈이 있는 이중선 사각형 → 벽 4 · 끊긴 끝점 0.

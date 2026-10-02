@@ -15,6 +15,8 @@
 //  - bandMax 700: 한 띠의 폭 상한 — 넘으면 바로 앞 구간의 띠와 가장 잘 이어지는 틈에서 가른다(bands.groupOffsets).
 //  - bandBreak 1000: 대표 띠와 안 겹치는 구간이 이보다 길면 다른 벽(단차)이다. 짧으면 벽기둥 부풂이다.
 //  - jogTol 20: 두께가 바뀌는 경계에서 두 중심선이 이보다 벌어지면 꺾임(jog) 벽을 두고, 안이면 한 중심선으로 맞춘다.
+//  - lattice*: 규칙 간격(tMin~latticePitch, ±latticeTol)으로 나란한 닮은 선이 latticeMin줄 이상이면 벽 선이 아니다
+//    (계단 디딤판·타일 해치 — 2026-10-02 내곡중: 디딤판 일곱 줄이 600 mm 벽 셋이 됐다). faces.latticeFaces.
 //  - col*: 기둥 = 닫힌 작은 직사각형(짧은 변 ≥ 300 · 긴 변 ≤ 1200 · 종횡비 ≤ 2.5). colRatio는 기둥을
 //    못 알아본 경우의 보루 — 길이가 두께의 2배 미만인 1.2 m 미만 토막은 벽이 아니다.
 //  - bareReach 1000: 문·창 근거(개구부 레이어 선·호, 창·문 이름 블록) 없이 끝을 늘일 수 있는 거리. 그보다 먼
@@ -27,6 +29,7 @@
 export const DXF_PARAMS = Object.freeze({
   minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
   tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20,
+  latticeMin: 5, latticePitch: 600, latticeTol: 0.3,
   bridge: 3000, bridgeAngTol: 2.5, gapMin: 600,
   colMin: 300, colMax: 1200, colAspect: 2.5, colRatio: 2, colTol: 3,
   extend: 4000, bareReach: 1000, joinMargin: 50, passes: 3, spur: 1000,

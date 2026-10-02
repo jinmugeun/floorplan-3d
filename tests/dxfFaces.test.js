@@ -1,7 +1,7 @@
 // §18.3의 2·4단계(면선·ROI). 벽 띠는 tests/dxfBands.test.js — 옛 평행쌍 매칭 테스트는 2026-09-29 정확도
 // 수정에서 함수와 함께 지웠다. 합성 도면으로 규칙 하나하나를 못 박는다.
 import { test, expect } from 'vitest';
-import { largestCluster, ROI_LINK, buildFaces, ivOverlap, ivLen, mergeIv } from '../src/io/dxf/faces.js';
+import { largestCluster, ROI_LINK, buildFaces, ivOverlap, ivLen, mergeIv, latticeFaces } from '../src/io/dxf/faces.js';
 import { wallBands } from '../src/io/dxf/bands.js';
 import { DXF_PARAMS as P } from '../src/io/dxf/params.js';
 
@@ -117,4 +117,38 @@ test('비유한 좌표를 가진 선분은 ROI 덩어리 계산에서 건너뛴�
   expect(largestCluster([seg(NaN, 0.25, 900.5, 0.25)])).toBe(null);
   // 같은 선분은 buildFaces도 통과하지 못한다(영-길이 가드가 비유한 길이까지 막는다).
   expect(buildFaces([seg(NaN, 0.25, 900.5, 0.25), seg(0.5, Infinity, 900.5, 0.25)], P)).toEqual([]);
+});
+
+// 2026-10-02 내곡중(모든 선이 한 레이어): 계단 디딤판 일곱 줄(280 mm 간격 · 길이 2.7 m)이 벽 띠가 되어 600 mm
+// 두께의 벽 셋이 섰다. **규칙 간격으로 나란한 닮은 선 다섯 줄 이상**은 벽이 아니다(계단·타일 해치·루버).
+// 벽은 여러 겹이어도 간격이 고르지 않고(마감 25 · 구조 200 · 마감 25) 줄 수가 적다.
+test('latticeFaces는 규칙 간격으로 나란한 닮은 선 무리(계단 디딤판)를 골라낸다', () => {
+  const treads = Array.from({ length: 7 }, (_, k) => seg(0.5, 1000.25 + k * 280, 2700.5, 1000.25 + k * 280));
+  const wall = [seg(0.5, 5000.25, 9000.5, 5000.25), seg(0.5, 5025.25, 9000.5, 5025.25), seg(0.5, 5225.25, 9000.5, 5225.25), seg(0.5, 5250.25, 9000.5, 5250.25)];
+  const faces = buildFaces([...treads, ...wall], P);
+  const lat = latticeFaces(faces, P);
+  expect(faces.filter(f => lat.has(f)).map(f => Math.round(f.off)).sort((a, b) => a - b)).toEqual([1000, 1280, 1560, 1840, 2120, 2400, 2680]);
+  // 네 줄은 무리가 아니다(벽 양면 + 마감 양면이 우연히 고른 간격일 수 있다)
+  expect(latticeFaces(buildFaces(treads.slice(0, 4), P), P).size).toBe(0);
+  // 간격이 고르지 않으면(±30 % 밖) 무리가 아니다
+  const uneven = [0, 280, 700, 800, 1500, 1600].map(d => seg(0.5, 1000.25 + d, 2700.5, 1000.25 + d));
+  expect(latticeFaces(buildFaces(uneven, P), P).size).toBe(0);
+  // 창틀처럼 촘촘한 선(간격 < tMin)이나 복도처럼 먼 선(간격 > latticePitch)은 무리가 아니다
+  const tight = Array.from({ length: 7 }, (_, k) => seg(0.5, 1000.25 + k * 30, 2700.5, 1000.25 + k * 30));
+  const far = Array.from({ length: 7 }, (_, k) => seg(0.5, 1000.25 + k * 900, 2700.5, 1000.25 + k * 900));
+  expect(latticeFaces(buildFaces(tight, P), P).size).toBe(0);
+  expect(latticeFaces(buildFaces(far, P), P).size).toBe(0);
+  // 디딤판 옆의 긴 벽 면(간격은 같아도 길이가 다르다)은 무리에 들지 않는다
+  const side = seg(0.5, 1000.25 + 7 * 280, 9000.5, 1000.25 + 7 * 280);
+  const withWall = buildFaces([...treads, side], P), lw = latticeFaces(withWall, P);
+  expect(lw.size).toBe(7);
+  expect([...lw].some(f => Math.round(f.off) === 2960)).toBe(false);
+  // 실파일 사동중 외벽(여러 겹 + 창 사이 벽 선): 오프셋 0·80·130·230·330·440에 닮은 선 — 80을 건너뛰면 130·100·100·110의
+  // 등차가 보이지만, **사이에 낀 닮은 선**(80)이 간격을 깨므로 무리가 아니다. 건너뛸 수 있는 것은 닮지 않은 선뿐이다.
+  const layered = [0, 80, 130, 230, 330, 440].map(d => seg(0.5, 1000.25 + d, 9000.5, 1000.25 + d));
+  expect(latticeFaces(buildFaces(layered, P), P).size).toBe(0);
+  // 토막 난 면선(창 사이 벽 선처럼 여러 조각 · 덮인 길이가 전체의 60 % 미만)은 무리의 일원이 아니다
+  const pieces = Array.from({ length: 6 }, (_, k) => [seg(0.5, 1000.25 + k * 200, 700.5, 1000.25 + k * 200), seg(4000.5, 1000.25 + k * 200, 4700.5, 1000.25 + k * 200)]).flat();
+  expect(latticeFaces(buildFaces(pieces, P), P).size).toBe(0);
+  expect([P.latticeMin, P.latticePitch, P.latticeTol]).toEqual([5, 600, 0.3]);
 });

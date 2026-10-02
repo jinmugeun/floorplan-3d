@@ -123,3 +123,35 @@ export function buildFaces(segs, P = DXF_PARAMS) {
   }
   return faces;
 }
+
+// 규칙 간격으로 나란한 **닮은** 면선 무리(계단 디딤판 · 타일 해치 · 루버)를 고른다(2026-10-02 내곡중: 디딤판 일곱 줄이
+// 벽 띠가 됐다). 한 방향 bin에서 오프셋 순으로 훑으며, 간격이 tMin~latticePitch이고 첫 간격의 ±latticeTol 안이며
+// 길이·자리가 닮은(겹침 ≥ 긴 쪽의 60 %) 면선을 이어 간다 — latticeMin줄 이상 이어지면 무리다. 벽은 여러 겹이어도
+// 간격이 고르지 않고 줄 수가 적으며, 옆의 긴 벽 면은 길이가 달라 무리에 들지 않는다. 건너뛰는 것은 **닮지 않은** 선뿐이다 —
+// 사이에 낀 닮은 선이 간격을 깨면 무리가 아니다(사동중 외벽: 여러 겹 선에서 우연한 등차를 골라 식당 벽을 지웠다).
+// 토막 난 면선(덮인 길이 < 전체의 60 %)은 일원이 아니다. → Set<face>
+export function latticeFaces(faces, P = DXF_PARAMS) {
+  const out = new Set(), bins = new Map();
+  for (const f of faces) (bins.get(f.key) ?? bins.set(f.key, []).get(f.key)).push(f);
+  const ext = f => [f.intervals[0][0], f.intervals[f.intervals.length - 1][1]];
+  const whole = f => { const [a, b] = ext(f); return f.span >= 0.6 * (b - a); };
+  const alike = (a, b) => { const [a0, a1] = ext(a), [b0, b1] = ext(b); return Math.min(a1, b1) - Math.max(a0, b0) >= 0.6 * Math.max(a1 - a0, b1 - b0); };
+  for (const list of bins.values()) {
+    list.sort((a, b) => a.off - b.off);
+    for (let i = 0; i < list.length; i++) {
+      if (out.has(list[i]) || !whole(list[i])) continue;
+      const fam = [list[i]];
+      let pitch = 0;
+      for (let k = i + 1; k < list.length; k++) {
+        const d = list[k].off - fam[fam.length - 1].off;
+        if (d > P.latticePitch) break;
+        if (!whole(list[k]) || !alike(fam[fam.length - 1], list[k])) continue;      // 닮지 않은 선은 건너뛴다
+        if (d < P.tMin || (pitch && Math.abs(d - pitch) > P.latticeTol * pitch)) break;   // 닮은 선이 간격을 깬다
+        if (!pitch) pitch = d;
+        fam.push(list[k]);
+      }
+      if (fam.length >= P.latticeMin) for (const f of fam) out.add(f);
+    }
+  }
+  return out;
+}

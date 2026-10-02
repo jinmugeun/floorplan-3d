@@ -9,6 +9,13 @@ import { productById } from '../../products/catalog.js';
 import { dropTinyComponents } from './walls.js';
 import { DXF_PARAMS } from './params.js';
 
+// 점 p에서 선분 a–b까지의 거리.
+const distSeg = (p, a, b) => {
+  const d = [b[0] - a[0], b[1] - a[1]], L2 = d[0] * d[0] + d[1] * d[1];
+  const t = L2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / L2)) : 0;
+  return Math.hypot(p[0] - a[0] - d[0] * t, p[1] - a[1] - d[1] * t);
+};
+
 export const INSUNITS_SCALE = Object.freeze({ 1: 25.4, 2: 304.8, 4: 1, 5: 10, 6: 1000 });
 export const DXF_DEFAULT_NAME = 'DXF 가져오기';
 // 도면 제목·파일 이름으로 쓸 수 있는 글자(§18.4). 실파일의 이름은 디스크 수준에서 이미 깨져 있어
@@ -117,7 +124,10 @@ export function buildProject(raw, {
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.
   // 고립 제거를 앞에 두면 끝점이 아직 공유되지 않아 멀쩡한 벽이 통째로 잘린다.
   let walls = raw.map(w => makeWall({ a: toApp(w.a), b: toApp(w.b), thickness: Math.max(2, Math.round(w.thickness * scale)), height }));
-  walls = dropTinyComponents(normalizeWalls(walls), P.minComp, P.minCompLen);
+  // 기둥에 닿은 벽은 그 기둥을 거쳐 본 네트워크에 이어진 것이다(기둥에 가로막혀 떨어진 실제 벽을 살린다).
+  const colBox = columns.map(c => ({ p: toApp(c.c), r: Math.max(c.w, c.h) * scale / 2 }));
+  const touching = w => colBox.flatMap((c, i) => (distSeg(c.p, w.a, w.b) <= c.r + w.thickness / 2 + 100 ? [i] : []));
+  walls = dropTinyComponents(normalizeWalls(walls), P.minComp, P.minCompLen, colBox.length ? touching : null);
   const rooms = detectRooms(walls);
   for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
   const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { nameRoles }).unmatched : [];

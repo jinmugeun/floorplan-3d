@@ -3,6 +3,7 @@
 //  findPilasters — 벽 면을 네 번째 변으로 삼는 ㄷ자(벽기둥).
 //  mergeColumns  — 한 자리에 겹쳐 그린 윤곽들(구조체·ㄷ자·마감 라이닝)을 바깥 윤곽의 기둥 하나로.
 import { DXF_PARAMS } from './params.js';
+import { clusters } from './faces.js';
 
 const hyp = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 
@@ -132,4 +133,40 @@ export function growLinings(cols, segs) {
     const cu = (u0 + u1) / 2, cn = (n0 + n1) / 2;
     return { ...col, c: [col.c[0] + u[0] * cu + n[0] * cn, col.c[1] + u[1] * cu + n[1] * cn], w: u1 - u0, h: n1 - n0 };
   });
+}
+
+// 홀로 선 가늘고 긴 선 묶음(2026-10-02 내곡중: 세척실의 그리스 트랩 G.T 350 × 6,900이 벽 띠가 됐다). 끝점으로 서로 이어진
+// 선 묶음의 상자가 짧은 변 tMin~bandGap(벽 띠가 될 폭) · 긴 변 minWall 이상인데 **다른 선과 전혀 닿지 않으면**
+// 트렌치·작업대다. 벽 토막(창 사이 벽 · 칸막이 · 기둥 사이 벽)은 끝이나 몸통에 다른 벽·창틀·기둥 선이 와서 닿는다.
+// used: 이미 기둥으로 쓴 선분 번호(묶음에는 넣지 않지만 닿는지는 본다). extra: 후보는 아니지만 닿는지는 봐야 하는 선분
+// (짧은 벽 선 · 창틀 선). → [{ c, u, w, h, segs }]
+const ISLAND_TOUCH = 20;
+const ISLAND_NEST = 60;      // 겹쳐 그린 안쪽 윤곽이 바깥 윤곽 밖으로 이만큼 삐져나와도 한 묶음이다(내곡중 G.T: 25 mm)
+const distPS = (p, a, b) => {
+  const d = [b[0] - a[0], b[1] - a[1]], L2 = d[0] * d[0] + d[1] * d[1];
+  const t = L2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / L2)) : 0;
+  return Math.hypot(p[0] - a[0] - d[0] * t, p[1] - a[1] - d[1] * t);
+};
+export function findIslands(segs, used = new Set(), P = DXF_PARAMS, extra = []) {
+  const idx = segs.map((_, i) => i).filter(i => !used.has(i));
+  const { list, of } = clusters(idx.map(i => segs[i]), ISLAND_TOUCH);
+  const members = list.map(() => []);
+  idx.forEach((i, k) => { if (of[k] >= 0) members[of[k]].push(i); });
+  const out = [], taken = new Set();
+  list.forEach((c, ci) => {
+    if (members[ci].every(i => taken.has(i))) return;      // 더 큰 묶음의 안쪽 윤곽으로 이미 들어갔다
+    const w = c.x1 - c.x0, h = c.y1 - c.y0, short = Math.min(w, h), long = Math.max(w, h);
+    if (members[ci].length < 2 || short < P.tMin || short > P.bandGap || long < P.minWall) return;
+    const inBox = p => p[0] >= c.x0 - ISLAND_TOUCH && p[0] <= c.x1 + ISLAND_TOUCH && p[1] >= c.y0 - ISLAND_TOUCH && p[1] <= c.y1 + ISLAND_TOUCH;
+    // 상자(± ISLAND_NEST) 안에 통째로 든 다른 선(겹쳐 그린 안쪽 윤곽)은 이 묶음의 일부다.
+    const nest = p => p[0] >= c.x0 - ISLAND_NEST && p[0] <= c.x1 + ISLAND_NEST && p[1] >= c.y0 - ISLAND_NEST && p[1] <= c.y1 + ISLAND_NEST;
+    const own = new Set(members[ci]);
+    segs.forEach((t, m) => { if (!used.has(m) && nest(t.a) && nest(t.b)) own.add(m); });
+    // 다른 선의 끝이 이 묶음에 닿거나(상자 안), 이 묶음의 끝이 다른 선의 몸통에 닿는다
+    const lands = t => inBox(t.a) || inBox(t.b) || [...own].some(i => distPS(segs[i].a, t.a, t.b) <= ISLAND_TOUCH || distPS(segs[i].b, t.a, t.b) <= ISLAND_TOUCH);
+    if (segs.some((t, m) => !own.has(m) && lands(t)) || extra.some(lands)) return;
+    for (const i of own) taken.add(i);
+    out.push({ c: [(c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2], u: [1, 0], w, h, segs: [...own] });
+  });
+  return out;
 }

@@ -10,8 +10,11 @@
 
 // 문 블록 이름(2026-09-29): 실파일 여닫이문은 역할 "기타"인 WID 레이어의 DR-900·DR-1800·dr-1850 블록에 있었다.
 // 이름 **앞머리**만 본다: "문"이 뒤에 붙는 주방 기구("보냉고 양문"·"소독기 단문")는 문이 아니다.
-export const DOOR_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]/i;
-export const WINDOW_BLOCK = /^(win|window|w)[-_ ]?\d{3,4}|^window|^창[-_ ]/i;
+// 2026-10-02 내곡중: 창호 일람표의 기호(SD·FSD·SSD·ASD·AD·WD·PD + 폭 / AW·PW·SW·WW + 폭)와 우리말 이름
+// (미서기단창_1300 · 방음문(시창형)_2400 · 화장실칸막이문600)도 읽는다. 우리말은 **문·창 종류를 가리키는 겹낱말**만
+// 본다 — "문"·"창" 한 글자로 잡으면 기구의 문 수(양문·단문)와 창고가 걸린다.
+export const DOOR_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]|^((f|s|a)?s?d|wd|pd)[-_ ]?\d{3,4}|(방화|방음|자동|현관|출입|칸막이|여닫이|미닫이|미서기|강화|유리|방풍)문/i;
+export const WINDOW_BLOCK = /^(win|window|w)[-_ ]?\d{3,4}|^window|^창[-_ ]|^(aw|pw|sw|ww)[-_ ]?\d{3,4}|(미서기|미닫이|여닫이|고정|프로젝트|픽스|붙박이|오르내리)[^\s_]{0,3}창/i;
 export const POCKET_BLOCK = /^문[-_ ]?(슬라이딩|포켓|미닫이)|^(pocket|sliding)/i;
 // 창·문 블록 이름 전체(evidence.js가 긴 연장·다리의 "문·창 자리" 근거로 쓴다).
 export const OPEN_BLOCK = new RegExp(`${DOOR_BLOCK.source}|${WINDOW_BLOCK.source}|${POCKET_BLOCK.source}`, 'i');
