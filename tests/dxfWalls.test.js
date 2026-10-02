@@ -361,3 +361,20 @@ test('틈 판정은 "둘 다 비는" 구간이다 — 한쪽 면선만 끊긴 �
   // (합성 두 선만으로는 1.8 m 틈이 ROI 덩어리를 갈라 놓으므로 사각형 안에서 잰다.)
   expect(extractWalls(exOf(rectSegs({ door: [2500.5, 4300.5] })), opts).gaps.map(g => Math.round(g.width))).toEqual([1800]);
 });
+
+// 2026-10-02 신상중 B: 식당 동쪽 벽이 4 m 폴딩도어(창·문 레이어의 가는 유리선) 앞에서 끝났다 — 맞은편 벽까지 4,086 mm,
+// 연장 한도(extend 4,000)를 86 mm 넘어 식당이 닫히지 않았다. 한도보다 먼 연장은 **개구부 선이 그 길의 절반 이상을
+// 덮을 때만**(evidence.wide) 한도의 두 배까지 한다 — 점 하나의 근거로는 한도를 넘지 않는다.
+test('joinEnds: 넓은 창·문 띠가 길을 덮으면 연장 한도를 넘어 잇는다', () => {
+  const jamb = wall(3000.5, 4300.25, 3000.5, 9000.25);         // 아래 끝이 매달림 — 가로 벽까지 4.3 m
+  const base = wall(0.5, 0.25, 6000.5, 0.25);
+  const yes = Object.assign(() => true, { wide: () => true }), no = Object.assign(() => true, { wide: () => false });
+  expect(joinEnds([jamb, base], P, () => true)[0].a).toEqual([3000.5, 4300.25]);      // 점 근거만으로는 한도를 넘지 않는다
+  expect(joinEnds([jamb, base], P, no)[0].a).toEqual([3000.5, 4300.25]);
+  expect(joinEnds([jamb, base], P, yes)[0].a).toEqual([3000.5, 0.25]);
+  // 한도의 두 배보다 멀면 띠가 있어도 잇지 않는다
+  expect(joinEnds([wall(3000.5, 8300.25, 3000.5, 12000.25), base], P, yes)[0].a).toEqual([3000.5, 8300.25]);
+  // 한도 안의 연장은 예전 그대로 점 근거를 본다(wide를 묻지 않는다)
+  expect(joinEnds([wall(3000.5, 3100.25, 3000.5, 4500.25), base], P, no)[0].a).toEqual([3000.5, 0.25]);
+  expect(P.extend).toBe(4000);
+});

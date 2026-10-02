@@ -8,7 +8,7 @@
 //  ① bands.js가 **그 자리에 함께 있는 면선 무리**로 벽 띠를 세우고(기둥은 먼저 뺀다),
 //  ② 같은 띠끼리만 틈을 이으며(문·창),
 //  ③ joinEnds가 끝점을 **자기 축 위에서만** 늘이거나 줄인다 — 벽 선이 옆으로 움직이는 단계가 없다.
-import { absorbLinings } from './linings.js';
+import { absorbLinings, buttJoin } from './linings.js';
 import { DXF_PARAMS } from './params.js';
 import { largestCluster, ROI_LINK, buildFaces, latticeFaces } from './faces.js';
 import { wallBands, bandRuns, wallsOfRuns } from './bands.js';
@@ -31,6 +31,7 @@ const FALLBACK_MODES = 6;       // 폴백에서 남길 우세 두께 계급 수(
 //  - 평행한 다른 벽의 몸통 안을 절반 넘게 지나지 않는다(405 벽 안의 100 모서리 띠가 3.9 m 늘어 벽이 겹쳤다).
 //  - bareReach보다 멀면 evidence(p, q, 두께)가 참이어야 한다 — 길(내 끝 → 상대 벽 면)에 문·창 근거가 있다(날개벽이
 //    빈 바닥 3.1 m를 건너 방을 가르고, 현관 벽이 2.8 m를 건넜다). evidence가 없으면(근거를 볼 수 없는 도면) 제약도 없다.
+//  - extend보다 먼 연장은 evidence.wide(창·문 선이 길의 절반 이상을 덮는다 — 폴딩도어·커튼월)가 참일 때만, 두 배까지.
 export function joinEnds(list, P = DXF_PARAMS, evidence = null) {
   const out = list.map(w => ({ ...w, a: [...w.a], b: [...w.b] }));
   const key = p => `${Math.round(p[0])},${Math.round(p[1])}`;
@@ -52,7 +53,7 @@ export function joinEnds(list, P = DXF_PARAMS, evidence = null) {
         const den = dir[0] * e[1] - dir[1] * e[0];
         if (Math.abs(den) < 1e-6 * Lv) continue;                      // 평행
         const s = ((v.a[0] - p[0]) * e[1] - (v.a[1] - p[1]) * e[0]) / den;
-        if (s < -(v.thickness / 2 + w.thickness + P.joinMargin) || s > P.extend) continue;
+        if (s < -(v.thickness / 2 + w.thickness + P.joinMargin) || s > (evidence?.wide ? 2 : 1) * P.extend) continue;
         if (s < 0 && L0 + s < P.minWall) continue;
         const q = [p[0] + dir[0] * s, p[1] + dir[1] * s];
         const t = ((q[0] - v.a[0]) * e[0] + (q[1] - v.a[1]) * e[1]) / (Lv * Lv);
@@ -64,7 +65,7 @@ export function joinEnds(list, P = DXF_PARAMS, evidence = null) {
         if (s > 0 && insideParallel(out, w, p, dir, s) > s / 2) continue;
         if (evidence && s > P.bareReach) {
           const f = Math.max(0, s - v.thickness / 2);
-          if (!evidence(p, [p[0] + dir[0] * f, p[1] + dir[1] * f], w.thickness)) continue;
+          if (!(s > P.extend ? evidence.wide : evidence)(p, [p[0] + dir[0] * f, p[1] + dir[1] * f], w.thickness)) continue;
         }
         best = { cost: Math.abs(s), q, v, tip };
       }
@@ -187,7 +188,8 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   // 도면(개구부 레이어·블록이 하나도 없다)은 가리지 않는다.
   const opening = openingEvidence(ex, openFaceLayers, inRoi);
   const support = faceSupport(cand.filter((s, i) => !colSegs.has(i) && !symbol(s) && wallish(s)));
-  const evidence = opening && ((p, q, th) => opening(p, q, th) || support(p, q, th));
+  const openSegs = ex.segs.filter(s => (openFaceLayers.has(s.layer) || OPEN_BLOCK.test(s.block ?? '')) && inRoi(s.a) && inRoi(s.b));
+  const evidence = opening && Object.assign((p, q, th) => opening(p, q, th) || support(p, q, th), { wide: faceSupport(openSegs) });
   const pieces = [], jogs = [], gaps = [];
   for (const list of byKey.values()) {
     const { u, n } = list[0];
@@ -224,7 +226,8 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   // 꺾임(두께가 바뀌는 경계): 두 구간 중심선을 잇는 짧은 수직 벽. 끝점은 두 구간 끝과 같은 식으로 계산해
   // 정확히 겹친다(joinEnds가 건드리지 않는다). minWall보다 짧아도 남긴다 — 지우면 벽이 끊긴다.
   for (const j of jogs) walls.push({ a: [j.u[0] * j.t + j.n[0] * j.c0, j.u[1] * j.t + j.n[1] * j.c0], b: [j.u[0] * j.t + j.n[0] * j.c1, j.u[1] * j.t + j.n[1] * j.c1], thickness: thOf(j.th), jog: true });
-  walls = absorbLinings(joinEnds(pruneSpurs(joinEnds(walls, P, evidence), P), P, evidence)).filter(w => w.jog || len(w.a, w.b) >= P.minWall)
+  walls = absorbLinings(joinEnds(pruneSpurs(joinEnds(walls, P, evidence), P), P, evidence)).filter(w => w.jog || len(w.a, w.b) >= P.minWall);
+  walls = buttJoin(walls, P, faceSupport(live.filter(usable)))
     .map(({ a, b, thickness: th }) => ({ a, b, thickness: th }));
   // 벽기둥(ㄷ자): 두 열린 끝이 모두 벽 몸통(± 30 mm)에 닿거나 **다른 벽 선의 끝과 이어져야** 한다 — 허공의 ㄷ자는
   // 기구·기호다. (실파일 식당 벽기둥은 창 아래 오목한 벽 안쪽 단에 붙어 벽 띠에서 200 mm 넘게 떨어져 있다.)
