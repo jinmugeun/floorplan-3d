@@ -8,7 +8,7 @@ import { createEmptyProject, createFloor, normalizeProject, createItem } from '.
 import { productById } from '../../products/catalog.js';
 import { dropTinyComponents } from './walls.js';
 import { DXF_PARAMS } from './params.js';
-import { dimLines, axisShiftOf, inheritRefs } from './refLines.js';
+import { dimLines, assignRefs } from './refLines.js';
 
 // 점 p에서 선분 a–b까지의 거리.
 const distSeg = (p, a, b) => {
@@ -137,9 +137,7 @@ export function buildProject(raw, {
     size: [Math.round(c.w * scale), Math.round(c.h * scale), height],
   })) : [];
   // 면적 기준선(refLines.js): 벽마다 치수가 가리키는 좌표(구조체 중심 · 기둥 그리드)를 기준선으로 단다 — 방의 areaCenter가 쓴다.
-  const refs = dimLines(dims, toApp);
-  for (const w of walls) { const s = axisShiftOf(w, refs, colItems, P); if (s) w.axisShift = s; }
-  inheritRefs(walls, P);
+  assignRefs(walls, dimLines(dims, toApp), colItems, P);
   const rooms = detectRooms(walls);
   for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
   const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { nameRoles }).unmatched : [];

@@ -2,7 +2,7 @@
 // 잰 값이었다: 실내벽은 구조체 중심(마감까지 넣은 우리 띠의 중심에서 16~50 mm 비낀다), 외벽은 기둥 그리드
 // (벽 안쪽 면보다 100 mm 실내 쪽 — 띠 밖이다). 좌표는 앱 좌표(mm)다.
 import { test, expect } from 'vitest';
-import { dimLines, axisShiftOf, inheritRefs } from '../src/io/dxf/refLines.js';
+import { dimLines, axisShiftOf, inheritRefs, assignRefs } from '../src/io/dxf/refLines.js';
 import { makeWall } from '../src/geom/walls.js';
 import { DXF_PARAMS as P } from '../src/io/dxf/params.js';
 
@@ -78,4 +78,23 @@ test('inheritRefs: 기준선 없는 토막은 이어진 나란한 이웃 벽의 
   const off = makeWall({ a: [5600, 5000], b: [5600, 5540], thickness: 100 });
   inheritRefs([main, makeWall({ a: [5000, 5000], b: [5600, 5000], thickness: 100 }), off], P);
   expect(off.axisShift).toBeUndefined();
+});
+
+// 사동중 영양관리실 북쪽: 같은 벽 줄의 접합부 토막(두께 515)이 띠 중심 31 mm의 약한 좌표(×2)를 기준선으로 골랐는데,
+// 이어진 옆 토막은 그리드(×3)였다 — 한 줄의 벽이 두 기준선으로 갈려 0.18 m² 어긋났다. 약한 기준선(한두 번만 재는
+// 좌표)은 이어진 나란한 이웃의 **강한 기준선**(여럿이 재는 선·기둥 줄)에 진다.
+test('assignRefs: 약한 기준선은 이어진 이웃의 강한 기준선에 진다', () => {
+  const a = makeWall({ a: [0, 1000], b: [6000, 1000], thickness: 395 });          // 그리드 y = 1206 (×3) → 강함
+  const jog = makeWall({ a: [6000, 1000], b: [6000, 875], thickness: 395 });
+  const b = makeWall({ a: [6000, 875], b: [6600, 875], thickness: 515 });          // 띠 안 31 mm에 약한 좌표 y = 906 (×2)
+  const lone = makeWall({ a: [20000, 875], b: [26000, 875], thickness: 515 });     // 이웃이 없으면 약한 기준선 그대로
+  const lines = { x: new Map(), y: new Map([[1206, 3], [906, 2]]) };
+  assignRefs([a, jog, b, lone], lines, [], P);
+  expect(a.axisShift).toBe(206);
+  expect(b.axisShift).toBe(331);               // 906이 아니라 1206
+  expect(lone.axisShift).toBe(31);
+  // 강한 기준선은 이웃이 무엇이든 바뀌지 않는다
+  const s1 = makeWall({ a: [0, 1000], b: [6000, 1000], thickness: 395 }), s2 = makeWall({ a: [6000, 1000], b: [9000, 1000], thickness: 395 });
+  assignRefs([s1, s2], { x: new Map(), y: new Map([[1206, 3]]) }, [], P);
+  expect([s1.axisShift, s2.axisShift]).toEqual([206, 206]);
 });
