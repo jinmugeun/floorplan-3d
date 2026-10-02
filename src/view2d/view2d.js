@@ -142,7 +142,7 @@ export function createView2D(canvas, store, ui, { readonly = false, labels = tru
     // 빠져 있었다 — 라벨 패스로 옮기면서 같은 규칙을 플래그로 넘긴다).
     const lflags = readonly ? { ...v2, productCode: false } : v2;
     // 덕트 띠는 라벨의 장애물이다(§17.4(4) · 감사 §40): 인쇄 평면도에서 방 이름이 띠에 묻혔다.
-    const placedLabels = labels ? placeLabels(collectLabels(api, pf, { flags: lflags, units, showUnit, pyeong }), { scale: camera.scale, obstacles: ductObstacles(api, pf, { flags: v2 }) }) : [];
+    const placedLabels = labels ? placeLabels(collectLabels(api, pf, { flags: lflags, units, showUnit, pyeong, areaMode: state.areaMode }), { scale: camera.scale, obstacles: ductObstacles(api, pf, { flags: v2 }) }) : [];
     // shown은 "라벨 패스가 맡았다"는 표시다(내용이 아니라 있고 없음만 본다 — ducts2d·items2d가
     // `!shown`으로 검사한다). key는 후보를 테스트에서 지목하고 겹침 진단을 읽기 위한 이름이다.
     const shown = labels ? new Set(placedLabels.map(c => c.key)) : null;

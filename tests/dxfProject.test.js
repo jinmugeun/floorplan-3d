@@ -69,7 +69,7 @@ test('사각형 하나가 방 하나가 되고 층고 한 칸이 층·벽·방�
   expect(floor.rooms.every(r => r.height === 3500)).toBe(true);
   expect(floor.rooms.every(r => r.matchWallHeight === false)).toBe(true);
   expect(stats).toMatchObject({ walls: 4, rooms: 1, openEnds: [], items: 0, size: [6000, 4000] });
-  expect(stats.areaM2).toBeCloseTo(22.0, 1);                    // (6000−200) × (4000−200) mm²
+  expect(stats.areaM2).toBeCloseTo(24.0, 1);                    // 도면 기준(벽 중심선) 6000 × 4000 mm² — 가져온 뒤 화면의 총면적과 같은 값
   expect(stats.thickness).toEqual([[200, 4]]);
 });
 

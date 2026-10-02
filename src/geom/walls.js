@@ -15,7 +15,7 @@ export const wallNormal = w => perp(wallDir(w));
 
 export function wallPolygon(w, walls = []) {
   const d = wallDir(w), n = wallNormal(w), h = w.thickness / 2;
-  const joined = p => walls.some(o => o.id !== w.id && (eq(o.a, p) || eq(o.b, p)));
+  const joined = p => walls.some(o => o.id !== w.id && !o.virtual && (eq(o.a, p) || eq(o.b, p)));   // 구획선은 벽 접합이 아니다
   const a = joined(w.a) ? sub(w.a, mul(d, h)) : w.a;
   const b = joined(w.b) ? add(w.b, mul(d, h)) : w.b;
   return [add(a, mul(n, h)), add(b, mul(n, h)), sub(b, mul(n, h)), sub(a, mul(n, h))];

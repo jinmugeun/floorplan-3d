@@ -73,6 +73,9 @@ function centerArea(pts, walls) {
   return Math.abs(polygonArea(insets.some(Boolean) ? insetPolygon(pts, insets) : pts));
 }
 
+// 화면에 보여 줄 방 넓이(m²). '도면 기준'(center)이면 벽·기둥 중심선 넓이, 아니면 안목 넓이(옛 파일은 areaCenter가 없다).
+export const roomArea = (room, mode = 'net') => (mode === 'center' && room?.areaCenter > 0 ? room.areaCenter : Number(room?.area) || 0);
+
 function nodeKey(p) { return `${Math.round(p[0])},${Math.round(p[1])}`; }
 
 function jaccard(a, b) {

@@ -5,7 +5,7 @@
 // ③ 많이 축소하면(scale < LOD_SCALE) 공간 이름만 남긴다.
 // 그리기는 기존 경로 그대로다: 뷰가 후보를 모아 placeLabels로 걸러 낸 뒤 drawLabels로 한 번에 그리고,
 // ducts2d·items2d는 shown이 오면 자기 라벨을 그리지 않는다.
-import { centroid } from '../geom/rooms.js';
+import { centroid, roomArea } from '../geom/rooms.js';
 import { wallLength } from '../geom/walls.js';
 import { damperPos, ductPolygons } from '../geom/ducts.js';
 import { itemAABB } from '../geom/items.js';
@@ -87,7 +87,7 @@ export function placeLabels(candidates, { priority = LABEL_PRIORITY, scale = nul
 
 // 후보 목록. 플래그 판정은 지금 그리는 코드와 글자 그대로 같게 두었다(공간 이름·면적·치수는 truthy,
 // 덕트·설비 라벨은 !== false) — 라벨을 옮기면서 보기 옵션의 뜻이 달라지지 않게 한다.
-export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = false, pyeong = false } = {}) {
+export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = false, pyeong = false, areaMode = 'net' } = {}) {
   const out = [];
   const mm = n => n / (v.camera.scale || 1);
   const cand = (key, kind, text, at, { size = 12, color = v.COLORS.text, bg = null } = {}) =>
@@ -95,7 +95,7 @@ export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = f
   for (const r of floor.rooms ?? []) {
     const c = centroid(r.points);
     if (flags.roomName && r.name) out.push(cand(`room:${r.id}:name`, 'roomName', r.name, [c[0], c[1] - mm(ROOM_NAME_DY)], { size: 13, color: v.COLORS.dim }));
-    if (flags.roomArea) out.push(cand(`room:${r.id}:area`, 'roomArea', fmtArea(r.area, { pyeong }), [c[0], c[1] + mm(ROOM_AREA_DY)]));
+    if (flags.roomArea) out.push(cand(`room:${r.id}:area`, 'roomArea', fmtArea(roomArea(r, areaMode), { pyeong }), [c[0], c[1] + mm(ROOM_AREA_DY)]));
   }
   // 측정선 라벨(§14.5의 LOD를 지나게 옮겼다 — m-3). 선 자체는 view2d가 그린다.
   if (flags.measures) for (const m of floor.measures ?? []) {
@@ -105,7 +105,7 @@ export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = f
     const dims = [];
     for (const w of floor.walls ?? []) {
       const len = wallLength(w);
-      if (len * (v.camera.scale || 1) < WALL_DIM_MIN_PX) continue;
+      if (w.virtual || len * (v.camera.scale || 1) < WALL_DIM_MIN_PX) continue;      // 구획선은 벽 치수가 아니다
       dims.push(cand(`wall:${w.id}`, 'wallDim', fmtLen(len, units, { unit: showUnit }), [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2], { size: 11, color: v.COLORS.dim, bg: LABEL_BG }));
     }
     out.push(...dedupeDims(dims));   // 가까이 반복되는 같은 치수는 한 번만(§15.14)

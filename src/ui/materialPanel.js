@@ -18,6 +18,7 @@ export function placedMaterials(floor) {
   const counts = new Map();
   const add = a => { if (a?.id) counts.set(a.id, (counts.get(a.id) ?? 0) + 1); };
   for (const w of floor.walls ?? []) {
+    if (w.virtual) continue;            // 구획선은 벽이 아니다
     add(assignmentOf(floor, { kind: 'wall', id: w.id, side: 'in' }));
     add(assignmentOf(floor, { kind: 'wall', id: w.id, side: 'out' }));
     for (const side of ['in', 'out']) for (const rg of w.regions?.[side] ?? []) add(rg.mat);

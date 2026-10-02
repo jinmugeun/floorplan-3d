@@ -30,7 +30,7 @@ export function floorDetailsHtml(project, floor, { units = 'mm', showUnit = fals
     <div class="row"><button type="button" name="floorRename" title="이 층의 이름을 바꿉니다">이름 변경</button><button type="button" name="floorDelete" class="danger" ${lastFloor ? `disabled title="${LAST_FLOOR_TITLE}"` : 'title="이 층과 그 안의 모든 것을 삭제합니다"'}>층 삭제</button></div>
     ${lenField(withUnit('층 높이', units, showUnit), 'floorHeight', f.height ?? 2300, 2000, 8000, false, units, 10)}
     <details ${detailsOpen ? 'open' : ''}><summary>상세 설정</summary>
-      ${field('실면적 기준', `<select name="areaMode"><option value="net" ${p.areaMode !== 'gross' ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option></select>`)}
+      ${field('실면적 기준', `<select name="areaMode"><option value="net" ${!['gross', 'center'].includes(p.areaMode) ? 'selected' : ''}>실면적</option><option value="gross" ${p.areaMode === 'gross' ? 'selected' : ''}>실면적+내외벽</option><option value="center" ${p.areaMode === 'center' ? 'selected' : ''}>도면 기준(벽 중심선)</option></select>`)}
       ${field('총면적', `<output name="totalArea">${fmtArea(totalArea(f, p.areaMode), { pyeong })}</output>`)}
       ${lenField(withUnit('슬래브 두께', units, showUnit), 'slab', f.slab ?? 0, 0, 1000, false, units)}
       ${field('벽 투명도', `<input type="range" name="wallOpacity" min="0" max="1" step="0.05" value="${p.view?.wallOpacity ?? 1}"><output name="wallOpacityOut">${Math.round((p.view?.wallOpacity ?? 1) * 100)}%</output>`)}

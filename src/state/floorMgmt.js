@@ -4,7 +4,7 @@
 // 않으므로 순환 import가 없다.
 import { createFloor, uid, activeFloor, defaultFloorName } from './schema.js';
 import { normalizeWalls } from '../geom/normalize.js';
-import { detectRooms } from '../geom/rooms.js';
+import { detectRooms, roomArea } from '../geom/rooms.js';
 import { wallLength } from '../geom/walls.js';
 import { reattach, seatCopies, copyRoomProps, cloneProp } from './floorInternal.js';
 
@@ -68,11 +68,12 @@ export function deleteFloor(store, index, opts) {
     d.activeFloor = index < d.activeFloor ? d.activeFloor - 1 : Math.min(d.activeFloor, d.floors.length - 1);
   }, opts);
 }
-// 실면적(net) = 방 폴리곤 면적 합. 실면적+내외벽(gross) = 거기에 벽 바닥면적을 더한 값. 단위 m².
+// 실면적(net) = 방 폴리곤 면적 합. 실면적+내외벽(gross) = 거기에 벽 바닥면적을 더한 값. 도면 기준(center) = 벽·기둥
+// 중심선으로 잰 방 넓이의 합(도면의 실 면적 표기가 이 기준이다). 단위 m².
 export function totalArea(floor, areaMode = 'net') {
-  const net = (floor.rooms ?? []).reduce((s, r) => s + (Number(r.area) || 0), 0);
+  const net = (floor.rooms ?? []).reduce((s, r) => s + roomArea(r, areaMode), 0);
   if (areaMode !== 'gross') return net;
-  const walls = (floor.walls ?? []).reduce((s, w) => s + wallLength(w) * w.thickness, 0) / 1e6;
+  const walls = (floor.walls ?? []).reduce((s, w) => s + (w.virtual ? 0 : wallLength(w) * w.thickness), 0) / 1e6;
   return net + walls;
 }
 

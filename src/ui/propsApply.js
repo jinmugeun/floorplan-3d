@@ -99,3 +99,6 @@ export function applyNumber(store, sel, name, v) {
   }
   return false;
 }
+
+// 구획선(방만 나누는 선) 켜고 끄기: 방의 안목 넓이가 달라지므로 방을 다시 센다(updateWall = reroom).
+export const setDivider = (store, wallId, on) => updateWall(store, wallId, { virtual: !!on });

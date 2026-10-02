@@ -2,6 +2,7 @@ import { activeFloor } from '../state/schema.js';
 import { updateRoom, setActiveFloor, deleteFloor, setRoomWallHeight, updateWallProps, updateItem, resizeItem, pruneSelection } from '../state/floorOps.js';
 import { floorBarHtml, floorDetailsHtml } from './floorBar.js';
 import { wallLength } from '../geom/walls.js';
+import { roomArea } from '../geom/rooms.js';
 import { fmtArea, fmtLen } from '../util/units.js';
 import { openFloorDialog } from './floorDialog.js';
 import { esc } from '../util/html.js';
@@ -14,7 +15,7 @@ import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
 import { field, num, numValue, lenField, readLen, withUnit, colorField, isDuplicateCommit, nextFocusName, tabWatcher } from './fieldUtils.js';
 import { roomAirflow } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // 목록 자체는 상태 계층에 둔다(시방서 등 DOM 아닌 모듈도 쓴다)
-import { applyNumber, setKeepRatio, getKeepRatio } from './propsApply.js';
+import { applyNumber, setKeepRatio, getKeepRatio, setDivider } from './propsApply.js';
 import { memoCollisions } from '../geom/collide.js';
 import { COLLISION_ITEM, CLAMP_MAX, CLAMP_MIN, LAST_FLOOR, WALL_ITEM_SLIDE_HINT } from './messages.js';
 export { lenField, readLen, withUnit } from './fieldUtils.js';
@@ -105,6 +106,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${materialRowsHtml(f, sel, { detailsOpen: false })}
         ${hasMaterial(f, sel, 'in') ? '' : colorField('내벽 색', 'colorIn', w.colorIn)}
         ${hasMaterial(f, sel, 'out') ? '' : colorField('외벽 색', 'colorOut', w.colorOut)}
+        <label class="check" title="벽 없이 방만 나누는 선입니다 — 2D에 점선으로 보이고 3D·견적에는 없습니다"><input type="checkbox" name="virtual" ${w.virtual ? 'checked' : ''}> 구획선(방만 나누는 선)</label>
         <button type="button" name="split">벽 나누기 (나눌 지점 클릭)</button>
         <button type="button" name="delete" class="danger">벽 삭제</button>`;
     }
@@ -135,7 +137,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
       return `<h2>공간 상세 정보</h2>
         ${field('공간 타입', `<select name="type">${ROOM_TYPES.map(([v, l]) => `<option value="${v}" ${r.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`)}
         ${field('공간 이름', `<input type="text" name="name" value="${esc(r.name)}" placeholder="공간 이름을 입력해 주세요">`)}
-        ${field('면적', `<output>${fmtArea(r.area, { pyeong })}</output>`)}
+        ${field('면적', `<output>${fmtArea(roomArea(r, st.areaMode), { pyeong })}</output>`)}
         ${lenField(withUnit('벽 두께', units, showUnit), 'wallThickness', t, 2, 1000, false, units)}
         ${lenField(withUnit('바닥 기준 높이', units, showUnit), 'floorOffset', r.floorOffset, -1000, 1000, false, units, 10)}
         ${lenField(withUnit('방 높이', units, showUnit), 'height', r.height, 0, 8000, false, units, 10)}
@@ -206,6 +208,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (name === 'areaMode') { store.dispatch(d => { d.areaMode = el.value; }, { record: false }); return; }
     if (name === 'wallOpacity' || name === 'floorOpacity') { store.dispatch(d => { d.view[name] = Number(el.value); }, { record: false }); return; }
     if (name === 'keepRatio') { setKeepRatio(el.checked); return; }
+    if (name === 'virtual' && sel?.type === 'wall') { setDivider(store, sel.id, el.checked); return; }
     if (name === 'color' && sel?.type === 'item') { updateItem(store, sel.id, { color: el.value }); return; }
     // 범위를 벗어난 입력이 말없이 잘리던 것을 알린다(§14.10 — 감사 #7).
     const onClamp = (v, { max }) => toast(v === max ? CLAMP_MAX(max) : CLAMP_MIN(v));

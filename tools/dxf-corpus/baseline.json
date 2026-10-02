@@ -3,7 +3,7 @@
   "regions": 1,
   "walls": 96,
   "rooms": 14,
-  "areaM2": 674.1,
+  "areaM2": 688.1,
   "named": 14,
   "unmatched": 1,
   "openEnds": 6,
@@ -17,13 +17,13 @@
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1452
+  "ms": 1446
  },
  "sinsang-B": {
   "regions": 2,
   "walls": 75,
   "rooms": 14,
-  "areaM2": 220.1,
+  "areaM2": 237.7,
   "named": 11,
   "unmatched": 4,
   "openEnds": 12,
@@ -37,13 +37,13 @@
   "passes": 19,
   "columns": 14,
   "guessed": false,
-  "ms": 973
+  "ms": 1082
  },
  "sinsang-A": {
   "regions": 2,
   "walls": 63,
   "rooms": 11,
-  "areaM2": 94,
+  "areaM2": 105.7,
   "named": 10,
   "unmatched": 9,
   "openEnds": 11,
@@ -57,13 +57,13 @@
   "passes": 22,
   "columns": 14,
   "guessed": false,
-  "ms": 823
+  "ms": 819
  },
  "naegok": {
   "regions": 1,
   "walls": 116,
   "rooms": 22,
-  "areaM2": 801.7,
+  "areaM2": 831.7,
   "named": 18,
   "unmatched": 3,
   "openEnds": 5,
@@ -77,6 +77,6 @@
   "passes": 4,
   "columns": 24,
   "guessed": false,
-  "ms": 944
+  "ms": 936
  }
 }

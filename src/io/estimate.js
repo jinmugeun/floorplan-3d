@@ -52,6 +52,7 @@ export function estimateRows(floor) {
   const area = new Map();
   const add = (a, m2) => { if (a?.id && m2 > 0) area.set(a.id, (area.get(a.id) ?? 0) + m2); };
   for (const w of floor.walls ?? []) {
+    if (w.virtual) continue;            // 구획선은 벽이 아니다
     const len = wallLength(w);
     // 면 면적의 정의는 materialOps.faceArea 한 곳에만 둔다(속성 패널과 견적이 어긋나지 않게 — I-17).
     // 벽은 안·밖 면적이 같으므로 'in'으로 한 번 구해 두 면에 쓴다. len은 영역 폭 계산에 계속 필요하다.

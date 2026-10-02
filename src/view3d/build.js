@@ -157,7 +157,7 @@ export function buildFloorGroup(floor, view) {
     faces.forEach((p, i) => {
       const q = faces[(i + 1) % faces.length];
       const w = edgeWall(r, floor.walls, i);
-      if (!w) return;
+      if (!w || w.virtual) return;      // 구획선에는 벽면이 없다
       const faceH = Math.min(r.height, w.height);
       const faceW = Math.hypot(q[0] - p[0], q[1] - p[1]);
       if (!(faceW > 0) || !(faceH > 0)) return;
@@ -197,6 +197,7 @@ export function buildFloorGroup(floor, view) {
     });
   }
   for (const w of floor.walls) {
+    if (w.virtual) continue;            // 구획선은 방만 나눈다 — 3D에 서지 않는다
     const poly = wallPolygon(w, floor.walls);
     const openings = openingsOnWall(floor.items, w);
     const { dir, len, rot } = wallAxis(w);
@@ -221,7 +222,7 @@ export function buildFloorGroup(floor, view) {
     } else {
       // 개구부가 있는 벽은 조각 박스로 쌓는다. 벽 접합(다른 벽이 끝점을 공유)만큼 범위를 늘려
       // 모서리에서 빈틈이 생기지 않게 한다(wallPolygon과 같은 규칙).
-      const joined = q => floor.walls.some(o => o.id !== w.id && (eq(o.a, q) || eq(o.b, q)));
+      const joined = q => floor.walls.some(o => o.id !== w.id && !o.virtual && (eq(o.a, q) || eq(o.b, q)));
       const start = joined(w.a) ? -w.thickness / 2 : 0;
       const end = len + (joined(w.b) ? w.thickness / 2 : 0);
       for (const pc of wallPieces(w, openings, { start, end })) {

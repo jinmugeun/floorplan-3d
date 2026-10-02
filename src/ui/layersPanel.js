@@ -78,7 +78,7 @@ export function createLayersPanel(container, { store, ui }) {
   function paintTree({ visible, collapse }) {
     const st = store.get();
     container.querySelector('.layer-tree-box').innerHTML =
-      layerTreeHtml(visible, { units: st.units ?? 'mm', pyeong: !!st.settings?.pyeong, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState, autoCollapse: collapse, query });
+      layerTreeHtml(visible, { units: st.units ?? 'mm', pyeong: !!st.settings?.pyeong, areaMode: st.areaMode, showHidden: showHidden(), selectedIds: selectedIds(), renaming, openState, autoCollapse: collapse, query });
     if (renaming) container.querySelector(`input[data-name="${renaming}"]`)?.focus();
     // 캔버스에서 고른 것이 트리 밖에 있으면 스크롤해 보여 준다(49행이 4화면이므로 꼭 필요하다).
     // **선택이 바뀔 때만** 한다: render()는 스토어·ui 양쪽에 걸려 있어 조건 없이 스크롤하면 다른 행의

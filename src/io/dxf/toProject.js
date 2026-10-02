@@ -179,7 +179,8 @@ export function buildProject(raw, {
   const stats = {
     walls: floor.walls.length,
     rooms: floor.rooms.length,
-    areaM2: Math.round(floor.rooms.reduce((a, r) => a + r.area, 0) * 10) / 10,
+    // 도면 기준(벽·기둥 중심선) 넓이의 합 — 가져온 뒤 화면의 총면적과 같은 값이다(areaMode center).
+    areaM2: Math.round(floor.rooms.reduce((a, r) => a + r.areaCenter, 0) * 10) / 10,
     // 차수 1 노드 = 끊긴 끝점. 이 배열이 배너·2D 마커·[보기]의 원천이다(§18.6). 기둥 몸통(+100 mm) 안에서 끝나는
     // 벽은 기둥에 닿아 있으므로 끊긴 것이 아니다(실파일 조리실 실내벽 끝).
     openEnds: [...deg.values()].filter(d => d.n === 1 && !atColumn(d.p)).map(d => [...d.p]),

@@ -9,6 +9,7 @@ import { productById, fmtSize } from '../products/catalog.js';
 import { equipLabel } from '../vent/equipment.js';
 import { ductLength } from '../geom/ducts.js';
 import { fmtArea, fmtLen } from '../util/units.js';
+import { roomArea } from '../geom/rooms.js';
 import { esc } from '../util/html.js';
 import { LAYERS_NO_MATCH } from './messages.js';
 
@@ -87,7 +88,7 @@ export const bucketOpen = (b, openState = new Map(), autoCollapse = false) => {
   return !autoCollapse && (b.items.length + b.ducts.length) > 0;
 };
 
-export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidden = true, selectedIds = new Set(), renaming = null, openState = new Map(), autoCollapse = false, query = '' } = {}) {
+export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, areaMode = 'net', showHidden = true, selectedIds = new Set(), renaming = null, openState = new Map(), autoCollapse = false, query = '' } = {}) {
   // 꼬리표는 **트리 전체**에서 같은 이름을 센다: 같은 후드 세 개가 서로 다른 방에 있어도 구분된다.
   // 번호도 같은 목록(숨김 필터 **전**)에서 매긴다(리뷰 M-6): 그려진 행에서만 세면 소파 둘 중 앞의
   // 것을 숨기고 "숨긴 항목 보기"를 끄는 순간 남은 #2가 #1이 됐다 — 같은 물건의 번호가 바뀌면
@@ -113,7 +114,7 @@ export function layerTreeHtml(buckets, { units = 'mm', pyeong = false, showHidde
       : '';
     const id = b.room?.id ?? 'none';
     const open = bucketOpen(b, openState, autoCollapse);
-    const title = b.room ? `${esc(b.room.name || '이름 없는 공간')} (${fmtArea(b.room.area, { pyeong })})` : '미지정';
+    const title = b.room ? `${esc(b.room.name || '이름 없는 공간')} (${fmtArea(roomArea(b.room, areaMode), { pyeong })})` : '미지정';
     const count = `제품 ${b.items.length} · 덕트 ${b.ducts.length}`;
     return `<li class="layer-room"><details data-room="${esc(id)}"${open ? ' open' : ''}>
       <summary><span class="layer-room-name">${title}</span><span class="muted">${count}</span></summary>

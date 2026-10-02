@@ -27,7 +27,7 @@ for (const entry of corpus()) {
   if (only && entry.id !== only) continue;
   const file = fileOf(entry);
   if (!file) { console.log(`${entry.id}: 파일 없음 — 건너뜀`); continue; }
-  const want = (await runDrawing(entry)).metrics;
+  const scored = await runDrawing(entry), want = scored.metrics;
   const out = resolve(HERE, 'out', entry.id); mkdirSync(out, { recursive: true });
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   const errors = [], checks = [];
@@ -63,6 +63,13 @@ for (const entry of corpus()) {
     if (b3) { await b3.click(); await page.waitForTimeout(3000); await page.screenshot({ path: resolve(out, '4-3d.png') }); }
     await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForTimeout(1500);
     check('새로고침 뒤 이어서 작업', /이어서 작업/.test(await page.evaluate(() => document.querySelector('#startScreen')?.innerText ?? '')));
+    // 화면이 보여 주는 넓이 = 도면의 면적 표기(±0.05 m²): 가져온 도면은 '도면 기준'으로 열리고, 저장된 방의 넓이가 표기와 같아야 한다.
+    if (want.areaAll) {
+      const saved = await page.evaluate(() => { try { const j = JSON.parse(localStorage.getItem('kvp.autosave')); return j?.project ?? j; } catch { return null; } });
+      const rooms = saved?.floors?.[0]?.rooms ?? [];
+      const ok = scored.areaRows.filter(a => rooms.some(r => r.name === a.room && Math.abs(r.areaCenter - a.label) <= 0.05)).length;
+      check('면적 표기 = 화면 넓이', saved?.areaMode === 'center' && ok === want.areaAll, '기준 ' + saved?.areaMode + ' · ' + ok + '/' + want.areaAll);
+    }
     check('콘솔 오류 0', errors.length === 0, errors.slice(0, 2).join(' | '));
   } catch (e) { check('실행', false, String(e.message).split('\n')[0]); }
   await page.close();

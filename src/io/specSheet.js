@@ -8,6 +8,7 @@ import { materialById } from '../materials/catalog.js';
 import { wallLength } from '../geom/walls.js';
 import { elevationFrame, planExtent } from '../geom/elevation.js';   // 입면 프레임의 정본(리뷰 M-7)
 import { fmtLen, fmtArea } from '../util/units.js';
+import { roomArea } from '../geom/rooms.js';
 import { roomAirflow, systemAirflow, UNPLACED_ROOM } from '../vent/airflow.js';
 import { ROOM_TYPES } from '../state/roomTypes.js';   // src/io/ → src/ui/ import는 계층 역전이다(아키텍처 §9)
 import { assignmentOf, explicitAssignmentOf } from '../state/materialOps.js';   // io/ → state/는 열려 있는 방향이다(roomTypes와 같다)
@@ -61,10 +62,10 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
     .map(r => [esc(r.name), esc(r.code), esc(r.size), r.qty]);
 
   const roomRows = (f.rooms ?? []).map(r => [
-    esc(r.name || '이름 없는 공간'), esc(typeLabel(r.type)), esc(fmtArea(r.area, { pyeong })), len(r.height),
+    esc(r.name || '이름 없는 공간'), esc(typeLabel(r.type)), esc(fmtArea(roomArea(r, project.areaMode), { pyeong })), len(r.height),
     esc(matOf(f, { kind: 'floor', id: r.id })), esc(r.hideCeiling ? '천장 감춤' : matOf(f, { kind: 'ceiling', id: r.id })),
   ]);
-  const wallRows = (f.walls ?? []).map((w, i) => [
+  const wallRows = (f.walls ?? []).filter(w => !w.virtual).map((w, i) => [
     `W${i + 1}`, len(wallLength(w)), len(w.thickness), len(w.height ?? f.height),
     esc(matOf(f, { kind: 'wall', id: w.id, side: 'in' })), esc(matOf(f, { kind: 'wall', id: w.id, side: 'out' })),
   ]);

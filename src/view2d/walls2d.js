@@ -12,7 +12,7 @@ export const GLASS_DIV = 6;   // 창 유리선은 벽 두께의 1/6만큼 중심
 
 // 벽 축 u 좌표의 범위. 접합 벽이 있는 끝은 두께/2만큼 연장한다(wallPolygon·build.js와 같은 규칙).
 export function wallRange(wall, walls = []) {
-  const joined = q => (walls ?? []).some(o => o.id !== wall.id && (eq(o.a, q) || eq(o.b, q)));
+  const joined = q => (walls ?? []).some(o => o.id !== wall.id && !o.virtual && (eq(o.a, q) || eq(o.b, q)));
   return {
     start: joined(wall.a) ? -wall.thickness / 2 : 0,
     end: wallLength(wall) + (joined(wall.b) ? wall.thickness / 2 : 0),
@@ -68,6 +68,17 @@ function drawPass(ctx, v, wall, o) {
   ctx.restore();
 }
 
+// 구획선(wall.virtual — 방만 나누는 선): 몸통이 없으므로 중심선을 점선 한 줄로 긋는다.
+function drawDivider(ctx, v, wall, color) {
+  const a = v.toScreen(wall.a), b = v.toScreen(wall.b);
+  ctx.save();
+  ctx.setLineDash([10, 6]);
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 // 벽마다 조각을 칠한다. 선택된 벽은 조각이 아니라 원래 사각형을 통짜로 강조한다(§14.4):
 // 클릭 대상이 벽 전체(hitWall)이므로 강조도 벽 전체여야 한다.
 export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags = {} } = {}) {
@@ -79,6 +90,7 @@ export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags =
   const byId = new Map(items.map(it => [it.id, it]));
   for (const wl of floor.walls ?? []) {
     ctx.globalAlpha = soloWalls && !soloWalls.has(wl.id) ? 0.25 : 1;
+    if (wl.virtual) { drawDivider(ctx, v, wl, sel?.type === 'wall' && sel.id === wl.id ? v.COLORS.wallSel : v.COLORS.wall); ctx.globalAlpha = 1; continue; }
     if (sel?.type === 'wall' && sel.id === wl.id) {
       v.poly(wallPolygon(wl, floor.walls), v.COLORS.wallSel, null);
       ctx.globalAlpha = 1;

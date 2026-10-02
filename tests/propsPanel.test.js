@@ -981,3 +981,22 @@ test('캔버스 확정 리스너는 document 캡처이고 destroy()가 뗀다(�
   expect(activeFloor(store.get()).walls.find(w => w.id === id).thickness).toBe(250);
   root.remove();
 });
+
+// 2026-10-02: 구획선(방만 나누는 선)은 벽 상세에서 켜고 끈다 — DXF 가져오기가 못 그은 자리는 벽을 그어 구획선으로 바꾼다.
+test('벽 상세의 "구획선" 체크가 벽을 방만 나누는 선으로 바꾸고 방 넓이를 다시 센다', () => {
+  const store = createStore(createEmptyProject()), ui = createUiState();
+  addWalls(store, [...rectWalls([0, 0], [10000, 6000], 200), makeWall({ a: [6000, 0], b: [6000, 6000], thickness: 200 })]);
+  const el = document.createElement('div'); createPropsPanel(el, store, ui);
+  const mid = () => activeFloor(store.get()).walls.find(w => w.a[0] === 6000 && w.b[0] === 6000);
+  const left = () => activeFloor(store.get()).rooms.find(r => Math.min(...r.points.map(p => p[0])) === 0);
+  expect(left().area).toBeCloseTo(5.8 * 5.8, 6);
+  ui.set({ selection: { type: 'wall', id: mid().id } });
+  const box = el.querySelector('input[name="virtual"]');
+  expect(box.checked).toBe(false);
+  box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(mid().virtual).toBe(true);
+  expect(left().area).toBeCloseTo(5.9 * 5.8, 6);            // 구획선 쪽은 깎지 않는다
+  expect(el.querySelector('input[name="virtual"]').checked).toBe(true);
+  store.undo();
+  expect(mid().virtual).toBeFalsy();
+});
