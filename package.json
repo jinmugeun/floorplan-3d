@@ -7,7 +7,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dxf:score": "node tools/dxf-corpus/score.mjs",
+    "dxf:e2e": "node tools/dxf-corpus/e2e.mjs"
   },
   "dependencies": {
     "three": "0.169.0"

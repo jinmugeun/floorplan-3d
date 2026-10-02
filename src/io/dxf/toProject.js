@@ -161,6 +161,9 @@ export function buildProject(raw, {
     items: floor.items.length,
     columns: colItems.length,
     size,
+    // DXF 좌표 → 앱 좌표의 원점·배율(앱 = (DXF − origin) × scale, y 뒤집기). 치수·면적선을 평면도와 맞댈 때 쓴다.
+    origin: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2],
+    scale,
   };
   return { project, stats, toApp, walls: floor.walls, rooms: floor.rooms, box, size };
 }

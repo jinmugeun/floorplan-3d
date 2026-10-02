@@ -230,3 +230,17 @@ test('닫힌 방 두 개가 벽 하나를 공유해도 각각 이름을 받는�
   expect(stats.unmatchedNames).toEqual([]);
   expect(stats.openEnds).toEqual([]);
 });
+
+// 2026-10-02: 치수(DIMENSION)·면적선처럼 **DXF 좌표로 적힌 것**을 가져온 평면도와 맞대려면 원점이 필요하다 —
+// 앱 좌표 = (DXF − origin) × scale, y는 뒤집는다(makeToApp). 점수판(tools/dxf-corpus)이 치수 끝점을 이것으로 옮긴다.
+test('stats.origin·scale은 DXF 좌표를 앱 좌표로 옮기는 원점과 배율이다', () => {
+  const walls = [
+    { a: [1000.5, 2000.25], b: [5000.5, 2000.25], thickness: 200 }, { a: [5000.5, 2000.25], b: [5000.5, 5000.25], thickness: 200 },
+    { a: [5000.5, 5000.25], b: [1000.5, 5000.25], thickness: 200 }, { a: [1000.5, 5000.25], b: [1000.5, 2000.25], thickness: 200 },
+  ];
+  const built = buildProject(walls, { height: 3500, scale: 10 });
+  expect(built.stats.origin).toEqual([3000.5, 3500.25]);
+  expect(built.stats.scale).toBe(10);
+  expect(built.toApp(built.stats.origin)).toEqual([0, 0]);
+  expect(built.toApp([5000.5, 5000.25])).toEqual([20000, -15000]);
+});
