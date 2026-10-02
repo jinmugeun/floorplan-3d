@@ -35,6 +35,9 @@ export function bulgeToArc(p0, p1, b) {
 // 호 → 현 분할 수(규칙 ③). 12는 §18.1이 정한 값이다.
 export const arcSteps = (sweep, steps = 12) => Math.max(2, Math.ceil(steps * Math.abs(sweep) / 180));
 
+// 엔티티에 적힌 색(ACI 1~255). ByLayer(256·없음)·ByBlock(0)은 undefined — 실제 색은 레이어 색이다(2026-10-02 · 청록 창호 판정).
+const colorOf = e => (e.color >= 1 && e.color <= 255 ? e.color : undefined);
+
 export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = () => {} } = {}) {
   // polyArcs: 폴리선 bulge 호(선분으로도 쪼개 segs에 넣는다). arcs(ARC 엔티티)와 따로 두는 것은 레이어
   // 통계(classify의 arcs 수)를 바꾸지 않기 위해서다 — 문 판정만 둘을 함께 본다(openings.buildOpenings).
@@ -49,7 +52,7 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
       const layer = (!e.layer || e.layer === '0') && inherit ? inherit : (e.layer || '0');
       switch (e.type) {
         case 'LINE':
-          out.segs.push({ a: apply(m, [e.x ?? 0, e.y ?? 0]), b: apply(m, [e.x2 ?? 0, e.y2 ?? 0]), layer, src: 'LINE', depth, block: blockName, ins });
+          out.segs.push({ a: apply(m, [e.x ?? 0, e.y ?? 0]), b: apply(m, [e.x2 ?? 0, e.y2 ?? 0]), layer, src: 'LINE', depth, block: blockName, ins, color: colorOf(e) });
           break;
         case 'LWPOLYLINE':
         case 'POLYLINE': {
@@ -60,7 +63,7 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
             const p0 = pts[k], p1 = pts[(k + 1) % n];
             const b = e.bulges?.[k] || 0;
             const arc = Math.abs(b) > 1e-9 ? bulgeToArc(p0, p1, b) : null;
-            if (!arc) { out.segs.push({ a: apply(m, p0), b: apply(m, p1), layer, src: e.type, depth, block: blockName, ins }); continue; }
+            if (!arc) { out.segs.push({ a: apply(m, p0), b: apply(m, p1), layer, src: e.type, depth, block: blockName, ins, color: colorOf(e) }); continue; }
             // 규칙 ③: 호에서 나온 선분은 src에 ':bulge'를 달아 벽 후보에서 빠지게 한다
             // (조경 곡선·라운드 코너는 벽이 아니다). 실측: :bulge 선분 34,495개 = 전체 선분의
             // **49.1 %**다 — 있으나 마나 한 장치가 아니라 필수 필터다(최종 리뷰 M-3).
@@ -69,13 +72,13 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
             const cW = apply(m, arc.c), sW = apply(m, p0), eW = apply(m, p1);
             const angW = q => Math.atan2(q[1] - cW[1], q[0] - cW[0]) * 180 / Math.PI;
             const ccw = (arc.sweep > 0) !== mirrored(m);
-            out.polyArcs.push({ c: cW, r: arc.r * scaleOf(m), a0: angW(ccw ? sW : eW), a1: angW(ccw ? eW : sW), layer, depth, block: blockName, ins });
+            out.polyArcs.push({ c: cW, r: arc.r * scaleOf(m), a0: angW(ccw ? sW : eW), a1: angW(ccw ? eW : sW), layer, depth, block: blockName, ins, color: colorOf(e) });
             const nSeg = arcSteps(arc.sweep, steps);
             let prev = p0;
             for (let s = 1; s <= nSeg; s++) {
               const ang = (arc.a0 + arc.sweep * s / nSeg) * Math.PI / 180;
               const q = [arc.c[0] + arc.r * Math.cos(ang), arc.c[1] + arc.r * Math.sin(ang)];
-              out.segs.push({ a: apply(m, prev), b: apply(m, q), layer, src: `${e.type}:bulge`, depth, block: blockName, ins });
+              out.segs.push({ a: apply(m, prev), b: apply(m, q), layer, src: `${e.type}:bulge`, depth, block: blockName, ins, color: colorOf(e) });
               prev = q;
             }
           }
@@ -91,12 +94,12 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
           out.arcs.push({
             c: apply(m, [e.x ?? 0, e.y ?? 0]), r: (e.r ?? 0) * scaleOf(m),
             a0: flip ? rr - s1 : s0 + rr, a1: flip ? rr - s0 : s1 + rr,
-            layer, depth, block: blockName, ins,
+            layer, depth, block: blockName, ins, color: colorOf(e),
           });
           break;
         }
         case 'CIRCLE':
-          out.circles.push({ c: apply(m, [e.x ?? 0, e.y ?? 0]), r: (e.r ?? 0) * scaleOf(m), layer, depth, block: blockName, ins });
+          out.circles.push({ c: apply(m, [e.x ?? 0, e.y ?? 0]), r: (e.r ?? 0) * scaleOf(m), layer, depth, block: blockName, ins, color: colorOf(e) });
           break;
         case 'INSERT': {
           const sx = e.xscale ?? 1, sy = e.yscale ?? 1;
@@ -113,10 +116,10 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
           break;
         }
         case 'TEXT': case 'MTEXT':
-          out.texts.push({ p: apply(m, [e.x ?? 0, e.y ?? 0]), h: (e.r ?? 0) * scaleOf(m), text: e.text ?? '', layer, depth, block: blockName, ins });
+          out.texts.push({ p: apply(m, [e.x ?? 0, e.y ?? 0]), h: (e.r ?? 0) * scaleOf(m), text: e.text ?? '', layer, depth, block: blockName, ins, color: colorOf(e) });
           break;
-        case 'HATCH': out.hatches.push({ layer, depth, block: blockName, ins }); break;
-        case 'DIMENSION': out.dims.push({ layer, depth, block: blockName, ins }); break;
+        case 'HATCH': out.hatches.push({ layer, depth, block: blockName, ins, color: colorOf(e) }); break;
+        case 'DIMENSION': out.dims.push({ layer, depth, block: blockName, ins, color: colorOf(e) }); break;
         case 'ATTRIB': case 'ATTDEF': case 'SEQEND': case 'VERTEX': break;
         // SPLINE·ELLIPSE는 **세기만 하고 만들지 않는다**: 실측 5,261개가 전부 기구 윤곽선이고
         // 벽에는 하나도 없다. 제어점 폴리라인 근사는 잘못 그릴 위험이 이득보다 크다(§18.10).

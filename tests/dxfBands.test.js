@@ -241,6 +241,21 @@ test('창틀만 남은 run은 벽 면 밖으로 조금 삐져나와도 겹치는
   expect(bandRuns(wallBands(buildFaces(segs, P), P, new Set(['WIN'])), P)[0].op).toBe(true);
 });
 
+// 2026-10-02 신상중: 미닫이문 문짝(레이어 `4` · 폭 100)이 200 mm 칸막이 면에서 12 mm 비껴 그려져 겹침이 88 mm였다 —
+// tMin(90)에 2 mm 모자라 문짝 띠가 제 줄(두께 100 벽)로 섰다. 창호 선만으로 된 run은 좁은 쪽의 절반만 겹쳐도 그 벽의 것이다.
+test('창호 선만으로 된 run은 벽 띠와 좁은 쪽의 절반 이상 겹치면 같은 벽이다(tMin 하한 없음)', () => {
+  const wallRun = run(0.5, 2400.5, 0.25, 200.25), leaf = { ...run(2550.5, 4250.5, -11.75, 88.25), op: true };
+  const r = wallsOfRuns([wallRun, leaf], P);
+  expect(r.chains).toBe(1);
+  expect(r.sections).toHaveLength(1);
+  expect(r.sections[0].t1).toBeCloseTo(4250.5, 6);
+  expect(r.sections[0].hi - r.sections[0].lo).toBeCloseTo(200, 6);
+  // 벽 선이 든 run이면 예전처럼 tMin 이상 겹쳐야 한다(88 mm 겹침은 다른 벽이다)
+  expect(wallsOfRuns([wallRun, { ...leaf, op: false }], P).chains).toBe(2);
+  // 창호 run이라도 절반 미만으로 겹치면 다른 줄이다
+  expect(wallsOfRuns([wallRun, { ...run(2550.5, 4250.5, -59.75, 40.25), op: true }], P).chains).toBe(2);
+});
+
 test('끝 구간이 얇아지면(이웃에 품기지만 샌드위치가 아니다) 진짜 두께 변화다', () => {
   const r = wallsOfRuns([run(0.5, 5000.5, 0.25, 405.25), run(5100.5, 6800.5, 0.25, 200.25)], P);
   expect(r.sections).toHaveLength(2);

@@ -161,8 +161,9 @@ export function bandRuns(items, P = DXF_PARAMS) {
 // 이어져야 한다). 같은 벽 = 두 면이 bandTol 안이거나(띠가 같다), 공통 핵심이 좁은 쪽의 절반 이상 ∧ tMin 이상.
 // 틈 ≤ bridge이고 가장 가까운 짝부터 — run마다 앞뒤 이웃은 하나씩이다.
 const same = (a, b, P) => Math.abs(a.lo - b.lo) <= P.bandTol && Math.abs(a.hi - b.hi) <= P.bandTol;
+// 창호 선만으로 된 run(op)은 tMin 하한 없이 좁은 쪽의 절반만 겹치면 된다 — 미닫이문 문짝·창틀은 벽 면에서 비껴 그린다.
 const compatible = (a, b, P) => same(a, b, P) ||
-  Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo) >= Math.max(P.tMin, 0.5 * Math.min(a.hi - a.lo, b.hi - b.lo));
+  Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo) >= Math.max(a.op || b.op ? 0 : P.tMin, 0.5 * Math.min(a.hi - a.lo, b.hi - b.lo));
 // evidence(t0, t1, lo, hi): 틈(t0..t1, 띠 lo..hi)에 문·창 근거가 있는가. 주면 줄 **끝**의 기둥 꼴 토막(길이 < minWall
 // 또는 < colRatio × 두께)이 근거 없는 다리(≥ gapMin)로만 붙어 있을 때 떼어 제 줄로 둔다 — 벽 끝에서 빈 바닥 너머
 // 기둥까지 없는 벽이 서지 않게(2026-09-30 실파일 현관). 안 주면(근거를 볼 수 없는 도면) 예전처럼 잇는다.

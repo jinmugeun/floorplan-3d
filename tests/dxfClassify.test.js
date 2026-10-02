@@ -143,3 +143,62 @@ test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되�
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
   expect(Object.keys(DXF_PARAMS)).toHaveLength(32);
 });
+
+// ── 2026-10-02 다른 사무소 도면 둘(신상중 · 내곡중)에서 드러난 판정 오류 ──────────────────────────
+// 이중선 방(벽 두께 t)의 선분들: 바깥 사각형 w × h와 안쪽 사각형.
+const rectSegs = (layer, x0, y0, w, h, extra = {}) => [
+  [[x0, y0], [x0 + w, y0]], [[x0 + w, y0], [x0 + w, y0 + h]], [[x0 + w, y0 + h], [x0, y0 + h]], [[x0, y0 + h], [x0, y0]],
+].map(([a, b]) => ({ a, b, layer, src: 'LINE', depth: 0, block: null, ...extra }));
+const room = (layer, x0 = 0.5, y0 = 0.25, w = 9000, h = 6000, t = 200, extra = {}) =>
+  [...rectSegs(layer, x0, y0, w, h, extra), ...rectSegs(layer, x0 + t, y0 + t, w - 2 * t, h - 2 * t, extra)];
+
+// 내곡중: 선 14,829개가 든 유일한 레이어 `건축`에 DIMENSION이 19개 있다는 이유로 레이어 전체가 "치수"가 됐다.
+test('치수 엔티티가 선분보다 적은 레이어는 치수 레이어가 아니다', () => {
+  const segs = Array.from({ length: 30 }, () => seg('WAL', 900.5));
+  const few = layerStats(docOf(layerRec('WAL')), exOf({ segs, dims: [{ layer: 'WAL' }, { layer: 'WAL' }] }));
+  expect(few[0].role).toBe('wall');
+  // 치수가 선분 이상이면(치수 전용 레이어) 예전처럼 dim이다.
+  const pure = layerStats(docOf(layerRec('A1')), exOf({ segs: [seg('A1', 900.5)], dims: [{ layer: 'A1' }, { layer: 'A1' }] }));
+  expect(pure[0].role).toBe('dim');
+});
+
+// 내곡중: 벽 키워드 레이어가 하나도 없다(모든 선이 `건축`). 이름으로 못 찾으면 **내용**으로 고른다 —
+// 이름이 아무것도 말하지 않는(other) 레이어 가운데 평행 짝과 나란히 가는 긴 선이 가장 많은 레이어.
+test('벽 키워드 레이어가 없으면 평행 짝이 가장 많은 이름 없는 레이어가 벽이다', () => {
+  const doc = docOf(layerRec('건축', 8), layerRec('kitchen', 8), layerRec('실명', 1), layerRec('메모', 7));
+  const segs = [...room('건축'), ...room('kitchen', 2000.5, 2000.25, 1200, 800, 100), seg('메모', 5000.5)];
+  const rows = layerStats(doc, exOf({ segs, texts: [{ layer: '실명' }], dims: [{ layer: '건축' }] }));
+  const by = Object.fromEntries(rows.map(r => [r.name, r]));
+  expect([by.건축.keyRole, by.건축.role, by.건축.guessed]).toEqual(['other', 'wall', true]);
+  expect(by.kitchen.role).toBe('equip');                 // 이름이 기구인 레이어는 짝이 있어도 벽이 아니다
+  expect(by.메모.role).toBe('other');                     // 짝 없는 외줄은 벽이 아니다
+  expect([...defaultChecked(rows)]).toEqual(['건축']);
+  // 평행 짝이 훨씬 적은 다른 이름 없는 레이어(가장 많은 것의 1/4 미만)는 함께 올리지 않는다.
+  const two = layerStats(docOf(layerRec('A1'), layerRec('A2')), exOf({ segs: [...room('A1', 0.5, 0.25, 30000, 20000), ...room('A2', 40000.5, 0.25, 1500, 1200, 100)] }));
+  expect(two.filter(r => r.role === 'wall').map(r => r.name)).toEqual(['A1']);
+  // 벽 키워드 레이어가 하나라도 있으면 내용으로 올리지 않는다(이름이 이긴다).
+  const named = layerStats(docOf(layerRec('WAL'), layerRec('A1')), exOf({ segs: [...room('WAL'), ...room('A1', 20000.5)] }));
+  expect(named.find(r => r.name === 'A1').role).toBe('other');
+  expect(named.find(r => r.name === 'A1').guessed).toBeUndefined();
+  // 짝이 하나도 없으면 아무것도 올리지 않는다(walls.js의 도형 추정 폴백으로 간다).
+  expect([...defaultChecked(layerStats(docOf(layerRec('A1')), exOf({ segs: [seg('A1', 5000.5)] })))]).toEqual([]);
+});
+
+// 신상중: 창이 `WID`(역할 기타)에 있어 벽이 창 자리에서 끊겼다. 두 도면의 창호 레이어 여섯이 모두 청록(ACI 4)이었다 —
+// 이름이 아무것도 말하지 않고, 선이 대부분 청록이고, 평행 짝(창틀)이 있으면 창호다. 외줄(신상중 `4` — 데크 윤곽)은 아니다.
+test('이름 없는 레이어가 청록이고 평행 짝이 있으면 창호다(선 색이 레이어 색을 이긴다)', () => {
+  const frame = (layer, extra) => room(layer, 0.5, 0.25, 9000, 6000, 100, extra);
+  const doc = docOf(layerRec('WAL', 2), layerRec('WID', 4), layerRec('4', 4), layerRec('X', 3), layerRec('Y', 4));
+  const segs = [
+    ...room('WAL', 20000.5), ...frame('WID'), seg('4', 9000.5), seg('4', 7000.5),
+    ...frame('X', { color: 4 }),            // 레이어는 초록이지만 선마다 청록을 줬다
+    ...frame('Y', { color: 9 }),            // 레이어는 청록이지만 선은 회색(사동중 WID: 문 블록 선)
+  ];
+  const by = Object.fromEntries(layerStats(doc, exOf({ segs })).map(r => [r.name, r]));
+  expect([by.WID.role, by.WID.byColor]).toEqual(['opening', true]);
+  expect(by.X.role).toBe('opening');
+  expect(by.Y.role).toBe('other');
+  expect(by['4'].role).toBe('other');
+  expect(by.WAL.role).toBe('wall');
+  expect(by.WID.cyan).toBe(8);
+});

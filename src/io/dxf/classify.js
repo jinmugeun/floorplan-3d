@@ -1,6 +1,8 @@
 // 레이어 역할 판정(§18.2): **키워드는 사전 확률, 도형이 증거, 사용자가 심판**.
+// 2026-10-02: 이름이 아무것도 말하지 않는 레이어는 내용으로 고친다(layerGuess.refineByContent — 청록 창호 · 벽 추정).
 // 이 도면의 WALL·CON·DOR·DOOR·A-WALL·WALL-FIN은 정의만 있고 엔티티가 0개이고, 실제 벽은
 // WAL·WAL-2·기존·FIN·ST-PL·BLO·COL 일곱에 흩어져 있다 — 이름만 믿는 구현은 벽 0개를 반환한다.
+import { refineByContent, CYAN } from './layerGuess.js';
 
 // 앞의 규칙이 이긴다. 비교는 소문자 부분일치다.
 export const LAYER_RULES = [
@@ -30,7 +32,9 @@ export const classifyLayer = name => {
 //     중앙값 1.0 mm)이 바로 keyRole 'other'이고, `급식기구`(16,789 · 7.1 mm)는 이름대로 equip이다.
 function shapeRole(r) {
   if (r.keyRole === 'opening') return 'opening';
-  if (r.dims > 0) return 'dim';
+  // 치수가 선분 이상일 때만 치수 레이어다(2026-10-02 내곡중: 선 14,829개가 든 유일한 레이어가 DIMENSION 19개 때문에
+  // 통째로 "치수"가 되어 벽 레이어가 0개가 됐다).
+  if (r.dims > 0 && r.dims >= r.segs) return 'dim';
   if (r.texts > r.segs) return 'text';
   if (r.keyRole === 'other' && r.segs > 1000 && r.medianSeg < 20) return 'hatch';
   return r.keyRole;
@@ -44,7 +48,7 @@ export function layerStats(doc, ex) {
     let r = rows.get(name ?? '0');
     if (!r) {
       r = { name: name ?? '0', color: 7, off: false, frozen: false, role: 'other', keyRole: 'other',
-        segs: 0, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 0, medianSeg: 0, lens: [] };
+        segs: 0, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 0, medianSeg: 0, cyan: 0, lens: [] };
       rows.set(r.name, r);
     }
     return r;
@@ -55,7 +59,12 @@ export function layerStats(doc, ex) {
     r.frozen = !!(l.flags & 1);
     r.off = r.color < 0 || r.frozen;      // §18.2: 꺼짐도 동결도 무조건 체크 해제다(배지는 하나)
   }
-  for (const s of ex.segs ?? []) { const r = get(s.layer); r.segs++; r.lens.push(Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1])); }
+  // cyan: 실제 색이 청록인 선분 수 — 선에 색이 있으면 그것이, 없으면(ByLayer) 레이어 색이 실제 색이다.
+  for (const s of ex.segs ?? []) {
+    const r = get(s.layer);
+    r.segs++; r.lens.push(Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]));
+    if ((s.color ?? Math.abs(r.color)) === CYAN) r.cyan++;
+  }
   for (const a of ex.arcs ?? []) get(a.layer).arcs++;
   for (const c of ex.circles ?? []) get(c.layer).circles++;
   for (const t of ex.texts ?? []) get(t.layer).texts++;
@@ -71,13 +80,20 @@ export function layerStats(doc, ex) {
     r.role = shapeRole(r);
     out.push(r);
   }
+  // 내용으로 고치기(청록 창호 · 이름으로 벽을 못 찾았을 때의 벽 추정) — 레이어별 선분은 필요할 때만 모은다.
+  let byLayer = null;
+  const segsOf = name => {
+    if (!byLayer) { byLayer = new Map(); for (const s of ex.segs ?? []) (byLayer.get(s.layer) ?? byLayer.set(s.layer, []).get(s.layer)).push(s); }
+    return byLayer.get(name) ?? [];
+  };
+  refineByContent(out, segsOf);
   // 도형이 하나도 없는 정의는 행이 아니다(사전 검토 I-4): 실파일의 레이어 정의 101개 중
   // 도형이 실린 것은 45개뿐이고, 빈 정의 56줄을 체크리스트에 늘어놓으면 §18.6의 수치가 무의미해진다.
   return out.filter(r => r.segs || r.arcs || r.circles || r.texts || r.dims || r.inserts)
     .sort((a, b) => b.segs - a.segs || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));   // 코드포인트 비교 — localeCompare는 실행 로캘에 따라 순서가 달라 CI(en-US-POSIX)와 ko-KR이 어긋난다(Task 8 리뷰 C-1)
 }
 
-// 기본 체크 = 벽 역할 · 켜짐 · 선분 > 0. 실파일에서 정확히 일곱 개가 켜진다.
+// 기본 체크 = 벽 역할 · 켜짐 · 선분 > 0. 실파일에서 정확히 일곱 개가 켜진다. 내용으로 추정한 벽(guessed)도 벽 역할이다.
 export const defaultChecked = rows => new Set(rows.filter(r => r.role === 'wall' && !r.off && r.segs > 0).map(r => r.name));
 
 // 역할별 레이어 이름. checked를 주면 교집합이다(개구부 보조 면선이 이 함수를 쓴다 — §18.3-3).

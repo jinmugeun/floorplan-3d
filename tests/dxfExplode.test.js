@@ -205,3 +205,17 @@ test('거울 부모 아래 INSERT의 rot은 합성 행렬의 각이다', () => {
   expect(plain.mirrored).toBe(false);
   expect(plain.rot).toBeCloseTo(50, 6);
 });
+// 2026-10-02: 레이어 판정이 선의 실제 색을 본다(청록 = 창호). 색은 엔티티에 적힌 값(1~255)만 옮기고,
+// ByLayer(256·없음)·ByBlock(0)은 비워 둔다 — 그때의 실제 색은 레이어 색이다(classify.layerStats).
+test('전개된 선분·호는 엔티티에 적힌 색(1~255)을 달고, ByLayer·ByBlock은 비운다', () => {
+  const doc = {
+    blocks: new Map([block('W', [{ ...line('WID', 0, 0, 900.5, 0), color: 4 }, { ...line('WID', 0, 100.5, 900.5, 100.5), color: 0 },
+      { type: 'LWPOLYLINE', layer: 'WID', pts: [[0, 0], [10.5, 0], [10.5, 10.5]], bulges: [0, 1], color: 9 }, { type: 'ARC', layer: 'WID', x: 0, y: 0, r: 5, a0: 0, a1: 90, color: 4 }])]),
+    entities: [insert('W', 'WID', 0, 0), { ...line('WAL', 0, 0, 5.5, 0), color: 256 }, line('WAL', 0, 0, 7.5, 0)],
+  };
+  const ex = explode(doc);
+  expect(ex.segs.filter(s => s.src === 'LINE').map(s => s.color)).toEqual([4, undefined, undefined, undefined]);
+  expect(ex.segs.filter(s => s.src.startsWith('LWPOLYLINE')).every(s => s.color === 9)).toBe(true);
+  expect(ex.polyArcs[0].color).toBe(9);
+  expect(ex.arcs[0].color).toBe(4);
+});
