@@ -134,9 +134,10 @@ const thicknessHist = runs => {
 };
 
 // 2~10단계를 한 줄로. 결과 좌표는 DXF 그대로다.
-export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new Set(), liveLayers = null, params: P = DXF_PARAMS, thickness = DXF_PARAMS.thickness } = {}) {
+// roi: 도면 후보(regions.planRegions) 하나. 안 주면 가장 큰 덩어리다.
+export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new Set(), liveLayers = null, params: P = DXF_PARAMS, thickness = DXF_PARAMS.thickness, roi: picked = null } = {}) {
   const live = liveLayers ? ex.segs.filter(s => liveLayers.has(s.layer)) : ex.segs;
-  const roi = largestCluster(live, ROI_LINK);   // 연결성 기반(C-7)
+  const roi = picked ?? largestCluster(live, ROI_LINK);   // 연결성 기반(C-7)
   const inRoi = p => !roi || (p[0] >= roi.x0 && p[0] <= roi.x1 && p[1] >= roi.y0 && p[1] <= roi.y1);
   const usable = s => inRoi(s.a) && inRoi(s.b) && !s.src?.endsWith(':bulge');   // 조경 곡선·라운드 코너는 벽이 아니다
   let cand = ex.segs.filter(s => usable(s) && (

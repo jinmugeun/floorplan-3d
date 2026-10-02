@@ -35,15 +35,19 @@ export const ROI_LINK = 500;
 // inRoi는 NaN 비교가 전부 false라 **모든 선분을 버린다** — 오류 없이 벽 0개가 나온다.
 // 던지지 않고 그런 선분만 세지 않는다(정상 선분으로 만든 덩어리는 그대로 남는다).
 const finite = p => Number.isFinite(p[0]) && Number.isFinite(p[1]);
-export function largestCluster(segs, link = ROI_LINK) {
-  const ok = segs.filter(s => finite(s.a) && finite(s.b));
-  if (!ok.length) return null;
+// 모든 덩어리. list는 크기(선분 길이 합 · 같으면 끝점 수) 내림차순이고, of[i]는 segs[i]가 든 덩어리의 list 번호다
+// (비유한 좌표 선분은 -1). regions.js가 덩어리마다 벽 선 길이를 재서 "도면 후보"를 고른다.
+export function clusters(segs, link = ROI_LINK) {
+  const of = new Int32Array(segs.length).fill(-1);
+  const ok = [];
+  segs.forEach((s, i) => { if (finite(s.a) && finite(s.b)) ok.push(i); });
+  if (!ok.length) return { list: [], of };
   const cell = p => `${Math.floor(p[0] / link)},${Math.floor(p[1] / link)}`;
   const par = new Map();
   const find = x => { while (par.get(x) !== x) { par.set(x, par.get(par.get(x))); x = par.get(x); } return x; };
   const uni = (x, y) => { const a = find(x), b = find(y); if (a !== b) par.set(a, b); };
-  for (const s of ok) for (const p of [s.a, s.b]) { const k = cell(p); if (!par.has(k)) par.set(k, k); }
-  for (const s of ok) uni(cell(s.a), cell(s.b));                       // ①
+  for (const i of ok) for (const p of [segs[i].a, segs[i].b]) { const k = cell(p); if (!par.has(k)) par.set(k, k); }
+  for (const i of ok) uni(cell(segs[i].a), cell(segs[i].b));           // ①
   for (const k of [...par.keys()]) {                                     // ②
     const [i, j] = k.split(',').map(Number);
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
@@ -52,18 +56,24 @@ export function largestCluster(segs, link = ROI_LINK) {
     }
   }
   const g = new Map();
-  for (const s of ok) for (const p of [s.a, s.b]) {
-    const r = find(cell(p));
-    const o = g.get(r) ?? { n: 0, len: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
-    o.n++;
-    o.x0 = Math.min(o.x0, p[0]); o.x1 = Math.max(o.x1, p[0]);            // bbox는 칸이 아니라 실제 끝점이다
-    o.y0 = Math.min(o.y0, p[1]); o.y1 = Math.max(o.y1, p[1]);
+  for (const i of ok) {
+    const s = segs[i], r = find(cell(s.a));
+    const o = g.get(r) ?? { n: 0, len: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, idx: [] };
+    for (const p of [s.a, s.b]) {
+      o.n++;
+      o.x0 = Math.min(o.x0, p[0]); o.x1 = Math.max(o.x1, p[0]);          // bbox는 칸이 아니라 실제 끝점이다
+      o.y0 = Math.min(o.y0, p[1]); o.y1 = Math.max(o.y1, p[1]);
+    }
+    // 크기 = 선분 길이의 합(같으면 끝점 수). 끝점 수로만 재면 짧은 선이 빽빽한 기호가 긴 벽 몇 개인 건물을 이긴다.
+    o.len += Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+    o.idx.push(i);
     g.set(r, o);
   }
-  // 크기 = 선분 길이의 합(같으면 끝점 수). 끝점 수로만 재면 짧은 선이 빽빽한 기호가 긴 벽 몇 개인 건물을 이긴다.
-  for (const s of ok) g.get(find(cell(s.a))).len += Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
-  return [...g.values()].sort((a, b) => b.len - a.len || b.n - a.n)[0];
+  const sorted = [...g.values()].sort((a, b) => b.len - a.len || b.n - a.n);
+  const list = sorted.map(({ idx, ...c }, k) => { for (const i of idx) of[i] = k; return c; });
+  return { list, of };
 }
+export const largestCluster = (segs, link = ROI_LINK) => clusters(segs, link).list[0] ?? null;
 
 // 방향 bin → 법선 오프셋 클러스터 → 구간 투영 → 틈 ≤ faceGap(작도 이음매)으로 잇기.
 export function buildFaces(segs, P = DXF_PARAMS) {

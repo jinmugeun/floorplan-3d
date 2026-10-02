@@ -251,6 +251,10 @@ export const DXF_ERRORS = { 'not-dxf': DXF_NOT_DXF, binary: DXF_BINARY, dwg: DXF
 export const DXF_MANY_SHEETS = '도면 좌표 범위가 너무 넓습니다 — 가장 큰 도면 한 장만 가져옵니다';
 export const DXF_UNITS_GUESS = '도면에 단위가 없어 mm로 봅니다. 다르면 위에서 바꿔 주세요';
 export const DXF_LAYERS_GUESSED = '벽 레이어를 찾지 못해 도형으로 추정했습니다. 체크를 확인해 주세요';
+// 2026-10-02: 한 파일에 도면이 여러 벌일 때(신상중: 같은 건물의 두 안) 고르는 칸의 알림과 항목.
+export const DXF_MANY_PLANS = n => `이 파일에 도면이 ${n}개 있습니다. 가져올 도면을 골라 주세요`;
+export const DXF_REGION = (i, wM, hM, hint) => `도면 ${i} · ${wM} m × ${hM} m${hint ? ` · ${hint}` : ''}`;
+export const DXF_REGION_LABEL = '도면';
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
 export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
 export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;
@@ -267,6 +271,9 @@ export const DXF_STEP_ROOMS = '방 만드는 중';
 export const DXF_PHASE_STEP = { decode: 1, parse: 2, explode: 2, walls: 3, rooms: 4, trace: 4 };
 export const DXF_BADGE_OFF = '꺼진 레이어';
 export const DXF_BADGE_HATCH = '해치(벽 채움)';
+// 이름이 아니라 내용으로 판정한 레이어(layerGuess.refineByContent) — 사람이 확인할 줄이다.
+export const DXF_BADGE_GUESSED = '도형으로 추정';
+export const DXF_BADGE_COLOR = '색으로 판정';
 
 // 시작 화면의 네 번째 동작 카드(§18.7). 문구는 §18.7이 글자로 정했다.
 export const DXF_CARD_TITLE = 'DXF 도면 가져오기';

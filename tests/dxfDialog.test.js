@@ -7,7 +7,7 @@ import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_S
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
-import { DXF_BADGE_OFF, DXF_BADGE_HATCH } from '../src/ui/messages.js';
+import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION } from '../src/ui/messages.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -440,4 +440,87 @@ test('닫히지 않은 공간 수를 검토 화면에 적는다', async () => {
   await flush();
   expect(q('unmatched').hidden).toBe(true);
   expect(q('unmatched').textContent).toBe('');
+});
+// ── 2026-10-02 배포 사이트 실측에서 나온 것들 ────────────────────────────────────────────────
+const REGIONS = [
+  { size: [38630, 20684], lenM: 3724, wallM: 258, hint: '식당 (196석) · 슬로프' },
+  { size: [37830, 20548], lenM: 1342, wallM: 247, hint: '식당 (168석)' },
+];
+
+// 신상중: 같은 건물의 두 안이 한 파일에 있었고 선이 많은 쪽이 조용히 골라졌다.
+test('도면 후보가 둘 이상이면 고르는 칸과 알림이 나오고, 바꾸면 그 번호로 다시 추출한다', async () => {
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, size: REGIONS[0].size, regions: REGIONS } });
+  await flush();
+  expect(q('regionRow').hidden).toBe(false);
+  const opts = [...q('region').options];
+  expect(opts.map(o => o.textContent)).toEqual([DXF_REGION(1, '38.6', '20.7', REGIONS[0].hint), DXF_REGION(2, '37.8', '20.5', REGIONS[1].hint)]);
+  expect(q('notice').textContent).toBe(DXF_MANY_PLANS(2));
+  expect(q('notice').hidden).toBe(false);
+  const extracts = () => w.posted.filter(m => m.type === 'extract');
+  expect(extracts()[0].opts.region).toBe(0);
+  w.emit(EXTRACTED);
+  await flush();
+  q('region').value = '1';
+  q('region').dispatchEvent(new Event('change', { bubbles: true }));
+  expect(q('head').textContent).toContain('37.8 m × 20.5 m');
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(extracts()[1].opts.region).toBe(1);
+});
+
+test('도면 후보가 하나면 고르는 칸은 숨는다', async () => {
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, regions: [REGIONS[0]] } });
+  await flush();
+  expect(q('regionRow').hidden).toBe(true);
+  expect(q('notice').hidden).toBe(true);
+  expect(w.posted.find(m => m.type === 'extract').opts.region).toBe(0);
+});
+
+// 내곡중: 벽 레이어를 이름으로 못 찾아 내용으로 고른 경우(행의 guessed) — 불러오자마자 알리고 행에 배지를 단다.
+test('내용으로 고른 벽 레이어는 불러오자마자 알리고 배지를 단다', async () => {
+  const rows = [row('건축', 'wall', 14829, { keyRole: 'other', guessed: true }), row('WID', 'opening', 2584, { keyRole: 'other', byColor: true, color: 4 }), row('실명', 'text', 0, { texts: 23 })];
+  const { w, q, root } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, layers: rows, checked: ['건축'] } });
+  await flush();
+  expect(q('notice').textContent).toBe(DXF_LAYERS_GUESSED);
+  const labels = [...root.querySelectorAll('.dxf-layer')].map(l => l.textContent);
+  expect(labels[0]).toContain(DXF_BADGE_GUESSED);
+  expect(labels[1]).toContain(DXF_BADGE_COLOR);
+  expect(labels[2]).not.toContain(DXF_BADGE_GUESSED);
+  expect(w.posted.find(m => m.type === 'extract').opts.layers).toEqual(['건축']);
+});
+
+// 코드 리뷰 2026-09-29에서 재현: 층고를 바꾸고 곧바로 [가져오기]를 누르면 옛 결과가 들어갔다(디바운스 중 버튼이
+// 켜져 있었고, 앞 재추출의 응답이 뒤 재추출을 기다리는 동안 버튼을 켰다). 바뀐 순간부터 최신 결과가 올 때까지 잠근다.
+test('옵션·체크를 바꾸면 최신 결과가 올 때까지 [가져오기]가 잠긴다', async () => {
+  const onImported = vi.fn(async () => true);
+  const { w, q } = open({ file: fileOf(), onImported });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit(EXTRACTED);
+  await flush();
+  expect(q('import').disabled).toBe(false);
+  q('height').value = '2700';
+  q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  expect(q('import').disabled).toBe(true);                 // 디바운스가 돌기도 전에 잠긴다
+  q('import').click();
+  await flush();
+  expect(onImported).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(250);
+  await flush();                                            // 재추출 #2가 나갔다
+  q('autoNames').click();                                   // 그 응답이 오기 전에 또 바꾼다
+  w.emit(EXTRACTED);                                        // #2의 응답 — 최신이 아니다
+  await flush();
+  expect(q('import').disabled).toBe(true);
+  vi.advanceTimersByTime(250);
+  await flush();
+  w.emit(EXTRACTED);                                        // #3(최신)의 응답
+  await flush();
+  expect(q('import').disabled).toBe(false);
 });

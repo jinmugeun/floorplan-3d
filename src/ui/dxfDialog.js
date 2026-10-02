@@ -8,7 +8,7 @@ import { traceBackground } from '../io/dxf/trace.js';
 import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
-import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED,
+import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED, DXF_MANY_PLANS, DXF_REGION, DXF_REGION_LABEL,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP } from './messages.js';
 
 const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
@@ -39,7 +39,8 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
       </div>
       <div class="dxf-col"><canvas name="preview" width="560" height="420" aria-label="추출 미리보기"></canvas></div>
       <div class="dxf-col dxf-opts">
-        <label>층고 <input type="number" name="height" min="${DXF_HEIGHT_RANGE[0]}" max="${DXF_HEIGHT_RANGE[1]}" step="10" value="${dxfHeight()}"> mm</label>
+        <label name="regionRow" hidden>${DXF_REGION_LABEL} <select name="region"></select></label>
+        <label>층고<input type="number" name="height" min="${DXF_HEIGHT_RANGE[0]}" max="${DXF_HEIGHT_RANGE[1]}" step="10" value="${dxfHeight()}"> mm</label>
         <label>기본 두께 <input type="number" name="thickness" min="${DXF_THICKNESS_RANGE[0]}" max="${DXF_THICKNESS_RANGE[1]}" step="10" value="200"> mm</label>
         <label>단위 <select name="units">${UNITS.map(([n, v]) => `<option value="${v}">${esc(n)}</option>`).join('')}</select></label>
         <label><input type="checkbox" name="preset" checked> 벽만 남기기</label>
@@ -64,6 +65,9 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   const thicknessMm = () => clampTo(Number(q('thickness').value) || 200, DXF_THICKNESS_RANGE);
   const client = createDxfClient({ workerFactory });
   let summary = null, initial = new Set(), checked = new Set(), last = null, timer = 0, closed = false, importing = false;
+  // want: 지금까지 요청된 재추출의 번호. 결과는 **그 번호가 아직 최신일 때만** 가져올 수 있다 — 옵션을 바꾼 순간부터
+  // 최신 결과가 올 때까지 [가져오기]를 잠근다(2026-09-29 리뷰: 층고를 바꾸고 곧바로 누르면 옛 결과가 들어갔다).
+  let want = 0, pending = false;
 
   const setError = text => { const e = q('error'); e.textContent = text ?? ''; e.hidden = !text; };
   const showError = code => setError(code ? (DXF_ERRORS[code] ?? DXF_ERRORS.oom) : null);
@@ -88,6 +92,18 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     q('preset').checked = checked.size === def.size && [...def].every(n => checked.has(n));
   };
   const renderLayers = () => { q('layers').innerHTML = summary ? layerListHtml(summary.layers, checked) : ''; syncPreset(); };
+  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정.
+  const notes = () => {
+    const n = summary?.regions?.length ?? 0;
+    const guessed = summary?.layers?.some(r => r.guessed) || last?.stats?.guessed;
+    notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS].filter(Boolean).join(' / ') || null);
+  };
+  const regionIdx = () => Number(q('region').value) || 0;
+  const km = mm => (mm / 1000).toFixed(1);
+  const setHead = () => {
+    const size = summary.regions?.[regionIdx()]?.size ?? summary.size;
+    q('head').textContent = DXF_HEAD(summary.title, km(size[0]), km(size[1]), unitName(summary.unitScale), summary.insunits, summary.ver);
+  };
 
   const render = () => {
     if (!last) return;
@@ -104,7 +120,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     un.hidden = !u;
     q('hist').textContent = (stats.thickness ?? []).slice(0, 4).map(([mm, c]) => `${mm} mm×${c}`).join(' · ');
     q('ms').textContent = [summary?.ms, stats.ms].filter(Boolean).flatMap(o => Object.entries(o)).map(([k, v]) => `${k} ${v}ms`).join(' · ');
-    if (stats.guessed) notice(DXF_LAYERS_GUESSED);
+    notes();
     drawDxfPreview(q('preview'), { trace, walls: floor.walls, rooms: floor.rooms, openEnds: stats.openEnds ?? [] });
   };
 
@@ -113,8 +129,10 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     showError(null);
     q('import').disabled = true;
     progress(3);
+    const id = want;
     client.extract({
       layers: [...checked],
+      region: regionIdx(),
       thickness: thicknessMm(),
       height: heightMm(),
       scale: Number(q('units').value) || summary.unitScale,
@@ -130,11 +148,13 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
         // 확인해 주세요"라고 하는데 켜진 줄이 하나도 없으면 확인할 것이 없다(리뷰 F-5).
         const guessed = m.stats?.guessed ? (m.stats.guessedLayers ?? []) : [];
         if (guessed.length) { for (const n of guessed) { checked.add(n); initial.add(n); } renderLayers(); }
-        progress(0); render(); q('import').disabled = false;
+        progress(0); render();
+        // 이 응답보다 뒤에 바뀐 것이 있으면(want가 앞서 있다) 아직 가져올 수 없다 — 최신 결과를 기다린다.
+        if (id === want) { pending = false; q('import').disabled = false; }
       })
       .catch(e => { if (!closed && !quiet(e)) { progress(0); warnErr(e); showError(e.code); } });
   };
-  const schedule = () => { clearTimeout(timer); timer = setTimeout(runExtract, DEBOUNCE); };
+  const schedule = () => { want++; pending = true; q('import').disabled = true; clearTimeout(timer); timer = setTimeout(runExtract, DEBOUNCE); };
 
   async function load(f) {
     if (!f || closed) return;
@@ -147,9 +167,14 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
       initial = new Set(summary.checked);
       checked = new Set(summary.checked);
       q('units').value = String(summary.unitScale);
-      q('head').textContent = DXF_HEAD(summary.title, (summary.size[0] / 1000).toFixed(1), (summary.size[1] / 1000).toFixed(1), unitName(summary.unitScale), summary.insunits, summary.ver);
+      // 도면 후보가 둘 이상이면 고르는 칸을 연다(첫 후보 = 가장 큰 덩어리가 기본값).
+      const regions = summary.regions ?? [];
+      q('region').innerHTML = regions.map((r, i) => `<option value="${i}">${esc(DXF_REGION(i + 1, km(r.size[0]), km(r.size[1]), r.hint))}</option>`).join('');
+      q('regionRow').hidden = regions.length < 2;
+      setHead();
       renderLayers();
-      notice(summary.manySheets ? DXF_MANY_SHEETS : summary.unitsGuessed ? DXF_UNITS_GUESS : null);
+      notes();
+      want++; pending = false;
       runExtract();
     } catch (e) { if (!closed && !quiet(e)) { progress(0); warnErr(e); showError(e.code); } }
   }
@@ -160,7 +185,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   async function doImport() {
     // 두 번 눌러도 한 번이다(리뷰 F-1): 두 번째 클릭은 래치가 막고 버튼은 기다리는 동안 잠긴다.
     // 막지 않으면 교체도 토스트도 두 번이고, 2048 px 래스터가 두 번 돌아 §18.9의 300 ms를 넘는다.
-    if (!last || closed || importing) return;
+    if (!last || closed || importing || pending) return;
     importing = true;
     q('import').disabled = true;
     const { project, stats, trace } = last;
@@ -208,6 +233,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     renderLayers(); schedule();
   });
   for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'openings', 'trace']) q(n).addEventListener('change', schedule);
+  q('region').addEventListener('change', () => { setHead(); schedule(); });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel(); } });
 
   const trap = focusTrap(root, { focus: '[name="file"]' });

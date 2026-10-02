@@ -6,7 +6,7 @@ import { decodeDxf, DxfError } from './decode.js';
 import { parseDxf, headerNum } from './parse.js';
 import { explode } from './explode.js';
 import { layerStats, defaultChecked, roleLayers } from './classify.js';
-import { largestCluster } from './faces.js';
+import { planRegions } from './regions.js';
 import { extractWalls } from './walls.js';
 import { buildProject, unitScale, drawingTitle } from './toProject.js';
 import { buildOpenings } from './openings.js';
@@ -36,7 +36,12 @@ function doParse(buf, fileName) {
   const tExplode = performance.now() - t2;
   rows = layerStats(doc, ex);
   const live = new Set(rows.filter(r => !r.off).map(r => r.name));
-  const roi = largestCluster(ex.segs.filter(s => live.has(s.layer)));   // 연결성 기반(C-7)
+  // 도면 후보(2026-10-02): 벽 선이 든 덩어리는 모두 후보이고 첫 후보(가장 큰 것)가 기본값이다 — 고르는 것은 검토 창이다.
+  const checked = defaultChecked(rows);
+  // 후보를 구별해 주는 문자는 실명이 놓이는 레이어(문자·기타·벽 역할)에서만 고른다 — 기구 라벨은 글자가 커도 힌트가 아니다.
+  const nameLayers = new Set(rows.filter(r => r.role === 'text' || r.role === 'other' || r.role === 'wall').map(r => r.name));
+  const regions = planRegions(ex.segs.filter(s => live.has(s.layer)), checked, ex.texts.filter(t => nameLayers.has(t.layer)));
+  const roi = regions[0] ?? null;
   let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
   for (const s of ex.segs) for (const p of [s.a, s.b]) {
     bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]);
@@ -49,10 +54,11 @@ function doParse(buf, fileName) {
   // 제목 후보는 역할이 text·other인 레이어뿐이다(사전 검토 I-6 — 높이만 보면 급식기구의
   // 지시선 라벨 '퇴식동선'(h 1,725)이 제목 '경산 사동중'(레이어 T · h 980)을 이긴다).
   const titleLayers = new Set(rows.filter(r => r.role === 'text' || r.role === 'other').map(r => r.name));
-  meta = { fileName, scale: u.scale, roi, live, titleLayers };
+  meta = { fileName, scale: u.scale, roi, regions, live, titleLayers };
   post({ type: 'parsed', summary: {
     ver, codepage, encoding, insunits, unitScale: u.scale, unitsGuessed: u.guessed,
-    layers: rows, checked: [...defaultChecked(rows)],
+    layers: rows, checked: [...checked],
+    regions: regions.map(r => ({ size: [Math.round((r.x1 - r.x0) * u.scale), Math.round((r.y1 - r.y0) * u.scale)], lenM: Math.round(r.len / 1000), wallM: Math.round(r.wallLen / 1000), hint: r.hint })),
     blocks: doc.counts.blocks, blocksUsed: doc.counts.blocksUsed, entities: doc.counts.entities,
     segs: ex.segs.length, arcs: ex.arcs.length, texts: ex.texts.length,
     others: [...ex.others], skipped: [...ex.skipped],
@@ -68,12 +74,19 @@ function doExtract(opts = {}) {
   const t0 = performance.now();
   progress('walls', 0);
   const openRole = roleLayers(rows, 'opening');
-  const r = extractWalls(ex, {
-    wallLayers: new Set(opts.layers ?? []),
+  const run = layers => extractWalls(ex, {
+    wallLayers: layers,
     openFaceLayers: opts.useOpeningFaces === false ? new Set() : openRole,
     liveLayers: meta.live,
     thickness: opts.thickness ?? DXF_PARAMS.thickness,
+    roi: meta.regions[opts.region] ?? meta.regions[0] ?? null,
   });
+  let r = run(new Set(opts.layers ?? []));
+  // 체크가 비어 도형 추정으로 떨어졌으면 **그 추정 레이어로 다시** 추출한다(2026-10-02 내곡중 실측): 검토 창은 추정
+  // 레이어를 켜진 것으로 보여 주므로, 결과도 "그 체크로 추출한 것"이어야 한다 — 폴백(두께 상위 여섯만)의 결과를
+  // 그대로 내면 표시(벽 135개가 나올 체크)와 계산(47개)이 어긋난다.
+  const guessedLayers = r.guessed ? [...r.guessedLayers] : [];
+  if (guessedLayers.length) { const again = run(new Set(guessedLayers)); if (again.walls.length) r = again; }
   const tWalls = performance.now() - t0;
   if (!r.walls.length) throw new DxfError('no-walls');
   progress('rooms', 0);
@@ -112,7 +125,7 @@ function doExtract(opts = {}) {
     tTrace = performance.now() - t2;
   }
   const stats = {
-    ...built.stats, guessed: r.guessed, guessedLayers: [...r.guessedLayers],
+    ...built.stats, guessed: guessedLayers.length > 0 || r.guessed, guessedLayers: guessedLayers.length ? guessedLayers : [...r.guessedLayers],
     hist: r.hist.slice(0, 10).map(([mm, len]) => [mm, Math.round(len)]),
     ms: { walls: Math.round(tWalls), rooms: Math.round(tRooms), trace: Math.round(tTrace) },
   };

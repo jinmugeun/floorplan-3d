@@ -2,7 +2,7 @@
 // ui/는 io/를 import해도 된다(막힌 방향은 view2d/·view3d/·app/뿐이다).
 import { ROLE_LABEL, defaultChecked } from '../io/dxf/classify.js';
 import { esc } from '../util/html.js';
-import { DXF_BADGE_OFF, DXF_BADGE_HATCH } from './messages.js';
+import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR } from './messages.js';
 
 // ACI 기본 아홉 색만 표로 두고 나머지는 번호에서 색을 만든다(256색 표를 들고 다니지 않는다 —
 // 이 점은 "어느 레이어인지"를 알아보는 표시이지 도면을 재현하는 색이 아니다).
@@ -13,7 +13,8 @@ export const aciColor = n => {
 };
 
 export function layerRowHtml(rowData, checked) {
-  const badge = rowData.off ? DXF_BADGE_OFF : rowData.role === 'hatch' ? DXF_BADGE_HATCH : '';
+  const badge = rowData.off ? DXF_BADGE_OFF : rowData.role === 'hatch' ? DXF_BADGE_HATCH
+    : rowData.guessed ? DXF_BADGE_GUESSED : rowData.byColor ? DXF_BADGE_COLOR : '';
   return `<label class="dxf-layer${rowData.off ? ' off' : ''}" title="${esc(rowData.name)}">`
     + `<input type="checkbox" name="layer" value="${esc(rowData.name)}"${checked ? ' checked' : ''}>`
     + `<i class="dot" style="background:${aciColor(rowData.color)}"></i>`
