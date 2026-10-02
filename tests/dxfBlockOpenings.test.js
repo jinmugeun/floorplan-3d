@@ -92,3 +92,22 @@ test('벽 끝을 넘는 블록 개구부는 옮기지 않고 벽 안(끝 여유 
   expect(items[0].size[0]).toBe(600);                      // 1000.5 ~ 1650 → 50 mm 단위 내림
   expect(items[0].t * 1700).toBeCloseTo(1000.5 + 300, 0);   // 왼쪽 문설주는 제자리다
 });
+
+// 2026-10-02 내곡중 남자휴게실 ↔ 화장실: 문은 하나인데 둘이 됐다. 블록 SD850은 다른 문 블록(SD1100…)과 달리 **로컬 y축이
+// 벽 방향**으로 그려져 있었다 — 로컬 x(= 열린 문짝 방향)와 나란한 벽을 찾아, 문짝이 기대어 선 옆 벽에 문이 앉았다(진짜 자리는
+// 벽 틈 경로가 따로 문을 앉혔다). 문틀은 벽 몸통을 가로질러(중심선 양쪽에) 놓이고, 기대어 선 문짝은 벽의 한쪽에만 있다:
+// 로컬 x 쪽 벽에 도형이 한쪽에만 있고 수직 방향 벽에 양쪽으로 있으면 수직 방향이 벽 방향이다.
+test('여닫이: 블록의 로컬 x가 벽 방향이 아니어도 문틀이 가로지르는 벽에 앉는다', () => {
+  const C = makeWall({ a: [2990, 0], b: [2990, 1000], thickness: 200, height: 3500 });      // 열린 문짝이 기대어 선 옆 벽
+  const s = (x0, y0, x1, y1) => seg(x0, y0, x1, y1, 1, '건축');
+  const segs = [s(2000, -100, 2000, 100), s(2850, -100, 2850, 100), s(2030, -100, 2820, -100), s(2030, 100, 2820, 100),      // 문틀(벽 A 안)
+    s(2855, 100, 2855, 950), s(2890, 100, 2890, 950), s(2855, 950, 2890, 950), s(2840, 600, 2855, 600), s(2890, 600, 2905, 600)];   // 문짝 + 손잡이(벽 C 옆)
+  const inserts = [plan, { name: 'SD850', pos: FAR, rot: 90, scale: [1, 1], mirrored: false, parent: 0 }];
+  const out = blockOpenings(exOf(inserts, segs), [A, B, C]);
+  expect(out).toHaveLength(1);
+  expect(out[0]).toMatchObject({ kind: 'door', name: 'SD850', width: 850, wall: A });
+  expect(out[0].t).toBeCloseTo(2452.5 / 6000, 6);           // 벽 방향 구간 2000~2905의 가운데(손잡이 끝까지)
+  // 로컬 x가 벽 방향인 블록은 그대로다(문짝이 옆 벽에 기대어 있어도)
+  const turned = [plan, { name: 'SD850', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
+  expect(blockOpenings(exOf(turned, segs), [A, B, C])[0].wall).toBe(A);
+});

@@ -21,6 +21,7 @@ export const OPEN_BLOCK = new RegExp(`${DOOR_BLOCK.source}|${WINDOW_BLOCK.source
 
 const PARALLEL_COS = Math.cos(3 * Math.PI / 180);
 const HOST_PAD = 50;          // 벽 몸통 여유(mm)
+const SIDE_TOL = 5;           // 벽 중심선의 "한쪽"으로 볼 최소 거리(mm)
 const LEAF_MIN = 0.75;        // 포켓 문짝 = 벽과 나란하고 호칭 폭의 이 비율 이상인 선
 
 export function blockKind(name = '') {
@@ -51,9 +52,17 @@ export function blockOpenings(ex, walls, toApp = p => p) {
     const r = (it.rot ?? 0) * Math.PI / 180, o = toApp(it.pos), e = toApp([it.pos[0] + Math.cos(r), it.pos[1] + Math.sin(r)]);
     const el = Math.hypot(e[0] - o[0], e[1] - o[1]);
     if (!el) continue;
-    const u = [(e[0] - o[0]) / el, (e[1] - o[1]) / el];
+    // 벽 방향 = 블록 로컬 x. 여닫이는 로컬 y를 벽 방향으로 그린 블록도 있다(2026-10-02 내곡중 SD850 — 로컬 x는 열린 문짝
+    // 방향이라, 문짝이 기대어 선 옆 벽에 문이 앉았다): 문틀은 벽 몸통을 **가로질러** 놓이고 기대어 선 문짝은 벽의 한쪽에만
+    // 있으므로, 로컬 x 쪽 벽은 가로지르지 않는데 수직 방향 벽은 가로지르면 수직 방향이 벽 방향이다.
+    const seat = dir => {
+      const ts = g.pts.map(p => p[0] * dir[0] + p[1] * dir[1]), lo = Math.min(...ts), hi = Math.max(...ts);
+      return { u: dir, x0: lo, x1: hi, host: hi > lo ? hostWall(walls, g.pts, dir, lo, hi) : null };
+    };
+    let pick = seat([(e[0] - o[0]) / el, (e[1] - o[1]) / el]);
+    if (kind === 'door' && !pick.host?.across) { const alt = seat([-pick.u[1], pick.u[0]]); if (alt.host?.across) pick = alt; }
+    const { u, x0, x1 } = pick, span = x1 - x0;
     const along = p => p[0] * u[0] + p[1] * u[1];
-    const ts = g.pts.map(along), x0 = Math.min(...ts), x1 = Math.max(...ts), span = x1 - x0;
     if (!(span > 0)) continue;
     const m = it.name.match(/(\d{3,4})/), nominal = m ? +m[1] : 0;
     const width = nominal >= 0.4 * span && nominal <= 1.1 * span ? nominal : kind === 'pocket' ? span / 2 : span;
@@ -64,7 +73,7 @@ export function blockOpenings(ex, walls, toApp = p => p) {
       const lc = leaf.length ? leaf.reduce((s, [a, b]) => s + (along(a) + along(b)) / 2, 0) / leaf.length : x0;
       c = lc <= (x0 + x1) / 2 ? x1 - width / 2 : x0 + width / 2;
     }
-    const host = hostWall(walls, g.pts, u, x0, x1);
+    const host = pick.host;
     if (!host) continue;
     const { wall, L, d } = host;
     // 벽 위 t: 벽 방향 단위벡터 d와 u는 나란하다(같거나 반대 방향).
@@ -85,12 +94,15 @@ function hostWall(walls, pts, u, x0, x1) {
     const ta = w.a[0] * u[0] + w.a[1] * u[1], tb = w.b[0] * u[0] + w.b[1] * u[1];
     if (Math.min(x1, Math.max(ta, tb)) - Math.max(x0, Math.min(ta, tb)) <= 0) continue;
     const h = w.thickness / 2 + HOST_PAD;
-    let n = 0;
+    let n = 0, left = 0, right = 0;
     for (const p of pts) {
-      const q = [p[0] - w.a[0], p[1] - w.a[1]], t = q[0] * d[0] + q[1] * d[1];
-      if (t >= -HOST_PAD && t <= L + HOST_PAD && Math.abs(q[1] * d[0] - q[0] * d[1]) <= h) n++;
+      const q = [p[0] - w.a[0], p[1] - w.a[1]], t = q[0] * d[0] + q[1] * d[1], lat = q[1] * d[0] - q[0] * d[1];
+      if (t < -HOST_PAD || t > L + HOST_PAD || Math.abs(lat) > h) continue;
+      n++;
+      if (lat > SIDE_TOL) left++; else if (lat < -SIDE_TOL) right++;
     }
-    if (n && (!best || n > best.n)) best = { wall: w, L, d, n };
+    // across: 도형이 벽 중심선의 양쪽에 있다(문틀·창틀은 벽을 가로지른다 — 기대어 선 문짝은 한쪽에만 있다).
+    if (n && (!best || n > best.n)) best = { wall: w, L, d, n, across: left > 0 && right > 0 };
   }
   return best;
 }

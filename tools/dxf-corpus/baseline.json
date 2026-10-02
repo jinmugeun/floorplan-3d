@@ -17,7 +17,7 @@
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1457
+  "ms": 1818
  },
  "sinsang-B": {
   "regions": 2,
@@ -37,7 +37,7 @@
   "passes": 18,
   "columns": 14,
   "guessed": false,
-  "ms": 948
+  "ms": 1108
  },
  "sinsang-A": {
   "regions": 2,
@@ -57,7 +57,7 @@
   "passes": 19,
   "columns": 14,
   "guessed": false,
-  "ms": 835
+  "ms": 893
  },
  "naegok": {
   "regions": 1,
@@ -74,9 +74,9 @@
   "areaAll": 0,
   "doors": 14,
   "windows": 18,
-  "passes": 4,
+  "passes": 3,
   "columns": 24,
   "guessed": false,
-  "ms": 946
+  "ms": 1097
  }
 }
