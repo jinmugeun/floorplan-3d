@@ -219,3 +219,27 @@ test('전개된 선분·호는 엔티티에 적힌 색(1~255)을 달고, ByLayer
   expect(ex.polyArcs[0].color).toBe(9);
   expect(ex.arcs[0].color).toBe(4);
 });
+
+// 2026-10-02: 치수(DIMENSION)의 측정점은 설계자가 실제로 재는 선(벽·기둥 중심선)을 가리킨다 — 면적 기준선의 근거다.
+// 선형 치수(종류 0 · 회전각 50)와 정렬 치수(종류 1)의 두 측정점(13/23 · 14/24)을 월드 좌표로 옮기고, 재는 축을 단다.
+test('치수는 두 측정점(월드 좌표)과 재는 축을 단다', () => {
+  const dim = (x3, y3, x4, y4, extra = {}) => ({ type: 'DIMENSION', layer: 'DIM', x3, y3, x4, y4, flags: 0, ...extra });
+  const doc = {
+    blocks: new Map([block('B', [dim(0, 0, 4500.5, 0)])]),
+    entities: [
+      dim(1000.5, 2000.25, 6700.5, 2000.25),                       // 가로 치수(회전 0): x를 잰다
+      dim(1000.5, 2000.25, 1000.5, 5200.25, { a0: 90 }),           // 세로 치수(회전 90): y를 잰다
+      dim(0.5, 0.25, 3000.5, 4000.25, { flags: 1 }),               // 정렬 치수(기운 선) — 축 없음
+      dim(0.5, 0.25, 3000.5, 4.25, { flags: 33 }),                 // 정렬 치수지만 거의 가로 → x
+      { type: 'DIMENSION', layer: 'DIM', flags: 3 },               // 지름 치수 · 측정점 없음 — 세기만 한다
+      insert('B', '0', 10000.5, 500.25, { a0: 90 }),               // 블록 안 치수: 90° 돌아 y를 잰다
+    ],
+  };
+  const d = explode(doc).dims;
+  expect(d).toHaveLength(6);
+  expect(d.map(x => x.axis)).toEqual(['x', 'y', null, 'x', undefined, 'y']);
+  expect([d[0].p1, d[0].p2]).toEqual([[1000.5, 2000.25], [6700.5, 2000.25]]);
+  expect(d[5].p1[0]).toBeCloseTo(10000.5, 6); expect(d[5].p1[1]).toBeCloseTo(500.25, 6);
+  expect(d[5].p2[0]).toBeCloseTo(10000.5, 6); expect(d[5].p2[1]).toBeCloseTo(5000.75, 6);
+  expect(d[4].p1).toBeUndefined();
+});

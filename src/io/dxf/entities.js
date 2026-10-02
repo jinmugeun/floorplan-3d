@@ -39,6 +39,11 @@ export function buildEntity(type, pairs) {
       case 30: e.z = +v; break;
       case 11: e.x2 = +v; break;
       case 21: e.y2 = +v; break;
+      // DIMENSION의 두 측정점(연장선이 시작하는 자리) — 설계자가 실제로 재는 선을 가리킨다(면적 기준선의 근거).
+      case 13: e.x3 = +v; break;
+      case 23: e.y3 = +v; break;
+      case 14: e.x4 = +v; break;
+      case 24: e.y4 = +v; break;
       case 40: e.r = +v; break;            // ARC/CIRCLE 반지름 · TEXT/MTEXT 글자 높이
       case 41: e.xscale = +v; break;
       case 42: if (type === 'LWPOLYLINE') { bulges[last] = +v; } else e.yscale = +v; break;

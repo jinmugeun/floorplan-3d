@@ -22,6 +22,8 @@
 //  - bareReach 1000: 문·창 근거(개구부 레이어 선·호, 창·문 이름 블록) 없이 끝을 늘일 수 있는 거리. 그보다 먼
 //    연장과, 줄 끝 기둥 꼴 토막으로 가는 다리는 그 길에 근거가 있어야 한다(2026-09-30 실파일: 날개벽이 빈 바닥
 //    3.1 m를 건너 방을 가르고, 현관 벽 끝이 2.8 m 너머 기둥 토막까지 이어졌다).
+//  - ref*: 벽의 면적 기준선(refLines.js) — 띠 밖 refOut 안에서 refGrid번 이상 재는 치수 좌표는 기둥 그리드이고,
+//    띠 중심 refCore 안의 좌표는 한두 번만 재도 그 벽의 구조체 중심이다.
 //  - spur 1000: 한 끝만 이어지고 다른 끝이 매달린 이보다 짧은 토막은 벽기둥·문틀 면에서 나온 가지다 —
 //    방을 둘러싸지 못하면서 옆 벽 끝을 먼저 붙잡아 진짜 접합을 막는다(실파일 식당 서쪽 벽).
 //  - minCompLen 3000: 벽 minComp개 미만 덩어리라도 이만큼 길면 남긴다(기둥에 가로막혀 떨어진 실제 벽).
@@ -33,5 +35,6 @@ export const DXF_PARAMS = Object.freeze({
   bridge: 3000, bridgeAngTol: 2.5, gapMin: 600,
   colMin: 300, colMax: 1200, colAspect: 2.5, colRatio: 2, colTol: 3,
   extend: 4000, bareReach: 1000, joinMargin: 50, passes: 3, spur: 1000,
+  refOut: 200, refGrid: 3, refCore: 60,
   minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
 });

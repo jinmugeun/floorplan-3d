@@ -134,3 +134,52 @@ test('nodeKey distinguishes endpoints down to 0.01 mm', () => {
   expect(nodeKey([10.004, 0])).toBe(nodeKey([10, 0]));   // 0.01 mm 미만은 같은 노드
   expect(nodeKey([10.02, 0])).not.toBe(nodeKey([10, 0]));
 });
+
+// ── 2026-10-02 면적 기준 "도면 기준(벽·기둥 중심선)" ─────────────────────────────────────────────
+// 실파일 사동중: 도면의 실 면적 11개는 전부 치수가 가리키는 선(벽 구조체 중심 · 기둥 그리드)으로 잰 값이었다 —
+// 벽 안쪽 면으로 잰 실면적(안목)은 15 m² 방에서 2 m² 작다. 방마다 areaCenter를 함께 낸다: 벽 중심선 폴리곤에서
+// 변마다 그 벽의 axisShift(벽의 왼쪽 법선 perp(b − a) 방향으로 기준선이 옮겨진 거리)만큼 옮긴 넓이다.
+import { insetPolygon } from '../src/geom/rooms.js';
+const W4 = (x0, y0, x1, y1, extra = {}) => [
+  makeWall({ a: [x0, y0], b: [x1, y0], thickness: 200 }), makeWall({ a: [x1, y0], b: [x1, y1], thickness: 200, ...extra }),
+  makeWall({ a: [x1, y1], b: [x0, y1], thickness: 200 }), makeWall({ a: [x0, y1], b: [x0, y0], thickness: 200 }),
+];
+
+test('areaCenter는 벽 중심선 넓이이고 실면적(area)은 안쪽 면 넓이 그대로다', () => {
+  const [room] = detectRooms(W4(0, 0, 4000, 3000));
+  expect(room.areaCenter).toBeCloseTo(12.0, 6);
+  expect(room.area).toBeCloseTo(3.8 * 2.8, 6);
+});
+
+test('벽의 axisShift만큼 그 변의 기준선이 옮겨진다 — 한쪽 방이 넓어지면 맞은편 방은 좁아진다', () => {
+  // 가운데 벽 x = 4000 (a → b 가 +y 방향이면 왼쪽 법선은 −x): axisShift −100 = 기준선이 x 4100.
+  const mid = makeWall({ a: [4000, 0], b: [4000, 3000], thickness: 200 });
+  mid.axisShift = -100;
+  const walls = [
+    makeWall({ a: [0, 0], b: [4000, 0], thickness: 200 }), makeWall({ a: [4000, 0], b: [9000, 0], thickness: 200 }),
+    makeWall({ a: [9000, 0], b: [9000, 3000], thickness: 200 }), makeWall({ a: [9000, 3000], b: [4000, 3000], thickness: 200 }),
+    makeWall({ a: [4000, 3000], b: [0, 3000], thickness: 200 }), makeWall({ a: [0, 3000], b: [0, 0], thickness: 200 }), mid,
+  ];
+  const rooms = detectRooms(walls).sort((p, q) => p.points[0][0] - q.points[0][0] || polygonArea(p.points) - polygonArea(q.points));
+  const left = rooms.find(r => r.points.every(p => p[0] <= 4000)), right = rooms.find(r => r.points.every(p => p[0] >= 4000));
+  expect(left.areaCenter).toBeCloseTo(4.1 * 3.0, 6);
+  expect(right.areaCenter).toBeCloseTo(4.9 * 3.0, 6);
+  // 벽을 반대 방향으로 그려도(b → a) 같은 자리의 기준선이면 같은 값이다(axisShift의 부호가 뒤집힌다).
+  const flip = makeWall({ a: [4000, 3000], b: [4000, 0], thickness: 200 }); flip.axisShift = 100;
+  const again = detectRooms([...walls.slice(0, 6), flip]);
+  expect(again.find(r => r.points.every(p => p[0] <= 4000)).areaCenter).toBeCloseTo(12.3, 6);
+});
+
+test('insetPolygon은 감긴 방향으로 안쪽을 정한다 — ㄱ자 방에서도 변마다 제 쪽으로 옮긴다', () => {
+  // ㄱ자: (0,0)-(6000,0)-(6000,2000)-(2000,2000)-(2000,5000)-(0,5000). 모든 변을 100 안으로 → 넓이 = 원래 − 둘레×100 + 모서리 보정
+  const L = [[0, 0], [6000, 0], [6000, 2000], [2000, 2000], [2000, 5000], [0, 5000]];
+  const full = Math.abs(polygonArea(L));
+  expect(full).toBe(6000 * 2000 + 2000 * 3000);
+  const inner = Math.abs(polygonArea(insetPolygon(L, L.map(() => 100))));
+  expect(inner).toBeCloseTo(5800 * 1800 + 1800 * 3000, 6);        // 가로 띠 5800 × 1800 + 세로 띠 1800 × 3000(겹침 없음)
+  // 점 순서를 뒤집어도 같다.
+  expect(Math.abs(polygonArea(insetPolygon([...L].reverse(), L.map(() => 100))))).toBeCloseTo(inner, 6);
+  // 한 직선 위의 두 변이 서로 다른 값이면 단이 진다(모서리를 잘라 먹지 않는다).
+  const S = [[0, 0], [2000, 0], [4000, 0], [4000, 3000], [0, 3000]];
+  expect(Math.abs(polygonArea(insetPolygon(S, [0, 100, 0, 0, 0])))).toBeCloseTo(4000 * 3000 - 2000 * 100, 6);
+});

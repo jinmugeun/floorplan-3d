@@ -139,10 +139,11 @@ test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되�
     bridge: 3000, bridgeAngTol: 2.5, gapMin: 600,
     colMin: 300, colMax: 1200, colAspect: 2.5, colRatio: 2, colTol: 3,
     extend: 4000, bareReach: 1000, joinMargin: 50, passes: 3, spur: 1000,
+    refOut: 200, refGrid: 3, refCore: 60,
     minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
   });
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
-  expect(Object.keys(DXF_PARAMS)).toHaveLength(35);
+  expect(Object.keys(DXF_PARAMS)).toHaveLength(38);
 });
 
 // ── 2026-10-02 다른 사무소 도면 둘(신상중 · 내곡중)에서 드러난 판정 오류 ──────────────────────────

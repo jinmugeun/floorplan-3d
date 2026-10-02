@@ -8,6 +8,7 @@ import { createEmptyProject, createFloor, normalizeProject, createItem } from '.
 import { productById } from '../../products/catalog.js';
 import { dropTinyComponents } from './walls.js';
 import { DXF_PARAMS } from './params.js';
+import { dimLines, axisShiftOf, inheritRefs } from './refLines.js';
 
 // 점 p에서 선분 a–b까지의 거리.
 const distSeg = (p, a, b) => {
@@ -118,7 +119,7 @@ export function drawingTitle(texts, fileName = '', titleLayers = null) {
 
 export function buildProject(raw, {
   height = DXF_PARAMS.height, scale = 1, texts = [], fileName = '', autoNames = true,
-  params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null, nameRoles = null, columns = [],
+  params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null, nameRoles = null, columns = [], dims = [],
 } = {}) {
   const { toApp, box, size } = makeToApp(raw, scale);
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.
@@ -128,9 +129,6 @@ export function buildProject(raw, {
   const colBox = columns.map(c => ({ p: toApp(c.c), r: Math.max(c.w, c.h) * scale / 2 }));
   const touching = w => colBox.flatMap((c, i) => (distSeg(c.p, w.a, w.b) <= c.r + w.thickness / 2 + 100 ? [i] : []));
   walls = dropTinyComponents(normalizeWalls(walls), P.minComp, P.minCompLen, colBox.length ? touching : null);
-  const rooms = detectRooms(walls);
-  for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
-  const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { nameRoles }).unmatched : [];
   // 기둥(walls.js가 고른 닫힌 작은 사각형) → 사각 기둥. w는 u 방향 변이고, 앱은 y가 뒤집혀 각도도 뒤집힌다.
   const colProduct = productById('column-square');
   const colItems = colProduct ? columns.map(c => createItem(colProduct, {
@@ -138,10 +136,18 @@ export function buildProject(raw, {
     rot: ((Math.atan2(-c.u[1], c.u[0]) * 180 / Math.PI) % 360 + 360) % 360,
     size: [Math.round(c.w * scale), Math.round(c.h * scale), height],
   })) : [];
+  // 면적 기준선(refLines.js): 벽마다 치수가 가리키는 좌표(구조체 중심 · 기둥 그리드)를 기준선으로 단다 — 방의 areaCenter가 쓴다.
+  const refs = dimLines(dims, toApp);
+  for (const w of walls) { const s = axisShiftOf(w, refs, colItems, P); if (s) w.axisShift = s; }
+  inheritRefs(walls, P);
+  const rooms = detectRooms(walls);
+  for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
+  const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { nameRoles }).unmatched : [];
   const items = [...(openings({ walls, rooms, toApp }) ?? []), ...colItems];
   const project = normalizeProject({
     ...createEmptyProject(),
     name: drawingTitle(titleTexts ?? texts, fileName, titleLayers),
+    areaMode: 'center',     // 도면의 실 면적은 벽·기둥 중심선 기준이다 — 가져온 도면은 그 기준으로 보여 준다
     floors: [{ ...createFloor('1F'), height, slab: 0, walls, rooms, items }],
   });
   const floor = project.floors[0];

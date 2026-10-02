@@ -119,7 +119,21 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
           out.texts.push({ p: apply(m, [e.x ?? 0, e.y ?? 0]), h: (e.r ?? 0) * scaleOf(m), text: e.text ?? '', layer, depth, block: blockName, ins, color: colorOf(e) });
           break;
         case 'HATCH': out.hatches.push({ layer, depth, block: blockName, ins, color: colorOf(e) }); break;
-        case 'DIMENSION': out.dims.push({ layer, depth, block: blockName, ins, color: colorOf(e) }); break;
+        case 'DIMENSION': {
+          // 선형(종류 0)·정렬(종류 1) 치수는 두 측정점을 월드 좌표로 옮기고 재는 축(x·y · 기울면 null)을 단다.
+          // 선형 치수의 방향은 회전각(50), 정렬 치수의 방향은 두 점이다 — 둘 다 행렬의 선형부로 옮겨 본다.
+          const d = { layer, depth, block: blockName, ins, color: colorOf(e) };
+          const type = (e.flags ?? 0) & 7;
+          if (type <= 1 && [e.x3, e.y3, e.x4, e.y4].every(Number.isFinite)) {
+            d.p1 = apply(m, [e.x3, e.y3]); d.p2 = apply(m, [e.x4, e.y4]);
+            const a = (e.a0 ?? 0) * Math.PI / 180, o = apply(m, [0, 0]);
+            const t = apply(m, type === 0 ? [Math.cos(a), Math.sin(a)] : [e.x4 - e.x3, e.y4 - e.y3]);
+            const vx = Math.abs(t[0] - o[0]), vy = Math.abs(t[1] - o[1]);
+            d.axis = vy <= 0.035 * vx ? 'x' : vx <= 0.035 * vy ? 'y' : null;
+          }
+          out.dims.push(d);
+          break;
+        }
         case 'ATTRIB': case 'ATTDEF': case 'SEQEND': case 'VERTEX': break;
         // SPLINE·ELLIPSE는 **세기만 하고 만들지 않는다**: 실측 5,261개가 전부 기구 윤곽선이고
         // 벽에는 하나도 없다. 제어점 폴리라인 근사는 잘못 그릴 위험이 이득보다 크다(§18.10).

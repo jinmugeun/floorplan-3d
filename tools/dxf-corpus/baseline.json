@@ -10,12 +10,14 @@
   "tiny": 0,
   "dimFit": 54,
   "dimEnds": 256,
+  "areaOk": 4,
+  "areaAll": 11,
   "doors": 17,
   "windows": 29,
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1281
+  "ms": 1348
  },
  "sinsang-B": {
   "regions": 2,
@@ -28,12 +30,14 @@
   "tiny": 0,
   "dimFit": 94,
   "dimEnds": 64,
+  "areaOk": 0,
+  "areaAll": 0,
   "doors": 10,
   "windows": 19,
   "passes": 19,
   "columns": 14,
   "guessed": false,
-  "ms": 738
+  "ms": 935
  },
  "sinsang-A": {
   "regions": 2,
@@ -46,12 +50,14 @@
   "tiny": 0,
   "dimFit": 85,
   "dimEnds": 68,
+  "areaOk": 0,
+  "areaAll": 0,
   "doors": 6,
   "windows": 14,
   "passes": 22,
   "columns": 14,
   "guessed": false,
-  "ms": 751
+  "ms": 914
  },
  "naegok": {
   "regions": 1,
@@ -64,11 +70,13 @@
   "tiny": 2,
   "dimFit": 63,
   "dimEnds": 16,
+  "areaOk": 0,
+  "areaAll": 0,
   "doors": 14,
   "windows": 18,
   "passes": 4,
   "columns": 24,
   "guessed": false,
-  "ms": 738
+  "ms": 955
  }
 }

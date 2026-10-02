@@ -230,7 +230,7 @@ export function normalizeProject(p) {
     version: SCHEMA_VERSION,
     name: str(src.name, def.name),
     units: src.units === 'ftin' ? 'ftin' : 'mm',
-    areaMode: src.areaMode === 'gross' ? 'gross' : 'net',
+    areaMode: ['gross', 'center'].includes(src.areaMode) ? src.areaMode : 'net',
     settings: normalizeSettings(src.settings),
     background: normalizeBackground(src.background),
     floors,

@@ -9,7 +9,8 @@ import { corpus, runDrawing, WORSE, DXF_DIR } from './lib.mjs';
 const BASE = resolve(dirname(fileURLToPath(import.meta.url)), 'baseline.json');
 const update = process.argv.includes('--update');
 const base = existsSync(BASE) ? JSON.parse(readFileSync(BASE, 'utf8')) : {};
-const COLS = ['regions', 'walls', 'rooms', 'named', 'unmatched', 'openEnds', 'tiny', 'dimFit', 'doors', 'windows', 'passes', 'columns', 'areaM2', 'ms'];
+const COLS = ['regions', 'walls', 'rooms', 'named', 'unmatched', 'openEnds', 'tiny', 'dimFit', 'areaOk', 'areaAll', 'doors', 'windows', 'passes', 'columns', 'areaM2', 'ms'];
+const detail = process.argv.includes('--areas');
 const now = {};
 let worse = 0, skipped = 0;
 console.log(`DXF_DIR ${DXF_DIR}`);
@@ -21,6 +22,7 @@ for (const entry of corpus()) {
   now[entry.id] = r.metrics;
   const b = base[entry.id];
   console.log([entry.id.padEnd(11), ...COLS.map(c => String(r.metrics[c] ?? '-').padStart(9))].join(''));
+  if (detail) for (const a of r.areaRows) console.log(`${''.padEnd(11)}  ${a.ok ? '✓' : '✗'} ${String(a.name).padEnd(10)} 도면 ${String(a.label).padStart(7)} · 우리 ${String(a.got ?? '-').padStart(7)}${a.got != null ? ` (${(a.got - a.label >= 0 ? '+' : '') + (a.got - a.label).toFixed(2)})` : ''} ← 방 "${a.room ?? '없음'}"`);
   if (!b) continue;
   const diff = [];
   for (const c of COLS) {

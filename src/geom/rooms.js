@@ -43,6 +43,36 @@ export function offsetPolygon(pts, insets) {
   });
 }
 
+// 변마다 안쪽으로 insets[i]만큼 옮긴 폴리곤(음수면 바깥으로). 안쪽은 **감긴 방향**으로 정한다 — offsetPolygon은
+// 무게중심 쪽을 안쪽으로 보아 ㄱ자 방의 일부 변에서 틀린다. 한 직선 위의 두 변이 다른 값이면 단이 진다(두 점을 낸다).
+export function insetPolygon(pts, insets) {
+  const sgn = polygonArea(pts) >= 0 ? 1 : -1, n = pts.length;
+  const lines = pts.map((a, i) => {
+    const d = norm(sub(pts[(i + 1) % n], a)), nn = mul(perp(d), sgn);
+    return { p: add(a, mul(nn, insets[i] ?? 0)), d };
+  });
+  return lines.flatMap((l, i) => {
+    const prev = lines[(i - 1 + n) % n];
+    const x = lineIntersect(prev.p, prev.d, l.p, l.d);
+    if (x) return [x];
+    const end = add(prev.p, mul(prev.d, dist(pts[(i - 1 + n) % n], pts[i])));   // 앞 변의 옮겨진 끝
+    return eq(end, l.p, 1e-6) ? [l.p] : [end, l.p];
+  });
+}
+
+// 방의 "도면 기준" 넓이(mm²): 변마다 그 벽의 axisShift(벽의 왼쪽 법선 perp(b − a) 쪽으로 기준선이 옮겨진 거리)만큼
+// 중심선을 옮긴 폴리곤. axisShift가 없으면 벽 중심선 그대로다.
+function centerArea(pts, walls) {
+  const sgn = polygonArea(pts) >= 0 ? 1 : -1, n = pts.length;
+  const insets = pts.map((a, i) => {
+    const b = pts[(i + 1) % n];
+    const w = walls.find(x => (eq(x.a, a) && eq(x.b, b)) || (eq(x.a, b) && eq(x.b, a)));
+    if (!w?.axisShift) return 0;
+    return w.axisShift * dot(perp(norm(sub(w.b, w.a))), mul(perp(norm(sub(b, a))), sgn));
+  });
+  return Math.abs(polygonArea(insets.some(Boolean) ? insetPolygon(pts, insets) : pts));
+}
+
 function nodeKey(p) { return `${Math.round(p[0])},${Math.round(p[1])}`; }
 
 function jaccard(a, b) {
@@ -123,17 +153,21 @@ export function detectRooms(walls, prevRooms = []) {
       // 안쪽 폴리곤은 offsetPolygon이 근-평행 변을 교차시키면 뒤집히거나 폭발한다(폭 6 mm 조각이 54.8 m²로 보고됐다 —
       // 계획 10 슬리버 리뷰). 부호가 뒤집혔거나 바깥 면적을 넘으면 바깥 폴리곤 면적(상한)으로 되돌린다.
       area: saneArea(polygonArea(inner), f.area) / 1e6,
+      // 도면 기준(벽·기둥 중심선) 넓이 — 치수가 가리키는 선으로 잰 값(DXF 도면의 실 면적 표기가 이 기준이다).
+      areaCenter: saneCenter(centerArea(f.pts, walls), f.area) / 1e6,
     };
   });
 }
 
+// 기준선 넓이는 중심선 넓이에서 크게 벗어날 수 없다(벽 두께만큼) — 교차 계산이 폭발하면 중심선 넓이로 되돌린다.
+const saneCenter = (a, outerA) => (Number.isFinite(a) && a > 0 && a <= outerA * 1.5 + 4e6 ? a : outerA);
 const saneArea = (innerA, outerA) => (Number.isFinite(innerA) && innerA > 0 && innerA <= outerA) ? innerA : outerA;
 
 export function roomInnerPolygon(room, walls, extra = 0) {
   const insets = room.points.map((_, i) => {
     const a = room.points[i], b = room.points[(i + 1) % room.points.length];
     const w = walls.find(x => (eq(x.a, a) && eq(x.b, b)) || (eq(x.a, b) && eq(x.b, a)));
-    return (w ? w.thickness : 200) / 2 + extra;
+    return (w ? (w.virtual ? 0 : w.thickness) : 200) / 2 + extra;      // 구획선(virtual)은 두께가 없다
   });
   return offsetPolygon(room.points, insets);
 }

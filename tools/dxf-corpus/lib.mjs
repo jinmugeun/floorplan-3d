@@ -46,6 +46,23 @@ export function scanDimensions(txt) {
   return out;
 }
 
+// 도면에 적힌 실 면적 표기("(15.39m²)")와 그 위의 실명 → [{ name, value, p }] (DXF 좌표). 정답 자료다.
+const AREA = /^\(?\s*(\d+(?:\.\d+)?)\s*(?:m²|㎡|m2)\s*\)?$/i;
+export async function areaLabels(raw) {
+  const { decodeDxf } = await import('../../src/io/dxf/decode.js');
+  const { parseDxf } = await import('../../src/io/dxf/parse.js');
+  const { explode } = await import('../../src/io/dxf/explode.js');
+  const ex = explode(parseDxf(decodeDxf(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)).txt), { arcSteps: 12 });
+  const clean = t => String(t.text ?? '').replace(/\s+/g, ' ').trim();
+  const labels = ex.texts.filter(t => AREA.test(clean(t)));
+  const names = ex.texts.filter(t => /[가-힣A-Za-z]/.test(clean(t)) && !AREA.test(clean(t)) && !/^\(\d+석\)$/.test(clean(t)));
+  return labels.map(a => {
+    let best = null;
+    for (const n of names) { const d = Math.hypot(n.p[0] - a.p[0], n.p[1] - a.p[1]); if (n.p[1] > a.p[1] && d < 1500 && n.layer === a.layer && (!best || d < best.d)) best = { n, d }; }
+    return { name: best ? clean(best.n).replace(/\s+/g, '') : null, value: +clean(a).match(AREA)[1], p: a.p };
+  });
+}
+
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }.
 export async function runDrawing(entry) {
   const path = fileOf(entry);
@@ -78,6 +95,17 @@ export async function runDrawing(entry) {
       if (c.some(f => Math.abs(f - q[ax]) <= 5)) hit++;
     }
   }
+  // 면적 적합: 도면의 면적 표기 ↔ 그 자리(또는 그 이름)의 방의 "도면 기준" 넓이. ±0.05 m² 안이면 맞은 것이다.
+  const { pointInPolygon } = await import('../../src/geom/rooms.js');
+  const labels = (await areaLabels(raw)).filter(a => near(toApp(a.p)));
+  const bare = s => String(s ?? '').replace(/\s+/g, '');
+  let areaOk = 0;
+  const areaRows = labels.map(a => {
+    const room = fl.rooms.find(r => pointInPolygon(toApp(a.p), r.points)) ?? fl.rooms.find(r => a.name && bare(r.name) === a.name);
+    const got = room ? room.areaCenter : null, ok = got != null && Math.abs(got - a.value) <= 0.05;
+    if (ok) areaOk++;
+    return { name: a.name, label: a.value, got: got == null ? null : Math.round(got * 100) / 100, room: room?.name ?? null, ok };
+  });
   const count = re => fl.items.filter(i => re.test(i.productId)).length;
   const metrics = {
     regions: summary.regions.length,
@@ -85,11 +113,12 @@ export async function runDrawing(entry) {
     named: fl.rooms.filter(r => r.name).length, unmatched: stats.unmatchedNames.length,
     openEnds: stats.openEnds.length, tiny: fl.rooms.filter(r => r.area < 1.5).length,
     dimFit: ends ? Math.round(100 * hit / ends) : null, dimEnds: ends,
+    areaOk, areaAll: labels.length,
     doors: count(/^door-/), windows: count(/^window-/), passes: count(/^opening-pass/), columns: cols.length,
     guessed: !!stats.guessed, ms,
   };
-  return { path, summary, project, stats, metrics };
+  return { path, summary, project, stats, metrics, areaRows };
 }
 
 // 방향이 있는 지표: 값이 이쪽으로 가면 나빠진 것이다(벽·방 수 같은 나머지는 바뀌면 알리기만 한다).
-export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1 };
+export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1, areaOk: -1 };
