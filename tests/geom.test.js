@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { add, sub, len, perp, eq } from '../src/geom/vec.js';
 import { makeWall, rectWalls, wallPolygon, splitWall, moveWallParallel, moveVertex, hitWall, transformWalls, endpoints, nodeKey } from '../src/geom/walls.js';
-import { detectRooms, polygonArea, pointInPolygon, offsetPolygon, centroid } from '../src/geom/rooms.js';
+import { detectRooms, polygonArea, pointInPolygon, offsetPolygon, centroid, roomInnerPolygon, saneInner } from '../src/geom/rooms.js';
 
 describe('vec', () => {
   test('basics', () => {
@@ -125,6 +125,30 @@ describe('rooms', () => {
     const again = detectRooms(ws, first);
     expect(again[0].name).toBe('식당');
     expect(again[0].id).toBe(first[0].id);
+  });
+  // 2026-10-06(계획 10 이월 ④): 안쪽 폴리곤은 2D 바닥·3D 바닥/천장/벽면·템플릿이 같이 쓴다. 폭발하면 바깥 폴리곤으로.
+  test('roomInnerPolygon은 조각 방에서 폭발하지 않고 바깥 폴리곤(같은 점 수·차례)으로 돌아온다', () => {
+    const ws = rectWalls([0, 0], [4000, 3000], 200);
+    const [room] = detectRooms(ws);
+    const inner = roomInnerPolygon(room, ws);
+    expect(inner).toHaveLength(4);
+    expect(Math.abs(polygonArea(inner))).toBeCloseTo(3800 * 2800, 3);          // 정상 방은 두께/2만큼 안쪽
+    // 폭 6 mm · 길이 5 m 조각(벽 두께 200): 안쪽으로 100씩 밀면 변이 서로를 지나 뒤집힌다.
+    const sliver = { points: [[0, 0], [5000, 0], [5000, 6], [0, 6]] };
+    const thin = sliver.points.map((p, i) => makeWall({ a: p, b: sliver.points[(i + 1) % 4], thickness: 200, height: 2300 }));
+    const out = roomInnerPolygon(sliver, thin);
+    expect(out).toEqual(sliver.points);                                          // 바깥 그대로(새 배열)
+    expect(out).not.toBe(sliver.points);
+    expect(Math.abs(polygonArea(out))).toBe(30000);                              // 0.03 m² — 54.8 m²가 아니다
+    // 같은 점이 잇따르면(변 길이 0) vec.norm이 [0, 0]을 주어 그 변은 밀리지 않는다 — 점 수는 그대로 5다.
+    const dup = { points: [[0, 0], [0, 0], [4000, 0], [4000, 3000], [0, 3000]] };
+    expect(roomInnerPolygon(dup, []).every(p => Number.isFinite(p[0]) && Number.isFinite(p[1]))).toBe(true);
+    expect(roomInnerPolygon(dup, [])).toHaveLength(5);
+    // 유한하지 않은 점이 섞이면 바깥으로.
+    expect(saneInner([[NaN, 0], [1, 0], [1, 1]], [[0, 0], [10, 0], [10, 10]])).toEqual([[0, 0], [10, 0], [10, 10]]);
+    expect(saneInner([[0, 0], [1, 0], [1, 1]], [[0, 0], [10, 0], [10, 10]])).toEqual([[0, 0], [1, 0], [1, 1]]);      // 멀쩡하면 그대로
+    expect(saneInner([[0, 0], [10, 0], [10, 10]], [[0, 0], [1, 0], [1, 1]])).toEqual([[0, 0], [1, 0], [1, 1]]);      // 바깥보다 크면 바깥
+    expect(saneInner([[0, 0], [1, 1], [1, 0]], [[0, 0], [1, 0], [1, 1]])).toEqual([[0, 0], [1, 0], [1, 1]]);         // 부호 뒤집힘
   });
 });
 

@@ -167,11 +167,22 @@ export function detectRooms(walls, prevRooms = []) {
 const saneCenter = (a, outerA) => (Number.isFinite(a) && a > 0 && a <= outerA * 1.5 + 4e6 ? a : outerA);
 const saneArea = (innerA, outerA) => (Number.isFinite(innerA) && innerA > 0 && innerA <= outerA) ? innerA : outerA;
 
+// 안쪽 폴리곤의 보루(2026-10-06 · 계획 10 이월 ④): offsetPolygon은 근-평행 변이 만나면 뒤집히거나 폭발한다(6 mm 조각이
+// 54.8 m² · 3D 바닥 폴리곤 123 m). saneArea는 숫자만 고쳤고 2D 바닥(view2d)·3D 바닥/천장/벽면(build.js)·템플릿은 그 폴리곤을
+// 그대로 그렸다. 점이 유한하지 않거나, 부호가 바깥과 다르거나(뒤집힘), 넓이가 바깥을 넘으면(폭발) **바깥 폴리곤의 복사본**으로
+// 되돌린다 — build.js의 edgeWall이 i번째 변 ↔ i번째 벽을 전제하므로 점 수와 차례는 지킨다.
+export function saneInner(inner, outer) {
+  const copy = () => outer.map(p => [p[0], p[1]]);
+  if (inner.length !== outer.length || inner.some(p => !Number.isFinite(p[0]) || !Number.isFinite(p[1]))) return copy();
+  const ai = polygonArea(inner), ao = polygonArea(outer);
+  return Math.sign(ai) === Math.sign(ao) && Math.abs(ai) <= Math.abs(ao) ? inner : copy();
+}
+
 export function roomInnerPolygon(room, walls, extra = 0) {
   const insets = room.points.map((_, i) => {
     const a = room.points[i], b = room.points[(i + 1) % room.points.length];
     const w = walls.find(x => (eq(x.a, a) && eq(x.b, b)) || (eq(x.a, b) && eq(x.b, a)));
     return (w ? (w.virtual ? 0 : w.thickness) : 200) / 2 + extra;      // 구획선(virtual)은 두께가 없다
   });
-  return offsetPolygon(room.points, insets);
+  return saneInner(offsetPolygon(room.points, insets), room.points);
 }
