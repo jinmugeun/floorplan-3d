@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dxf:score": "node tools/dxf-corpus/score.mjs",
-    "dxf:e2e": "node tools/dxf-corpus/e2e.mjs"
+    "dxf:e2e": "node tools/dxf-corpus/e2e.mjs",
+    "dxf:public": "node tools/dxf-corpus/public.mjs"
   },
   "dependencies": {
     "three": "0.169.0"
