@@ -95,7 +95,7 @@ async function score(name) {
   if (ex.type !== 'extracted') return { name, error: ex.code ?? 'extract', summary: parsed.summary };
   const ms = Math.round(performance.now() - t0);
   const { stats, project } = ex, fl = project.floors[0];
-  const k = parsed.summary.unitScale ?? 1;
+  const k = stats.unitScale ?? parsed.summary.unitScale ?? 1;   // 추출이 실제로 쓴 배율이 먼저(lib.mjs와 같다 · 2026-10-06 최종 리뷰)
   const toApp = p => [(p[0] * k - stats.origin[0]) * stats.scale, -(p[1] * k - stats.origin[1]) * stats.scale];
   const { pointInPolygon } = await import('../../src/geom/rooms.js');
   const gt = await groundTruth(gtPath);

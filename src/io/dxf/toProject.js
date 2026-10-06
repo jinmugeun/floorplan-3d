@@ -190,7 +190,8 @@ export function buildProject(raw, {
     columns: colItems.length,
     dividers: floor.walls.filter(w => w.virtual).length, annexes,
     size,
-    // DXF 좌표 → 앱 좌표의 원점·배율(앱 = (DXF − origin) × scale, y 뒤집기). 치수·면적선을 평면도와 맞댈 때 쓴다.
+    // DXF 좌표 → 앱 좌표의 원점·배율(앱 = (DXF × stats.unitScale − origin) × scale, y 뒤집기 — 워커가 전개를 unitScale배로 mm로
+    // 만든 뒤 이 함수가 받는다 · 2026-10-06 최종 리뷰). 치수·면적선을 평면도와 맞댈 때 쓴다.
     origin: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2],
     scale,
   };

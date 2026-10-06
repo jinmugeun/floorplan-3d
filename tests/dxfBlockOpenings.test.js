@@ -59,16 +59,18 @@ test('여닫이는 문틀이 든 벽에 앉는다 — 열린 문짝이 닿는 �
   expect(out[0].t * 6000).toBeCloseTo(3450.5, 6);
 });
 
-// 실파일 문_슬라이딩 포켓 900: 블록은 1800 폭(문 900 + 벽 속 주머니 900)이고 문짝(벽과 나란한 긴 선)이 로컬 x 0~930에
-// 있다. 거울 INSERT(xscale −1 → rot 180)에서도 문짝이 없는 쪽 절반이 개구부다.
+// 실파일 문_슬라이딩 포켓 900: 블록은 1800 폭(문 900 + 벽 속 주머니 900)이다. 문짝(벽과 나란한 긴 선)이 있는 쪽 절반이
+// 주머니이고 개구부는 반대쪽 절반이다. 거울 INSERT(xscale −1 → rot 180)에서도 같다.
+// 2026-10-06 최종 리뷰: 문짝을 로컬 x 0~930(실파일 그대로)에 두면 기대값이 "문짝 없음" 기본값(로컬 x0 쪽이 주머니)과 같아 문짝을
+// 읽는지 시험하지 못했다 — 블록을 로컬 x 900에서 뒤집어 문짝(y ±50)을 로컬 870~1760, 가운데 선을 50~990에 둔다.
 test('포켓 미닫이는 문짝이 없는 쪽 절반이 개구부다(거울 INSERT 포함)', () => {
   const X = 5900.5;   // 로컬 x → 월드 x = X − lx (rot 180)
   const inserts = [plan, { name: '문_슬라이딩 포켓 900', pos: [X, 0], rot: 180, scale: [-1, 1], mirrored: true, parent: 0 }];
-  const segs = [seg(X - 40, -50, X - 930, -50, 1, '04창호'), seg(X - 40, 50, X - 930, 50, 1, '04창호'), seg(X - 810, 0, X - 1750, 0, 1, '04창호'), seg(X - 1800, -30, X - 1800, 30, 1, '04창호'), seg(X, -30, X, 30, 1, '04창호')];
+  const segs = [seg(X - 870, -50, X - 1760, -50, 1, '04창호'), seg(X - 870, 50, X - 1760, 50, 1, '04창호'), seg(X - 50, 0, X - 990, 0, 1, '04창호'), seg(X - 1800, -30, X - 1800, 30, 1, '04창호'), seg(X, -30, X, 30, 1, '04창호')];
   const out = blockOpenings(exOf(inserts, segs), [A]);
   expect(out).toHaveLength(1);
   expect(out[0]).toMatchObject({ kind: 'pocket', width: 900 });
-  expect(out[0].t * 6000).toBeCloseTo(X - 1350, 6);        // 개구부 = 로컬 900~1800 = 월드 4100.5~5000.5
+  expect(out[0].t * 6000).toBeCloseTo(X - 450, 6);         // 주머니 = 문짝 쪽 로컬 900~1800 → 개구부 = 로컬 0~900 = 월드 5000.5~5900.5
   const items = buildOpenings({ ex: exOf(inserts, segs), walls: [A], toApp: p => p, openingLayers: new Set(['04창호']) });
   expect(items).toHaveLength(1);
   expect(items[0].productId).toBe('door-pocket-900');
@@ -118,7 +120,7 @@ test('여닫이: 블록의 로컬 x가 벽 방향이 아니어도 문틀이 가�
 
 // 2026-10-06: 창·문 INSERT 하나의 전개 도형 bbox(DXF 좌표)를 코퍼스 점수판(정답 자리)과 벽 구간화(창 도중 경계)가 같이 쓴다.
 // 자식 INSERT(HANDLE)의 호 중심은 창틀 상자 밖(x 1950.5)에 두어, 자식 도형이 정말 상자에 드는지 본다.
-test('blockBoxes는 바깥 창·문 INSERT마다 자식 도형까지 모은 bbox와 호칭 폭을 낸다', () => {
+test('blockBoxes는 안쪽(자기 이름이 창·문이면 자기) 창·문 INSERT마다 자식 도형까지 모은 bbox와 호칭 폭을 낸다', () => {
   const inserts = [plan, { name: 'win-900-3', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 },
     { name: 'HANDLE', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 1 }, { name: '식탁-4인', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
   const segs = [...winSegs(1000.5, 1), seg(1440.5, 0.5, 1460.5, 0.5, 2), seg(0, 0, 6000, 0, 0, 'WAL'), seg(0, 0, 100, 100, 3, 'FUR')];
@@ -141,19 +143,20 @@ test('inserts 밖을 가리키는 ins 꼬리표는 blockBoxes·blockOpenings 모
 
 // 2026-10-06: 로컬 y가 벽 방향인 블록은 문만이 아니다(2026-10-02 내곡중 SD850 규칙을 창·포켓에도). 세로 벽 V에 앉은 창인데 블록
 // 로컬 x가 세로 벽을 가로지르는 방향이라, 로컬 x로 앉히면 호스트가 없어 창이 통째로 빠졌다.
-test('창·포켓 블록도 로컬 x 쪽 호스트가 없거나 가로지르지 않으면 수직 방향 벽에 앉는다', () => {
+test('창·포켓 블록도 로컬 x 쪽 호스트가 없으면 수직 방향 벽에 앉는다', () => {
   const V = makeWall({ a: [3000, 0], b: [3000, 6000], thickness: 200, height: 3500 });
   const inserts = [plan, { name: 'AW-900', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 },
     { name: '문_슬라이딩 포켓 900', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
-  // 창틀: 벽 몸통(x 2932.5~3067.5)을 가로지르는 선 + 유리선. 로컬 x = 월드 x(rot 0)인데 벽은 y 방향이다.
+  // 창틀(x 2932.5~3067.5): 벽 V의 중심선(x 3000)을 가로지르는 선 + 유리선. 로컬 x = 월드 x(rot 0)인데 벽은 y 방향이다.
   const win = [seg(2932.5, 1000, 2932.5, 1900, 1), seg(3067.5, 1000, 3067.5, 1900, 1), seg(2932.5, 1000, 3067.5, 1000, 1), seg(2932.5, 1900, 3067.5, 1900, 1), seg(3000.5, 1070, 3000.5, 1830, 1)];
-  // 포켓: 문틀(가로지름) + 문짝(벽과 나란한 긴 선)이 y 3000~3930, 주머니 y 3930~4800.
-  const pocket = [seg(2950, 3000, 3050, 3000, 2, '04창호'), seg(2950, 4800, 3050, 4800, 2, '04창호'), seg(2950, 3000, 2950, 4800, 2, '04창호'), seg(3050, 3000, 3050, 4800, 2, '04창호'), seg(3000, 3040, 3000, 3930, 2, '04창호')];
+  // 포켓(y 3000~4800): 문틀(가로지름) + 문짝(벽과 나란한 긴 선)이 y 3870~4760 — 문짝 쪽 절반(3900~4800)이 주머니, 개구부는
+  // 반대쪽 y 3000~3900이다. 문짝을 위쪽 절반에 두어 "문짝 없음" 기본값(아래쪽 x0 절반이 주머니 → 4350)과 기대값이 갈린다(최종 리뷰).
+  const pocket = [seg(2950, 3000, 3050, 3000, 2, '04창호'), seg(2950, 4800, 3050, 4800, 2, '04창호'), seg(2950, 3000, 2950, 4800, 2, '04창호'), seg(3050, 3000, 3050, 4800, 2, '04창호'), seg(3000, 3870, 3000, 4760, 2, '04창호')];
   const out = blockOpenings(exOf(inserts, [...win, ...pocket]), [A, V]);
   expect(out).toHaveLength(2);
   const w = out.find(o => o.kind === 'window'), p = out.find(o => o.kind === 'pocket');
   expect(w.wall).toBe(V); expect(w.width).toBe(900); expect(w.t * 6000).toBeCloseTo(1450, 0);
-  expect(p.wall).toBe(V); expect(p.width).toBe(900); expect(p.t * 6000).toBeCloseTo(4350, 0);   // 문짝(3000~3930) 반대쪽 절반
+  expect(p.wall).toBe(V); expect(p.width).toBe(900); expect(p.t * 6000).toBeCloseTo(3450, 0);   // 문짝(3870~4760) 반대쪽 절반 3000~3900
 });
 
 // 2026-10-06 최종 리뷰 재현: 호스트가 있지만 가로지르지 않는 창은 수직 방향으로 넘어가면 안 된다 — 두꺼운 외벽(400)의 실내 쪽에만

@@ -182,6 +182,12 @@ test('카드 동작 → 그다음 onClose 한 번 (DXF·템플릿·Esc·close())
   document.querySelector('[data-start="dxf"]').click();
   expect(calls).toEqual(['dxf', 'close']);
   expect(document.querySelector('#startScreen')).toBeNull();
+  // 템플릿 카드(기본 템플릿 builtin-studio)도 같은 차례다(2026-10-06 최종 리뷰 — 제목에만 있고 누르지 않았다).
+  calls.length = 0;
+  openStartScreen({ store, onTemplate: () => calls.push('template'), onClose: () => calls.push('close') });
+  document.querySelector('[data-template]').click();
+  expect(calls).toEqual(['template', 'close']);
+  expect(document.querySelector('#startScreen')).toBeNull();
   calls.length = 0;
   openStartScreen({ store, onEmpty: () => calls.push('empty'), onClose: () => calls.push('close') });
   document.querySelector('#startScreen').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -190,15 +196,20 @@ test('카드 동작 → 그다음 onClose 한 번 (DXF·템플릿·Esc·close())
   const s = openStartScreen({ store, onClose: () => calls.push('close') });
   s.close(); s.close();
   expect(calls).toEqual(['close']);
-  // 동작이 던져도 알림은 간다(온보딩이 영영 안 뜨지 않게). 클릭 리스너가 async라(startScreen.js:79) 예외를 삼키지 않으면 unhandled
-  // rejection이 되어 vitest 전체가 실패한다(사전 검토 재현) — run()이 잡아 console.error로 보낸다.
+  // 동작이 던져도 알림은 간다(온보딩이 영영 안 뜨지 않게). 시작 화면의 클릭 리스너(root의 'click')가 async라 예외를 삼키지 않으면
+  // unhandled rejection이 되어 vitest 전체가 실패한다(사전 검토 재현) — run()이 잡아 console.error로 보낸다.
   calls.length = 0;
   openStartScreen({ store, onUpload: () => { calls.push('upload'); throw new Error('boom'); }, onClose: () => calls.push('close') });
   // 스파이는 연 **뒤에** 건다 — jsdom이 미리보기 캔버스의 getContext 미구현을 console.error로 보내므로(카드마다 한 번) 먼저 걸면 그것까지 센다.
+  // 단언이 실패해도 스파이는 풀린다(try/finally — 2026-10-06 최종 리뷰).
   const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-  document.querySelector('[data-start="upload"]').click();
-  await new Promise(r => setTimeout(r, 0));
-  expect(calls).toEqual(['upload', 'close']);
-  expect(err).toHaveBeenCalledTimes(1);
-  err.mockRestore();
+  try {
+    document.querySelector('[data-start="upload"]').click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(calls).toEqual(['upload', 'close']);
+    expect(err).toHaveBeenCalledTimes(1);
+    expect(err).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }));
+  } finally {
+    err.mockRestore();
+  }
 });

@@ -165,7 +165,8 @@ describe('rooms', () => {
       expect(inner.every(([x, y]) => x >= -1 && x <= 10001 && y >= -1 && y <= 3001)).toBe(true);
       expect(inner).toEqual(pts);                                                // 바깥 폴리곤(같은 점 수·차례)
     }
-    // 구획선 변의 점은 bbox 위에 그대로 앉는다(inset 0) — 정상 방에서는 1 mm 여유 덕에 안쪽 폴리곤을 그대로 쓴다.
+    // 구획선 변의 점은 bbox 선 위에 그대로 앉는다(inset 0) — bbox 검사가 엄격 비교(벗어날 때만 되돌린다)라 그대로 통과하고, 정상 방은
+    // 안쪽 폴리곤을 쓴다. saneInner의 1 mm 여유는 부동소수 오차를 위한 쿠션이지 이 경우가 시험하는 것이 아니다(2026-10-06 최종 리뷰).
     const sq = [[0, 0], [4000, 0], [4000, 3000], [0, 3000]];
     const sqWalls = sq.map((p, i) => {
       const w = makeWall({ a: p, b: sq[(i + 1) % 4], thickness: 200, height: 2300 });

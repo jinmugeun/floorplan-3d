@@ -98,7 +98,8 @@ export async function runDrawing(entry) {
   const { project, stats } = ex, fl = project.floors[0];
   // 치수 적합: 측정점(앱 좌표로 옮김)이 벽 면·중심선이나 기둥 면·중심에서 5 mm 안에 드는 비율. 도면 상자 안의 치수만.
   // DXF 원 좌표 → 앱 좌표: 워커가 전개를 unitScale배로 mm로 만든 뒤(2026-10-06) origin을 뺀다. 실파일 넷은 전부 mm(배율 1)다.
-  const k = summary.unitScale ?? 1;
+  // 배율은 추출이 실제로 쓴 stats.unitScale을 먼저 본다(없으면 parse 요약 · 2026-10-06 최종 리뷰).
+  const k = stats.unitScale ?? summary.unitScale ?? 1;
   const toApp = p => [(p[0] * k - stats.origin[0]) * stats.scale, -(p[1] * k - stats.origin[1]) * stats.scale];
   const cols = fl.items.filter(i => i.kind === 'column');
   let ends = 0, hit = 0;
