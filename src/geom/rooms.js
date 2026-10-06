@@ -154,8 +154,9 @@ export function detectRooms(walls, prevRooms = []) {
       floorMat: prev?.floorMat ?? null, ceilingMat: prev?.ceilingMat ?? null,
       design: prev?.design ?? { EA: 0, SA: 0 },
       points: f.pts, wallIds: f.wallIds.filter(id => wallById[id]),
-      // 안쪽 폴리곤은 offsetPolygon이 근-평행 변을 교차시키면 뒤집히거나 폭발한다(폭 6 mm 조각이 54.8 m²로 보고됐다 —
-      // 계획 10 슬리버 리뷰). 부호가 뒤집혔거나 바깥 면적을 넘으면 바깥 폴리곤 면적(상한)으로 되돌린다.
+      // 안쪽 폴리곤은 roomInnerPolygon이 이미 saneInner로 걸러 준다(뒤집힘·폭발이면 바깥 폴리곤 — 2026-10-06). saneArea는
+      // 숫자에 대한 두 번째 보루다: 그래도 넓이가 0 이하이거나 바깥을 넘으면 바깥 폴리곤 면적(상한)으로 되돌린다
+      // (처음 보고: 폭 6 mm 조각이 54.8 m² — 계획 10 슬리버 리뷰).
       area: saneArea(polygonArea(inner), f.area) / 1e6,
       // 도면 기준(벽·기둥 중심선) 넓이 — 치수가 가리키는 선으로 잰 값(DXF 도면의 실 면적 표기가 이 기준이다).
       areaCenter: saneCenter(centerArea(f.pts, walls), f.area) / 1e6,
@@ -169,11 +170,17 @@ const saneArea = (innerA, outerA) => (Number.isFinite(innerA) && innerA > 0 && i
 
 // 안쪽 폴리곤의 보루(2026-10-06 · 계획 10 이월 ④): offsetPolygon은 근-평행 변이 만나면 뒤집히거나 폭발한다(6 mm 조각이
 // 54.8 m² · 3D 바닥 폴리곤 123 m). saneArea는 숫자만 고쳤고 2D 바닥(view2d)·3D 바닥/천장/벽면(build.js)·템플릿은 그 폴리곤을
-// 그대로 그렸다. 점이 유한하지 않거나, 부호가 바깥과 다르거나(뒤집힘), 넓이가 바깥을 넘으면(폭발) **바깥 폴리곤의 복사본**으로
-// 되돌린다 — build.js의 edgeWall이 i번째 변 ↔ i번째 벽을 전제하므로 점 수와 차례는 지킨다.
+// 그대로 그렸다. 네 가지를 모두 지켜야 안쪽을 쓴다 — 점이 유한하고, 부호가 바깥과 같고(뒤집히지 않음), 넓이가 바깥 이하이고,
+// 모든 점이 바깥 bbox 안이다(음수가 아닌 inset은 bbox를 벗어날 수 없다). 넓이만으로는 모자랐다(2026-10-06 리뷰: 5 m 변 끝이
+// 5 mm 꺾이고 다음 변이 구획선이면 한 점이 x ≈ 105 m로 튀는데 넓이는 22.9 m² < 29.99 m²였다). 하나라도 어기면 **바깥
+// 폴리곤의 복사본**으로 되돌린다 — build.js의 edgeWall이 i번째 변 ↔ i번째 벽을 전제하므로 점 수와 차례는 지킨다.
 export function saneInner(inner, outer) {
   const copy = () => outer.map(p => [p[0], p[1]]);
   if (inner.length !== outer.length || inner.some(p => !Number.isFinite(p[0]) || !Number.isFinite(p[1]))) return copy();
+  // bbox는 1 mm 여유를 둔다: 구획선(inset 0) 변의 점은 bbox 선 위에 그대로 앉는다(부동소수 오차 포함).
+  const xs = outer.map(p => p[0]), ys = outer.map(p => p[1]);
+  const x0 = Math.min(...xs) - 1, x1 = Math.max(...xs) + 1, y0 = Math.min(...ys) - 1, y1 = Math.max(...ys) + 1;
+  if (inner.some(([x, y]) => x < x0 || x > x1 || y < y0 || y > y1)) return copy();
   const ai = polygonArea(inner), ao = polygonArea(outer);
   return Math.sign(ai) === Math.sign(ao) && Math.abs(ai) <= Math.abs(ao) ? inner : copy();
 }

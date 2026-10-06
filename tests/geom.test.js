@@ -146,9 +146,33 @@ describe('rooms', () => {
     expect(roomInnerPolygon(dup, [])).toHaveLength(5);
     // 유한하지 않은 점이 섞이면 바깥으로.
     expect(saneInner([[NaN, 0], [1, 0], [1, 1]], [[0, 0], [10, 0], [10, 10]])).toEqual([[0, 0], [10, 0], [10, 10]]);
+    expect(saneInner([[0, 0], [1, 0]], [[0, 0], [10, 0], [10, 10]])).toEqual([[0, 0], [10, 0], [10, 10]]);         // 점 수가 다르면 바깥
     expect(saneInner([[0, 0], [1, 0], [1, 1]], [[0, 0], [10, 0], [10, 10]])).toEqual([[0, 0], [1, 0], [1, 1]]);      // 멀쩡하면 그대로
     expect(saneInner([[0, 0], [10, 0], [10, 10]], [[0, 0], [1, 0], [1, 1]])).toEqual([[0, 0], [1, 0], [1, 1]]);      // 바깥보다 크면 바깥
     expect(saneInner([[0, 0], [1, 1], [1, 0]], [[0, 0], [1, 0], [1, 1]])).toEqual([[0, 0], [1, 0], [1, 1]]);         // 부호 뒤집힘
+  });
+  // 2026-10-06 리뷰: 부호가 같고 넓이도 바깥보다 작은데 한 점이 100 m 밖으로 튄다 — 5 m 변 끝이 5 mm 꺾이고(근-평행)
+  // 다음 변이 구획선(inset 0)이면 두 옮긴 직선이 x ≈ 105 000에서 만난다(안쪽 22.9 m² < 바깥 29.99 m²). 200 → 100 벽 쌍도 같다.
+  test('roomInnerPolygon은 근-평행 꺾임에서 점이 바깥 bbox를 벗어나면 바깥 폴리곤으로 돌아온다', () => {
+    const pts = [[0, 0], [5000, 0], [10000, 5], [10000, 3000], [0, 3000]];
+    const walls = (second) => pts.map((p, i) => i === 1 ? second(p, pts[2])
+      : makeWall({ a: p, b: pts[(i + 1) % 5], thickness: 200, height: 2300 }));
+    const partition = walls((a, b) => Object.assign(makeWall({ a, b, thickness: 200, height: 2300 }), { virtual: true }));
+    const thinner = walls((a, b) => makeWall({ a, b, thickness: 100, height: 2300 }));
+    for (const ws of [partition, thinner]) {
+      const inner = roomInnerPolygon({ points: pts }, ws);
+      expect(inner).toHaveLength(5);
+      expect(inner.every(([x, y]) => x >= -1 && x <= 10001 && y >= -1 && y <= 3001)).toBe(true);
+      expect(inner).toEqual(pts);                                                // 바깥 폴리곤(같은 점 수·차례)
+    }
+    // 구획선 변의 점은 bbox 위에 그대로 앉는다(inset 0) — 정상 방에서는 1 mm 여유 덕에 안쪽 폴리곤을 그대로 쓴다.
+    const sq = [[0, 0], [4000, 0], [4000, 3000], [0, 3000]];
+    const sqWalls = sq.map((p, i) => {
+      const w = makeWall({ a: p, b: sq[(i + 1) % 4], thickness: 200, height: 2300 });
+      return i === 0 ? Object.assign(w, { virtual: true }) : w;
+    });
+    const kept = roomInnerPolygon({ points: sq }, sqWalls);
+    expect(Math.abs(polygonArea(kept))).toBeCloseTo(3800 * 2900, 3);
   });
 });
 
