@@ -67,11 +67,19 @@ export async function areaLabels(ex) {
   });
 }
 
-// 창·문 블록 정답(2026-10-06): 종류·호칭 폭·전개 도형 bbox 중심(DXF 좌표). 3차 수정의 scratch 채점기(사동중 44개)가 저장소 도구로 왔다.
+// 창·문 블록 정답(2026-10-06): 종류·호칭 폭·전개 도형 bbox와 그 중심(DXF 좌표). 3차 수정의 scratch 채점기(사동중 44개)가 저장소 도구로 왔다.
+// 중심(c)은 도면 상자 안인지 가리는 데만, 적합 판정은 상자(box)로 한다.
 export async function blockTruth(ex) {
   const { blockBoxes } = await import('../../src/io/dxf/blockOpenings.js');
-  return blockBoxes(ex).map(b => ({ name: b.name, kind: b.kind, width: b.width, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] }));
+  return blockBoxes(ex).map(b => ({ name: b.name, kind: b.kind, width: b.width, box: b.box, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] }));
 }
+
+// 개구부 적합 허용 거리(mm, 2026-10-06): 우리 개구부 중심에서 정답 블록 **상자**까지(상자 안이면 0). 처음엔 상자 **중심**까지를
+// max(300, 폭/2 + 50) 안에서 봤는데, 포켓(절반이 벽 속 주머니)과 여닫이(열린 문짝까지 그림)는 상자 중심이 개구부 중심에서 ≈ 폭/2
+// 비껴 있어 여유가 없었고(사동중 포켓 453~460·502 mm / 허용 500, 내곡중 SD850 446 / 475), 긴 창은 거꾸로 너무 느슨했다(4800 창은
+// 2450 mm 안의 무엇이든). 상자까지 재면 포켓의 개구부 중심은 상자 안, 여닫이의 개구부 중심은 문틀 쪽 상자 변 위라 폭/2 비낌이
+// 사라지고 긴 창은 엄격해진다. 150은 벽 중심선과 블록 틀의 어긋남 여유다(사동중 포켓 하나가 상자에서 138 mm).
+const OPN_TOL = 150;
 
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }.
 export async function runDrawing(entry) {
@@ -119,14 +127,20 @@ export async function runDrawing(entry) {
     if (ok) areaOk++;
     return { name: a.name, label: a.value, got: got == null ? null : Math.round(got * 100) / 100, room: room?.name ?? null, ok };
   });
-  // 개구부 적합: 정답 블록 자리(중심 거리 ≤ max(300, 폭/2 + 50) — 포켓은 블록의 절반이 주머니라 중심이 폭/2 비껴 있다)에 우리
-  // 개구부(문·창·개구부 아이템)가 있는가, 있으면 폭이 50 mm 안인가.
+  // 개구부 적합: 정답 블록 상자에서 OPN_TOL 안에 우리 개구부(문·창·개구부 아이템) 중심이 있는가, 있으면 폭이 50 mm 안인가
+  // (이름에 폭이 없는 블록은 폭 검사를 늘 통과한다).
   const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
   const truth = (await blockTruth(exRaw)).filter(t => near(toApp(t.c)));
   let opnHit = 0, opnWidth = 0;
   for (const t of truth) {
-    const c = toApp(t.c), tol = Math.max(300, t.width / 2 + 50);
-    const it = opens.filter(i => Math.hypot(i.pos[0] - c[0], i.pos[1] - c[1]) <= tol).sort((a, b) => Math.hypot(a.pos[0] - c[0], a.pos[1] - c[1]) - Math.hypot(b.pos[0] - c[0], b.pos[1] - c[1]))[0];
+    // 상자 네 귀를 앱 좌표로 옮긴 뒤 min·max를 다시 잡는다 — toApp는 y를 뒤집는다.
+    const P = [[t.box[0], t.box[1]], [t.box[2], t.box[1]], [t.box[0], t.box[3]], [t.box[2], t.box[3]]].map(toApp);
+    const x0 = Math.min(...P.map(p => p[0])), x1 = Math.max(...P.map(p => p[0])), y0 = Math.min(...P.map(p => p[1])), y1 = Math.max(...P.map(p => p[1]));
+    const c = toApp(t.c);
+    const dBox = i => Math.hypot(Math.max(x0 - i.pos[0], 0, i.pos[0] - x1), Math.max(y0 - i.pos[1], 0, i.pos[1] - y1));
+    const dMid = i => Math.hypot(i.pos[0] - c[0], i.pos[1] - c[1]);
+    // 가장 가까운 것: 상자까지의 거리, 같으면(둘 다 상자 안 — 긴 창이 둘로 나뉜 자리) 상자 중심에 가까운 것.
+    const it = opens.filter(i => dBox(i) <= OPN_TOL).sort((a, b) => dBox(a) - dBox(b) || dMid(a) - dMid(b))[0];
     if (!it) continue;
     opnHit++;
     if (!t.width || Math.abs(it.size[0] - t.width) <= 50) opnWidth++;

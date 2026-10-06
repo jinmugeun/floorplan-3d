@@ -13,14 +13,14 @@
   "areaOk": 11,
   "areaAll": 11,
   "opnAll": 44,
-  "opnHit": 43,
-  "opnWidth": 39,
+  "opnHit": 44,
+  "opnWidth": 40,
   "doors": 17,
   "windows": 30,
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1376
+  "ms": 1412
  },
  "sinsang-B": {
   "regions": 2,
@@ -43,7 +43,7 @@
   "passes": 18,
   "columns": 14,
   "guessed": false,
-  "ms": 886
+  "ms": 965
  },
  "sinsang-A": {
   "regions": 2,
@@ -66,7 +66,7 @@
   "passes": 19,
   "columns": 14,
   "guessed": false,
-  "ms": 832
+  "ms": 902
  },
  "naegok": {
   "regions": 1,
@@ -89,6 +89,6 @@
   "passes": 3,
   "columns": 24,
   "guessed": false,
-  "ms": 889
+  "ms": 961
  }
 }

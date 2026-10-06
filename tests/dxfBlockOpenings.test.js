@@ -117,11 +117,24 @@ test('여닫이: 블록의 로컬 x가 벽 방향이 아니어도 문틀이 가�
 });
 
 // 2026-10-06: 창·문 INSERT 하나의 전개 도형 bbox(DXF 좌표)를 코퍼스 점수판(정답 자리)과 벽 구간화(창 도중 경계)가 같이 쓴다.
+// 자식 INSERT(HANDLE)의 호 중심은 창틀 상자 밖(x 1950.5)에 두어, 자식 도형이 정말 상자에 드는지 본다.
 test('blockBoxes는 바깥 창·문 INSERT마다 자식 도형까지 모은 bbox와 호칭 폭을 낸다', () => {
   const inserts = [plan, { name: 'win-900-3', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 },
     { name: 'HANDLE', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 1 }, { name: '식탁-4인', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
   const segs = [...winSegs(1000.5, 1), seg(1440.5, 0.5, 1460.5, 0.5, 2), seg(0, 0, 6000, 0, 0, 'WAL'), seg(0, 0, 100, 100, 3, 'FUR')];
-  const boxes = blockBoxes(exOf(inserts, segs, [{ c: [1900.5, 10], r: 5, ins: 2 }]));
-  expect(boxes).toEqual([{ k: 1, kind: 'window', name: 'win-900-3', width: 900, box: [1000.5, -67.5, 1900.5, 67.5] }]);
+  const boxes = blockBoxes(exOf(inserts, segs, [{ c: [1950.5, 10], r: 5, ins: 2 }]));
+  expect(boxes).toEqual([{ k: 1, kind: 'window', name: 'win-900-3', width: 900, box: [1000.5, -67.5, 1950.5, 67.5] }]);
   expect(blockBoxes(exOf([], []))).toEqual([]);
+});
+
+// 2026-10-06: ins 꼬리표가 inserts 밖을 가리키면 주인이 undefined다 — `k < 0`만 보면 그대로 지나가 ins[undefined].name에서 던졌다.
+// 두 함수 모두 그런 도형을 건너뛰고(던지지 않고, 상자·개구부를 만들지 않고) 나머지는 그대로 낸다.
+test('inserts 밖을 가리키는 ins 꼬리표는 blockBoxes·blockOpenings 모두 건너뛴다', () => {
+  const inserts = [plan, { name: 'win-900-3', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
+  const ex = exOf(inserts, [...winSegs(1000.5, 1), seg(3000.5, 0.5, 3100.5, 0.5, 7)], [{ c: [3050.5, 10], r: 5, ins: 9 }]);
+  expect(blockBoxes(ex)).toEqual([{ k: 1, kind: 'window', name: 'win-900-3', width: 900, box: [1000.5, -67.5, 1900.5, 67.5] }]);
+  const out = blockOpenings(ex, [A, B]);
+  expect(out).toHaveLength(1);
+  expect(out[0]).toMatchObject({ kind: 'window', name: 'win-900-3', width: 900, wall: A });
+  expect(out[0].t * 6000).toBeCloseTo(1450.5, 6);
 });

@@ -31,6 +31,13 @@ export function blockKind(name = '') {
   return null;
 }
 
+// 블록 이름의 호칭 폭(mm): 이름에서 처음 나오는 3~4자리 숫자(win-900-3 → 900 · 문 2짝다른사이즈1500-200 → 1500), 없으면 0.
+// blockOpenings(벽 위 폭)와 blockBoxes(코퍼스 정답 폭)가 같은 규칙을 쓴다(2026-10-06).
+export function nominalWidth(name = '') {
+  const m = String(name).match(/(\d{3,4})/);
+  return m ? +m[1] : 0;
+}
+
 // INSERT 번호 → 그 도형을 거느리는 창·문 INSERT 번호(자기 이름이 창·문이면 자기, 아니면 부모의 주인 · 없으면 −1).
 // 전개 순서상 부모가 자식보다 앞이라 한 번 훑으면 된다. blockOpenings와 blockBoxes가 같은 규칙을 쓴다(2026-10-06).
 function ownerOf(ins) {
@@ -39,7 +46,9 @@ function ownerOf(ins) {
   return owner;
 }
 
-// 바깥 창·문 INSERT(blockKind가 있는 가장 바깥 것)마다 전개 도형(자식 INSERT 포함)의 bbox — **DXF 좌표**다(2026-10-06). 두 곳이 쓴다:
+// 창·문 INSERT(ownerOf의 주인 — 자기 이름이 창·문이면 자기, 안쪽이 이긴다)마다 전개 도형(창·문 이름이 아닌 자식 INSERT 포함)의
+// bbox — **DXF 좌표**다(2026-10-06). 창·문 블록 안에 창·문 블록이 또 들어 있으면 상자가 둘 나온다(바깥 것은 안쪽 도형을 뺀 제 몫만):
+// 네 도면에는 이런 겹침이 없지만, 있으면 Task 7의 spans가 서로 겹친다. 두 곳이 쓴다:
 // 코퍼스 점수판의 개구부 정답 자리(tools/dxf-corpus/lib.mjs), 벽 구간화가 창 도중에 경계를 두지 않게 하는 spans(walls.js → bands.sectionsOf).
 // 점은 선분 끝과 호 중심이다(blockOpenings와 같은 재료).
 export function blockBoxes(ex) {
@@ -54,8 +63,8 @@ export function blockBoxes(ex) {
   for (const s of ex?.segs ?? []) if (s.ins != null) { add(owner[s.ins], s.a); add(owner[s.ins], s.b); }
   for (const c of [...(ex?.arcs ?? []), ...(ex?.polyArcs ?? [])]) if (c.ins != null) add(owner[c.ins], c.c);
   return [...box].map(([k, b]) => {
-    const it = ins[k], m = it.name.match(/(\d{3,4})/);
-    return { k, kind: blockKind(it.name), name: it.name, width: m ? +m[1] : 0, box: b };
+    const it = ins[k];
+    return { k, kind: blockKind(it.name), name: it.name, width: nominalWidth(it.name), box: b };
   });
 }
 
@@ -91,7 +100,7 @@ export function blockOpenings(ex, walls, toApp = p => p) {
     const { u, x0, x1 } = pick, span = x1 - x0;
     const along = p => p[0] * u[0] + p[1] * u[1];
     if (!(span > 0)) continue;
-    const m = it.name.match(/(\d{3,4})/), nominal = m ? +m[1] : 0;
+    const nominal = nominalWidth(it.name);
     const width = nominal >= 0.4 * span && nominal <= 1.1 * span ? nominal : kind === 'pocket' ? span / 2 : span;
     let c = (x0 + x1) / 2;
     if (kind === 'pocket') {
