@@ -155,3 +155,19 @@ test('창·포켓 블록도 로컬 x 쪽 호스트가 없거나 가로지르지 
   expect(w.wall).toBe(V); expect(w.width).toBe(900); expect(w.t * 6000).toBeCloseTo(1450, 0);
   expect(p.wall).toBe(V); expect(p.width).toBe(900); expect(p.t * 6000).toBeCloseTo(4350, 0);   // 문짝(3000~3930) 반대쪽 절반
 });
+
+// 2026-10-06 최종 리뷰 재현: 호스트가 있지만 가로지르지 않는 창은 수직 방향으로 넘어가면 안 된다 — 두꺼운 외벽(400)의 실내 쪽에만
+// 그린 창(창틀 y 50~185)은 외벽 중심선 한쪽에만 있어 across가 아니고, 창 가운데 x 1450에서 T자로 붙는 칸막이 V(100)의 몸통에
+// 멀리언 두 선(x 1430 · 1470)이 양쪽으로 걸려 V가 "가로지르는" 호스트가 됐다(폭 135 개구부가 칸막이에 앉고 외벽의 창이 빠졌다).
+// 창·포켓은 호칭 폭이 수직 구간 폭의 0.4~1.1배일 때만 넘어간다(문은 그대로 — 내곡중 SD850·방음문).
+test('창: 호스트가 있지만 가로지르지 않는 창은 호칭 폭이 수직 구간에 맞지 않으면 제 벽에 남는다', () => {
+  const W1 = makeWall({ a: [0, 0], b: [6000, 0], thickness: 400 });
+  const V = makeWall({ a: [1450, 0], b: [1450, 3000], thickness: 100 });
+  const inserts = [plan, { name: 'win-900-3', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
+  const segs = [seg(1000, 50, 1900, 50, 1), seg(1000, 185, 1900, 185, 1), seg(1000, 50, 1000, 185, 1), seg(1900, 50, 1900, 185, 1),
+    seg(1430, 50, 1430, 185, 1), seg(1470, 50, 1470, 185, 1)];
+  const out = blockOpenings(exOf(inserts, segs), [W1, V]);
+  expect(out).toHaveLength(1);
+  expect(out[0]).toMatchObject({ kind: 'window', name: 'win-900-3', width: 900, wall: W1 });
+  expect(out[0].t * 6000).toBeCloseTo(1450, 6);
+});

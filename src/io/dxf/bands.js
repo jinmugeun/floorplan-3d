@@ -211,8 +211,8 @@ export function chainRuns(runs, P = DXF_PARAMS, evidence = null) {
 //  - 경계 사이의 틈(문)은 **얇은 쪽** 구간이 가진다(문틀은 벽의 몸통에 선다).
 //  - 두 중심이 jogTol보다 벌어지면 경계에 꺾임(jog)을 두고, 그 안이면 한 중심선으로 맞춘다.
 //  - 창·문 블록 도중의 경계(2026-10-06 · spans = bin 좌표의 블록 구간 [{ x0, x1, o0, o1 }]): 경계가 블록 안쪽이고 블록의 오프셋 범위가
-//    양쪽 띠와 겹치면 경계를 가까운 블록 끝으로 옮긴다(양쪽 구간이 minWall을 지키는 끝 · 둘 다 되면 가까운 쪽 · 같으면 x0). 창이 짧은
-//    구간에 앉아 벽 끝에서 잘리던 것(사동중 4800 창·스테인리스 벽 뒤 창)을 막는다. 틈은 옮기기 전 구간으로 센다.
+//    양쪽 띠와 의미 있게 겹치면(spanOverlap · 최종 리뷰) 경계를 가까운 블록 끝으로 옮긴다(양쪽 구간이 minWall을 지키는 끝 · 둘 다 되면
+//    가까운 쪽 · 같으면 x0). 창이 짧은 구간에 앉아 벽 끝에서 잘리던 것(사동중 4800 창·스테인리스 벽 뒤 창)을 막는다. 틈은 옮기기 전 구간으로 센다.
 // 반환: sections [{ t0, t1, lo, hi }] · jogs [{ t, c0, c1, th }] · gaps [{ t, off, width, t0, t1, lo, hi }] (bin 좌표).
 const contains = (A, B) => A.lo <= B.lo + 10 && A.hi >= B.hi - 10;
 export function sectionsOf(chain, P = DXF_PARAMS, spans = []) {
@@ -264,7 +264,14 @@ export function sectionsOf(chain, P = DXF_PARAMS, spans = []) {
     gapOf(a.t1, b.t0, thin);
     let t = thin === a ? b.t0 : a.t1;
     const lo = Math.min(a.lo, b.lo), hi = Math.max(a.hi, b.hi);
-    const span = spans.find(s => s.x0 + P.spanEdge < t && t < s.x1 - P.spanEdge && Math.min(s.o1, hi) - Math.max(s.o0, lo) > 0);
+    // 2026-10-06 최종 리뷰: 겹침 ≥ spanOverlap × min(얇은 띠 두께, 블록 깊이)일 때만 옮긴다 — "조금이라도 겹치면"이면 벽에 수직으로 그린
+    // 문 상자(문틀 + 문짝 + 궤적 ≈ 폭 × 폭)가 띠를 몇 mm 스쳐도 경계가 450 mm 옮겨졌다(재현 · 내곡중 11 mm 스침). 내곡중 FSD800(100 mm / 250 띠)은 옮긴다.
+    const thinTh = Math.min(a.hi - a.lo, b.hi - b.lo);
+    const span = spans.find(s => {
+      if (!(s.x0 + P.spanEdge < t && t < s.x1 - P.spanEdge)) return false;
+      const overlap = Math.min(s.o1, hi) - Math.max(s.o0, lo);
+      return overlap > 0 && overlap >= P.spanOverlap * Math.min(thinTh, s.o1 - s.o0);
+    });
     if (span) {
       const ok = x => x - a.t0 >= P.minWall && b.t1 - x >= P.minWall;
       const ends = [span.x0, span.x1].filter(ok).sort((x, y) => Math.abs(x - t) - Math.abs(y - t) || x - y);

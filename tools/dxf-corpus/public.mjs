@@ -1,7 +1,9 @@
-// 공개 정답 코퍼스: node tools/dxf-corpus/public.mjs [--fetch] [--update] [--only N]
-// WeiyaChen/CAD_rule_checker(MIT)의 아파트 평면 41쌍 — 원본 DXF와 사람이 단 정답 DXF(GT_<공간> 레이어의 닫힌 폴리선 = 방, GT_门 = 문).
-// 우리 파이프라인(worker.js와 같은 순서)을 원본에 돌리고 정답과 견준다. 다른 사무소·다른 나라 관례에서 벽·방·문이 얼마나 서는지의 **측정**이다.
-// 파일은 저장소 밖 ../dxf-public(DXF_PUBLIC_DIR)에 캐시한다. --fetch가 없는 파일만 받는다(약 100 MB).
+// 공개 정답 코퍼스: node tools/dxf-corpus/public.mjs [--fetch] [--update] [--only "<도면 이름>"]
+// (--only는 파일 이름 전체 · 확장자 없이, 예 "2suite (10)". --update는 --only와 함께 쓰지 못한다 — 종료 코드 2.)
+// WeiyaChen/CAD_rule_checker(MIT)의 아파트 평면 유효 39쌍(40 파일, 6suite (5)는 정답 없음) — 원본 DXF와 사람이 단 정답 DXF
+// (GT_<공간> 레이어의 폴리선 = 방, GT_门 = 문). 우리 파이프라인(worker.js와 같은 순서)을 원본에 돌리고 정답과 견준다. 다른 사무소·
+// 다른 나라 관례에서 벽·방·문이 얼마나 서는지의 **측정**이다.
+// 파일은 저장소 밖 ../dxf-public(DXF_PUBLIC_DIR)에 캐시한다. --fetch가 없는 파일만 받는다(80 파일 · 약 82 MB).
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -14,7 +16,13 @@ const REPO = 'WeiyaChen/CAD_rule_checker';
 const RAW = `https://raw.githubusercontent.com/${REPO}/main/input_data`;
 const argv = process.argv.slice(2);
 const flag = f => argv.includes(f);
-const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;   // 파일 이름 전체(확장자 없이)
+const hasOnly = flag('--only');
+const only = hasOnly ? argv[argv.indexOf('--only') + 1] : null;   // 파일 이름 전체(확장자 없이)
+// 2026-10-06 최종 리뷰: 값이 없는 --only(다음 인자가 없거나 --로 시작)와 맞는 도면이 없는 --only(아래)는 종료 코드 2다 — 오타로
+// 0개를 채점하고 "나빠진 지표 없음"으로 통과하지 않게. --only와 --update를 함께 쓰면 거절한다: 일부만 돌린 결과로 기준을 쓰지
+// 않는다(아래 병합이 안전망이고, 이 거절이 정책이다).
+if (hasOnly && (only == null || only.startsWith('--'))) { console.log(`해당 도면 없음: ${only ?? '(값 없음)'}`); process.exit(2); }
+if (hasOnly && flag('--update')) { console.log('--update는 --only와 함께 쓰지 않는다 — 기준은 전체 실행으로만 쓴다'); process.exit(2); }
 const UA = { headers: { 'User-Agent': 'floorplan-3d dxf-corpus' } };
 
 // `<n>suite (k).dxf`만 쓴다: sample.dxf는 2suite (6)과 같은 파일이고 정답 이름 꼴(sample_Annotated)이 다르다. 숫자 순.
@@ -51,7 +59,8 @@ async function worker() {
   return data => { posts.length = 0; onmessage({ data }); return posts.filter(m => m.type !== 'progress').at(-1); };
 }
 
-// 정답: GT_ 레이어의 닫힌 LWPOLYLINE(DXF 좌표). 문은 GT_门.
+// 정답(DXF 좌표): `GT_*` 레이어의 LWPOLYLINE 중 점이 3개 이상인 것 — 닫힘 플래그·페이퍼스페이스는 보지 않는다(2026-10-06 최종 리뷰).
+// 레이어가 GT_门이면 문, 나머지 GT_*는 방이다.
 async function groundTruth(path) {
   const { decodeDxf } = await import('../../src/io/dxf/decode.js');
   const { parseDxf } = await import('../../src/io/dxf/parse.js');
@@ -96,17 +105,18 @@ async function score(name) {
   // 문 적합은 로컬 점수판의 opnHit와 같은 규칙이다: 우리 개구부 중심에서 정답 문 **상자**까지(상자 안이면 0) OPN_TOL 안.
   // 상자 **중심**까지 재면 안 된다 — GT_门 상자는 대개 여닫이 궤적까지 그린 정사각형(900×900 · 800×800)이라 중심이 개구부
   // 중심에서 ≈ 폭/2 비껴 있다(2026-10-06: 중심 400 mm 규칙 712/1505 · 앉힌 문 489개를 못 셌다).
-  // 상자는 앱 좌표로 옮긴 꼭짓점의 min·max다(toApp가 y를 뒤집는다). 가장 가까운 것: 상자 거리, 같으면 상자 중심 거리.
+  // 상자는 앱 좌표로 옮긴 꼭짓점의 min·max다(toApp가 y를 뒤집는다). 있고 없음만 센다 — 폭을 보지 않으니 가장 가까운 것을 고를
+  // 까닭이 없다(2026-10-06 최종 리뷰: 정렬은 결과에 쓰이지 않았다).
   const doorHit = gtDoors.filter(d => {
-    const [x0, y0, x1, y1] = bbox(d), c = [(x0 + x1) / 2, (y0 + y1) / 2];
+    const [x0, y0, x1, y1] = bbox(d);
     const dBox = i => Math.hypot(Math.max(x0 - i.pos[0], 0, i.pos[0] - x1), Math.max(y0 - i.pos[1], 0, i.pos[1] - y1));
-    const dMid = i => Math.hypot(i.pos[0] - c[0], i.pos[1] - c[1]);
-    return !!opens.filter(i => dBox(i) <= OPN_TOL).sort((a, b) => dBox(a) - dBox(b) || dMid(a) - dMid(b))[0];
+    return opens.some(i => dBox(i) <= OPN_TOL);
   }).length;
   return { name, walls: stats.walls, rooms: stats.rooms, openEnds: stats.openEnds.length, gtRooms: gtRooms.length, roomHit, gtDoors: gtDoors.length, doorHit, guessed: !!stats.guessed, ms };
 }
 
-const names = (await list()).filter(n => !only || n.replace(/\.dxf$/i, '') === only);
+const names = (await list()).filter(n => !hasOnly || n.replace(/\.dxf$/i, '') === only);
+if (hasOnly && !names.length) { console.log(`해당 도면 없음: ${only}`); process.exit(2); }
 // 한 쌍이 실패해도(404 · 네트워크) 나머지는 받는다 — 실패는 표의 "파일 없음"으로 드러난다.
 if (flag('--fetch')) for (const n of names) { try { await fetchPair(n); } catch (e) { console.log(`받기 실패 ${n}: ${e.message}`); } }
 const COLS = ['walls', 'rooms', 'openEnds', 'gtRooms', 'roomHit', 'gtDoors', 'doorHit', 'ms'];
@@ -133,7 +143,19 @@ for (const n of names) {
   for (const c of COLS) { if (c === 'ms' || b[c] === r[c]) continue; const bad = WORSE[c] && Math.sign(r[c] - b[c]) === WORSE[c]; if (bad) worse++; diff.push(`${c} ${b[c]} → ${r[c]}${bad ? ' ✗' : ''}`); }
   if (diff.length) console.log(`${''.padEnd(22)}  기준 대비: ${diff.join(' · ')}`);
 }
+// 전체 실행에서 기준에 있는 도면이 이번에 없으면(목록·캐시에서 빠졌다) 나빠진 것이다 — 조용히 덜 채점하지 않게(2026-10-06 최종 리뷰).
+if (!hasOnly) for (const id of Object.keys(base)) if (id !== 'Σ' && !(id in now)) { worse++; console.log(`${id}  기준에 있는데 이번 실행에 없음 ✗`); }
 const pct = (a, b) => (b ? Math.round(100 * a / b) : 0);
 console.log(`\nΣ 방 ${sum.roomHit}/${sum.gtRooms} (${pct(sum.roomHit, sum.gtRooms)} %) · 문 ${sum.doorHit}/${sum.gtDoors} (${pct(sum.doorHit, sum.gtDoors)} %) · 오류 ${sum.errors}/${names.length}`);
-if (flag('--update')) { writeFileSync(BASE, JSON.stringify({ ...now, 'Σ': sum }, null, 1) + '\n'); console.log('기준을 새로 썼습니다'); }
+if (flag('--update')) {
+  // 기준 줄은 지우지 않는다: 옛 기준에 이번 줄을 덮어 병합하고 Σ는 병합한 줄들로 다시 센다(2026-10-06 최종 리뷰 — 예전에는 이번에
+  // 돈 도면만 남아, 일부만 돈 실행이 나머지 기준을 지웠다).
+  const { 'Σ': _oldSum, ...rows } = base;
+  const merged = { ...rows, ...now }, total = { gtRooms: 0, roomHit: 0, gtDoors: 0, doorHit: 0, errors: 0 };
+  for (const r of Object.values(merged)) {
+    if (r.error) { total.errors++; continue; }
+    for (const c of ['gtRooms', 'roomHit', 'gtDoors', 'doorHit']) total[c] += r[c] ?? 0;
+  }
+  writeFileSync(BASE, JSON.stringify({ ...merged, 'Σ': total }, null, 1) + '\n'); console.log('기준을 새로 썼습니다');
+}
 else if (worse) { console.log(`✗ 나빠진 지표 ${worse}개`); process.exit(1); }

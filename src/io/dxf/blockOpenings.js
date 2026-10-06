@@ -93,17 +93,25 @@ export function blockOpenings(ex, walls, toApp = p => p) {
     // 가로지르지 않는데 수직 방향 벽은 가로지르면 수직 방향이 벽 방향이다. 2026-10-06: 문만이 아니라 창·포켓도 같은 규칙이다(계획 10
     // 이월 — 로컬 x 쪽 호스트가 없으면 창이 통째로 빠졌다). 코퍼스 넷에서 창·문·개구부 정답 지표가 나빠지지 않았다(그대로다 — 넷의
     // 창·포켓 중 이 길을 타는 것은 아직 없고, 수직 방향으로 앉는 것은 내곡중 문 SD850·방음문 2400뿐이다).
+    // 2026-10-06 최종 리뷰: 창·포켓은 로컬 x 쪽 호스트가 **있지만 가로지르지 않을** 때 호칭 폭이 수직 구간 폭의 0.4~1.1배(아래 폭
+    // 규칙과 같다)일 때만 넘어간다 — 두꺼운 외벽의 한쪽에만 그린 창이, 창 가운데에 T자로 붙는 칸막이 몸통에 걸린 멀리언 두 선 때문에
+    // 칸막이에 폭 135로 앉고 외벽의 창이 빠질 수 있었다(합성 테스트로 확인 — 코퍼스 넷의 창·포켓 중 이 길을 타는 것은 없다).
+    // 호스트가 없으면 예전처럼 넘어가고, 문은 그대로다(내곡중 SD850·방음문으로 확인한 동작).
+    const nominal = nominalWidth(it.name);
+    const plausible = span => nominal >= 0.4 * span && nominal <= 1.1 * span;
     const seat = dir => {
       const ts = g.pts.map(p => p[0] * dir[0] + p[1] * dir[1]), lo = Math.min(...ts), hi = Math.max(...ts);
       return { u: dir, x0: lo, x1: hi, host: hi > lo ? hostWall(walls, g.pts, dir, lo, hi) : null };
     };
     let pick = seat([(e[0] - o[0]) / el, (e[1] - o[1]) / el]);
-    if (!pick.host?.across) { const alt = seat([-pick.u[1], pick.u[0]]); if (alt.host?.across) pick = alt; }
+    if (!pick.host?.across) {
+      const alt = seat([-pick.u[1], pick.u[0]]);
+      if (alt.host?.across && (kind === 'door' || !pick.host || plausible(alt.x1 - alt.x0))) pick = alt;
+    }
     const { u, x0, x1 } = pick, span = x1 - x0;
     const along = p => p[0] * u[0] + p[1] * u[1];
     if (!(span > 0)) continue;
-    const nominal = nominalWidth(it.name);
-    const width = nominal >= 0.4 * span && nominal <= 1.1 * span ? nominal : kind === 'pocket' ? span / 2 : span;
+    const width = plausible(span) ? nominal : kind === 'pocket' ? span / 2 : span;
     let c = (x0 + x1) / 2;
     if (kind === 'pocket') {
       // 문짝(벽과 나란한 긴 선)이 있는 쪽 절반이 주머니다 — 개구부는 반대쪽 절반.
