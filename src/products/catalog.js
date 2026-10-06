@@ -45,7 +45,7 @@ export const ATTACH_LABELS = { floor: '바닥에 서있는 제품', floorLay: '�
 // 제품 단가(원). 실판매 가격 DB는 범위 밖이라 견적서용 정적 값이다(명세 §17).
 // 구조물(기둥·개구부)은 사는 물건이 아니라 도면 요소라 0원이다.
 const BASE_PRICES = {
-  'door-swing-900': 180000, 'door-swing-1000': 190000, 'door-double-1800': 360000, 'door-slide-1500': 420000,
+  'door-swing-900': 180000, 'door-swing-1000': 190000, 'door-double-1800': 360000, 'door-slide-1500': 420000, 'door-pocket-900': 390000,
   'window-slide-1200': 260000, 'window-slide-1800': 380000, 'window-fix-600': 140000,
   'fridge-2door': 1290000, 'fridge-kimchi': 980000, 'range-gas-6': 1850000, 'range-induction': 890000,
   'oven-built': 1250000, dishwasher: 760000, 'washer-drum': 890000, dryer: 1090000, 'aircon-stand': 1450000,
@@ -81,6 +81,9 @@ const BASE_PRODUCTS = [
   P('door-swing-1000', '여닫이문 1000', 'DR-1000', '문/창문', '문', [1000, 40, 2100], 'wall', 'door', { ...hole('door', 1000, 2100, 0, '#b98a54'), tags: '문 현관문 여닫이' }),
   P('door-double-1800', '양여닫이문 1800', 'DR-1800', '문/창문', '문', [1800, 40, 2100], 'wall', 'door', { ...hole('door', 1800, 2100, 0, '#b98a54'), tags: '문 양문 쌍문' }),
   P('door-slide-1500', '미닫이문 1500', 'DR-S150', '문/창문', '문', [1500, 40, 2100], 'wall', 'door', { ...hole('door', 1500, 2100, 0, '#b98a54'), tags: '문 미닫이 슬라이딩' }),
+  // 포켓 미닫이(2026-10-06): 벽 속 주머니로 들어가는 외짝. DXF 창·문 블록의 "문_슬라이딩 포켓 900"이 이 제품으로 앉는다 — 그 전에는
+  // 미닫이문 1500에 폭 900으로 앉아 명세서가 "미닫이문 1500"이라고 말했다. 2D 심벌은 door(여닫이 호)뿐이라 그대로 쓴다.
+  P('door-pocket-900', '포켓 미닫이문 900', 'DR-P090', '문/창문', '문', [900, 40, 2100], 'wall', 'door', { ...hole('door', 900, 2100, 0, '#b98a54'), tags: '문 포켓 미닫이 슬라이딩 벽속' }),
   P('window-slide-1200', '미닫이창 1200', 'WD-1200', '문/창문', '창문', [1200, 40, 1200], 'wall', 'window', { ...hole('window', 1200, 1200, 900, '#9fd3e3'), tags: '창 창문 미닫이' }),
   P('window-slide-1800', '미닫이창 1800', 'WD-1800', '문/창문', '창문', [1800, 40, 1200], 'wall', 'window', { ...hole('window', 1800, 1200, 900, '#9fd3e3'), tags: '창 창문 거실창' }),
   P('window-fix-600', '고정창 600', 'WD-0600', '문/창문', '창문', [600, 40, 600], 'wall', 'window', { ...hole('window', 600, 600, 1200, '#9fd3e3'), tags: '창 고정창 픽스창' }),

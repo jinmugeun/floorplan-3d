@@ -103,6 +103,14 @@ describe('제품 카탈로그', () => {
     expect(productById('meeting-table-2400').size).toEqual([2400, 1200, 750]);
     expect(PRODUCTS.filter(p => ids.includes(p.id))).toHaveLength(8);   // PRODUCTS에 실제로 들어 있다
   });
+
+  // 2026-10-06(계획 10 이월): 포켓 미닫이는 door-slide-1500(미닫이문 1500)에 폭 900으로 앉았다 — 명세서·견적이 "미닫이문 1500"으로 나갔다.
+  test('포켓 미닫이문 제품이 있다', () => {
+    const p = productById('door-pocket-900');
+    expect(p).toMatchObject({ name: '포켓 미닫이문 900', code: 'DR-P090', category: '문/창문', sub: '문', size: [900, 40, 2100], attach: 'wall', symbol: 'door', kind: 'door' });
+    expect(p.opening).toEqual({ w: 900, h: 2100, sill: 0 });
+    expect(p.price).toBe(390000);
+  });
 });
 
 test('카테고리마다 타일 색이 있다', () => {

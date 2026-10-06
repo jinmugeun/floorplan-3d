@@ -173,10 +173,11 @@ export function windowSpans(segs, layers, walls, P = DXF_PARAMS) {
   return out;
 }
 
-// 블록 개구부의 제품: 여닫이는 폭이 가장 가까운 여닫이문, 포켓 미닫이는 미닫이문, 창은 900 미만 고정창 · 1500
-// 이하 1200 미닫이창 · 그 위 1800 미닫이창(높이·sill이 그 제품 값이다). 폭은 제품 폭이 아니라 블록 폭으로 앉는다.
+// 블록 개구부의 제품: 여닫이는 폭이 가장 가까운 여닫이문, 포켓 미닫이는 **포켓 미닫이문**(2026-10-06 — 그 전에는 미닫이문 1500에 폭 900으로
+// 앉아 명세서가 다른 제품을 말했다), 창은 900 미만 고정창 · 1500 이하 1200 미닫이창 · 그 위 1800 미닫이창(높이·sill이 그 제품 값이다).
+// 폭은 제품 폭이 아니라 블록 폭으로 앉는다.
 function blockProduct(kind, width) {
-  if (kind === 'pocket') return 'door-slide-1500';
+  if (kind === 'pocket') return 'door-pocket-900';
   if (kind === 'window') return width < 900 ? 'window-fix-600' : width <= 1500 ? 'window-slide-1200' : 'window-slide-1800';
   return DOOR_PRODUCTS.filter(([id]) => id !== 'door-slide-1500').reduce((m, e) => (Math.abs(e[1] - width) < Math.abs(m[1] - width) ? e : m))[0];
 }

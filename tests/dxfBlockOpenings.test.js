@@ -69,6 +69,10 @@ test('포켓 미닫이는 문짝이 없는 쪽 절반이 개구부다(거울 INS
   expect(out).toHaveLength(1);
   expect(out[0]).toMatchObject({ kind: 'pocket', width: 900 });
   expect(out[0].t * 6000).toBeCloseTo(X - 1350, 6);        // 개구부 = 로컬 900~1800 = 월드 4100.5~5000.5
+  const items = buildOpenings({ ex: exOf(inserts, segs), walls: [A], toApp: p => p, openingLayers: new Set(['04창호']) });
+  expect(items).toHaveLength(1);
+  expect(items[0].productId).toBe('door-pocket-900');
+  expect(items[0].size[0]).toBe(900);
 });
 
 test('buildOpenings는 블록 개구부를 먼저 앉히고(종류별 제품 · 블록 폭), 같은 자리의 문 원호는 겹쳐 놓지 않는다', () => {
