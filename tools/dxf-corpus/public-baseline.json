@@ -7,9 +7,8 @@
   "gtRooms": 39,
   "roomHit": 10,
   "gtDoors": 26,
-  "doorHit": 10,
-  "guessed": false,
-  "ms": 190
+  "doorHit": 14,
+  "guessed": false
  },
  "2suite (2)": {
   "name": "2suite (2).dxf",
@@ -19,9 +18,8 @@
   "gtRooms": 34,
   "roomHit": 22,
   "gtDoors": 31,
-  "doorHit": 14,
-  "guessed": false,
-  "ms": 142
+  "doorHit": 27,
+  "guessed": false
  },
  "2suite (3)": {
   "name": "2suite (3).dxf",
@@ -31,9 +29,8 @@
   "gtRooms": 30,
   "roomHit": 22,
   "gtDoors": 23,
-  "doorHit": 11,
-  "guessed": false,
-  "ms": 77
+  "doorHit": 21,
+  "guessed": false
  },
  "2suite (4)": {
   "name": "2suite (4).dxf",
@@ -43,9 +40,8 @@
   "gtRooms": 33,
   "roomHit": 23,
   "gtDoors": 26,
-  "doorHit": 10,
-  "guessed": false,
-  "ms": 98
+  "doorHit": 20,
+  "guessed": false
  },
  "2suite (5)": {
   "name": "2suite (5).dxf",
@@ -55,9 +51,8 @@
   "gtRooms": 36,
   "roomHit": 28,
   "gtDoors": 27,
-  "doorHit": 11,
-  "guessed": false,
-  "ms": 73
+  "doorHit": 23,
+  "guessed": false
  },
  "2suite (6)": {
   "name": "2suite (6).dxf",
@@ -67,9 +62,8 @@
   "gtRooms": 35,
   "roomHit": 19,
   "gtDoors": 25,
-  "doorHit": 11,
-  "guessed": false,
-  "ms": 96
+  "doorHit": 25,
+  "guessed": false
  },
  "2suite (7)": {
   "name": "2suite (7).dxf",
@@ -79,9 +73,8 @@
   "gtRooms": 34,
   "roomHit": 20,
   "gtDoors": 24,
-  "doorHit": 12,
-  "guessed": false,
-  "ms": 76
+  "doorHit": 20,
+  "guessed": false
  },
  "2suite (8)": {
   "name": "2suite (8).dxf",
@@ -91,9 +84,8 @@
   "gtRooms": 32,
   "roomHit": 25,
   "gtDoors": 23,
-  "doorHit": 12,
-  "guessed": false,
-  "ms": 88
+  "doorHit": 19,
+  "guessed": false
  },
  "2suite (9)": {
   "name": "2suite (9).dxf",
@@ -103,9 +95,8 @@
   "gtRooms": 37,
   "roomHit": 31,
   "gtDoors": 28,
-  "doorHit": 18,
-  "guessed": false,
-  "ms": 72
+  "doorHit": 28,
+  "guessed": false
  },
  "2suite (10)": {
   "name": "2suite (10).dxf",
@@ -115,9 +106,8 @@
   "gtRooms": 30,
   "roomHit": 12,
   "gtDoors": 20,
-  "doorHit": 4,
-  "guessed": false,
-  "ms": 33
+  "doorHit": 16,
+  "guessed": false
  },
  "3suite (1)": {
   "name": "3suite (1).dxf",
@@ -127,9 +117,8 @@
   "gtRooms": 49,
   "roomHit": 35,
   "gtDoors": 44,
-  "doorHit": 21,
-  "guessed": false,
-  "ms": 125
+  "doorHit": 37,
+  "guessed": false
  },
  "3suite (2)": {
   "name": "3suite (2).dxf",
@@ -139,9 +128,8 @@
   "gtRooms": 47,
   "roomHit": 34,
   "gtDoors": 38,
-  "doorHit": 20,
-  "guessed": false,
-  "ms": 101
+  "doorHit": 38,
+  "guessed": false
  },
  "3suite (3)": {
   "name": "3suite (3).dxf",
@@ -151,9 +139,8 @@
   "gtRooms": 47,
   "roomHit": 21,
   "gtDoors": 41,
-  "doorHit": 19,
-  "guessed": false,
-  "ms": 109
+  "doorHit": 35,
+  "guessed": false
  },
  "3suite (4)": {
   "name": "3suite (4).dxf",
@@ -163,9 +150,8 @@
   "gtRooms": 53,
   "roomHit": 28,
   "gtDoors": 45,
-  "doorHit": 23,
-  "guessed": false,
-  "ms": 88
+  "doorHit": 42,
+  "guessed": false
  },
  "3suite (5)": {
   "name": "3suite (5).dxf",
@@ -175,9 +161,8 @@
   "gtRooms": 46,
   "roomHit": 27,
   "gtDoors": 33,
-  "doorHit": 13,
-  "guessed": false,
-  "ms": 92
+  "doorHit": 24,
+  "guessed": false
  },
  "3suite (6)": {
   "name": "3suite (6).dxf",
@@ -187,9 +172,8 @@
   "gtRooms": 45,
   "roomHit": 25,
   "gtDoors": 38,
-  "doorHit": 18,
-  "guessed": false,
-  "ms": 80
+  "doorHit": 34,
+  "guessed": false
  },
  "3suite (7)": {
   "name": "3suite (7).dxf",
@@ -199,9 +183,8 @@
   "gtRooms": 45,
   "roomHit": 32,
   "gtDoors": 39,
-  "doorHit": 19,
-  "guessed": false,
-  "ms": 125
+  "doorHit": 34,
+  "guessed": false
  },
  "3suite (8)": {
   "name": "3suite (8).dxf",
@@ -211,9 +194,8 @@
   "gtRooms": 41,
   "roomHit": 28,
   "gtDoors": 35,
-  "doorHit": 21,
-  "guessed": false,
-  "ms": 64
+  "doorHit": 33,
+  "guessed": false
  },
  "3suite (9)": {
   "name": "3suite (9).dxf",
@@ -223,9 +205,8 @@
   "gtRooms": 35,
   "roomHit": 19,
   "gtDoors": 24,
-  "doorHit": 12,
-  "guessed": false,
-  "ms": 54
+  "doorHit": 24,
+  "guessed": false
  },
  "3suite (10)": {
   "name": "3suite (10).dxf",
@@ -235,9 +216,8 @@
   "gtRooms": 48,
   "roomHit": 20,
   "gtDoors": 36,
-  "doorHit": 16,
-  "guessed": false,
-  "ms": 57
+  "doorHit": 36,
+  "guessed": false
  },
  "4suite (1)": {
   "name": "4suite (1).dxf",
@@ -247,9 +227,8 @@
   "gtRooms": 55,
   "roomHit": 29,
   "gtDoors": 46,
-  "doorHit": 30,
-  "guessed": false,
-  "ms": 122
+  "doorHit": 41,
+  "guessed": false
  },
  "4suite (2)": {
   "name": "4suite (2).dxf",
@@ -259,9 +238,8 @@
   "gtRooms": 55,
   "roomHit": 27,
   "gtDoors": 41,
-  "doorHit": 20,
-  "guessed": false,
-  "ms": 164
+  "doorHit": 38,
+  "guessed": false
  },
  "4suite (3)": {
   "name": "4suite (3).dxf",
@@ -271,9 +249,8 @@
   "gtRooms": 59,
   "roomHit": 31,
   "gtDoors": 45,
-  "doorHit": 20,
-  "guessed": false,
-  "ms": 159
+  "doorHit": 41,
+  "guessed": false
  },
  "4suite (4)": {
   "name": "4suite (4).dxf",
@@ -283,9 +260,8 @@
   "gtRooms": 52,
   "roomHit": 34,
   "gtDoors": 40,
-  "doorHit": 20,
-  "guessed": false,
-  "ms": 82
+  "doorHit": 40,
+  "guessed": false
  },
  "4suite (5)": {
   "name": "4suite (5).dxf",
@@ -295,9 +271,8 @@
   "gtRooms": 48,
   "roomHit": 26,
   "gtDoors": 40,
-  "doorHit": 20,
-  "guessed": false,
-  "ms": 71
+  "doorHit": 34,
+  "guessed": false
  },
  "4suite (6)": {
   "name": "4suite (6).dxf",
@@ -307,9 +282,8 @@
   "gtRooms": 46,
   "roomHit": 28,
   "gtDoors": 37,
-  "doorHit": 17,
-  "guessed": false,
-  "ms": 90
+  "doorHit": 31,
+  "guessed": false
  },
  "4suite (7)": {
   "name": "4suite (7).dxf",
@@ -319,9 +293,8 @@
   "gtRooms": 43,
   "roomHit": 25,
   "gtDoors": 31,
-  "doorHit": 17,
-  "guessed": false,
-  "ms": 114
+  "doorHit": 29,
+  "guessed": false
  },
  "4suite (8)": {
   "name": "4suite (8).dxf",
@@ -331,9 +304,8 @@
   "gtRooms": 45,
   "roomHit": 33,
   "gtDoors": 35,
-  "doorHit": 20,
-  "guessed": false,
-  "ms": 81
+  "doorHit": 33,
+  "guessed": false
  },
  "4suite (9)": {
   "name": "4suite (9).dxf",
@@ -343,9 +315,8 @@
   "gtRooms": 45,
   "roomHit": 17,
   "gtDoors": 31,
-  "doorHit": 11,
-  "guessed": false,
-  "ms": 53
+  "doorHit": 25,
+  "guessed": false
  },
  "4suite (10)": {
   "name": "4suite (10).dxf",
@@ -355,9 +326,8 @@
   "gtRooms": 53,
   "roomHit": 38,
   "gtDoors": 43,
-  "doorHit": 24,
-  "guessed": false,
-  "ms": 101
+  "doorHit": 40,
+  "guessed": false
  },
  "6suite (1)": {
   "name": "6suite (1).dxf",
@@ -367,9 +337,8 @@
   "gtRooms": 77,
   "roomHit": 49,
   "gtDoors": 59,
-  "doorHit": 27,
-  "guessed": false,
-  "ms": 377
+  "doorHit": 58,
+  "guessed": false
  },
  "6suite (2)": {
   "name": "6suite (2).dxf",
@@ -379,9 +348,8 @@
   "gtRooms": 64,
   "roomHit": 37,
   "gtDoors": 48,
-  "doorHit": 28,
-  "guessed": false,
-  "ms": 140
+  "doorHit": 38,
+  "guessed": false
  },
  "6suite (3)": {
   "name": "6suite (3).dxf",
@@ -391,9 +359,8 @@
   "gtRooms": 53,
   "roomHit": 29,
   "gtDoors": 52,
-  "doorHit": 25,
-  "guessed": false,
-  "ms": 156
+  "doorHit": 43,
+  "guessed": false
  },
  "6suite (4)": {
   "name": "6suite (4).dxf",
@@ -403,9 +370,8 @@
   "gtRooms": 76,
   "roomHit": 31,
   "gtDoors": 64,
-  "doorHit": 32,
-  "guessed": false,
-  "ms": 181
+  "doorHit": 57,
+  "guessed": false
  },
  "6suite (5)": {
   "name": "6suite (5).dxf",
@@ -416,8 +382,7 @@
   "roomHit": 0,
   "gtDoors": 0,
   "doorHit": 0,
-  "guessed": false,
-  "ms": 199
+  "guessed": false
  },
  "6suite (6)": {
   "name": "6suite (6).dxf",
@@ -427,9 +392,8 @@
   "gtRooms": 73,
   "roomHit": 43,
   "gtDoors": 56,
-  "doorHit": 18,
-  "guessed": false,
-  "ms": 251
+  "doorHit": 53,
+  "guessed": false
  },
  "6suite (7)": {
   "name": "6suite (7).dxf",
@@ -439,9 +403,8 @@
   "gtRooms": 76,
   "roomHit": 51,
   "gtDoors": 62,
-  "doorHit": 23,
-  "guessed": false,
-  "ms": 221
+  "doorHit": 54,
+  "guessed": false
  },
  "6suite (8)": {
   "name": "6suite (8).dxf",
@@ -451,9 +414,8 @@
   "gtRooms": 71,
   "roomHit": 37,
   "gtDoors": 54,
-  "doorHit": 28,
-  "guessed": false,
-  "ms": 174
+  "doorHit": 42,
+  "guessed": false
  },
  "6suite (9)": {
   "name": "6suite (9).dxf",
@@ -463,9 +425,8 @@
   "gtRooms": 63,
   "roomHit": 37,
   "gtDoors": 49,
-  "doorHit": 17,
-  "guessed": false,
-  "ms": 109
+  "doorHit": 44,
+  "guessed": false
  },
  "6suite (10)": {
   "name": "6suite (10).dxf",
@@ -475,15 +436,14 @@
   "gtRooms": 66,
   "roomHit": 37,
   "gtDoors": 46,
-  "doorHit": 20,
-  "guessed": false,
-  "ms": 143
+  "doorHit": 43,
+  "guessed": false
  },
  "Σ": {
   "gtRooms": 1916,
   "roomHit": 1120,
   "gtDoors": 1505,
-  "doorHit": 712,
+  "doorHit": 1334,
   "errors": 0
  }
 }

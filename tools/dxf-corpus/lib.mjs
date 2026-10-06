@@ -80,7 +80,7 @@ export async function blockTruth(ex) {
 // 2450 mm 안의 무엇이든). 상자까지 재면 포켓의 개구부 중심은 상자 안, 여닫이의 개구부 중심은 문틀 쪽 상자 변 위라 폭/2 비낌이
 // 사라지고 긴 창은 엄격해진다. 200은 벽 중심선과 블록 틀의 어긋남 여유다: 150 → 200(2026-10-06)으로 상자에서 138 mm인 사동중
 // 포켓 하나에 62 mm, 내곡중 FSD800에 100 mm 여유를 두고도 가장 가까운 진짜 빗나감(473 mm)보다 273 mm 아래다.
-const OPN_TOL = 200;
+export const OPN_TOL = 200;
 
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }.
 export async function runDrawing(entry) {

@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { APP } from './lib.mjs';
+import { APP, OPN_TOL } from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIR = process.env.DXF_PUBLIC_DIR ?? resolve(APP, '../dxf-public');
@@ -93,7 +93,16 @@ async function score(name) {
   const gtRooms = gt.rooms.map(r => r.pts.map(toApp)), gtDoors = gt.doors.map(d => d.pts.map(toApp));
   const roomHit = gtRooms.filter(g => fl.rooms.some(r => iou(g, r.points, pointInPolygon) >= 0.5)).length;
   const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
-  const doorHit = gtDoors.filter(d => { const b = bbox(d), c = [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]; return opens.some(i => Math.hypot(i.pos[0] - c[0], i.pos[1] - c[1]) <= 400); }).length;
+  // 문 적합은 로컬 점수판의 opnHit와 같은 규칙이다: 우리 개구부 중심에서 정답 문 **상자**까지(상자 안이면 0) OPN_TOL 안.
+  // 상자 **중심**까지 재면 안 된다 — GT_门 상자는 대개 여닫이 궤적까지 그린 정사각형(900×900 · 800×800)이라 중심이 개구부
+  // 중심에서 ≈ 폭/2 비껴 있다(2026-10-06: 중심 400 mm 규칙 712/1505 · 앉힌 문 489개를 못 셌다).
+  // 상자는 앱 좌표로 옮긴 꼭짓점의 min·max다(toApp가 y를 뒤집는다). 가장 가까운 것: 상자 거리, 같으면 상자 중심 거리.
+  const doorHit = gtDoors.filter(d => {
+    const [x0, y0, x1, y1] = bbox(d), c = [(x0 + x1) / 2, (y0 + y1) / 2];
+    const dBox = i => Math.hypot(Math.max(x0 - i.pos[0], 0, i.pos[0] - x1), Math.max(y0 - i.pos[1], 0, i.pos[1] - y1));
+    const dMid = i => Math.hypot(i.pos[0] - c[0], i.pos[1] - c[1]);
+    return !!opens.filter(i => dBox(i) <= OPN_TOL).sort((a, b) => dBox(a) - dBox(b) || dMid(a) - dMid(b))[0];
+  }).length;
   return { name, walls: stats.walls, rooms: stats.rooms, openEnds: stats.openEnds.length, gtRooms: gtRooms.length, roomHit, gtDoors: gtDoors.length, doorHit, guessed: !!stats.guessed, ms };
 }
 
@@ -114,7 +123,8 @@ for (const n of names) {
     if (base[id] && !base[id].error) { worse++; console.log(`${''.padEnd(22)}  기준에서는 됐다 ✗`); }   // 되던 도면이 안 되면 나빠진 것이다
     continue;
   }
-  now[id] = r;
+  const { ms: _ms, ...keep } = r;   // 시간은 표에만 — 기준 파일은 지표가 바뀔 때만 바뀐다
+  now[id] = keep;
   for (const c of ['gtRooms', 'roomHit', 'gtDoors', 'doorHit']) sum[c] += r[c];
   console.log([id.padEnd(22), ...COLS.map(c => String(r[c] ?? '-').padStart(9))].join(''));
   const b = base[id];
