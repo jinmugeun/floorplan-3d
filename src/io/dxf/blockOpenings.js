@@ -88,15 +88,17 @@ export function blockOpenings(ex, walls, toApp = p => p) {
     const r = (it.rot ?? 0) * Math.PI / 180, o = toApp(it.pos), e = toApp([it.pos[0] + Math.cos(r), it.pos[1] + Math.sin(r)]);
     const el = Math.hypot(e[0] - o[0], e[1] - o[1]);
     if (!el) continue;
-    // 벽 방향 = 블록 로컬 x. 여닫이는 로컬 y를 벽 방향으로 그린 블록도 있다(2026-10-02 내곡중 SD850 — 로컬 x는 열린 문짝
-    // 방향이라, 문짝이 기대어 선 옆 벽에 문이 앉았다): 문틀은 벽 몸통을 **가로질러** 놓이고 기대어 선 문짝은 벽의 한쪽에만
-    // 있으므로, 로컬 x 쪽 벽은 가로지르지 않는데 수직 방향 벽은 가로지르면 수직 방향이 벽 방향이다.
+    // 벽 방향 = 블록 로컬 x. 로컬 y를 벽 방향으로 그린 블록도 있다(2026-10-02 내곡중 SD850 — 로컬 x는 열린 문짝 방향이라 문짝이 기대어 선
+    // 옆 벽에 문이 앉았다): 문틀·창틀은 벽 몸통을 **가로질러** 놓이고 기대어 선 문짝은 벽의 한쪽에만 있으므로, 로컬 x 쪽 벽을 도형이
+    // 가로지르지 않는데 수직 방향 벽은 가로지르면 수직 방향이 벽 방향이다. 2026-10-06: 문만이 아니라 창·포켓도 같은 규칙이다(계획 10
+    // 이월 — 로컬 x 쪽 호스트가 없으면 창이 통째로 빠졌다). 코퍼스 넷에서 창·문·개구부 정답 지표가 나빠지지 않았다(그대로다 — 넷의
+    // 창·포켓 중 이 길을 타는 것은 아직 없고, 수직 방향으로 앉는 것은 내곡중 문 SD850·방음문 2400뿐이다).
     const seat = dir => {
       const ts = g.pts.map(p => p[0] * dir[0] + p[1] * dir[1]), lo = Math.min(...ts), hi = Math.max(...ts);
       return { u: dir, x0: lo, x1: hi, host: hi > lo ? hostWall(walls, g.pts, dir, lo, hi) : null };
     };
     let pick = seat([(e[0] - o[0]) / el, (e[1] - o[1]) / el]);
-    if (kind === 'door' && !pick.host?.across) { const alt = seat([-pick.u[1], pick.u[0]]); if (alt.host?.across) pick = alt; }
+    if (!pick.host?.across) { const alt = seat([-pick.u[1], pick.u[0]]); if (alt.host?.across) pick = alt; }
     const { u, x0, x1 } = pick, span = x1 - x0;
     const along = p => p[0] * u[0] + p[1] * u[1];
     if (!(span > 0)) continue;

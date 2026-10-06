@@ -138,3 +138,20 @@ test('inserts 밖을 가리키는 ins 꼬리표는 blockBoxes·blockOpenings 모
   expect(out[0]).toMatchObject({ kind: 'window', name: 'win-900-3', width: 900, wall: A });
   expect(out[0].t * 6000).toBeCloseTo(1450.5, 6);
 });
+
+// 2026-10-06: 로컬 y가 벽 방향인 블록은 문만이 아니다(2026-10-02 내곡중 SD850 규칙을 창·포켓에도). 세로 벽 V에 앉은 창인데 블록
+// 로컬 x가 세로 벽을 가로지르는 방향이라, 로컬 x로 앉히면 호스트가 없어 창이 통째로 빠졌다.
+test('창·포켓 블록도 로컬 x 쪽 호스트가 없거나 가로지르지 않으면 수직 방향 벽에 앉는다', () => {
+  const V = makeWall({ a: [3000, 0], b: [3000, 6000], thickness: 200, height: 3500 });
+  const inserts = [plan, { name: 'AW-900', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 },
+    { name: '문_슬라이딩 포켓 900', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
+  // 창틀: 벽 몸통(x 2932.5~3067.5)을 가로지르는 선 + 유리선. 로컬 x = 월드 x(rot 0)인데 벽은 y 방향이다.
+  const win = [seg(2932.5, 1000, 2932.5, 1900, 1), seg(3067.5, 1000, 3067.5, 1900, 1), seg(2932.5, 1000, 3067.5, 1000, 1), seg(2932.5, 1900, 3067.5, 1900, 1), seg(3000.5, 1070, 3000.5, 1830, 1)];
+  // 포켓: 문틀(가로지름) + 문짝(벽과 나란한 긴 선)이 y 3000~3930, 주머니 y 3930~4800.
+  const pocket = [seg(2950, 3000, 3050, 3000, 2, '04창호'), seg(2950, 4800, 3050, 4800, 2, '04창호'), seg(2950, 3000, 2950, 4800, 2, '04창호'), seg(3050, 3000, 3050, 4800, 2, '04창호'), seg(3000, 3040, 3000, 3930, 2, '04창호')];
+  const out = blockOpenings(exOf(inserts, [...win, ...pocket]), [A, V]);
+  expect(out).toHaveLength(2);
+  const w = out.find(o => o.kind === 'window'), p = out.find(o => o.kind === 'pocket');
+  expect(w.wall).toBe(V); expect(w.width).toBe(900); expect(w.t * 6000).toBeCloseTo(1450, 0);
+  expect(p.wall).toBe(V); expect(p.width).toBe(900); expect(p.t * 6000).toBeCloseTo(4350, 0);   // 문짝(3000~3930) 반대쪽 절반
+});
