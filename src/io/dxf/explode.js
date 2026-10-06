@@ -145,3 +145,21 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
   onProgress(1);
   return out;
 }
+
+// 전개 결과의 **길이**를 k배 한다(단위 변환 · 2026-10-06, 계획 10 이월 ①). 추출 파라미터(params.js)는 전부 mm라 m·cm·inch 도면은
+// 추출 **전에** mm로 바꿔야 한다(2026-09-29 리뷰: m 도면은 선분이 minSeg 150에 걸려 벽 0개 — toProject.makeToApp만 배율을 곱했다).
+// 각(rot·a0·a1)·블록 배율(scale)·개수·레이어·꼬리표(ins·parent·block)는 길이가 아니라 그대로다. 1배는 복사하지 않는다.
+export function scaleExplode(ex, k) {
+  if (!(k > 0) || k === 1) return ex;
+  const p = q => [q[0] * k, q[1] * k];
+  return {
+    ...ex,
+    segs: ex.segs.map(s => ({ ...s, a: p(s.a), b: p(s.b) })),
+    arcs: ex.arcs.map(a => ({ ...a, c: p(a.c), r: a.r * k })),
+    polyArcs: ex.polyArcs.map(a => ({ ...a, c: p(a.c), r: a.r * k })),
+    circles: ex.circles.map(c => ({ ...c, c: p(c.c), r: c.r * k })),
+    inserts: ex.inserts.map(i => ({ ...i, pos: p(i.pos) })),
+    texts: ex.texts.map(t => ({ ...t, p: p(t.p), h: t.h * k })),
+    dims: ex.dims.map(d => (d.p1 && d.p2 ? { ...d, p1: p(d.p1), p2: p(d.p2) } : d)),
+  };
+}

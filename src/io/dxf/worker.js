@@ -2,28 +2,49 @@
 // **전개 결과는 여기 남는다**: 레이어 체크가 바뀌면 extract만 다시 돈다(재파싱 없음 · 실측 ≈ 0.4 s).
 // 취소는 메인의 terminate() 한 줄이므로 여기에 취소 플래그를 두지 않는다.
 // 이 파일과 그 import 사슬은 DOM·ui를 건드리지 않는다(문구는 코드로만 보내고 ui/messages.js가 옮긴다).
+// 좌표는 prepare가 mm로 맞춘 뒤의 것이다(2026-10-06): ex0은 전개 원본(원 단위), ex는 그것을 단위 배율로 바꾼 mm 좌표다.
 import { decodeDxf, DxfError } from './decode.js';
 import { parseDxf, headerNum } from './parse.js';
-import { explode } from './explode.js';
+import { explode, scaleExplode } from './explode.js';
 import { layerStats, defaultChecked, roleLayers } from './classify.js';
 import { planRegions } from './regions.js';
 import { extractWalls } from './walls.js';
-import { buildProject, unitScale, drawingTitle } from './toProject.js';
+import { buildProject, unitScale, drawingTitle, INSUNITS_SCALE } from './toProject.js';
 import { buildOpenings } from './openings.js';
 import { DXF_PARAMS } from './params.js';
 
 const HUGE_EXTENTS = 10_000_000;   // 10 km — 여러 장이 한 파일에 흩어져 있다는 신호(§18.5)
-let doc = null, ex = null, rows = null, meta = null;
+let doc = null, ex0 = null, ex = null, rows = null, meta = null;
 const post = (msg, transfer = []) => self.postMessage(msg, transfer);
 // blocks를 함께 보낸다: 진행 막대 2단계가 "도면 해석 중 (블록 N개)"이라 파싱이 끝나기 전에도 N이 필요하다.
 const progress = (phase, pct) => post({ type: 'progress', phase, pct, blocks: doc?.counts?.blocks ?? 0 });
 const inBox = (p, b) => !b || (p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1);
 
+// 전개 원본(ex0)을 배율 k로 mm 좌표(ex)로 만들고, 그 좌표로 레이어 통계·도면 후보·ROI를 낸다(둘 다 mm 문턱을 쓴다 —
+// layerGuess의 길이 문턱, regions의 ROI_LINK 500). 단위는 **추출 전**에 맞춘다(2026-10-06 · 계획 10 이월 ①): extractWalls의
+// DXF_PARAMS가 전부 mm라 m 도면을 원 좌표로 돌리면 벽 0개였다. 사람이 검토 창에서 단위를 바꾸면 doExtract가 다시 부른다.
+function prepare(k) {
+  ex = scaleExplode(ex0, k);
+  rows = layerStats(doc, ex);
+  const live = new Set(rows.filter(r => !r.off).map(r => r.name));
+  // 도면 후보(2026-10-02): 벽 선이 든 덩어리는 모두 후보이고 첫 후보(가장 큰 것)가 기본값이다 — 고르는 것은 검토 창이다.
+  const checked = defaultChecked(rows);
+  // 후보를 구별해 주는 문자는 실명이 놓이는 레이어(문자·기타·벽 역할)에서만 고른다 — 기구 라벨은 글자가 커도 힌트가 아니다.
+  const nameLayers = new Set(rows.filter(r => r.role === 'text' || r.role === 'other' || r.role === 'wall').map(r => r.name));
+  const regions = planRegions(ex.segs.filter(s => live.has(s.layer)), checked, ex.texts.filter(t => nameLayers.has(t.layer)));
+  // 제목 후보는 역할이 text·other인 레이어뿐이다(사전 검토 I-6 — 높이만 보면 급식기구의
+  // 지시선 라벨 '퇴식동선'(h 1,725)이 제목 '경산 사동중'(레이어 T · h 980)을 이긴다).
+  const titleLayers = new Set(rows.filter(r => r.role === 'text' || r.role === 'other').map(r => r.name));
+  meta = { fileName: meta?.fileName ?? '', scale: k, roi: regions[0] ?? null, regions, live, titleLayers };
+  return { checked };
+}
+
 function doParse(buf, fileName) {
   // 앞 파일의 전개 결과를 **맨 먼저** 비운다(Task 10 리뷰 F1). 이 줄이 없으면 재파싱이 실패했을 때
   // (A.dxf 성공 → B.dwg 거절) 앞 도면의 ex·meta가 살아남아, 뒤따르는 extract가 !ex 검사를 통과해
   // **앞 도면의 프로젝트를 조용히 돌려준다**. 비워 두면 그 extract가 정직하게 not-dxf로 떨어진다.
-  doc = ex = rows = meta = null;
+  // 전개 원본 ex0도 함께 비운다(2026-10-06): 남아 있으면 단위를 바꾼 extract가 prepare로 앞 도면을 되살린다.
+  doc = ex0 = ex = rows = meta = null;
   progress('decode', 0);
   const t0 = performance.now();
   const { txt, ver, codepage, encoding } = decodeDxf(buf);
@@ -32,45 +53,44 @@ function doParse(buf, fileName) {
   doc = parseDxf(txt, { onProgress: p => progress('parse', p) });
   const tParse = performance.now() - t1;
   const t2 = performance.now();
-  ex = explode(doc, { arcSteps: 12, onProgress: p => progress('explode', p) });
+  ex0 = explode(doc, { arcSteps: 12, onProgress: p => progress('explode', p) });
   const tExplode = performance.now() - t2;
-  rows = layerStats(doc, ex);
-  const live = new Set(rows.filter(r => !r.off).map(r => r.name));
-  // 도면 후보(2026-10-02): 벽 선이 든 덩어리는 모두 후보이고 첫 후보(가장 큰 것)가 기본값이다 — 고르는 것은 검토 창이다.
-  const checked = defaultChecked(rows);
-  // 후보를 구별해 주는 문자는 실명이 놓이는 레이어(문자·기타·벽 역할)에서만 고른다 — 기구 라벨은 글자가 커도 힌트가 아니다.
-  const nameLayers = new Set(rows.filter(r => r.role === 'text' || r.role === 'other' || r.role === 'wall').map(r => r.name));
-  const regions = planRegions(ex.segs.filter(s => live.has(s.layer)), checked, ex.texts.filter(t => nameLayers.has(t.layer)));
-  const roi = regions[0] ?? null;
+  meta = { fileName };
+  // 단위(§18.5): $INSUNITS를 알면 바로 그 배율(1배 통계를 헛되이 내지 않는다). 모르면 원 좌표 ROI의 긴 변으로 추정한다(10~1000이면 m) —
+  // 그때만 먼저 1배로 한 번 본다.
+  const insunits = headerNum(doc.header, '$INSUNITS', 70, 0);
+  const known = INSUNITS_SCALE[insunits];
+  let { checked } = prepare(known ?? 1);
+  const u = known ? { scale: known, guessed: false } : unitScale(insunits, meta.roi ? Math.max(meta.roi.x1 - meta.roi.x0, meta.roi.y1 - meta.roi.y0) : 0);
+  if (!known && u.scale !== 1) ({ checked } = prepare(u.scale));
+  const roi = meta.roi, regions = meta.regions;
   let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
   for (const s of ex.segs) for (const p of [s.a, s.b]) {
     bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]);
     by0 = Math.min(by0, p[1]); by1 = Math.max(by1, p[1]);
   }
-  const insunits = headerNum(doc.header, '$INSUNITS', 70, 0);
-  const u = unitScale(insunits, roi ? Math.max(roi.x1 - roi.x0, roi.y1 - roi.y0) : 0);
   // 제목·방 이름은 **꺼진 레이어의 문자도 쓴다**: 이 도면의 실명은 꺼진 TEXT2에 들어 있다.
   const texts = ex.texts.filter(t => inBox(t.p, roi));
-  // 제목 후보는 역할이 text·other인 레이어뿐이다(사전 검토 I-6 — 높이만 보면 급식기구의
-  // 지시선 라벨 '퇴식동선'(h 1,725)이 제목 '경산 사동중'(레이어 T · h 980)을 이긴다).
-  const titleLayers = new Set(rows.filter(r => r.role === 'text' || r.role === 'other').map(r => r.name));
-  meta = { fileName, scale: u.scale, roi, regions, live, titleLayers };
   post({ type: 'parsed', summary: {
     ver, codepage, encoding, insunits, unitScale: u.scale, unitsGuessed: u.guessed,
     layers: rows, checked: [...checked],
-    regions: regions.map(r => ({ size: [Math.round((r.x1 - r.x0) * u.scale), Math.round((r.y1 - r.y0) * u.scale)], lenM: Math.round(r.len / 1000), wallM: Math.round(r.wallLen / 1000), hint: r.hint })),
+    // 좌표가 이미 mm라 배율을 곱하지 않는다.
+    regions: regions.map(r => ({ size: [Math.round(r.x1 - r.x0), Math.round(r.y1 - r.y0)], lenM: Math.round(r.len / 1000), wallM: Math.round(r.wallLen / 1000), hint: r.hint })),
     blocks: doc.counts.blocks, blocksUsed: doc.counts.blocksUsed, entities: doc.counts.entities,
     segs: ex.segs.length, arcs: ex.arcs.length, texts: ex.texts.length,
     others: [...ex.others], skipped: [...ex.skipped],
-    title: drawingTitle(texts, fileName, titleLayers),
-    size: roi ? [Math.round((roi.x1 - roi.x0) * u.scale), Math.round((roi.y1 - roi.y0) * u.scale)] : [0, 0],
-    manySheets: Math.max(bx1 - bx0, by1 - by0) * u.scale > HUGE_EXTENTS,
+    title: drawingTitle(texts, fileName, meta.titleLayers),
+    size: roi ? [Math.round(roi.x1 - roi.x0), Math.round(roi.y1 - roi.y0)] : [0, 0],
+    manySheets: Math.max(bx1 - bx0, by1 - by0) > HUGE_EXTENTS,
     ms: { decode: Math.round(tDecode), parse: Math.round(tParse), explode: Math.round(tExplode) },
   } });
 }
 
 function doExtract(opts = {}) {
   if (!ex) throw new DxfError('not-dxf');
+  // 단위는 **사람이 이긴다**(§18.5): 검토 창의 셀렉트가 보낸 배율이 적용된 배율과 다르면 전개 원본에서 다시 mm를 만든다.
+  const want = Number(opts.scale) > 0 ? Number(opts.scale) : meta.scale;
+  if (want !== meta.scale) prepare(want);
   const t0 = performance.now();
   progress('walls', 0);
   const openRole = roleLayers(rows, 'opening');
@@ -92,11 +112,10 @@ function doExtract(opts = {}) {
   progress('rooms', 0);
   const t1 = performance.now();
   const texts = ex.texts.filter(t => inBox(t.p, r.roi));
-  // 단위는 **사람이 이긴다**(§18.5): 대화상자의 셀렉트가 보낸 배율이 $INSUNITS 추정을 덮는다.
-  const scale = Number(opts.scale) > 0 ? Number(opts.scale) : meta.scale;
+  // 좌표가 이미 mm라(prepare) 앱 좌표로 옮길 때 배율은 1이다 — 적용된 단위 배율은 stats.unitScale로 따로 알린다.
   const built = buildProject(r.walls, {
     height: opts.height ?? DXF_PARAMS.height,
-    scale, texts, fileName: meta.fileName, titleLayers: meta.titleLayers,
+    scale: 1, texts, fileName: meta.fileName, titleLayers: meta.titleLayers,
     autoNames: opts.autoNames !== false,
     // 방 이름은 레이어 역할로 고른다(문자 레이어 실명 우선 · 기구 라벨은 이름이 아니다 — toProject.nameRooms).
     nameRoles: new Map(rows.map(r => [r.name, r.role])),
@@ -105,7 +124,7 @@ function doExtract(opts = {}) {
     dims: ex.dims.filter(d => d.p1 && inBox(d.p1, r.roi && { x0: r.roi.x0 - 10000, y0: r.roi.y0 - 10000, x1: r.roi.x1 + 10000, y1: r.roi.y1 + 10000 })),
     // 개구부는 두 재료를 함께 쓴다: 스윙 호(ex.arcs)와 **벽 틈**(r.gaps · 사전 검토 C-2).
     openings: opts.openings === false ? () => [] : ({ walls, toApp }) =>
-      buildOpenings({ ex, walls, toApp, scale, openingLayers: openRole, gaps: r.gaps }),
+      buildOpenings({ ex, walls, toApp, scale: 1, openingLayers: openRole, gaps: r.gaps }),
   });
   const tRooms = performance.now() - t1;
   // 트레이스는 **ROI 안 · 꺼지지 않은 레이어를 전부** 그린다(체크 여부와 무관): 사람이 이어야 할
@@ -127,7 +146,7 @@ function doExtract(opts = {}) {
     tTrace = performance.now() - t2;
   }
   const stats = {
-    ...built.stats, guessed: guessedLayers.length > 0 || r.guessed, guessedLayers: guessedLayers.length ? guessedLayers : [...r.guessedLayers],
+    ...built.stats, unitScale: meta.scale, guessed: guessedLayers.length > 0 || r.guessed, guessedLayers: guessedLayers.length ? guessedLayers : [...r.guessedLayers],
     hist: r.hist.slice(0, 10).map(([mm, len]) => [mm, Math.round(len)]),
     ms: { walls: Math.round(tWalls), rooms: Math.round(tRooms), trace: Math.round(tTrace) },
   };
