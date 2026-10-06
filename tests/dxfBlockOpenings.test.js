@@ -142,7 +142,7 @@ test('inserts 밖을 가리키는 ins 꼬리표는 blockBoxes·blockOpenings 모
 });
 
 // 2026-10-06: 로컬 y가 벽 방향인 블록은 문만이 아니다(2026-10-02 내곡중 SD850 규칙을 창·포켓에도). 세로 벽 V에 앉은 창인데 블록
-// 로컬 x가 세로 벽을 가로지르는 방향이라, 로컬 x로 앉히면 호스트가 없어 창이 통째로 빠졌다.
+// 로컬 x가 세로 벽을 가로지르는 방향이라, 로컬 x로 앉히면 호스트가 없어 창이 통째로 빠질 수 있었다(합성 테스트 — 코퍼스 넷에는 없다).
 test('창·포켓 블록도 로컬 x 쪽 호스트가 없으면 수직 방향 벽에 앉는다', () => {
   const V = makeWall({ a: [3000, 0], b: [3000, 6000], thickness: 200, height: 3500 });
   const inserts = [plan, { name: 'AW-900', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 },
