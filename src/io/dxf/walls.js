@@ -14,7 +14,7 @@ import { largestCluster, ROI_LINK, buildFaces, latticeFaces } from './faces.js';
 import { wallBands, bandRuns, wallsOfRuns } from './bands.js';
 import { findColumns, findPilasters, mergeColumns, growLinings, findIslands } from './columns.js';
 import { openingEvidence, faceSupport } from './evidence.js';
-import { OPEN_BLOCK } from './blockOpenings.js';
+import { OPEN_BLOCK, blockBoxes } from './blockOpenings.js';
 
 const OPEN_FACE = 'open-block';   // 창·문 블록에서 온 면선의 표지 레이어(실제 레이어 이름과 겹치지 않는다)
 
@@ -190,13 +190,20 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   const support = faceSupport(cand.filter((s, i) => !colSegs.has(i) && !symbol(s) && wallish(s)));
   const openSegs = ex.segs.filter(s => (openFaceLayers.has(s.layer) || OPEN_BLOCK.test(s.block ?? '')) && inRoi(s.a) && inRoi(s.b));
   const evidence = opening && Object.assign((p, q, th) => opening(p, q, th) || support(p, q, th), { wide: faceSupport(openSegs) });
+  // 창·문 블록 구간(2026-10-06): 벽 구간 경계(꺾임)를 블록 도중에 두지 않기 위한 재료 — bin마다 bbox 네 모서리를 (t, off)로 투영한다.
+  const boxes = blockBoxes(ex).filter(b => b.kind && inRoi([b.box[0], b.box[1]]) && inRoi([b.box[2], b.box[3]]));
+  const spansOf = (u, n) => boxes.map(b => {
+    const pts = [[b.box[0], b.box[1]], [b.box[2], b.box[1]], [b.box[2], b.box[3]], [b.box[0], b.box[3]]];
+    const ts = pts.map(p => u[0] * p[0] + u[1] * p[1]), os = pts.map(p => n[0] * p[0] + n[1] * p[1]);
+    return { x0: Math.min(...ts), x1: Math.max(...ts), o0: Math.min(...os), o1: Math.max(...os) };
+  });
   const pieces = [], jogs = [], gaps = [];
   for (const list of byKey.values()) {
     const { u, n } = list[0];
     const at = (t, off) => [u[0] * t + n[0] * off, u[1] * t + n[1] * off];
     // 줄 끝 토막 다리는 문·창 근거만 본다 — 벽 선 받침은 옆 벽의 면선이 대신 설 수 있다(405 벽 안의 100 모서리 띠).
     const binEvidence = opening && ((t0, t1, lo, hi) => opening(at(t0, (lo + hi) / 2), at(t1, (lo + hi) / 2), hi - lo));
-    const br = wallsOfRuns(bandRuns(wallBands(list, P, openLayers), P), P, binEvidence);
+    const br = wallsOfRuns(bandRuns(wallBands(list, P, openLayers), P), P, binEvidence, spansOf(u, n));
     const perChain = new Map();
     for (const r of br.sections) perChain.set(r.chain, (perChain.get(r.chain) ?? 0) + 1);
     for (const r of br.sections) {

@@ -210,9 +210,12 @@ export function chainRuns(runs, P = DXF_PARAMS, evidence = null) {
 // 그다음 띠가 같은 이웃끼리 한 구간으로 합치고(길이 가중 평균), 남은 경계는 진짜 두께 변화다:
 //  - 경계 사이의 틈(문)은 **얇은 쪽** 구간이 가진다(문틀은 벽의 몸통에 선다).
 //  - 두 중심이 jogTol보다 벌어지면 경계에 꺾임(jog)을 두고, 그 안이면 한 중심선으로 맞춘다.
+//  - 창·문 블록 도중의 경계(2026-10-06 · spans = bin 좌표의 블록 구간 [{ x0, x1, o0, o1 }]): 경계가 블록 안쪽이고 블록의 오프셋 범위가
+//    양쪽 띠와 겹치면 경계를 가까운 블록 끝으로 옮긴다(양쪽 구간이 minWall을 지키는 끝 · 둘 다 되면 가까운 쪽 · 같으면 x0). 창이 짧은
+//    구간에 앉아 벽 끝에서 잘리던 것(사동중 4800 창·스테인리스 벽 뒤 창)을 막는다. 틈은 옮기기 전 구간으로 센다.
 // 반환: sections [{ t0, t1, lo, hi }] · jogs [{ t, c0, c1, th }] · gaps [{ t, off, width, t0, t1, lo, hi }] (bin 좌표).
 const contains = (A, B) => A.lo <= B.lo + 10 && A.hi >= B.hi - 10;
-export function sectionsOf(chain, P = DXF_PARAMS) {
+export function sectionsOf(chain, P = DXF_PARAMS, spans = []) {
   const rs = chain.map(r => ({ ...r }));
   const adopt = (r, x) => { if (r.lo === x.lo && r.hi === x.hi) return false; r.lo = x.lo; r.hi = x.hi; return true; };
   const longer = (a, b) => (a.t1 - a.t0 >= b.t1 - b.t0 ? a : b);
@@ -259,7 +262,14 @@ export function sectionsOf(chain, P = DXF_PARAMS) {
     const a = secs[k - 1], b = secs[k];
     const thin = a.hi - a.lo <= b.hi - b.lo ? a : b;
     gapOf(a.t1, b.t0, thin);
-    const t = thin === a ? b.t0 : a.t1;
+    let t = thin === a ? b.t0 : a.t1;
+    const lo = Math.min(a.lo, b.lo), hi = Math.max(a.hi, b.hi);
+    const span = spans.find(s => s.x0 + P.spanEdge < t && t < s.x1 - P.spanEdge && Math.min(s.o1, hi) - Math.max(s.o0, lo) > 0);
+    if (span) {
+      const ok = x => x - a.t0 >= P.minWall && b.t1 - x >= P.minWall;
+      const ends = [span.x0, span.x1].filter(ok).sort((x, y) => Math.abs(x - t) - Math.abs(y - t) || x - y);
+      if (ends.length) t = ends[0];
+    }
     a.t1 = t; b.t0 = t;
     const ca = (a.lo + a.hi) / 2, cb = (b.lo + b.hi) / 2;
     if (Math.abs(ca - cb) <= P.jogTol) { b.lo += ca - cb; b.hi += ca - cb; }
@@ -268,11 +278,11 @@ export function sectionsOf(chain, P = DXF_PARAMS) {
   return { sections: secs.map(({ t0, t1, lo, hi }) => ({ t0, t1, lo, hi })), jogs, gaps };
 }
 
-// 한 bin의 run들 → 구간·꺾임·틈(④ + ⑤). evidence는 chainRuns로 간다.
-export function wallsOfRuns(runs, P = DXF_PARAMS, evidence = null) {
+// 한 bin의 run들 → 구간·꺾임·틈(④ + ⑤). evidence는 chainRuns로, spans(창·문 블록 구간)는 sectionsOf로 간다.
+export function wallsOfRuns(runs, P = DXF_PARAMS, evidence = null, spans = []) {
   const out = { sections: [], jogs: [], gaps: [], chains: 0 };
   for (const chain of chainRuns(runs, P, evidence)) {
-    const r = sectionsOf(chain, P);
+    const r = sectionsOf(chain, P, spans);
     out.sections.push(...r.sections.map(s => ({ ...s, chain: out.chains })));
     out.jogs.push(...r.jogs);
     out.gaps.push(...r.gaps);

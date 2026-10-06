@@ -1,6 +1,6 @@
 // 벽 띠 스윕(2026-09-29 정확도 수정). 좌표는 전부 소수다(정수 격자에 우연히 맞는 답을 거른다).
 import { test, expect } from 'vitest';
-import { wallBands, bandRuns, wallsOfRuns } from '../src/io/dxf/bands.js';
+import { wallBands, bandRuns, wallsOfRuns, sectionsOf } from '../src/io/dxf/bands.js';
 import { findColumns } from '../src/io/dxf/columns.js';
 import { buildFaces } from '../src/io/dxf/faces.js';
 import { DXF_PARAMS as P } from '../src/io/dxf/params.js';
@@ -265,4 +265,25 @@ test('끝 구간이 얇아지면(이웃에 품기지만 샌드위치가 아니�
   expect(same.sections).toHaveLength(2);
   expect(same.jogs).toEqual([]);
   expect(same.sections.map(c)).toEqual([100.25, 100.25]);
+});
+
+// 2026-10-06(계획 10 이월 · 3차 남은 것 ①): 두께가 바뀌는 경계가 창 블록 도중에 있으면 창이 짧은 구간에 앉아 벽 끝에서 잘렸다
+// (사동중 폭 정답 40/44). 경계는 창·문 블록 구간(spans · bin 좌표)의 **가까운 끝**으로 옮기고 꺾임도 그 자리에 선다.
+test('sectionsOf는 창·문 블록 도중의 구간 경계를 블록 끝으로 옮긴다', () => {
+  const chain = [{ t0: 0, t1: 5000, lo: 0, hi: 405 }, { t0: 5000, t1: 9000, lo: 0, hi: 250 }];
+  const base = sectionsOf(chain, P);
+  expect(base.sections.map(s => [s.t0, s.t1])).toEqual([[0, 5000], [5000, 9000]]);
+  expect(base.jogs.map(j => j.t)).toEqual([5000]);
+  // 창 4700~5500(오프셋 −50~300 — 띠와 겹친다): 5000은 안쪽 → 가까운 끝 4700으로.
+  const moved = sectionsOf(chain, P, [{ x0: 4700, x1: 5500, o0: -50, o1: 300 }]);
+  expect(moved.sections.map(s => [s.t0, s.t1])).toEqual([[0, 4700], [4700, 9000]]);
+  expect(moved.jogs.map(j => j.t)).toEqual([4700]);
+  // 오프셋이 띠 밖(다른 벽의 창)이면 옮기지 않는다.
+  expect(sectionsOf(chain, P, [{ x0: 4700, x1: 5500, o0: 2000, o1: 2300 }]).jogs.map(j => j.t)).toEqual([5000]);
+  // 가까운 끝으로 옮기면 한 구간이 minWall(250) 미만이 되면 반대쪽 끝으로, 그것도 안 되면 그대로.
+  const short = [{ t0: 0, t1: 5000, lo: 0, hi: 405 }, { t0: 5000, t1: 5300, lo: 0, hi: 250 }];
+  expect(sectionsOf(short, P, [{ x0: 4850, x1: 5100, o0: -50, o1: 300 }]).sections.map(s => [s.t0, s.t1])).toEqual([[0, 4850], [4850, 5300]]);   // 가까운 5100이면 b가 200 → 먼 끝 4850
+  expect(sectionsOf(short, P, [{ x0: 100, x1: 5250, o0: -50, o1: 300 }]).sections.map(s => [s.t0, s.t1])).toEqual([[0, 5000], [5000, 5300]]);     // 100은 a가 100 · 5250은 b가 50 → 그대로
+  // 경계가 블록 끝 10 mm 안(= 이미 끝에 있다)이면 옮기지 않는다.
+  expect(sectionsOf(chain, P, [{ x0: 4995, x1: 5800, o0: -50, o1: 300 }]).jogs.map(j => j.t)).toEqual([5000]);
 });
