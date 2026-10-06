@@ -140,3 +140,13 @@ export function focusTrap(root, { focus = null, opener = document.activeElement 
     },
   };
 }
+
+// 열린 모달(.modal)이 없을 때 cb를 부른다 — 지금 없으면 바로, 있으면 마지막 모달이 떨어질 때 한 번(2026-10-06). 모달은 전부
+// document.body 바로 아래에 붙으므로(dxfDialog·backgroundDialog·openModal·onboarding) body의 childList만 보면 된다.
+// 온보딩이 다른 대화상자 **뒤에** 뜨지 않게 하는 데 쓴다(main.js maybeOnboard — 시작 화면의 DXF·배경 카드).
+export function whenNoModal(cb, { root = document.body, selector = '.modal' } = {}) {
+  if (!root.querySelector(selector)) { cb(); return () => {}; }
+  const mo = new MutationObserver(() => { if (!root.querySelector(selector)) { mo.disconnect(); cb(); } });
+  mo.observe(root, { childList: true });
+  return () => mo.disconnect();
+}

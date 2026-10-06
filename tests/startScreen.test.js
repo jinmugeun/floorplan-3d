@@ -170,3 +170,35 @@ test('"이어서 작업" 카드가 저장 시각을 적는다', () => {
   openStartScreen({ store: createStore(createEmptyProject()), restored: p });
   expect(document.querySelector(`[data-start="restore"]`).textContent).not.toContain('저장)');
 });
+
+// 2026-10-06(계획 10 이월 ③): 카드 동작이 먼저, onClose 알림은 그다음 — DXF·배경 카드는 대화상자를 여는데 알림(온보딩)이 먼저 가면
+// 온보딩이 그 대화상자 뒤에 떠서 Esc·화살표를 가로챘다. 어느 길로 닫혀도 알림은 한 번이다.
+test('카드 동작 → 그다음 onClose 한 번 (DXF·템플릿·Esc·close())', async () => {
+  localStorage.clear();
+  document.body.innerHTML = '';
+  const store = createStore(createEmptyProject());
+  const calls = [];
+  openStartScreen({ store, onDxf: () => calls.push('dxf'), onClose: () => calls.push('close') });
+  document.querySelector('[data-start="dxf"]').click();
+  expect(calls).toEqual(['dxf', 'close']);
+  expect(document.querySelector('#startScreen')).toBeNull();
+  calls.length = 0;
+  openStartScreen({ store, onEmpty: () => calls.push('empty'), onClose: () => calls.push('close') });
+  document.querySelector('#startScreen').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(calls).toEqual(['empty', 'close']);
+  calls.length = 0;
+  const s = openStartScreen({ store, onClose: () => calls.push('close') });
+  s.close(); s.close();
+  expect(calls).toEqual(['close']);
+  // 동작이 던져도 알림은 간다(온보딩이 영영 안 뜨지 않게). 클릭 리스너가 async라(startScreen.js:79) 예외를 삼키지 않으면 unhandled
+  // rejection이 되어 vitest 전체가 실패한다(사전 검토 재현) — run()이 잡아 console.error로 보낸다.
+  calls.length = 0;
+  openStartScreen({ store, onUpload: () => { calls.push('upload'); throw new Error('boom'); }, onClose: () => calls.push('close') });
+  // 스파이는 연 **뒤에** 건다 — jsdom이 미리보기 캔버스의 getContext 미구현을 console.error로 보내므로(카드마다 한 번) 먼저 걸면 그것까지 센다.
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  document.querySelector('[data-start="upload"]').click();
+  await new Promise(r => setTimeout(r, 0));
+  expect(calls).toEqual(['upload', 'close']);
+  expect(err).toHaveBeenCalledTimes(1);
+  err.mockRestore();
+});

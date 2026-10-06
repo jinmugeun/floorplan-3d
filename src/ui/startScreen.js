@@ -73,8 +73,15 @@ export function openStartScreen({ store, restored = null, restoredAt = null, onE
   // 검증은 renameTemplate과 같은 규칙을 본다(저장한 템플릿·내장 템플릿과 이름이 겹치면 막는다). 저장은 하지 않는다.
   const renameCheck = (id, name) => !listTemplates().some(t => t.id !== id && t.name === name)
     && !BUILTIN_TEMPLATES.some(t => t.name === name);
-  // 어느 길로 닫혀도(카드·템플릿·Esc·close()) 한 번만 알린다 — 온보딩이 시작 화면 위에 겹쳐 뜨지 않게.
-  const close = () => { if (!root.parentNode) return; root.remove(); trap.destroy(); onClose(); };
+  // 닫기는 두 단계다(2026-10-06 · 계획 10 이월 ③): hide()가 화면을 떼고, notify()가 onClose를 **한 번** 알린다. 카드의 동작은 그 사이에
+  // 간다 — DXF·배경 카드는 대화상자를 여는데 알림(main.js maybeOnboard → 온보딩)이 먼저 가면 온보딩이 그 대화상자 **뒤에** 떠서
+  // 캡처 keydown으로 Esc·화살표를 삼켰다. 동작 뒤에 알리면 온보딩이 "다른 대화상자가 열려 있다"를 볼 수 있다(dialogBase.whenNoModal).
+  let notified = false;
+  const hide = () => { if (!root.parentNode) return false; root.remove(); trap.destroy(); return true; };
+  const notify = () => { if (notified) return; notified = true; onClose(); };
+  const close = () => { if (hide()) notify(); };
+  // 동작이 던져도 알림은 간다. 예외는 여기서 잡아 콘솔로 보낸다 — 이 리스너는 async라 그냥 두면 unhandled rejection이다.
+  const run = fn => { try { fn?.(); } catch (e) { console.error(e); } finally { notify(); } };
   const handlers = { empty: onEmpty, upload: onUpload, dxf: onDxf, sample: onSample, restore: onRestore };
   root.addEventListener('click', async ev => {
     const del = ev.target.closest('[data-tpl-delete]');
@@ -93,14 +100,14 @@ export function openStartScreen({ store, restored = null, restoredAt = null, onE
       return;
     }
     const tpl = ev.target.closest('[data-template]');
-    if (tpl) { close(); onTemplate(tpl.dataset.template); return; }
+    if (tpl) { hide(); run(() => onTemplate(tpl.dataset.template)); return; }
     const b = ev.target.closest('[data-start]');
     if (!b) return;
-    close();
-    handlers[b.dataset.start]?.();
+    hide();
+    run(handlers[b.dataset.start]);
   });
   // Esc = 빈 프로젝트로 시작(다른 대화상자와 같은 규칙). 첫 카드에 포커스를 두어 키보드만으로도 고를 수 있게 한다.
-  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); onEmpty(); } });
+  root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); hide(); run(onEmpty); } });
   // §15.10: 첫 카드로 포커스를 넣고 [Tab]을 안에 가둔다(모달 뒤의 앱을 조작할 수 없게).
   const trap = focusTrap(root, { focus: '.start-card' });
   return { close };

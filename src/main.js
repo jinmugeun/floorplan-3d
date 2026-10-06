@@ -36,6 +36,7 @@ import { createArrangeActions } from './app/arrangeActions.js';
 import { createDndActions } from './app/dndActions.js';
 import { createMenuActions } from './app/menuActions.js';
 import { openOnboarding, isOnboarded } from './ui/onboarding.js';
+import { whenNoModal } from './ui/dialogBase.js';
 import { createTopbar, projectIsEmpty } from './app/topbar.js';
 import { createDirtyTracker, createSaveIndicator } from './app/dirty.js';
 import { createProjectActions } from './app/projectActions.js';
@@ -237,8 +238,9 @@ const auto = startAutosave(store, { onSaved: t => saveInd.markSaved('auto', t) }
 const firstRoomFit = createFirstRoomFit({ store, ui, view });
 const dxf = createDxfActions({ store, ui, view, toast: shell.toast, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm });
 const project = createProjectActions({ store, ui, view, toast: shell.toast, restored, isDirty: () => dirty.isDirty(), markSaved: saveInd.markSaved, saveNow: () => auto.saveNow(), onProjectSwap: firstRoomFit.rearm, onDxf: () => dxf.open() });
-// 온보딩을 닫으면 배너가 다음 행동을 가리킨다(§16.12 · 감사 §47).
-const maybeOnboard = () => { if (!isOnboarded()) openOnboarding({ store, onDone: () => ui.set({ firstRoomHint: true }) }); };
+// 온보딩을 닫으면 배너가 다음 행동을 가리킨다(§16.12 · 감사 §47). 시작 화면의 DXF·배경 카드가 연 대화상자가 **닫힌 뒤**에 뜬다
+// (2026-10-06 · 계획 10 이월 ③ — 그 전에는 온보딩이 검토 창 뒤에 떠서 캡처 keydown으로 Esc·화살표를 삼켰다).
+const maybeOnboard = () => { if (!isOnboarded()) whenNoModal(() => { if (!isOnboarded()) openOnboarding({ store, onDone: () => ui.set({ firstRoomHint: true }) }); }); };
 if (projectIsEmpty(store.get())) project.showStart({ onClose: maybeOnboard });
 else maybeOnboard();
 document.getElementById('btnSave').addEventListener('click', () => {

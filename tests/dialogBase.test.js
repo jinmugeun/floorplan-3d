@@ -5,7 +5,7 @@
 // ③ 모달 밖(팝오버 등)에 포커스가 있으면 트랩이 끼어들지 않는다,
 // ④ destroy()를 두 번 불러도 포커스를 다시 빼앗지 않는다.
 import { test, expect, beforeEach } from 'vitest';
-import { focusTrap } from '../src/ui/dialogBase.js';
+import { focusTrap, whenNoModal } from '../src/ui/dialogBase.js';
 import { confirmDialog } from '../src/ui/confirmDialog.js';
 import { createKeyHandler } from '../src/ui/keymap.js';
 import { createStore } from '../src/state/store.js';
@@ -168,4 +168,29 @@ test('떼어낸 root의 트랩은 남아 있어도 [Tab]을 가로채지 않는�
   tab(document.body);
   expect(live.root.contains(document.activeElement)).toBe(true);
   trap.destroy();
+});
+
+// 2026-10-06: 열린 모달이 없을 때 부른다 — 온보딩이 DXF 검토 창·배경 대화상자 뒤에 뜨지 않게(main.js maybeOnboard).
+test('whenNoModal은 모달이 없으면 바로, 있으면 마지막 모달이 떨어질 때 한 번 부른다', async () => {
+  document.body.innerHTML = '';
+  const calls = [];
+  whenNoModal(() => calls.push('now'));
+  expect(calls).toEqual(['now']);
+  const m1 = document.createElement('div'); m1.className = 'modal'; document.body.appendChild(m1);
+  const m2 = document.createElement('div'); m2.className = 'modal onboarding'; document.body.appendChild(m2);
+  const cancel = whenNoModal(() => calls.push('later'));
+  expect(calls).toEqual(['now']);
+  m1.remove();
+  await new Promise(r => setTimeout(r, 0));
+  expect(calls).toEqual(['now']);                     // 아직 하나 남았다
+  m2.remove();
+  await new Promise(r => setTimeout(r, 0));
+  expect(calls).toEqual(['now', 'later']);
+  const m3 = document.createElement('div'); m3.className = 'modal'; document.body.appendChild(m3);
+  const c2 = whenNoModal(() => calls.push('never'));
+  c2();                                               // 취소하면 떨어져도 부르지 않는다
+  m3.remove();
+  await new Promise(r => setTimeout(r, 0));
+  expect(calls).toEqual(['now', 'later']);
+  expect(typeof cancel).toBe('function');
 });

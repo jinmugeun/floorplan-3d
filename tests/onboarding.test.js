@@ -115,4 +115,24 @@ describe('온보딩', () => {
     openOnboarding({});
     expect(document.querySelectorAll('.modal.onboarding')).toHaveLength(1);
   });
+
+  // 2026-10-06 재현: 시작 화면 DXF 카드 → (예전) onClose가 먼저 온보딩을 띄우고 그 위에 검토 창이 열려 Esc가 검토 창에 닿지 않았다.
+  test('시작 화면의 DXF 카드가 연 대화상자가 닫힐 때까지 온보딩은 뜨지 않는다', async () => {
+    const { openStartScreen } = await import('../src/ui/startScreen.js');
+    const { whenNoModal } = await import('../src/ui/dialogBase.js');
+    localStorage.clear();
+    const store = createStore(createEmptyProject());
+    let dialog = null;
+    const openDxf = () => { dialog = document.createElement('div'); dialog.className = 'modal'; document.body.appendChild(dialog); };
+    const maybeOnboard = () => { if (!isOnboarded()) whenNoModal(() => { if (!isOnboarded()) openOnboarding({ store }); }); };
+    openStartScreen({ store, onDxf: openDxf, onClose: maybeOnboard });
+    document.querySelector('[data-start="dxf"]').click();
+    expect(dialog).not.toBeNull();
+    expect(card()).toBeNull();                                  // 검토 창이 열려 있는 동안 온보딩 없음
+    dialog.remove();
+    await new Promise(r => setTimeout(r, 0));
+    expect(card()).not.toBeNull();                              // 닫히자 온보딩
+    btn('skip').click();
+    expect(isOnboarded()).toBe(true);
+  });
 });
