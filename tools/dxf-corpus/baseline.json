@@ -12,12 +12,15 @@
   "dimEnds": 256,
   "areaOk": 11,
   "areaAll": 11,
+  "opnAll": 44,
+  "opnHit": 43,
+  "opnWidth": 39,
   "doors": 17,
   "windows": 30,
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1818
+  "ms": 1376
  },
  "sinsang-B": {
   "regions": 2,
@@ -32,12 +35,15 @@
   "dimEnds": 64,
   "areaOk": 0,
   "areaAll": 0,
+  "opnAll": 0,
+  "opnHit": 0,
+  "opnWidth": 0,
   "doors": 10,
   "windows": 20,
   "passes": 18,
   "columns": 14,
   "guessed": false,
-  "ms": 1108
+  "ms": 886
  },
  "sinsang-A": {
   "regions": 2,
@@ -52,12 +58,15 @@
   "dimEnds": 68,
   "areaOk": 0,
   "areaAll": 0,
+  "opnAll": 2,
+  "opnHit": 2,
+  "opnWidth": 2,
   "doors": 6,
   "windows": 17,
   "passes": 19,
   "columns": 14,
   "guessed": false,
-  "ms": 893
+  "ms": 832
  },
  "naegok": {
   "regions": 1,
@@ -72,11 +81,14 @@
   "dimEnds": 16,
   "areaOk": 0,
   "areaAll": 0,
+  "opnAll": 36,
+  "opnHit": 32,
+  "opnWidth": 27,
   "doors": 14,
   "windows": 18,
   "passes": 3,
   "columns": 24,
   "guessed": false,
-  "ms": 1097
+  "ms": 889
  }
 }

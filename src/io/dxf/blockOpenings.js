@@ -31,16 +31,43 @@ export function blockKind(name = '') {
   return null;
 }
 
+// INSERT 번호 → 그 도형을 거느리는 창·문 INSERT 번호(자기 이름이 창·문이면 자기, 아니면 부모의 주인 · 없으면 −1).
+// 전개 순서상 부모가 자식보다 앞이라 한 번 훑으면 된다. blockOpenings와 blockBoxes가 같은 규칙을 쓴다(2026-10-06).
+function ownerOf(ins) {
+  const owner = [];
+  ins.forEach((it, k) => { owner[k] = blockKind(it.name) ? k : it.parent != null ? owner[it.parent] ?? -1 : -1; });
+  return owner;
+}
+
+// 바깥 창·문 INSERT(blockKind가 있는 가장 바깥 것)마다 전개 도형(자식 INSERT 포함)의 bbox — **DXF 좌표**다(2026-10-06). 두 곳이 쓴다:
+// 코퍼스 점수판의 개구부 정답 자리(tools/dxf-corpus/lib.mjs), 벽 구간화가 창 도중에 경계를 두지 않게 하는 spans(walls.js → bands.sectionsOf).
+// 점은 선분 끝과 호 중심이다(blockOpenings와 같은 재료).
+export function blockBoxes(ex) {
+  const ins = ex?.inserts ?? [];
+  const owner = ownerOf(ins);
+  const box = new Map();
+  const add = (k, p) => {
+    if (!(k >= 0)) return;      // -1(주인 없음)뿐 아니라 undefined(ins가 없는 INSERT를 가리킴)도 거른다 — Task 7부터 모든 추출이 이 길을 지난다
+    const b = box.get(k) ?? box.set(k, [Infinity, Infinity, -Infinity, -Infinity]).get(k);
+    b[0] = Math.min(b[0], p[0]); b[1] = Math.min(b[1], p[1]); b[2] = Math.max(b[2], p[0]); b[3] = Math.max(b[3], p[1]);
+  };
+  for (const s of ex?.segs ?? []) if (s.ins != null) { add(owner[s.ins], s.a); add(owner[s.ins], s.b); }
+  for (const c of [...(ex?.arcs ?? []), ...(ex?.polyArcs ?? [])]) if (c.ins != null) add(owner[c.ins], c.c);
+  return [...box].map(([k, b]) => {
+    const it = ins[k], m = it.name.match(/(\d{3,4})/);
+    return { k, kind: blockKind(it.name), name: it.name, width: m ? +m[1] : 0, box: b };
+  });
+}
+
 // → [{ kind, name, width, wall, t }] (앱 좌표 · mm). walls는 앱 좌표의 벽(id·a·b·thickness)이다.
 export function blockOpenings(ex, walls, toApp = p => p) {
   const ins = ex?.inserts ?? [];
-  const owner = [];
-  ins.forEach((it, k) => { owner[k] = blockKind(it.name) ? k : it.parent != null ? owner[it.parent] ?? -1 : -1; });
+  const owner = ownerOf(ins);
   const geo = new Map();
   const at = k => geo.get(k) ?? geo.set(k, { pts: [], lines: [] }).get(k);
   for (const s of ex?.segs ?? []) {
     const k = s.ins != null ? owner[s.ins] : -1;
-    if (k < 0) continue;
+    if (!(k >= 0)) continue;    // undefined(ins가 없는 INSERT를 가리킴)도 거른다 — blockBoxes와 같은 결함(2026-10-06)
     const a = toApp(s.a), b = toApp(s.b), g = at(k);
     g.pts.push(a, b);
     g.lines.push([a, b]);

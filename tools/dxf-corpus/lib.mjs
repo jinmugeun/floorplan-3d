@@ -46,13 +46,17 @@ export function scanDimensions(txt) {
   return out;
 }
 
-// 도면에 적힌 실 면적 표기("(15.39m²)")와 그 위의 실명 → [{ name, value, p }] (DXF 좌표). 정답 자료다.
-const AREA = /^\(?\s*(\d+(?:\.\d+)?)\s*(?:m²|㎡|m2)\s*\)?$/i;
-export async function areaLabels(raw) {
+// 실파일 원문 → 전개(DXF 좌표 · 단위 배율 전). 정답 자료(면적 표기·창·문 블록)가 같이 쓴다 — 디코드·파싱·전개는 한 번만(2026-10-06).
+export async function explodeRaw(raw) {
   const { decodeDxf } = await import('../../src/io/dxf/decode.js');
   const { parseDxf } = await import('../../src/io/dxf/parse.js');
   const { explode } = await import('../../src/io/dxf/explode.js');
-  const ex = explode(parseDxf(decodeDxf(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)).txt), { arcSteps: 12 });
+  return explode(parseDxf(decodeDxf(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)).txt), { arcSteps: 12 });
+}
+
+// 도면에 적힌 실 면적 표기("(15.39m²)")와 그 위의 실명 → [{ name, value, p }] (DXF 좌표). 정답 자료다. ex = explodeRaw(raw).
+const AREA = /^\(?\s*(\d+(?:\.\d+)?)\s*(?:m²|㎡|m2)\s*\)?$/i;
+export async function areaLabels(ex) {
   const clean = t => String(t.text ?? '').replace(/\s+/g, ' ').trim();
   const labels = ex.texts.filter(t => AREA.test(clean(t)));
   const names = ex.texts.filter(t => /[가-힣A-Za-z]/.test(clean(t)) && !AREA.test(clean(t)) && !/^\(\d+석\)$/.test(clean(t)));
@@ -61,6 +65,12 @@ export async function areaLabels(raw) {
     for (const n of names) { const d = Math.hypot(n.p[0] - a.p[0], n.p[1] - a.p[1]); if (n.p[1] > a.p[1] && d < 1500 && n.layer === a.layer && (!best || d < best.d)) best = { n, d }; }
     return { name: best ? clean(best.n).replace(/\s+/g, '') : null, value: +clean(a).match(AREA)[1], p: a.p };
   });
+}
+
+// 창·문 블록 정답(2026-10-06): 종류·호칭 폭·전개 도형 bbox 중심(DXF 좌표). 3차 수정의 scratch 채점기(사동중 44개)가 저장소 도구로 왔다.
+export async function blockTruth(ex) {
+  const { blockBoxes } = await import('../../src/io/dxf/blockOpenings.js');
+  return blockBoxes(ex).map(b => ({ name: b.name, kind: b.kind, width: b.width, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] }));
 }
 
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }.
@@ -99,7 +109,8 @@ export async function runDrawing(entry) {
   }
   // 면적 적합: 도면의 면적 표기 ↔ 그 자리(또는 그 이름)의 방의 "도면 기준" 넓이. ±0.05 m² 안이면 맞은 것이다.
   const { pointInPolygon } = await import('../../src/geom/rooms.js');
-  const labels = (await areaLabels(raw)).filter(a => near(toApp(a.p)));
+  const exRaw = await explodeRaw(raw);
+  const labels = (await areaLabels(exRaw)).filter(a => near(toApp(a.p)));
   const bare = s => String(s ?? '').replace(/\s+/g, '');
   let areaOk = 0;
   const areaRows = labels.map(a => {
@@ -108,6 +119,18 @@ export async function runDrawing(entry) {
     if (ok) areaOk++;
     return { name: a.name, label: a.value, got: got == null ? null : Math.round(got * 100) / 100, room: room?.name ?? null, ok };
   });
+  // 개구부 적합: 정답 블록 자리(중심 거리 ≤ max(300, 폭/2 + 50) — 포켓은 블록의 절반이 주머니라 중심이 폭/2 비껴 있다)에 우리
+  // 개구부(문·창·개구부 아이템)가 있는가, 있으면 폭이 50 mm 안인가.
+  const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
+  const truth = (await blockTruth(exRaw)).filter(t => near(toApp(t.c)));
+  let opnHit = 0, opnWidth = 0;
+  for (const t of truth) {
+    const c = toApp(t.c), tol = Math.max(300, t.width / 2 + 50);
+    const it = opens.filter(i => Math.hypot(i.pos[0] - c[0], i.pos[1] - c[1]) <= tol).sort((a, b) => Math.hypot(a.pos[0] - c[0], a.pos[1] - c[1]) - Math.hypot(b.pos[0] - c[0], b.pos[1] - c[1]))[0];
+    if (!it) continue;
+    opnHit++;
+    if (!t.width || Math.abs(it.size[0] - t.width) <= 50) opnWidth++;
+  }
   const count = re => fl.items.filter(i => re.test(i.productId)).length;
   const metrics = {
     regions: summary.regions.length,
@@ -116,6 +139,7 @@ export async function runDrawing(entry) {
     openEnds: stats.openEnds.length, tiny: fl.rooms.filter(r => r.area < 1.5).length,
     dimFit: ends ? Math.round(100 * hit / ends) : null, dimEnds: ends,
     areaOk, areaAll: labels.length,
+    opnAll: truth.length, opnHit, opnWidth,
     doors: count(/^door-/), windows: count(/^window-/), passes: count(/^opening-pass/), columns: cols.length,
     guessed: !!stats.guessed, ms,
   };
@@ -123,4 +147,4 @@ export async function runDrawing(entry) {
 }
 
 // 방향이 있는 지표: 값이 이쪽으로 가면 나빠진 것이다(벽·방 수 같은 나머지는 바뀌면 알리기만 한다).
-export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1, areaOk: -1 };
+export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1, areaOk: -1, opnHit: -1, opnWidth: -1 };

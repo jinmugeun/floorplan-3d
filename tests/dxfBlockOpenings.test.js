@@ -2,7 +2,7 @@
 // 전개 도형에 explode의 ins 꼬리표를 직접 단다. INSERT 점(pos)은 일부러 멀리 둔다 — 블록 로컬 좌표가 base에서
 // 수십만 mm 떨어진 실파일(DR-1800)처럼, 자리는 전개 도형에서만 읽어야 한다.
 import { test, expect } from 'vitest';
-import { blockOpenings, blockKind, OPEN_BLOCK } from '../src/io/dxf/blockOpenings.js';
+import { blockOpenings, blockBoxes, blockKind, OPEN_BLOCK } from '../src/io/dxf/blockOpenings.js';
 import { buildOpenings } from '../src/io/dxf/openings.js';
 import { makeWall } from '../src/geom/walls.js';
 
@@ -114,4 +114,14 @@ test('여닫이: 블록의 로컬 x가 벽 방향이 아니어도 문틀이 가�
   // 로컬 x가 벽 방향인 블록은 그대로다(문짝이 옆 벽에 기대어 있어도)
   const turned = [plan, { name: 'SD850', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
   expect(blockOpenings(exOf(turned, segs), [A, B, C])[0].wall).toBe(A);
+});
+
+// 2026-10-06: 창·문 INSERT 하나의 전개 도형 bbox(DXF 좌표)를 코퍼스 점수판(정답 자리)과 벽 구간화(창 도중 경계)가 같이 쓴다.
+test('blockBoxes는 바깥 창·문 INSERT마다 자식 도형까지 모은 bbox와 호칭 폭을 낸다', () => {
+  const inserts = [plan, { name: 'win-900-3', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 },
+    { name: 'HANDLE', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 1 }, { name: '식탁-4인', pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
+  const segs = [...winSegs(1000.5, 1), seg(1440.5, 0.5, 1460.5, 0.5, 2), seg(0, 0, 6000, 0, 0, 'WAL'), seg(0, 0, 100, 100, 3, 'FUR')];
+  const boxes = blockBoxes(exOf(inserts, segs, [{ c: [1900.5, 10], r: 5, ins: 2 }]));
+  expect(boxes).toEqual([{ k: 1, kind: 'window', name: 'win-900-3', width: 900, box: [1000.5, -67.5, 1900.5, 67.5] }]);
+  expect(blockBoxes(exOf([], []))).toEqual([]);
 });

@@ -9,7 +9,7 @@ import { corpus, runDrawing, WORSE, DXF_DIR } from './lib.mjs';
 const BASE = resolve(dirname(fileURLToPath(import.meta.url)), 'baseline.json');
 const update = process.argv.includes('--update');
 const base = existsSync(BASE) ? JSON.parse(readFileSync(BASE, 'utf8')) : {};
-const COLS = ['regions', 'walls', 'rooms', 'named', 'unmatched', 'openEnds', 'tiny', 'dimFit', 'areaOk', 'areaAll', 'doors', 'windows', 'passes', 'columns', 'areaM2', 'ms'];
+const COLS = ['regions', 'walls', 'rooms', 'named', 'unmatched', 'openEnds', 'tiny', 'dimFit', 'areaOk', 'areaAll', 'doors', 'windows', 'passes', 'columns', 'opnAll', 'opnHit', 'opnWidth', 'areaM2', 'ms'];
 const detail = process.argv.includes('--areas');
 const now = {};
 let worse = 0, skipped = 0;
