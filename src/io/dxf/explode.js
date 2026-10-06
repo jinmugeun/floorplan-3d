@@ -118,6 +118,19 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
         case 'TEXT': case 'MTEXT':
           out.texts.push({ p: apply(m, [e.x ?? 0, e.y ?? 0]), h: (e.r ?? 0) * scaleOf(m), text: e.text ?? '', layer, depth, block: blockName, ins, color: colorOf(e) });
           break;
+        case 'MLINE': {
+          // 이중선(2026-10-06 · 계획 10 이월): 요소 el의 정점 k 점 = 정점 + 마이터 × 첫 파라미터(정점에서 마이터 방향으로 요소 선이
+          // 시작하는 거리 — 스타일 오프셋·배율·정렬이 이미 녹아 있어 MLINESTYLE을 읽지 않는다). 요소마다 잇따른 정점 사이를 선분으로.
+          // 파라미터가 없는 정점(74 = 0)은 정점 그대로. 검증 한계: 보유 도면에 MLINE 엔티티가 없어 참조 문서대로만 맞췄다.
+          const vs = e.verts ?? [], n = vs.length, nE = e.nElems ?? 0;
+          if (n < 2 || !(nE > 0)) { bump(out.skipped, 'mline-empty'); break; }
+          const at = (k, el) => { const mt = e.miters?.[k] ?? [0, 0], d = e.params?.[k]?.[el]?.[0] ?? 0; return [vs[k][0] + mt[0] * d, vs[k][1] + mt[1] * d]; };
+          const lim = e.closed ? n : n - 1;
+          for (let el = 0; el < nE; el++) for (let k = 0; k < lim; k++) {
+            out.segs.push({ a: apply(m, at(k, el)), b: apply(m, at((k + 1) % n, el)), layer, src: 'MLINE', depth, block: blockName, ins, color: colorOf(e) });
+          }
+          break;
+        }
         case 'HATCH': out.hatches.push({ layer, depth, block: blockName, ins, color: colorOf(e) }); break;
         case 'DIMENSION': {
           // 선형(종류 0)·정렬(종류 1) 치수는 두 측정점을 월드 좌표로 옮기고 재는 축(x·y · 기울면 null)을 단다.
