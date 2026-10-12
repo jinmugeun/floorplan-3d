@@ -1,5 +1,6 @@
-// 공개 정답 코퍼스: node tools/dxf-corpus/public.mjs [--fetch] [--update] [--only "<도면 이름>"]
+// 공개 정답 코퍼스: node tools/dxf-corpus/public.mjs [--fetch] [--update] [--only "<도면 이름>"] [--ends "<도면 이름>"]
 // (--only는 파일 이름 전체 · 확장자 없이, 예 "2suite (10)". --update는 --only와 함께 쓰지 못한다 — 종료 코드 2.)
+// --ends는 그 도면 하나만 돌리고(--only와 같다) 끊긴 끝점마다 원 DXF 좌표와 300 mm 안의 선분을 레이어별로 낸다(아래 endsReport).
 // WeiyaChen/CAD_rule_checker(MIT)의 아파트 평면 유효 39쌍(40 파일, 6suite (5)는 정답 없음) — 원본 DXF와 사람이 단 정답 DXF
 // (GT_<공간> 레이어의 폴리선 = 방, GT_门 = 문). 우리 파이프라인(worker.js와 같은 순서)을 원본에 돌리고 정답과 견준다. 다른 사무소·
 // 다른 나라 관례에서 벽·방·문이 얼마나 서는지의 **측정**이다.
@@ -7,7 +8,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { APP, OPN_TOL } from './lib.mjs';
+import { APP, OPN_TOL, explodeRaw } from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIR = process.env.DXF_PUBLIC_DIR ?? resolve(APP, '../dxf-public');
@@ -16,8 +17,9 @@ const REPO = 'WeiyaChen/CAD_rule_checker';
 const RAW = `https://raw.githubusercontent.com/${REPO}/main/input_data`;
 const argv = process.argv.slice(2);
 const flag = f => argv.includes(f);
-const hasOnly = flag('--only');
-const only = hasOnly ? argv[argv.indexOf('--only') + 1] : null;   // 파일 이름 전체(확장자 없이)
+const ends = flag('--ends');
+const hasOnly = flag('--only') || ends;
+const only = hasOnly ? argv[argv.indexOf(ends ? '--ends' : '--only') + 1] : null;   // 파일 이름 전체(확장자 없이)
 // 2026-10-06 최종 리뷰: 값이 없는 --only(다음 인자가 없거나 --로 시작)와 맞는 도면이 없는 --only(아래)는 종료 코드 2다 — 오타로
 // 0개를 채점하고 "나빠진 지표 없음"으로 통과하지 않게. --only와 --update를 함께 쓰면 거절한다: 일부만 돌린 결과로 기준을 쓰지
 // 않는다(아래 병합이 안전망이고, 이 거절이 정책이다).
@@ -112,7 +114,49 @@ async function score(name) {
     const dBox = i => Math.hypot(Math.max(x0 - i.pos[0], 0, i.pos[0] - x1), Math.max(y0 - i.pos[1], 0, i.pos[1] - y1));
     return opens.some(i => dBox(i) <= OPN_TOL);
   }).length;
+  if (ends) await endsReport(raw, stats, fl, k, parsed.summary.layers);
   return { name, walls: stats.walls, rooms: stats.rooms, openEnds: stats.openEnds.length, gtRooms: gtRooms.length, roomHit, gtDoors: gtDoors.length, doorHit, guessed: !!stats.guessed, ms };
+}
+
+// --ends(2026-10-12 · 계획 12 Task 4 진단): 끊긴 끝점(stats.openEnds · 앱 좌표)을 toApp의 역으로 원 DXF 좌표에 되돌리고, 그 점에서
+// ENDS_R 안의 원본 선분(explodeRaw · 단위 배율 전)을 레이어별로 묶는다 — 선 수 · 길이 중앙값 · 끝의 벽 방향과 10° 안으로 나란한 선의
+// 벽 중심선에서의 가로 거리(5 mm 계급 · 겹치는 값은 한 번) · 그 선들이 끝 너머로 뻗은 가장 먼 거리(ahead). 2suite (1)·4suite (9)·
+// 6suite (6)의 끊긴 끝이 WINDOW 선 옆인지, 그 선이 벽 면에서 얼마나 비껴 있는지 재려고 만들었다.
+const ENDS_R = 300;
+async function endsReport(raw, stats, fl, k, rows) {
+  const fromApp = p => [(p[0] / stats.scale + stats.origin[0]) / k, (-p[1] / stats.scale + stats.origin[1]) / k];
+  const role = new Map(rows.map(r => [r.name, r.role]));
+  const ex = await explodeRaw(raw);
+  const key = p => `${Math.round(p[0])},${Math.round(p[1])}`;
+  const dSeg = (p, a, b) => {
+    const d = [b[0] - a[0], b[1] - a[1]], L2 = d[0] * d[0] + d[1] * d[1];
+    const t = L2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / L2)) : 0;
+    return Math.hypot(p[0] - a[0] - d[0] * t, p[1] - a[1] - d[1] * t);
+  };
+  const med = xs => { const s = [...xs].sort((a, b) => a - b); return Math.round(s[Math.floor(s.length / 2)]); };
+  stats.openEnds.forEach((pa, i) => {
+    const w = fl.walls.find(x => key(x.a) === key(pa) || key(x.b) === key(pa));
+    const q = fromApp(pa), o = w && fromApp(key(w.a) === key(pa) ? w.b : w.a);
+    const L = o ? Math.hypot(q[0] - o[0], q[1] - o[1]) : 0;
+    const u = L ? [(q[0] - o[0]) / L, (q[1] - o[1]) / L] : null;   // 끝이 향하는 쪽(원 DXF 좌표)
+    const by = new Map();
+    for (const s of ex.segs) {
+      if (dSeg(q, s.a, s.b) * k > ENDS_R) continue;
+      const g = by.get(s.layer) ?? by.set(s.layer, { lens: [], offs: new Set(), ahead: -Infinity }).get(s.layer);
+      const d = [s.b[0] - s.a[0], s.b[1] - s.a[1]], Ls = Math.hypot(d[0], d[1]);
+      g.lens.push(Ls * k);
+      if (!u || !Ls || Math.abs(u[0] * d[1] - u[1] * d[0]) / Ls > Math.sin(Math.PI / 18)) continue;
+      const m = [(s.a[0] + s.b[0]) / 2 - q[0], (s.a[1] + s.b[1]) / 2 - q[1]];
+      g.offs.add(Math.round((m[1] * u[0] - m[0] * u[1]) * k / 5) * 5);
+      for (const p of [s.a, s.b]) g.ahead = Math.max(g.ahead, ((p[0] - q[0]) * u[0] + (p[1] - q[1]) * u[1]) * k);
+    }
+    const dir = u ? (Math.abs(u[0]) >= Math.abs(u[1]) ? (u[0] > 0 ? '+x' : '-x') : (u[1] > 0 ? '+y' : '-y')) : '?';
+    console.log(`#${i + 1} DXF (${Math.round(q[0])}, ${Math.round(q[1])}) 끝 방향 ${dir} · 두께 ${w?.thickness ?? '-'} · 벽 길이 ${Math.round(L * k)}`);
+    for (const [layer, g] of [...by].sort((a, b) => b[1].lens.length - a[1].lens.length)) {
+      const par = g.offs.size ? ` · 나란한 선 가로 [${[...g.offs].sort((a, b) => a - b).join(', ')}] · 너머 ${Math.round(g.ahead)}` : '';
+      console.log(`    ${layer}(${role.get(layer) ?? '?'}) ${g.lens.length}개 · 길이 중앙값 ${med(g.lens)}${par}`);
+    }
+  });
 }
 
 const names = (await list()).filter(n => !hasOnly || n.replace(/\.dxf$/i, '') === only);

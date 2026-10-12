@@ -207,3 +207,17 @@ test('이름 없는 레이어가 청록이고 평행 짝이 있으면 창호다(
   expect(by.WAL.role).toBe('wall');
   expect(by.WID.cyan).toBe(8);
 });
+
+// 2026-10-12 계획 12 Task 4(사전 검토 반영): 공개 코퍼스(WeiyaChen/CAD_rule_checker)의 `DOTE`는 TArch 축선 레이어다 — 2suite (1) 선 65개 ·
+// 길이 중앙값 3,000 mm · 6suite (6) 33개 · 18,266 mm, 둘 다 꺼짐. 이름이 아무것도 말하지 않던(other) 탓에 켜진 도면에서는 청록이면 창호로,
+// 벽 레이어가 없으면 축선 격자가 벽으로 올라갈 수 있었다(축선은 건물 끝에서 끝까지 3~18 m라 평행 짝이 길다).
+test('DOTE(TArch 축선)는 축선이다 — 청록 평행 짝이 있어도 창호·벽으로 올리지 않는다', () => {
+  expect(classifyLayer('DOTE')).toBe('grid');
+  const cyan = layerStats(docOf(layerRec('WAL'), layerRec('DOTE', 4)), exOf({ segs: [...room('WAL', 20000.5), ...room('DOTE', 0.5, 0.25, 9000, 6000, 100)] }));
+  expect(cyan.find(r => r.name === 'DOTE').role).toBe('grid');
+  // 벽 이름 레이어가 없는 도면: 평행 짝이 가장 긴 것이 축선이어도 벽 추정은 이름 없는 레이어(A1)에서만 고른다.
+  const guess = layerStats(docOf(layerRec('DOTE'), layerRec('A1')), exOf({ segs: [...room('DOTE', 0.5, 0.25, 30000, 20000), ...room('A1', 40000.5, 0.25, 9000, 6000)] }));
+  const by = Object.fromEntries(guess.map(r => [r.name, r]));
+  expect([by.DOTE.role, by.DOTE.guessed]).toEqual(['grid', undefined]);
+  expect([by.A1.role, by.A1.guessed]).toEqual(['wall', true]);
+});

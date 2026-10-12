@@ -5,13 +5,15 @@
 import { refineByContent, CYAN } from './layerGuess.js';
 
 // 앞의 규칙이 이긴다. 비교는 소문자 부분일치다.
+// grid의 'dote'(2026-10-12 · 계획 12 Task 4): 공개 코퍼스의 TArch 축선 레이어 `DOTE` — 2suite (1) 선 65개 · 길이 중앙값 3,000 mm, 6suite (6)
+// 33개 · 18,266 mm, 둘 다 꺼짐. other로 두면 켜진 도면에서 청록 창호·벽 추정(layerGuess)으로 올라갈 수 있다(축선은 3~18 m라 평행 짝이 길다).
 export const LAYER_RULES = [
   { role: 'dim',     keys: ['dim', '치수', 'az-leal', 'az-leat', 'az-cutl', 'tol'] },
   { role: 'text',    keys: ['text', 'txt', 'note', '문자', 'title', 'number', 'a-she', 'revision', 'sym-t'] },
   { role: 'opening', keys: ['win', 'dor', 'door', '창호', '창', '문', '개구', 'wind', 'wd'] },
   { role: 'equip',   keys: ['급식', '기구', 'fur', 'fu-', 'equip', '가구', '설비', '후드', 'hood', 'kitchen', 'sit', '주방'] },
   { role: 'mep',     keys: ['전기', 'ele', 'el-line', 'elline', '급배수', '덕트', 'duct', 'hvac', '트렌치', 'pipe'] },
-  { role: 'grid',    keys: ['cen', 'grid', 'axis', 'a-guide', 'guide', 'defpoints', 'polycen'] },
+  { role: 'grid',    keys: ['cen', 'grid', 'axis', 'a-guide', 'guide', 'defpoints', 'polycen', 'dote'] },
   { role: 'hatch',   keys: ['hat', 'poche', '해치'] },
   { role: 'wall',    keys: ['wal', 'wall', '벽', 'con', 'col', '기둥', 'blo', '벽체', 'a-wall', 'st-pl', 'structure', '구조', '기존', 'fin', '마감'] },
 ];
