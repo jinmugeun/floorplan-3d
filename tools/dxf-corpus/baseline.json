@@ -15,12 +15,13 @@
   "opnAll": 44,
   "opnHit": 44,
   "opnWidth": 43,
+  "opnKind": 44,
   "doors": 17,
   "windows": 30,
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1520
+  "ms": 1540
  },
  "sinsang-B": {
   "regions": 2,
@@ -37,13 +38,14 @@
   "areaAll": 0,
   "opnAll": 7,
   "opnHit": 7,
-  "opnWidth": 3,
+  "opnWidth": 5,
+  "opnKind": 6,
   "doors": 16,
   "windows": 14,
   "passes": 17,
   "columns": 14,
   "guessed": false,
-  "ms": 997
+  "ms": 1178
  },
  "sinsang-A": {
   "regions": 2,
@@ -61,12 +63,13 @@
   "opnAll": 2,
   "opnHit": 2,
   "opnWidth": 2,
+  "opnKind": 2,
   "doors": 6,
   "windows": 17,
   "passes": 19,
   "columns": 14,
   "guessed": false,
-  "ms": 820
+  "ms": 878
  },
  "naegok": {
   "regions": 1,
@@ -84,11 +87,12 @@
   "opnAll": 36,
   "opnHit": 32,
   "opnWidth": 29,
+  "opnKind": 32,
   "doors": 14,
   "windows": 18,
   "passes": 3,
   "columns": 24,
   "guessed": false,
-  "ms": 1001
+  "ms": 949
  }
 }

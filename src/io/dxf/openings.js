@@ -13,7 +13,7 @@
 // 이 파일은 워커가 import하므로 DOM·ui를 건드리지 않는다.
 import { DXF_PARAMS } from './params.js';
 import { DOOR_BLOCK, OPEN_BLOCK, blockOpenings } from './blockOpenings.js';
-import { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, OPENING_EDGE, OPENING_MIN, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, makeItem } from './openingSeat.js';
+import { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, OPENING_EDGE, OPENING_MIN, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, nearestProduct, makeItem } from './openingSeat.js';
 import { slideDoors } from './slideDoors.js';
 
 export { DOOR_BLOCK, OPEN_BLOCK, slideDoors };
@@ -109,13 +109,15 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
   const mark = (wall, t, width) => (placed.get(wall.id) ?? placed.set(wall.id, []).get(wall.id)).push({ t, width, L: wallLen(wall) });
   // 세 경로가 같은 규칙을 지난다: 벽 길이에 맞춰 폭을 정하고(fitOpening) → 그 폭만큼 t를 당기고(fitT)
   // → **놓일 폭 그대로** 충돌을 본다(리뷰 C3 — 예전에는 측정 폭으로 재고 카탈로그 폭으로 앉혔다).
-  const seat = (list, mm, wall, t0) => {
+  // keep(2026-10-12 · 외미닫이 기호): 폭은 실측 그대로(벽보다 넓으면 fitOpening의 벽 길이 규칙으로 줄인다) 두고 제품만 목록에서
+  // 가장 가까운 것을 고른다 — 블록 경로(makeItem(blockProduct(…), 블록 폭, …))와 같은 뜻이다. 1,000 mm 기호 → door-slide-900 · 폭 1000.
+  const seat = (list, mm, wall, t0, keep = false) => {
     const L = wallLen(wall);
-    const fit = fitOpening(list, mm, L);
+    const fit = fitOpening(keep ? [] : list, mm, L);
     if (!fit) return;
     const t = fitT(t0, L, fit.width);
     if (clash(wall, t, fit.width)) return;
-    const item = makeItem(fit.id, fit.width, wall, t);
+    const item = makeItem(keep ? nearestProduct(list, fit.width) : fit.id, fit.width, wall, t);
     if (!item) return;
     items.push(item);
     mark(wall, t, fit.width);
@@ -172,11 +174,14 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
   leaves.forEach((f, i) => { if (!paired.has(i)) seat(DOOR_PRODUCTS, f.width, f.wall, clamp01(f.tMid)); });
   // ②′ 외미닫이 문 기호(2026-10-12 · 신상중 A-DOOR 문짝 선 + 미닫이 화살표 — 여섯 자리): 스윙 호 뒤 · 창 앞. 그 자리의 문틀·레일 선
   // (개구부 + 주차 자리, 1,700~2,000 mm)은 windowSpans가 창으로 읽던 재료라, 문을 먼저 앉혀 창 구간이 충돌로 비켜 가게 한다.
-  for (const d of slideDoors(ex, walls, openingLayers, toApp, P, wallLayers)) seat(SLIDE_PRODUCTS, d.width, d.wall, clamp01(d.t));
+  // 문짝 선 자체도 창 재료에서 뺀다 — 문의 증거이고, 문 옆에 맞닿아(겹치지 않아) 충돌로는 못 막는 창·통로 조각이 됐다(합성 900·1300 문짝).
+  const slides = slideDoors(ex, walls, openingLayers, toApp, P, wallLayers);
+  for (const d of slides) seat(SLIDE_PRODUCTS, d.width, d.wall, clamp01(d.t), true);
+  const leafSegs = new Set(slides.map(d => d.leaf));
   // 차례가 규칙이다(Task 6 재리뷰): 스윙 호 → **창(면선)** → 벽 틈. 개구부 레이어의 면선은 그 자리가
   // 창이라는 직접 증거라 같은 자리의 일반 틈을 이긴다. 틈은 마지막 폴백이고, 이미 앉은 개구부와
   // 겹치면 놓지 않는다(사전 검토 C-2의 "같은 자리에 겹쳐 놓지 않는다").
-  const appSegs = (ex?.segs ?? []).map(s => ({ layer: s.layer, a: toApp(s.a), b: toApp(s.b) }));
+  const appSegs = (ex?.segs ?? []).filter(s => !leafSegs.has(s)).map(s => ({ layer: s.layer, a: toApp(s.a), b: toApp(s.b) }));
   for (const span of windowSpans(appSegs, openingLayers, walls, P)) seat(WINDOW_PRODUCTS, span.width, span.wall, span.t);
   for (const g of dedupeGaps(gapOpenings(gaps, walls, toApp, scale))) seat([], g.width, g.wall, g.t);
   return items;

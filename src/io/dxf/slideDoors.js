@@ -50,14 +50,15 @@ function headed(end, back, layer, arms) {
   return left && right;
 }
 
-// → [{ wall, t, width }] (앱 좌표 · mm). wallLayers가 비면 개구부(면선이 없는 구간)를 볼 수 없으므로 아무것도 내지 않는다.
+// → [{ wall, t, width, leaf }] (앱 좌표 · mm · leaf = 문짝인 ex.segs 원소 — buildOpenings가 창 재료에서 뺀다).
+// wallLayers가 비면 개구부(면선이 없는 구간)를 볼 수 없으므로 아무것도 내지 않는다.
 export function slideDoors(ex, walls, openingLayers, toApp = p => p, P = DXF_PARAMS, wallLayers = new Set()) {
   if (!openingLayers?.size || !wallLayers?.size || !walls?.length) return [];
   const ins = ex?.inserts ?? [];
   // 창·문·포켓 블록 안의 선은 블록 경로(①)가 이미 앉혔다 — 거슬러 올라가 창·문 이름 INSERT가 하나라도 있으면 뺀다.
   const inOpenBlock = s => { for (let k = s.ins, n = 0; k != null && k >= 0 && n < 16; k = ins[k]?.parent, n++) if (blockKind(ins[k]?.name ?? '')) return true; return false; };
   const lines = (ex?.segs ?? []).filter(s => openingLayers.has(s.layer) && !s.src?.endsWith(':bulge') && !inOpenBlock(s))
-    .map(s => ({ layer: s.layer, a: toApp(s.a), b: toApp(s.b) })).filter(s => len(s.a, s.b) > 0);
+    .map(s => ({ layer: s.layer, a: toApp(s.a), b: toApp(s.b), src: s })).filter(s => len(s.a, s.b) > 0);
   const between = (s, [lo, hi]) => { const L = len(s.a, s.b); return L >= lo && L <= hi; };
   const arms = lines.filter(s => between(s, ARM));
   const arrows = [];
@@ -83,7 +84,7 @@ export function slideDoors(ex, walls, openingLayers, toApp = p => p, P = DXF_PAR
     if (!side) continue;
     // 화살표 쪽이 막혀 있으면 반대쪽을 본다(둘 다 막히면 건너뛴다).
     const hit = openingBeside(leaf, L, e, side, walls, faces, P) ?? openingBeside(leaf, L, e, -side, walls, faces, P);
-    if (hit) out.push(hit);
+    if (hit) out.push({ ...hit, leaf: leaf.src });
   }
   return out;
 }

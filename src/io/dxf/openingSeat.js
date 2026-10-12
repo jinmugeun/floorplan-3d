@@ -91,7 +91,13 @@ export function dedupeGaps(list) {
 export function blockProduct(kind, width) {
   if (kind === 'pocket') return 'door-pocket-900';
   if (kind === 'window') return width < 900 ? 'window-fix-600' : width <= 1500 ? 'window-slide-1200' : 'window-slide-1800';
-  return DOOR_PRODUCTS.filter(([id]) => id !== 'door-slide-1500').reduce((m, e) => (Math.abs(e[1] - width) < Math.abs(m[1] - width) ? e : m))[0];
+  return nearestProduct(DOOR_PRODUCTS.filter(([id]) => id !== 'door-slide-1500'), width);
+}
+
+// 목록에서 폭이 가장 가까운 제품 id(같으면 앞의 것). 실측 폭을 그대로 두고 제품 이름만 고르는 경로(블록 · 외미닫이 기호)가 쓴다 —
+// productForWidth와 달리 20 % 문턱도 opening-pass 폴백도 없다.
+export function nearestProduct(list, width) {
+  return list.reduce((m, e) => (Math.abs(e[1] - width) < Math.abs(m[1] - width) ? e : m))[0];
 }
 
 // 높이·sill은 **카탈로그 기본값 그대로**다 — 도면에 입면 정보가 전혀 없다. 폭만 실측으로 덮어쓴다.

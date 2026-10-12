@@ -259,7 +259,7 @@ test('외미닫이 기호(벽과 나란한 문짝 선 + 미닫이 화살표)는 
   const items = buildOpenings({ ex: exOf({ segs: [...faces(), leafA(), ...arrowA(), seg(1000, 0, 2700, 0, 'WIN')] }), walls: [WALL_A], openingLayers: SLIDE_OPEN, wallLayers: SLIDE_WALL });
   expect(items.map(i => i.productId)).toEqual(['door-slide-900']);
   expect(items[0].t * 6000).toBeCloseTo(2500, 6);
-  expect(items[0].size).toEqual([900, 40, 2100]);
+  expect(items[0].size).toEqual([1000, 40, 2100]);             // 폭은 실측 개구부 그대로, 제품만 가장 가까운 미닫이(블록 경로와 같다)
   // 벽 레이어를 모르면(빈 집합) 빈 구간을 볼 수 없어 이 경로는 아무것도 내지 않는다 — 창 면선이 예전처럼 창이 된다.
   const blind = buildOpenings({ ex: exOf({ segs: [...faces(), leafA(), ...arrowA(), seg(1000, 0, 2700, 0, 'WIN')] }), walls: [WALL_A], openingLayers: SLIDE_OPEN });
   expect(blind.map(i => i.productId)).toEqual(['window-slide-1800']);
@@ -281,6 +281,28 @@ test('외미닫이 기호가 아닌 것은 읽지 않는다 — 화살표·꺾�
   expect(run([seg(0, 100, 6000, 100, 'WAL'), seg(0, -100, 6000, -100, 'WAL'), leafA(), ...arrowA()])).toEqual([]);
   // 빈 구간이 문짝의 80 %보다 짧으면(2000~2300 뒤에 면선 조각) 문이 아니다 — 300 mm 개구부 조각을 만들지 않는다.
   expect(run([...faces(), seg(2300, 100, 2400, 100, 'WAL'), leafA(), ...arrowA()])).toEqual([]);
+});
+
+test('외미닫이 문은 실측 폭으로 앉고 제품은 가장 가까운 미닫이다 — 벽보다 넓으면 벽 안으로 줄이고, 겹치면 놓지 않는다', () => {
+  const build = (segs, walls = [WALL_A]) => buildOpenings({ ex: exOf({ segs }), walls, openingLayers: SLIDE_OPEN, wallLayers: SLIDE_WALL });
+  // 문짝 900(1100~2000) → 개구부 2000~2900, 폭 900.
+  const n900 = build([...faces(), seg(1100, 130, 2000, 130, 'A-DOOR'), ...arrowA()]);
+  expect(n900.map(i => [i.productId, i.size[0]])).toEqual([['door-slide-900', 900]]);
+  expect(n900[0].t * 6000).toBeCloseTo(2450, 6);
+  // 문짝 1300 · 개구부 1300(2000~3300) → 1500 미닫이가 더 가깝다(|1300 − 1500| < |1300 − 900|), 폭은 1300 그대로.
+  // 문짝 선은 창 재료에서 빠진다 — 빼지 않으면 그 선이 window-slide-1200으로 문 옆(겹치지 않게 맞닿아)에 앉았다.
+  const wide = build([seg(0, 100, 2000, 100, 'WAL'), seg(0, -100, 2000, -100, 'WAL'), seg(3300, 100, 6000, 100, 'WAL'), seg(3300, -100, 6000, -100, 'WAL'),
+    seg(700, 130, 2000, 130, 'A-DOOR'), ...arrowA()]);
+  expect(wide.map(i => [i.productId, i.size[0]])).toEqual([['door-slide-1500', 1300]]);
+  // 개구부 쪽 벽이 1,000 mm뿐이면(쓸 수 있는 폭 900) 폭 1000 기호도 900으로 줄여 벽 안에 앉힌다(fitOpening의 벽 길이 규칙).
+  const short = makeWall({ a: [2000, 0], b: [3000, 0], thickness: 200, height: 3500 });
+  const clamp = build([...faces(), leafA(), ...arrowA()], [short]);
+  expect(clamp.map(i => [i.productId, i.size[0]])).toEqual([['door-slide-900', 900]]);
+  expect(clamp[0].t).toBeCloseTo(0.5, 6);
+  // 같은 자리에 스윙 호 문이 이미 있으면 겹쳐 놓지 않는다.
+  const swing = { c: [2000, 0], r: 900, a0: 0, a1: 90, layer: 'A-DOOR', depth: 0 };
+  const both = buildOpenings({ ex: exOf({ arcs: [swing], segs: [...faces(), leafA(), ...arrowA()] }), walls: [WALL_A], openingLayers: SLIDE_OPEN, wallLayers: SLIDE_WALL });
+  expect(both.map(i => i.productId)).toEqual(['door-swing-900']);
 });
 
 test('화살표 쪽이 막혀 있으면 문짝의 반대쪽 빈 구간을 본다', () => {

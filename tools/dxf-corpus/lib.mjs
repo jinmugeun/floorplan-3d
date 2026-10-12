@@ -148,7 +148,11 @@ export async function runDrawing(entry) {
   // (이름에 폭이 없는 블록은 폭 검사를 늘 통과한다). 정답 = 블록 정답 + 손 정답(truth/<id>.json · 2026-10-12).
   const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
   const truth = [...(await blockTruth(exRaw)), ...manualTruth(entry.id)].filter(t => near(toApp(t.c)));
-  let opnHit = 0, opnWidth = 0;
+  // opnKind(2026-10-12): 맞힌 정답 중 가장 가까운 아이템의 **종류**도 맞는 수 — 문·포켓 정답에 door-*, 창 정답에 window-*.
+  // opening-pass는 어느 쪽도 아니다. 자리 적중(opnHit)은 창이 문 자리를 차지해도 세므로 종류는 따로 센다
+  // (신상중 외미닫이 일곱 자리는 규칙 전에도 opnHit 7/7이었다 — 전부 창·통로였다).
+  const kindOk = (kind, id) => ((kind === 'door' || kind === 'pocket') && id.startsWith('door-')) || (kind === 'window' && id.startsWith('window-'));
+  let opnHit = 0, opnWidth = 0, opnKind = 0;
   for (const t of truth) {
     // 상자 네 귀를 앱 좌표로 옮긴 뒤 min·max를 다시 잡는다 — toApp는 y를 뒤집는다.
     const P = [[t.box[0], t.box[1]], [t.box[2], t.box[1]], [t.box[0], t.box[3]], [t.box[2], t.box[3]]].map(toApp);
@@ -161,6 +165,7 @@ export async function runDrawing(entry) {
     if (!it) continue;
     opnHit++;
     if (!t.width || Math.abs(it.size[0] - t.width) <= 50) opnWidth++;
+    if (kindOk(t.kind, it.productId)) opnKind++;
   }
   const count = re => fl.items.filter(i => re.test(i.productId)).length;
   const metrics = {
@@ -170,7 +175,7 @@ export async function runDrawing(entry) {
     openEnds: stats.openEnds.length, tiny: fl.rooms.filter(r => r.area < 1.5).length,
     dimFit: ends ? Math.round(100 * hit / ends) : null, dimEnds: ends,
     areaOk, areaAll: labels.length,
-    opnAll: truth.length, opnHit, opnWidth,
+    opnAll: truth.length, opnHit, opnWidth, opnKind,
     doors: count(/^door-/), windows: count(/^window-/), passes: count(/^opening-pass/), columns: cols.length,
     guessed: !!stats.guessed, ms,
   };
@@ -178,4 +183,4 @@ export async function runDrawing(entry) {
 }
 
 // 방향이 있는 지표: 값이 이쪽으로 가면 나빠진 것이다(벽·방 수 같은 나머지는 바뀌면 알리기만 한다).
-export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1, areaOk: -1, opnHit: -1, opnWidth: -1 };
+export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1, areaOk: -1, opnHit: -1, opnWidth: -1, opnKind: -1 };
