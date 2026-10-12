@@ -118,6 +118,24 @@ test('벽 끝에서 같은 직선으로 이어지는 난간 구획선은 그 벽
   expect(railDividers(side, [line(100, 1600, 5900, 1600)]).walls.filter(w => w.virtual).map(w => w.axisShift)).toEqual([undefined]);
 });
 
+// 2026-10-12 · 계획 13 Task 7(계획 12 Task 5 리뷰 M5-2 · 고정 테스트): 이미 닫힌 방 안에서 벽에서 벽까지 이은 난간은 **지금** 그 방을 가른다.
+// "난간 전에 센 방 하나 안에 통째로 든 묶음은 건너뛴다" 가드를 재 보니 공개 roomHit −5 · falseRooms −4 · splitRooms −1(감소 5 = 손실 5)이라
+// 넣지 않았다(railDividers.js 머리 주석 ⑤). 한국 계단 난간 위험은 남는다 — 이 동작을 바꾸려면 이 테스트와 함께 다시 재고 바꾼다.
+test('닫힌 방 안 난간은 방을 가른다(가드 미채택 — 고정) · 바깥 발코니를 닫는 난간은 그대로 발코니를 닫는다', () => {
+  // 6 × 4 m 방(닫힘) + 앞 발코니 자리(y 4000 → 5600 · 양옆 벽만).
+  const walls = normalizeWalls([
+    wall(0, 0, 6000, 0), wall(6000, 0, 6000, 5600), wall(0, 5600, 0, 0), wall(0, 4000, 6000, 4000),
+  ]);
+  expect(areas(walls)).toEqual([24]);
+  const inside = line(2000, 100, 2000, 3900);                                            // 방 안 · 위 벽 면에서 아래 벽 면까지(계단 난간 꼴)
+  const balcony = line(100, 5600, 5900, 5600);                                           // 발코니 앞 · 양옆 벽 끝을 잇는다
+  const { walls: out, added } = railDividers(walls, [inside, balcony]);
+  expect(added).toBe(2);
+  expect(out.filter(w => w.virtual).map(ends).map(e => e.map(p => p.join(',')).sort()).sort())
+    .toEqual([['0,5600', '6000,5600'], ['2000,0', '2000,4000']]);
+  expect(areas(out)).toEqual([8, 9.6, 16]);                                              // 24 m² 방이 8 + 16으로 갈렸다
+});
+
 test('buildProject: 워커가 넘긴 난간 선(DXF 좌표)으로 발코니가 닫히고, stats.railDividers로 따로 센다 — 저장 형식은 그냥 구획선', () => {
   // DXF 좌표(y 위): 건물 벽 y = 1600, 양옆 벽이 아래(y = 0)로 1.6 m, 앞 난간 y = 0.
   const raw = [
