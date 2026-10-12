@@ -164,7 +164,10 @@ export async function runDrawing(entry) {
     const it = opens.filter(i => dBox(i) <= OPN_TOL).sort((a, b) => dBox(a) - dBox(b) || dMid(a) - dMid(b))[0];
     if (!it) continue;
     opnHit++;
-    if (!t.width || Math.abs(it.size[0] - t.width) <= 50) opnWidth++;
+    // 폭(2026-10-12 · 계획 12 Task 7 — 사동중 win-4800-3 둘째(T자 칸막이)): 블록 개구부 하나가 같은 선 위 벽 조각들에 나뉘어 앉으면
+    // 조각들이 같은 openingGroup 표지를 갖는다 — 가장 가까운 아이템의 무리 전체 폭을 더해 정답 폭과 맞댄다(무리가 없으면 그 아이템 폭).
+    const w = it.openingGroup ? opens.filter(i => i.openingGroup === it.openingGroup).reduce((a, i) => a + i.size[0], 0) : it.size[0];
+    if (!t.width || Math.abs(w - t.width) <= 50) opnWidth++;
     if (kindOk(t.kind, it.productId)) opnKind++;
   }
   const count = re => fl.items.filter(i => re.test(i.productId)).length;

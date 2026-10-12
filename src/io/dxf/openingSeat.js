@@ -100,6 +100,59 @@ export function nearestProduct(list, width) {
   return list.reduce((m, e) => (Math.abs(e[1] - width) < Math.abs(m[1] - width) ? e : m))[0];
 }
 
+// 블록 개구부 구간 [c0, c1](호스트 벽 a→b 축 mm)을 벽 조각들에 나눠 앉힐 자리 → [{ wall, width, t }](벽 축 차례 · 빈 배열 = 놓지 않는다).
+// 2026-10-12 · 계획 12 Task 7 — 사동중 win-4800-3 둘째(T자 칸막이): 창 도중 x 1176986에 355 칸막이가 T자로 붙어 normalizeWalls가 외벽을
+// 같은 끝점을 나눠 갖는 두 조각(a→p · p→b)으로 갈랐고, 창이 호스트 조각(2834) 안으로 잘려 2700만 앉았다. 구간이 벽 끝을 넘고 그 끝점을
+// **같은 방향(2° 안)·같은 두께(±tol)**의 벽이 공유하면 그 조각으로 잇는다(T자로 붙는 칸막이는 방향이 달라 잇지 않는다).
+//  - 공유 접점에서는 OPENING_EDGE를 면제한다 — 지키면 4000 창이 1950 + 1950이 된다. geom/openings.js의 clipRectByOpenings가
+//    벽 끝에 닿는 개구부를 그대로 다룬다. 바깥 끝은 지금처럼 여유를 지키고, 넘치면 잘리지 않은 쪽(접점) 문설주를 제자리에 둔다.
+//  - 양 끝 조각이 OPENING_MIN 미만이면 버리고 남은 이웃의 그 끝을 벽 끝으로 다시 잰다(잇지 않던 지금의 자르기와 같다).
+//  - 이웃이 없으면 결과는 예전 호스트 자르기와 똑같다(조각 하나).
+const JOINT_COS = Math.cos(2 * Math.PI / 180);
+const JOINT_EPS = 1;                       // 공유 끝점으로 볼 거리(mm) — normalizeWalls 뒤에는 정확히 같다
+export function spanPieces(walls, host, c0, c1, tol) {
+  const L = Math.hypot(host.b[0] - host.a[0], host.b[1] - host.a[1]);
+  if (!L) return [];
+  const d = [(host.b[0] - host.a[0]) / L, (host.b[1] - host.a[1]) / L];
+  const s = p => (p[0] - host.a[0]) * d[0] + (p[1] - host.a[1]) * d[1];        // 호스트 축 좌표
+  const span = w => { const sa = s(w.a), sb = s(w.b); return { wall: w, L: Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), sa, sign: sb >= sa ? 1 : -1, S: Math.min(sa, sb), E: Math.max(sa, sb) }; };
+  const chain = [span(host)], used = new Set([host]);
+  // J를 끝점으로 갖고, 호스트와 나란하며, J에서 바깥(out = −1: a 쪽 · +1: b 쪽)으로 뻗는 같은 두께의 벽.
+  const next = (from, J, out) => (walls ?? []).find(w => {
+    if (used.has(w) || Math.abs(w.thickness - from.thickness) > tol) return false;
+    const atA = Math.hypot(w.a[0] - J[0], w.a[1] - J[1]) <= JOINT_EPS;
+    if (!atA && Math.hypot(w.b[0] - J[0], w.b[1] - J[1]) > JOINT_EPS) return false;
+    const far = atA ? w.b : w.a, v = [far[0] - J[0], far[1] - J[1]], l = Math.hypot(v[0], v[1]);
+    return l > 0 && (v[0] * d[0] + v[1] * d[1]) * out >= l * JOINT_COS;
+  });
+  for (const out of [-1, 1]) {
+    for (let cur = chain.at(out < 0 ? 0 : -1); out < 0 ? cur.S > c0 : cur.E < c1;) {
+      const J = (cur.sign > 0) === (out < 0) ? cur.wall.a : cur.wall.b;
+      const w = next(cur.wall, J, out);
+      if (!w) break;
+      used.add(w); cur = span(w);
+      if (out < 0) chain.unshift(cur); else chain.push(cur);
+    }
+  }
+  // 조각 하나: [r0, r1]을 [S + m0, E − m1] 안으로(호스트 하나뿐이면 예전 블록 경로의 자르기 그대로). 나뉜 조각(n > 1)은 바깥 끝에서
+  // 잘려도 50 mm 단위로 내리지 않는다 — 접점 쪽 폭이 이미 실측(1966)이라 단위가 뜻이 없고, 내리면 무리의 폭 합이 여유 말고도 최대 49 mm
+  // 더 모자란다(사동중 그 창: 호스트 조각의 바깥 끝이 외벽 꺾임(x 1174152)에 딱 붙어 [50, 2834] → 2784 · 내리면 2750이라 합 4716).
+  const fit = (c, r0, r1, m0, m1, n) => {
+    const u0 = Math.max(r0, c.S + m0), u1 = Math.min(r1, c.E - m1);
+    const whole = u1 - u0 >= r1 - r0 - 1;
+    const width = whole ? Math.round(r1 - r0) : n > 1 ? Math.round(u1 - u0) : Math.floor((u1 - u0) / 50) * 50;
+    if (width < OPENING_MIN) return null;
+    const mid = whole ? (r0 + r1) / 2 : r0 < c.S + m0 ? u1 - width / 2 : u0 + width / 2;
+    return { wall: c.wall, width, t: (mid - c.sa) * c.sign / c.L };
+  };
+  for (let lo = 0, hi = chain.length - 1; ;) {
+    const out = chain.slice(lo, hi + 1).map((c, i, a) => fit(c, i ? c.S : c0, i < a.length - 1 ? c.E : c1, i ? 0 : OPENING_EDGE, i < a.length - 1 ? 0 : OPENING_EDGE, a.length));
+    if (lo < hi && !out[0]) lo++;
+    else if (lo < hi && !out.at(-1)) hi--;
+    else return out.filter(Boolean);       // 가운데 조각은 벽 전체다(그 벽이 OPENING_MIN보다 짧을 때만 빠진다)
+  }
+}
+
 // 높이·sill은 **카탈로그 기본값 그대로**다 — 도면에 입면 정보가 전혀 없다. 폭만 실측으로 덮어쓴다.
 // 제품마다 값이 다르다(사전 검토 I-9): 문 z 0 · h 2100 / `window-slide-*` z 900 · h 1200 /
 // **`window-fix-600`은 z 1200 · h 600** / `opening-pass` z 0 · h 2100.

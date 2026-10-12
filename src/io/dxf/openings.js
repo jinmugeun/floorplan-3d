@@ -13,8 +13,9 @@
 // 이 파일은 워커가 import하므로 DOM·ui를 건드리지 않는다.
 import { DXF_PARAMS } from './params.js';
 import { DOOR_BLOCK, OPEN_BLOCK, blockOpenings } from './blockOpenings.js';
-import { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, OPENING_EDGE, OPENING_MIN, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, nearestProduct, makeItem } from './openingSeat.js';
+import { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, nearestProduct, makeItem, spanPieces } from './openingSeat.js';
 import { slideDoors } from './slideDoors.js';
+import { uid } from '../../state/schema.js';
 
 export { DOOR_BLOCK, OPEN_BLOCK, slideDoors };
 // 제품 목록·폭 맞추기·틈 중복 제거·벽 찾기·아이템 만들기(순수 도우미)는 openingSeat.js로 옮겼다(2026-10-12 · 300줄 예산).
@@ -126,17 +127,22 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
   for (const o of blockOpenings(ex, walls, toApp)) {
     // 자리가 정확하므로 옮기지 않는다: 벽 끝(여유 OPENING_EDGE)을 넘는 쪽만 잘라 50 mm 단위로 내리고 반대쪽
     // 문설주는 제자리에 둔다(옮기면 문설주가 치수에서 어긋나고 이웃 개구부와 겹쳐 통째로 빠졌다).
+    // 2026-10-12 · 계획 12 Task 7 — 사동중 win-4800-3 둘째(T자 칸막이): 넘친 끝을 **같은 선 위 이웃 조각**이 이어 받으면
+    // 자르지 않고 그 조각에 나머지를 앉힌다(spanPieces — 공유 접점은 여유 면제). 조각마다 충돌을 따로 보고, 둘 이상 앉으면
+    // 같은 openingGroup 표지를 단다(코퍼스 점수판이 그 폭을 더해 블록 폭과 맞댄다). 제품은 조각이 아니라 창 전체 폭으로 고른다
+    // (1200 창의 600 조각이 고정창이 되지 않게 — 두 조각의 높이·sill이 같아야 한다).
     const L = wallLen(o.wall), c = o.t * L, half = o.width / 2;
-    const u0 = Math.max(c - half, OPENING_EDGE), u1 = Math.min(c + half, L - OPENING_EDGE);
-    const whole = u1 - u0 >= o.width - 1;
-    const width = whole ? Math.round(o.width) : Math.floor((u1 - u0) / 50) * 50;
-    if (width < OPENING_MIN) continue;
-    const t = (whole ? c : c - half < OPENING_EDGE ? u1 - width / 2 : u0 + width / 2) / L;
-    if (clash(o.wall, t, width)) continue;
-    const item = makeItem(blockProduct(o.kind, width), width, o.wall, t);
-    if (!item) continue;
-    items.push(item);
-    mark(o.wall, t, width);
+    const pieces = spanPieces(walls, o.wall, c - half, c + half, P.bandTol);
+    const id = blockProduct(o.kind, pieces.reduce((a, p) => a + p.width, 0));
+    const group = [];
+    for (const { wall, width, t } of pieces) {
+      if (clash(wall, t, width)) continue;
+      const item = makeItem(id, width, wall, t);
+      if (!item) continue;
+      items.push(item); group.push(item);
+      mark(wall, t, width);
+    }
+    if (group.length > 1) { const g = uid('og'); for (const it of group) it.openingGroup = g; }
   }
   // ② 문 재료는 ARC 엔티티와 폴리선 bulge 호(polyArcs) 둘 다다.
   const leaves = [];

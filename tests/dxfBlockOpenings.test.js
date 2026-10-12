@@ -174,3 +174,48 @@ test('창: 호스트가 있지만 가로지르지 않는 창은 호칭 폭이 �
   expect(out[0]).toMatchObject({ kind: 'window', name: 'win-900-3', width: 900, wall: W1 });
   expect(out[0].t * 6000).toBeCloseTo(1450, 6);
 });
+
+// 2026-10-12 · 계획 12 Task 7 — 사동중 win-4800-3 둘째(T자 칸막이): 창 도중 x 1176986에 355 칸막이가 T자로 붙어 normalizeWalls가
+// 외벽을 두 조각으로 가르고, 블록 경로가 창을 호스트 조각(2834) 안으로 잘라 2700만 앉혔다. 호스트 끝점을 **같은 방향·같은 두께**의
+// 벽이 공유하면 넘친 만큼을 그 조각에 둘째 아이템으로 앉힌다(같은 제품 · 같은 openingGroup). 공유 접점에서는 OPENING_EDGE를
+// 면제한다(아니면 1950 + 1950) — 먼 끝의 여유는 그대로 지킨다.
+const winSpan = (x0, x1, ins) => [seg(x0, -67.5, x1, -67.5, ins), seg(x0, 67.5, x1, 67.5, ins), seg(x0 + 70, 0.5, x1 - 70, 0.5, ins), seg(x0, -67.5, x0, 67.5, ins), seg(x1, -67.5, x1, 67.5, ins)];
+const winIns = name => [plan, { name, pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
+const T = makeWall({ a: [4000, 0], b: [4000, 3000], thickness: 100 });          // x 4000에 T자로 붙는 칸막이(같은 선이 아니다)
+
+test('T자로 갈린 벽: 블록 창이 접점을 넘으면 같은 선 위 이웃 조각에 나머지를 이어 앉힌다(접점 여유 면제 · 같은 openingGroup)', () => {
+  const W1 = makeWall({ a: [0, 0], b: [4000, 0], thickness: 200 });
+  for (const W2 of [makeWall({ a: [4000, 0], b: [8000, 0], thickness: 200 }), makeWall({ a: [8000, 0], b: [4000, 0], thickness: 230 })]) {   // 이웃이 거꾸로여도 · 두께 ±60 안
+    const items = buildOpenings({ ex: exOf(winIns('win-4000-3'), winSpan(2000, 6000, 1)), walls: [W1, W2, T], openingLayers: new Set() });
+    expect(items.map(i => [i.productId, i.size[0], i.wallId])).toEqual([['window-slide-1800', 2000, W1.id], ['window-slide-1800', 2000, W2.id]]);
+    expect(items[0].pos[0]).toBeCloseTo(3000, 6);
+    expect(items[1].pos[0]).toBeCloseTo(5000, 6);
+    expect(items[0].openingGroup).toBeTruthy();
+    expect(items[1].openingGroup).toBe(items[0].openingGroup);
+  }
+});
+
+// 사동중 그 창의 꼴(앱 좌표를 호스트 a = 0으로 옮김): 창 x −0.13 ~ 4799.87, 호스트 조각 0 ~ 2834의 a 끝은 외벽 꺾임(같은 선 이웃 없음),
+// 2834에 칸막이가 T자로 붙고 이웃 조각이 2834 ~ 9434. 꺾임 쪽은 여유 50을 지키되 나뉜 조각은 50 mm 단위로 내리지 않는다 → 2784 + 1966 = 4750.
+test('T자로 갈린 벽: 바깥 끝(꺾임)은 여유 50 mm를 지키고, 나뉜 조각은 50 mm 단위로 내리지 않는다(사동중 win-4800-3 둘째의 꼴)', () => {
+  const W1 = makeWall({ a: [0, 0], b: [2834, 0], thickness: 360 }), W2 = makeWall({ a: [2834, 0], b: [9434, 0], thickness: 360 });
+  const jog = makeWall({ a: [0, -196], b: [0, 0], thickness: 230 }), part = makeWall({ a: [2834, 0], b: [2834, 2171], thickness: 355 });
+  const items = buildOpenings({ ex: exOf(winIns('win-4800-3'), winSpan(-0.13, 4799.87, 1)), walls: [W1, W2, jog, part], openingLayers: new Set() });
+  expect(items.map(i => [i.productId, i.size[0], i.wallId])).toEqual([['window-slide-1800', 2784, W1.id], ['window-slide-1800', 1966, W2.id]]);
+  expect(items[0].pos[0]).toBeCloseTo(50 + 2784 / 2, 6);               // 꺾임에서 50 · 접점까지
+  expect(items[1].pos[0]).toBeCloseTo((2834 + 4799.87) / 2, 6);         // 접점 ~ 창 끝(다 들어간다)
+  expect(items[1].openingGroup).toBe(items[0].openingGroup);
+});
+
+test('T자로 갈린 벽: 두께가 다른 이웃(±60 밖)이나 300 mm 미만의 나머지는 잇지 않는다 — 지금처럼 호스트 안으로 자른다', () => {
+  const W1 = makeWall({ a: [0, 0], b: [4000, 0], thickness: 200 });
+  const thick = makeWall({ a: [4000, 0], b: [8000, 0], thickness: 400 });
+  const a = buildOpenings({ ex: exOf(winIns('win-4000-3'), winSpan(2000, 6000, 1)), walls: [W1, thick, T], openingLayers: new Set() });
+  expect(a.map(i => [i.productId, i.size[0], i.wallId])).toEqual([['window-slide-1800', 1950, W1.id]]);
+  expect(a[0].pos[0]).toBeCloseTo(2000 + 1950 / 2, 6);
+  expect(a[0].openingGroup).toBeUndefined();
+  const W2 = makeWall({ a: [4000, 0], b: [8000, 0], thickness: 200 });
+  const b = buildOpenings({ ex: exOf(winIns('win-2200-3'), winSpan(2000, 4200, 1)), walls: [W1, W2, T], openingLayers: new Set() });
+  expect(b.map(i => [i.size[0], i.wallId])).toEqual([[1950, W1.id]]);       // 나머지 200 < 300 → 접점 여유를 지켜 1950
+  expect(b[0].openingGroup).toBeUndefined();
+});
