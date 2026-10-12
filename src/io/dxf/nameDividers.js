@@ -13,6 +13,7 @@
 //  ④ 한 바퀴에 방마다 하나씩 긋고 방을 다시 센다(세 이름이면 두 바퀴).
 //  ⑤ 끝이 문·창 자리(구획선 없이 먼저 앉힌 개구부 폭 + OPENING_EDGE) 안인 가로지르기는 후보가 아니다 — 그 점에서 벽이 나뉘어 개구부가
 //     앉지 못한다(아래 inOpening).
+//  ⑥ 위아래 두 줄로 쓴 한 실명은 한 이름이다(아래 stacked · 리뷰 M-1).
 // 좌표는 앱 좌표(mm · 정수 — makeToApp)다. 반환 { walls(정규화한 새 배열 · 넣은 것이 없으면 받은 배열 그대로), added(그은 구획선 수) }.
 // 만든 구획선에는 byName 표지를 단다(toProject가 세고 지운다 — 저장 형식은 그냥 구획선이다).
 import { makeWall } from '../../geom/walls.js';
@@ -102,15 +103,20 @@ function split(poly, a, b) {
   return null;
 }
 
-// 가로지르기가 방 안에 떠 있는 벽(섬 — 방 경계가 아니다)을 끝 1 mm 밖에서 지나는가.
+// 가로지르기가 방 안에 떠 있는 벽(섬 — 방 경계가 아니다)을 끝 1 mm 밖에서 지나거나, 같은 직선 위에서 그 벽과 1 mm 넘게 겹치는가
+// (겹치면 정규화가 그 섬을 구획선 조각으로 나눈다 — 2026-10-12 리뷰 M-2 후속 테스트에서 드러났다).
 function crosses(ch, walls) {
-  const d = [ch.b[0] - ch.a[0], ch.b[1] - ch.a[1]];
+  const d = [ch.b[0] - ch.a[0], ch.b[1] - ch.a[1]], L = Math.hypot(d[0], d[1]);
   return walls.some(w => {
     const e = [w.b[0] - w.a[0], w.b[1] - w.a[1]], den = d[0] * e[1] - d[1] * e[0], Lw = Math.hypot(e[0], e[1]);
-    if (Math.abs(den) < 1e-9 * ch.len * Lw) return false;
     const q = [w.a[0] - ch.a[0], w.a[1] - ch.a[1]];
+    if (Math.abs(den) < 1e-9 * L * Lw) {
+      if (!L || Math.abs(q[0] * d[1] - q[1] * d[0]) / L > 1) return false;
+      const t0 = dot(q, d) / L, t1 = t0 + dot(e, d) / L;
+      return Math.min(Math.max(t0, t1), L) - Math.max(Math.min(t0, t1), 0) > 1;
+    }
     const t = (q[0] * e[1] - q[1] * e[0]) / den, u = (q[0] * d[1] - q[1] * d[0]) / den;
-    return t * ch.len > 1 && (1 - t) * ch.len > 1 && u * Lw >= -1 && (1 - u) * Lw >= -1;
+    return t * L > 1 && (1 - t) * L > 1 && u * Lw >= -1 && (1 - u) * Lw >= -1;
   });
 }
 
@@ -154,6 +160,23 @@ function pairCut(poly, A, B, walls, P, spans) {
   return pick.small >= P.dividerMinArea ? pick : null;
 }
 
+// ⑥ 두 줄로 쓴 한 실명(2026-10-12 리뷰 M-1): 내곡중 "남자" 위 · "화장실" 아래(h 250 · dy 425 = 1.7h · dx 174), 3suite (10) "空中/花园"·"入户/花园"
+// (dy 1.66h)는 두 방이 아니다 — roomLabels ③은 "/·,"로 끝나는 윗줄만 잇는다. 그 사이를 가르면 한 방이 거짓으로 둘이 된다(222개 중 5개).
+// 같은 방의 두 후보가 |dx| ≤ 2h이고 0.8h ≤ dy ≤ 2.2h(h = 둘 중 큰 글자 높이)이면 한 이름이다: 자리는 윗줄(앱 좌표는 y 아래 — 작은 y),
+// 글자는 이어 붙인다. dx 4h(③의 폭)는 600 mm 글자로 나란히 쓴 두 실명까지 묶어 정답 3개를 잃는다(리뷰 시제품). 높이를 모르면 묶지 않는다.
+function stacked(own) {
+  const sorted = [...own].sort((a, b) => a.p[1] - b.p[1]), used = new Set(), out = [];
+  for (const c of sorted) {
+    if (used.has(c)) continue;
+    used.add(c);
+    const below = sorted.filter(d => !used.has(d) && c.h > 0 && d.h > 0).map(d => ({ d, h: Math.max(c.h, d.h), dx: Math.abs(d.p[0] - c.p[0]), dy: d.p[1] - c.p[1] }))
+      .filter(x => x.dx <= 2 * x.h && x.dy >= 0.8 * x.h && x.dy <= 2.2 * x.h).sort((x, y) => x.dy - y.dy)[0];
+    if (below) used.add(below.d);
+    out.push(below ? { ...c, text: c.text + below.d.text } : c);
+  }
+  return out;
+}
+
 // 한 방의 구획선 하나: 이웃한 실명 짝(넓게 퍼진 축으로 정렬) 중 가장 짧은 것.
 function roomCut(poly, own, walls, P, spans) {
   const span = ax => Math.max(...own.map(l => l.p[ax])) - Math.min(...own.map(l => l.p[ax]));
@@ -176,7 +199,7 @@ export function addDividersByNames(walls, labels, { params: P = DXF_PARAMS, heig
   for (let pass = 0; pass < PASSES; pass++) {
     const cuts = [];
     for (const room of detectRooms(list)) {
-      const own = names.filter(l => pointInPolygon(l.p, room.points));
+      const own = stacked(names.filter(l => pointInPolygon(l.p, room.points)));
       if (own.length < 2 || marked.some(l => pointInPolygon(l.p, room.points))) continue;
       const cut = roomCut(room.points, own, list, P, openings);
       const key = cut && [cut.a, cut.b].map(p => p.join(',')).sort().join('|');

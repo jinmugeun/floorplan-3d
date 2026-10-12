@@ -6,6 +6,7 @@ import { test, expect } from 'vitest';
 import { addDividersByNames, isRoomName } from '../src/io/dxf/nameDividers.js';
 import { buildProject, nameRooms } from '../src/io/dxf/toProject.js';
 import { DXF_PARAMS } from '../src/io/dxf/params.js';
+import { OPENING_EDGE, makeItem } from '../src/io/dxf/openingSeat.js';
 import { makeWall } from '../src/geom/walls.js';
 import { normalizeWalls } from '../src/geom/normalize.js';
 import { detectRooms } from '../src/geom/rooms.js';
@@ -76,6 +77,69 @@ test('가장 짧은 가로지르기가 dividerMinArea(2 m²) 미만 조각을 �
   expect(added).toBe(1);
   expect(out.filter(w => w.virtual).map(ends)).toEqual([['0,4000', '1000,4000']]);
   expect(areas(out)).toEqual([2.5, 24]);
+});
+
+// 리뷰 M-1(2026-10-12): 한 실명을 두 줄로 쓴 것("남자" 위 · "화장실" 아래 — 내곡중 h 250 · dy 425 · dx 174)은 두 방이 아니다.
+// |dx| ≤ 2h · 0.8h ≤ dy ≤ 2.2h(h = 둘 중 큰 글자 높이)이면 한 이름(윗줄 자리 · 글자는 이어 붙임)으로 본다.
+const lined = (text, x, y, h = 250) => ({ ...label(text, x, y), h });
+test('두 줄로 쓴 한 실명(위 "남자" · 아래 "화장실")은 한 이름이다 — 그 사이를 가르지 않는다', () => {
+  const walls = loop([[0, 0], [6000, 0], [6000, 4000], [0, 4000]]);
+  expect(addDividersByNames(walls, [lined('남자', 3000, 1800), lined('화장실', 2826, 2225)])).toEqual({ walls, added: 0 });
+  // 두 줄 이름 + 6 m 떨어진 다른 실명 → 구획선 하나, 두 이름 사이(x = 5000)이고 두 줄 사이가 아니다
+  const wide = loop([[0, 0], [12000, 0], [12000, 4000], [0, 4000]]);
+  const { walls: out, added } = addDividersByNames(wide, [lined('남자', 2000, 1800), lined('화장실', 2000, 2225), lined('세면실', 8000, 2000)]);
+  expect(added).toBe(1);
+  expect(out.filter(w => w.virtual).map(ends)).toEqual([['5000,0', '5000,4000']]);
+  // 줄 간격이 2.2h를 넘으면(위아래 두 방의 이름) 따로 센다
+  expect(addDividersByNames(walls, [lined('남자', 3000, 1000), lined('화장실', 3000, 3000)]).added).toBe(1);
+});
+
+// 리뷰 M-2(2026-10-12): ⑤ 끝이 문·창 자리(개구부 폭 + 양쪽 OPENING_EDGE) 안인 가로지르기는 후보가 아니다.
+test('끝이 문·창 자리 안인 가로지르기는 버리고 다음 자리를 쓴다 — 모든 자리가 막히면 긋지 않는다', () => {
+  const walls = loop([[0, 0], [12000, 0], [12000, 4000], [0, 4000]]);
+  const labels = [label('客厅', 2000, 2000), label('餐厅', 10000, 2000)];
+  const top = walls.find(w => w.a[1] === 0 && w.b[1] === 0);
+  const xs = res => res.walls.filter(w => w.virtual).map(w => w.a[0]);
+  expect(xs(addDividersByNames(walls, labels))).toEqual([6000]);                       // 문이 없으면 한가운데
+  // x = 6000에 문 900 → 6000 ± (450 + OPENING_EDGE) 밖의 가장 가까운 표본 자리(5200 · 800 비낌)
+  const door = { wall: top, t: (6000 - top.a[0]) / (top.b[0] - top.a[0]), width: 900 };
+  const moved = xs(addDividersByNames(walls, labels, { openings: [door] }));
+  expect(moved).toHaveLength(1);
+  expect([5200, 6800]).toContain(moved[0]);                                             // 한가운데에서 800 비낀 표본 자리(어느 쪽이든)
+  expect(Math.abs(moved[0] - 6000)).toBeGreaterThanOrEqual(450 + OPENING_EDGE);
+  // 두 이름 사이 표본 자리가 전부 7 m 창 안이면 긋지 않는다
+  expect(addDividersByNames(walls, labels, { openings: [{ ...door, width: 7000 }] })).toEqual({ walls, added: 0 });
+});
+
+test('방 안에 떠 있는 벽(섬)을 지나거나 그 위를 따라가는 가로지르기는 버린다', () => {
+  const walls = loop([[0, 0], [12000, 0], [12000, 4000], [0, 4000]]);
+  const labels = [label('客厅', 2000, 2000), label('餐厅', 10000, 2000)];
+  for (const island of [wall(5800, 2000, 6200, 2000), wall(6000, 1000, 6000, 3000)]) {        // x = 6000 가로지르기를 가로지르는 섬 · 같은 직선 위의 섬
+    const { walls: out, added } = addDividersByNames([...walls, island], labels);
+    expect(added).toBe(1);
+    const v = out.filter(w => w.virtual);
+    expect(v).toHaveLength(1);
+    expect([5200, 6800]).toContain(v[0].a[0]);
+  }
+});
+
+test('buildProject: 이름 구획선을 켜도 구획선 없이 앉던 문은 그대로 앉는다(⑤ — 문 한가운데에서 벽을 나누지 않는다)', () => {
+  // DXF 좌표 12 × 4 m 방, 실명 둘(앱 x = −4000 · 4000) — 문이 없으면 구획선은 앱 x = 0.
+  const raw = [[0, 0], [12000, 0], [12000, 4000], [0, 4000]].map((p, i, a) => ({ a: p, b: a[(i + 1) % 4], thickness: 200 }));
+  const texts = [{ text: '客厅', p: [2000, 2000], h: 300, layer: 'TEXT' }, { text: '餐厅', p: [10000, 2000], h: 300, layer: 'TEXT' }];
+  // 개구부 자리 흉내: 앱 x = 0을 가운데로 문 900을 앉힌다 — 그 폭(± 450)을 다 품은 가로 벽 조각이 있을 때만(조각이 나뉘면 앉지 못한다).
+  const doorAt0 = ({ walls }) => {
+    const w = walls.find(v => v.a[1] === v.b[1] && Math.min(v.a[0], v.b[0]) <= -450 && Math.max(v.a[0], v.b[0]) >= 450);
+    return w ? [makeItem('door-swing-900', 900, w, (0 - w.a[0]) / (w.b[0] - w.a[0]))] : [];
+  };
+  const off = buildProject(raw, { texts, openings: doorAt0 });
+  expect(off.project.floors[0].items.filter(i => i.productId === 'door-swing-900')).toHaveLength(1);
+  const on = buildProject(raw, { texts, openings: doorAt0, dividerByNames: true });
+  const fl = on.project.floors[0];
+  expect([on.stats.nameDividers, on.stats.rooms]).toEqual([1, 2]);
+  expect(fl.items.filter(i => i.productId === 'door-swing-900')).toHaveLength(1);         // 문이 살아남았다
+  const v = fl.walls.find(w => w.virtual);
+  expect(Math.abs(v.a[0])).toBeGreaterThanOrEqual(450 + OPENING_EDGE);                   // 구획선은 문 자리 밖
 });
 
 test('buildProject: 옵션 dividerByNames가 꺼져 있으면(기본) 긋지 않고, 켜면 stats.nameDividers로 따로 센다 — 저장 형식은 그냥 구획선', () => {
