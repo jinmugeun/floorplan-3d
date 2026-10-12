@@ -23,10 +23,10 @@ const focusClick = (el, sel) => { const b = el.querySelector(sel); b.focus(); b.
 beforeEach(() => { localStorage.clear(); document.activeElement?.blur?.(); });
 
 describe('라이브러리 패널', () => {
-  test('탭 3개와 카테고리 13개를 보여주고 카테고리 → 하위 → 타일로 들어간다', () => {
+  test('탭 3개와 카테고리 14개를 보여주고 카테고리 → 하위 → 타일로 들어간다', () => {
     const { el } = setup();
     expect([...el.querySelectorAll('[data-tab]')].map(b => b.textContent)).toEqual(['오늘의집 제품', '즐겨찾기', '배치된 제품']);
-    expect(el.querySelectorAll('[data-cat]')).toHaveLength(13);   // '환기 설비' 카테고리가 늘었다
+    expect(el.querySelectorAll('[data-cat]')).toHaveLength(14);   // '환기 설비'에 이어 '도면 기구'(2026-10-12 · 계획 13 Task 2)가 늘었다
     click(el, '[data-cat="소파"]');
     expect([...el.querySelectorAll('[data-sub]')].map(b => b.dataset.sub)).toEqual(['', '소파', '리클라이너']);
     click(el, '[data-sub="소파"]');
@@ -160,7 +160,7 @@ describe('라이브러리 패널', () => {
 // §15.8(감사 §26): 처음 열면 제품이 하나도 없었다(카테고리 목록 13줄만).
 test('처음 열면 전체 그리드와 칩 행이 함께 보인다', () => {
   const { el } = setup();
-  expect(el.querySelectorAll('.chips button[data-cat]')).toHaveLength(13);
+  expect(el.querySelectorAll('.chips button[data-cat]')).toHaveLength(14);   // '도면 기구' 포함(2026-10-12 · 계획 13 Task 2)
   expect(el.querySelector('[data-cat-all]').classList.contains('on')).toBe(true);
   const tiles = [...el.querySelectorAll('.tile')];
   expect(tiles.length).toBeGreaterThan(20);                 // 카탈로그 전체가 보인다

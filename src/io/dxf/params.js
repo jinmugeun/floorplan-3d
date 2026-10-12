@@ -48,6 +48,11 @@
 //    벽감·샤프트다 — 그 표지 하나로 방을 가르지 않게 한다(사전 검토가 정한 값). 공개 정답 1,916방 중 2 m² 미만은 171(샤프트 水机房·电机房·风机房
 //    0.45~ · 储藏间 0.60~ · 花园·玄关·阳台·过道의 아래 꼬리)이고 卫生间(2.20~)·卧室·厨房·餐厅·客厅은 모두 그 위다 — 이 규칙은 주 공간만 가른다.
 //    민감도(옵션 켬 · Σ roomHit): 0.4 m² 1402 · 1 m² 1402 · 2 m² 1401 · 3 m² 1398 — 값에 둔하다.
+//  - 기구 블록(equipment.js · 2026-10-12 계획 13 Task 2 · Task 1 진단 p13-task-1-report.md 실측): equipMin 150 = 기구로 세울 상자 긴 변의 하한
+//    (네 도면 영역 안에서 이 아래는 CT170C8P 100×55 둘뿐 — 기호다). equipMax 8000 = 상한: 넘는 것은 동선 화살표(zw$4149 16 m · zw$6627 22 m)·
+//    평면 블록(1f plan-1)·도면틀(권-효성a3 61 m · S-S3 63 m)이고 그 아래 가장 큰 기구는 세척 라인 *U266 5,200(아이템 크기 상한 5,000으로 잘린다 —
+//    schema ITEM_RANGE). equipClash 0.5 = 바닥 기구 상자의 이 비율 이상이 벽 띠·기둥과 겹치면 겹침으로 센다(그래도 세운다 — 사람이 본다):
+//    Task 1 겹침 분포는 0 / ≤ 0.1 / ≤ 0.25 / ≤ 0.5 / > 0.5 = 사동 175·31·2·1·2 — 0.5를 넘는 셋은 모두 벽 위의 얇은 판넬이었다(짧은 변 ≤ 200이면 벽 부착).
 export const DXF_PARAMS = Object.freeze({
   minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
   tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20, spanEdge: 10, spanOverlap: 0.25,
@@ -60,4 +65,5 @@ export const DXF_PARAMS = Object.freeze({
   doorLeaf: Object.freeze([700, 1300]), slideOffset: 200, slideArrowLen: Object.freeze([400, 600]),
   railMin: 600, railSnap: 150, railPair: 300,
   dividerMinArea: 2_000_000,
+  equipMin: 150, equipMax: 8000, equipClash: 0.5,
 });

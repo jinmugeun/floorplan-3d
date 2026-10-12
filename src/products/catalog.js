@@ -3,6 +3,7 @@
 // opening이 있는 제품(문·창·개구부)은 벽에 그 크기의 구멍을 뚫는다(opening.sill = zDefault).
 // 실판매 상품 DB는 범위 밖이라 price는 참고용 정적 값이고 없는 제품도 있다(명세 §17).
 import { EXTRA_PRODUCTS, EXTRA_PRICES } from './catalogExtra.js';
+import { DRAWING_PRODUCTS, DRAWING_PRICES } from './catalogDrawing.js';
 
 export const CATEGORIES = [
   { name: '문/창문', subs: ['문', '창문'] },
@@ -18,6 +19,8 @@ export const CATEGORIES = [
   { name: '조명', subs: ['천장등', '벽등'] },
   { name: '구조물', subs: ['기둥', '개구부'] },
   { name: '환기 설비', subs: ['후드', '조리기구', '디퓨저', '팬', '환기캡'] },
+  // 2026-10-12 · 계획 13 Task 2: DXF 기구 블록 중 카탈로그로 맞추지 못한 것(일반 상자 equip-generic — catalogDrawing.js).
+  { name: '도면 기구', subs: ['기구'] },
 ];
 
 // 카테고리 색(라이브러리 타일 썸네일 배경). 심벌 선화가 잘 보이게 옅은 색만 쓴다.
@@ -36,6 +39,7 @@ export const CATEGORY_COLORS = {
   '조명': '#fdf6dd',
   '구조물': '#eceef0',
   '환기 설비': '#e9eef2',
+  '도면 기구': '#eef0f2',
 };
 
 export const SYMBOL_NAMES = ['box', 'bed', 'sofa', 'table', 'chair', 'door', 'window', 'column', 'columnRound', 'circle', 'sink', 'range', 'fridge', 'lamp', 'hood', 'appliance', 'diffuser', 'fan', 'ventcap'];
@@ -69,7 +73,7 @@ const BASE_PRICES = {
   'ventcap-100': 35000, 'ventcap-150': 45000,
 };
 // 계획 5가 더한 제품 단가를 병합한다(§13.9). 이름은 그대로 PRICES다 — 읽는 쪽(견적서·테스트)이 바뀌지 않는다.
-export const PRICES = { ...BASE_PRICES, ...EXTRA_PRICES };
+export const PRICES = { ...BASE_PRICES, ...EXTRA_PRICES, ...DRAWING_PRICES };
 
 const P = (id, name, code, category, sub, size, attach, symbol, extra = {}) =>
   ({ id, name, code, category, sub, size, attach, symbol, zDefault: 0, color: '#cfd4da', kind: 'product', tags: '', price: PRICES[id] ?? 0, ...extra });
@@ -174,8 +178,8 @@ const BASE_PRODUCTS = [
   P('ventcap-100', 'STS 환기캡 Ø100', 'VP-100', '환기 설비', '환기캡', [100, 100, 100], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 100 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
   P('ventcap-150', 'STS 환기캡 Ø150', 'VP-150', '환기 설비', '환기캡', [150, 150, 150], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 150 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
 ];
-// 새 제품은 catalogExtra.js에 있다(catalog.js를 300줄 아래로 유지한다 — 아키텍처 §9).
-export const PRODUCTS = [...BASE_PRODUCTS, ...EXTRA_PRODUCTS];
+// 새 제품은 catalogExtra.js에 있다(catalog.js를 300줄 아래로 유지한다 — 아키텍처 §9). 도면 기구(DXF 가져오기의 일반 상자)는 catalogDrawing.js.
+export const PRODUCTS = [...BASE_PRODUCTS, ...EXTRA_PRODUCTS, ...DRAWING_PRODUCTS];
 
 const byId = new Map(PRODUCTS.map(p => [p.id, p]));
 export const productById = id => byId.get(id) ?? null;

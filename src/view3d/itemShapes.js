@@ -26,6 +26,8 @@ export const ITEM_MATERIALS = {
   '조명': { color: '#fff3c4', roughness: 0.4, metalness: 0 },
   '구조물': { color: '#b6bdc4', roughness: 0.9, metalness: 0 },
   '환기 설비': { color: '#c6ccd2', roughness: 0.35, metalness: 0.55 },
+  // 2026-10-12 · 계획 13 Task 2: DXF 기구 블록의 일반 상자(equip-generic) — 계획의 회색 #cfd4da 그대로(급식 기구는 대개 스테인리스라 약간의 금속도).
+  '도면 기구': { color: '#cfd4da', roughness: 0.6, metalness: 0.2 },
 };
 export const ITEM_MATERIAL_DEFAULT = { color: ITEM_BASE_COLOR, roughness: 0.8, metalness: 0 };
 

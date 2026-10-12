@@ -2,10 +2,19 @@ import { describe, test, expect } from 'vitest';
 import { CATEGORIES, PRODUCTS, SYMBOL_NAMES, productById, productsIn, searchProducts, sortProducts, fmtSize, CATEGORY_COLORS } from '../src/products/catalog.js';
 
 describe('제품 카탈로그', () => {
-  test('카테고리 13개가 정확한 이름과 순서로 있다', () => {
-    expect(CATEGORIES.map(c => c.name)).toEqual(['문/창문', '가전', '침대/매트리스', '드레스룸/행거', '수납가구', '소파', '책상/테이블', '의자/스툴', '화장대/거울', '주방싱크/욕실', '조명', '구조물', '환기 설비']);
+  // 2026-10-12 · 계획 13 Task 2: 14번째 '도면 기구'(DXF 기구 블록의 일반 상자).
+  test('카테고리 14개가 정확한 이름과 순서로 있다', () => {
+    expect(CATEGORIES.map(c => c.name)).toEqual(['문/창문', '가전', '침대/매트리스', '드레스룸/행거', '수납가구', '소파', '책상/테이블', '의자/스툴', '화장대/거울', '주방싱크/욕실', '조명', '구조물', '환기 설비', '도면 기구']);
     expect(CATEGORIES.find(c => c.name === '구조물').subs).toEqual(['기둥', '개구부']);
     expect(CATEGORIES.find(c => c.name === '환기 설비').subs).toEqual(['후드', '조리기구', '디퓨저', '팬', '환기캡']);
+    expect(CATEGORIES.find(c => c.name === '도면 기구').subs).toEqual(['기구']);
+  });
+
+  // 2026-10-12 · 계획 13 Task 2: DXF 가져오기가 카탈로그로 맞추지 못한 기구가 서는 일반 상자(크기·이름은 아이템이 도면 값으로 덮는다).
+  test('도면 기구(equip-generic) 제품이 있고 0원이다', () => {
+    expect(productById('equip-generic')).toMatchObject({ name: '도면 기구', code: 'DR-EQ', category: '도면 기구', sub: '기구', size: [900, 600, 850], attach: 'floor', symbol: 'box', kind: 'product', price: 0, tags: '도면 기구 블록' });
+    expect(productsIn('도면 기구').map(p => p.id)).toEqual(['equip-generic']);
+    expect(searchProducts('DR-EQ').map(p => p.id)).toEqual(['equip-generic']);
   });
 
   test('제품이 40개 이상이고 id·코드가 겹치지 않는다', () => {
