@@ -114,6 +114,10 @@ function doExtract(opts = {}) {
   progress('rooms', 0);
   const t1 = performance.now();
   const texts = ex.texts.filter(t => inBox(t.p, r.roi));
+  // 난간 선(2026-10-12 · 계획 12 Task 5): 역할 rail · 꺼지지 않은 레이어 중 벽으로 체크하지 않은 것(사람이 벽으로 체크하면 벽이다)의 도면 상자 안
+  // 선분 — buildProject가 발코니를 닫는 구획선으로만 쓴다(railDividers.js · 벽 추출에는 넣지 않는다).
+  const railRole = roleLayers(rows, 'rail');
+  const rails = ex.segs.filter(s => railRole.has(s.layer) && !wallSet.has(s.layer) && inBox(s.a, r.roi) && inBox(s.b, r.roi));
   // 좌표가 이미 mm라(prepare) 앱 좌표로 옮길 때 배율은 1이다 — 적용된 단위 배율은 stats.unitScale로 따로 알린다.
   const built = buildProject(r.walls, {
     height: opts.height ?? DXF_PARAMS.height,
@@ -121,7 +125,7 @@ function doExtract(opts = {}) {
     autoNames: opts.autoNames !== false,
     // 방 이름은 레이어 역할로 고른다(문자 레이어 실명 우선 · 기구 라벨은 이름이 아니다 — toProject.nameRooms).
     nameRoles: new Map(rows.map(r => [r.name, r.role])),
-    columns: r.columns,
+    columns: r.columns, rails,
     // 면적 기준선의 근거: 이 도면(± 10 m) 안의 치수. 측정점은 건물 밖 치수줄이 아니라 재는 자리에 있다.
     dims: ex.dims.filter(d => d.p1 && inBox(d.p1, r.roi && { x0: r.roi.x0 - 10000, y0: r.roi.y0 - 10000, x1: r.roi.x1 + 10000, y1: r.roi.y1 + 10000 })),
     // 개구부는 두 재료를 함께 쓴다: 스윙 호(ex.arcs)와 **벽 틈**(r.gaps · 사전 검토 C-2).

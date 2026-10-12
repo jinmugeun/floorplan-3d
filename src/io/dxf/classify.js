@@ -16,8 +16,14 @@ export const LAYER_RULES = [
   { role: 'grid',    keys: ['cen', 'grid', 'axis', 'a-guide', 'guide', 'defpoints', 'polycen', 'dote'] },
   { role: 'hatch',   keys: ['hat', 'poche', '해치'] },
   { role: 'wall',    keys: ['wal', 'wall', '벽', 'con', 'col', '기둥', 'blo', '벽체', 'a-wall', 'st-pl', 'structure', '구조', '기존', 'fin', '마감'] },
+  // rail(2026-10-12 · 계획 12 Task 5): 난간 — 벽이 아니라 방을 닫는 구획선의 재료다(railDividers.js · 기본 체크 아님). **wall 뒤**에 둔다:
+  // 공개 코퍼스의 `BALCONY`(8도면)·`Balcony(阳台)`(5)·`BACONY`(1)는 `con` 키로 벽이고 그 도면들의 발코니는 이미 잘 닫힌다(회귀 금지).
+  // 키 근거(놓친 발코니·정원 정답의 빈 변을 그 레이어 선이 60 % 이상 덮는 수): `栏杆` 78 · `0-栏杆` 36 · `阳台栏杆SHUTTER` 15 · `RAIL` 1 →
+  // `栏杆`·`rail`(`난간`·`handrail`은 사전 검토가 정한 한국어·영어 이름), `阳台` 계열 `屋顶轮廓阳台` 28 · `阳台露台` 9 · `阳台` 8 → `阳台`,
+  // 철자가 틀린 `4-BACLONY` 36(2suite (9)·3suite (3)·(4)·(10) — 그림으로 확인한 발코니 앞 두 줄 난간) → `baclony`.
+  { role: 'rail',    keys: ['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony'] },
 ];
-export const ROLE_LABEL = { wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', other: '기타' };
+export const ROLE_LABEL = { wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', rail: '난간', other: '기타' };
 
 export const classifyLayer = name => {
   const n = String(name).toLowerCase();
@@ -96,6 +102,7 @@ export function layerStats(doc, ex) {
 }
 
 // 기본 체크 = 벽 역할 · 켜짐 · 선분 > 0. 실파일에서 정확히 일곱 개가 켜진다. 내용으로 추정한 벽(guessed)도 벽 역할이다.
+// 난간(rail)은 체크하지 않는다 — 체크는 "벽으로 세울 레이어"이고, 난간 선은 워커가 roleLayers(rows, 'rail')로 따로 모아 구획선으로만 쓴다.
 export const defaultChecked = rows => new Set(rows.filter(r => r.role === 'wall' && !r.off && r.segs > 0).map(r => r.name));
 
 // 역할별 레이어 이름. checked를 주면 교집합이다(개구부 보조 면선이 이 함수를 쓴다 — §18.3-3).

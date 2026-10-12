@@ -10,6 +10,7 @@ import { dropTinyComponents } from './walls.js';
 import { DXF_PARAMS } from './params.js';
 import { dimLines, assignRefs } from './refLines.js';
 import { addDividers, mergeAnnexes, claimOutside } from './reconcile.js';
+import { railDividers } from './railDividers.js';
 
 // 점 p에서 선분 a–b까지의 거리.
 const distSeg = (p, a, b) => {
@@ -65,7 +66,8 @@ export function makeToApp(walls, scale = 1) {
 //     배식대로만 나뉜 두 공간이 한 방으로 닫혔다는 뜻). 면적 라벨이 붙은 것이 없으면 방 중심에 가장
 //     가까운 하나다(설비 라벨 "청소용수전"이 이름을 가로채지 않는다).
 //  ⑤ unmatched = 어느 방에도 들지 못한 1층 실명뿐이다 — 검토 화면의 "닫히지 않은 공간 n곳"이 그 수다.
-const NAME_TIER = { text: 1, wall: 2, other: 2 };
+// rail(난간 · 2026-10-12)은 그 레이어들이 other였을 때의 층을 그대로 둔다(`阳台` 레이어의 글자 "阳台"가 발코니 이름일 수 있다).
+const NAME_TIER = { text: 1, wall: 2, other: 2, rail: 2 };
 const AREA_LABEL = /m²|㎡|m2\b/i;
 const notName = t => /^\(.*\)$/.test(t) || AREA_LABEL.test(t) || /^(up|dn|down)$/i.test(t) || /^[\d.,\s]+$/.test(t) || /^[A-Z]{1,2}\d{1,3}$/.test(t);
 const unspace = t => (/^([가-힣] )+[가-힣]$/.test(t) ? t.replace(/ /g, '') : t);
@@ -128,7 +130,7 @@ export function drawingTitle(texts, fileName = '', titleLayers = null) {
 
 export function buildProject(raw, {
   height = DXF_PARAMS.height, scale = 1, texts = [], fileName = '', autoNames = true,
-  params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null, nameRoles = null, columns = [], dims = [],
+  params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null, nameRoles = null, columns = [], dims = [], rails = [],
 } = {}) {
   const { toApp, box, size } = makeToApp(raw, scale);
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.
@@ -147,10 +149,16 @@ export function buildProject(raw, {
   })) : [];
   // 면적 기준선(refLines.js): 벽마다 치수가 가리키는 좌표(구조체 중심 · 기둥 그리드)를 기준선으로 단다 — 방의 areaCenter가 쓴다.
   assignRefs(walls, dimLines(dims, toApp), colItems, P);
+  // 난간 선(rails · DXF mm 좌표 — 워커가 역할 rail 레이어에서 모은다)으로 발코니를 닫는 구획선(railDividers.js · 2026-10-12 계획 12 Task 5).
+  // 방을 세기 전, 면적 표기 구획선보다 먼저 둔다 — addDividers·mergeAnnexes가 닫힌 발코니를 본다.
+  walls = railDividers(walls, rails.map(s => ({ a: toApp(s.a), b: toApp(s.b) })), { height, params: P }).walls;
   // 방 구조를 도면의 실명·면적 표기에 맞춘다(reconcile.js): 트인 공간의 구획선 · 한 실로 센 딸린 방.
   const labels = autoNames ? roomLabels(texts, toApp, { nameRoles }) : [];
   walls = addDividers(walls, labels);
   const annexes = mergeAnnexes(walls, labels);
+  // 난간 구획선 표지는 여기서 세고 지운다 — 저장 형식은 그대로(그냥 구획선)이고, stats.dividers(면적 표기로 그은 것 — 검토 창 문구)와 따로 센다.
+  const railIds = new Set();
+  for (const w of walls) if (w.rail) { railIds.add(w.id); delete w.rail; }
   const rooms = detectRooms(walls);
   for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
   const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { labels }).unmatched : [];
@@ -188,7 +196,7 @@ export function buildProject(raw, {
     unmatchedNames,
     items: floor.items.length,
     columns: colItems.length,
-    dividers: floor.walls.filter(w => w.virtual).length, annexes,
+    dividers: floor.walls.filter(w => w.virtual && !railIds.has(w.id)).length, railDividers: railIds.size, annexes,
     size,
     // DXF 좌표 → 앱 좌표의 원점·배율(앱 = (DXF × stats.unitScale − origin) × scale, y 뒤집기 — 워커가 전개를 unitScale배로 mm로
     // 만든 뒤 이 함수가 받는다 · 2026-10-06 최종 리뷰). 치수·면적선을 평면도와 맞댈 때 쓴다.

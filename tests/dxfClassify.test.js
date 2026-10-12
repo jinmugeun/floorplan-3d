@@ -24,11 +24,12 @@ const docOf = (...recs) => ({ layers: new Map(recs) });
 const exOf = ({ segs = [], arcs = [], circles = [], texts = [], dims = [], inserts = [] } = {}) => ({ segs, arcs, circles, texts, dims, inserts });
 
 test('LAYER_RULES와 ROLE_LABEL은 §18.2가 적은 표 그대로다(앞의 규칙이 이긴다)', () => {
-  expect(LAYER_RULES.map(r => r.role)).toEqual(['dim', 'text', 'opening', 'equip', 'mep', 'grid', 'hatch', 'wall']);
+  expect(LAYER_RULES.map(r => r.role)).toEqual(['dim', 'text', 'opening', 'equip', 'mep', 'grid', 'hatch', 'wall', 'rail']);
   expect(LAYER_RULES[0].keys).toEqual(['dim', '치수', 'az-leal', 'az-leat', 'az-cutl', 'tol']);
   expect(LAYER_RULES[7].keys).toContain('기존');
   expect(LAYER_RULES[7].keys).toContain('st-pl');
-  expect(ROLE_LABEL).toEqual({ wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', other: '기타' });
+  expect(LAYER_RULES[8].keys).toEqual(['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony']);   // 2026-10-12 계획 12 Task 5(classify.js 주석)
+  expect(ROLE_LABEL).toEqual({ wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', rail: '난간', other: '기타' });
 });
 
 test('실파일 레이어 32개의 역할이 조사 §1.4와 일치한다', () => {
@@ -143,10 +144,12 @@ test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되�
     minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
     // 2026-10-12 외미닫이 문 기호(신상중 A-DOOR 실측 — params.js 주석)
     doorLeaf: [700, 1300], slideOffset: 200, slideArrowLen: [400, 600],
+    // 2026-10-12 난간 구획선(공개 코퍼스 실측 — params.js 주석)
+    railMin: 600, railSnap: 150, railPair: 300,
   });
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
   expect(Object.isFrozen(DXF_PARAMS.doorLeaf) && Object.isFrozen(DXF_PARAMS.slideArrowLen)).toBe(true);   // 범위 배열도 얼어 있다
-  expect(Object.keys(DXF_PARAMS)).toHaveLength(43);
+  expect(Object.keys(DXF_PARAMS)).toHaveLength(46);
 });
 
 // ── 2026-10-02 다른 사무소 도면 둘(신상중 · 내곡중)에서 드러난 판정 오류 ──────────────────────────
@@ -220,4 +223,20 @@ test('DOTE(TArch 축선)는 축선이다 — 청록 평행 짝이 있어도 창�
   const by = Object.fromEntries(guess.map(r => [r.name, r]));
   expect([by.DOTE.role, by.DOTE.guessed]).toEqual(['grid', undefined]);
   expect([by.A1.role, by.A1.guessed]).toEqual(['wall', true]);
+});
+
+// 2026-10-12 계획 12 Task 5: 공개 코퍼스의 난간·발코니 레이어 이름(실측 — classify.js 주석). 난간은 rail이고 기본 체크가 아니며(벽으로 세우지
+// 않는다), `con` 키로 이미 벽인 BALCONY 계열은 그대로 벽이다(rail 규칙이 wall 뒤 — 그 도면들의 발코니는 이미 닫힌다).
+test('난간·발코니 레이어: 栏杆·阳台·4-BACLONY·RAIL은 난간(rail), BALCONY·Balcony(阳台)·BACONY는 벽 그대로', () => {
+  const rail = ['栏杆', '0-栏杆', '阳台栏杆SHUTTER', 'P平面－栏杆栏杆', '屋顶轮廓阳台', '阳台', '阳台露台', '4-BACLONY', 'RAIL', 'HANDRAIL', 'A-난간'];
+  expect(rail.map(n => [n, classifyLayer(n)])).toEqual(rail.map(n => [n, 'rail']));
+  expect(['BALCONY', 'Balcony(阳台)', 'BACONY'].map(classifyLayer)).toEqual(['wall', 'wall', 'wall']);
+  expect(classifyLayer('L-LANGAN')).toBe('other');          // 병음 표기(4suite (5) · 빈 변 1)는 키가 아니다
+  // 난간 레이어는 기본 체크(벽)가 아니고, roleLayers(rows, 'rail')로 모인다. 내용으로 고치기(청록 창호·벽 추정)도 이름이 other인 것만 본다.
+  const rows = layerStats(docOf(layerRec('WAL'), layerRec('栏杆', 4), layerRec('阳台', 4, 1)),
+    exOf({ segs: [...room('WAL', 20000.5), ...room('栏杆', 0.5, 0.25, 9000, 6000, 100), ...room('阳台', 0.5, 9000.25, 9000, 6000, 100)] }));
+  const by = Object.fromEntries(rows.map(r => [r.name, r]));
+  expect([by['栏杆'].role, by['栏杆'].byColor, by['栏杆'].guessed]).toEqual(['rail', undefined, undefined]);
+  expect([...defaultChecked(rows)]).toEqual(['WAL']);
+  expect([...roleLayers(rows, 'rail')]).toEqual(['栏杆']);   // 꺼진(동결) 阳台는 빠진다
 });

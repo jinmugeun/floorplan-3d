@@ -36,6 +36,13 @@
 //  - 외미닫이 문 기호(slideDoors.js · 2026-10-12 신상중 A-DOOR 실측): 문짝 선 길이 doorLeaf [700, 1300](실측 900·940·1000·1008·900 ·
 //    닫힌 자리에 그린 것 1000 · 주차 자리 800), 문짝이 벽 면에서 벗어나도 되는 거리 slideOffset 200(실측: 벽 중심선에서 두께/2 + 0~20 mm —
 //    면 위에 겹치거나 문틀 바깥 면에 붙는다), 미닫이 화살표 축선 길이 slideArrowLen [400, 600](실측 일곱 개 모두 491 mm).
+//  - 난간 구획선(railDividers.js · 2026-10-12 계획 12 Task 5 · 공개 코퍼스 39쌍 실측): railMin 600 = 구획선이 될 난간 줄(같은 직선 위 조각을
+//    이은 것)의 최소 길이 · 홀로 선 구획선의 최소 길이(기둥 사각형·장식 토막을 거른다 — 300이면 방 +2 · 1000이면 −7, 나빠진 도면은 셋 다 0;
+//    사전 검토가 적은 600을 둔다 — 300과의 차이가 방 2개라 짧은 쪽으로 넓히지 않는다). railSnap 150 = 줄 끝을 자기 축 위로 옮겨 벽 몸통
+//    (+ 두께/2)·다른 난간 줄에 붙이는 거리이자 같은 직선 위 조각 사이 틈의 상한(난간 기둥에서 끊긴 선 — 100이면 방 −1 · 250이면 −2).
+//    railPair 300 = 두 줄로 그린 난간을 가운데 한 줄로 볼 간격 상한: 난간 레이어의 나란한 짝 간격은
+//    25~275(281쌍 · 그중 100이 231)와 ≥ 500(84쌍 — 따로 선 난간: 6suite (10)·3suite (10)의 발코니 앞 난간과 실외기 받침 난간 600)으로 갈린다
+//    (200~400 같음).
 export const DXF_PARAMS = Object.freeze({
   minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
   tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20, spanEdge: 10, spanOverlap: 0.25,
@@ -46,4 +53,5 @@ export const DXF_PARAMS = Object.freeze({
   refOut: 200, refGrid: 3, refCore: 60,
   minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
   doorLeaf: Object.freeze([700, 1300]), slideOffset: 200, slideArrowLen: Object.freeze([400, 600]),
+  railMin: 600, railSnap: 150, railPair: 300,
 });
