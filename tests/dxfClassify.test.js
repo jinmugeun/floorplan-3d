@@ -28,8 +28,9 @@ test('LAYER_RULES와 ROLE_LABEL은 §18.2가 적은 표 그대로다(앞의 규�
   expect(LAYER_RULES[0].keys).toEqual(['dim', '치수', 'az-leal', 'az-leat', 'az-cutl', 'tol']);
   expect(LAYER_RULES[7].keys).toContain('기존');
   expect(LAYER_RULES[7].keys).toContain('st-pl');
-  // 2026-10-12 계획 12 Task 5(classify.js 주석) · 'divider'는 최종 리뷰 X-1(정규화 DXF의 DIVIDER 구획선을 다시 긋는다)
-  expect(LAYER_RULES[8].keys).toEqual(['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony', 'divider']);
+  // 2026-10-12 계획 12 Task 5(classify.js 주석) · 'divider'는 최종 리뷰 X-1(정규화 DXF의 DIVIDER 구획선을 다시 긋는다) — 계획 13 Task 7부터
+  // 부분 문자열 키가 아니라 정확 이름(exact · 최종 재리뷰 R-3)
+  expect(LAYER_RULES[8]).toEqual({ role: 'rail', keys: ['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony'], exact: ['divider'] });
   expect(ROLE_LABEL).toEqual({ wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', rail: '난간', other: '기타' });
 });
 
@@ -242,4 +243,13 @@ test('난간·발코니 레이어: 栏杆·阳台·4-BACLONY·RAIL은 난간(rai
   expect([by['栏杆'].role, by['栏杆'].byColor, by['栏杆'].guessed]).toEqual(['rail', undefined, undefined]);
   expect([...defaultChecked(rows)]).toEqual(['WAL']);
   expect([...roleLayers(rows, 'rail')]).toEqual(['栏杆']);   // 꺼진(동결) 阳台는 빠진다
+});
+
+// 2026-10-12 계획 13 Task 7(계획 12 최종 재리뷰 R-3): `divider`는 우리 내보내기의 구획선 레이어 `DIVIDER` 하나만 난간으로 읽는다(대소문자 ·
+// 앞뒤 공백 무시). 부분 문자열이면 "TOILET DIVIDER"(화장실 칸막이)·"ROOM DIVIDER" 같은 남의 레이어가 벽 두 곳에 닿을 때 구획선이 되어 헛방을
+// 만든다 — 그런 이름은 예전처럼 나머지 규칙으로 간다. 다른 난간 키(栏杆·rail …)는 부분 문자열 그대로다.
+test('divider는 정확 이름만: DIVIDER·divider·" Divider "는 난간, MY-DIVIDERS·TOILET DIVIDER·DIVIDER-PANEL은 아니다', () => {
+  expect(['DIVIDER', 'divider', ' Divider '].map(classifyLayer)).toEqual(['rail', 'rail', 'rail']);
+  expect(['MY-DIVIDERS', 'TOILET DIVIDER', 'ROOM DIVIDER', 'DIVIDER-PANEL'].map(classifyLayer)).toEqual(['other', 'other', 'other', 'other']);
+  expect(['A-RAIL-DIVIDER', 'HANDRAIL-2'].map(classifyLayer)).toEqual(['rail', 'rail']);   // 부분 문자열 키(rail)는 그대로 — divider와 상관없이
 });

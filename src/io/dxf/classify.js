@@ -4,7 +4,7 @@
 // WAL·WAL-2·기존·FIN·ST-PL·BLO·COL 일곱에 흩어져 있다 — 이름만 믿는 구현은 벽 0개를 반환한다.
 import { refineByContent, CYAN } from './layerGuess.js';
 
-// 앞의 규칙이 이긴다. 비교는 소문자 부분일치다.
+// 앞의 규칙이 이긴다. 비교는 소문자 부분일치다(keys) — exact는 앞뒤 공백을 뗀 소문자 이름 전체가 같을 때만(2026-10-12 · 계획 13 Task 7 · rail의 divider).
 // grid의 'dote'(2026-10-12 · 계획 12 Task 4): 공개 코퍼스의 TArch 축선 레이어 `DOTE` — 2suite (1) 선 65개 · 길이 중앙값 3,000 mm, 6suite (6)
 // 33개 · 18,266 mm, 둘 다 꺼짐. other로 두면 켜진 도면에서 청록 창호·벽 추정(layerGuess)으로 올라갈 수 있다(축선은 3~18 m라 평행 짝이 길다).
 export const LAYER_RULES = [
@@ -24,13 +24,16 @@ export const LAYER_RULES = [
   // `divider`(2026-10-12 · 최종 리뷰 X-1): 정규화 DXF 내보내기는 구획선(virtual)을 `DIVIDER` 레이어에 쓴다. '기타'로 버리면 난간으로 닫은 발코니가
   // 왕복 한 번에 다시 열렸다(방 2 → 1 · 끊긴 끝 0 → 2). 난간 역할이면 railDividers가 벽 두 곳 이상에 닿는 railMin 이상 선을 구획선으로 다시 긋는다
   // (더 짧은 것은 잃는다). 두 코퍼스에 `divider`가 든 레이어 이름은 없다(점수 불변).
-  { role: 'rail',    keys: ['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony', 'divider'] },
+  // `divider`는 **정확 이름**(exact · 2026-10-12 계획 13 Task 7 · 최종 재리뷰 R-3): 부분 문자열이면 "TOILET DIVIDER"(화장실 칸막이)·"ROOM DIVIDER"·
+  // "DIVIDER-PANEL" 같은 남의 레이어가 난간이 되고, 벽 두 곳에 닿는 칸막이 선이 구획선이 되어 헛방을 만든다. 우리 내보내기의 레이어는 `DIVIDER`
+  // 하나뿐이다(dxfExportTemplate.js) — 그 이름만 난간으로, 나머지는 예전처럼(기타) 둔다. 다른 난간 키는 부분 문자열 그대로다.
+  { role: 'rail',    keys: ['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony'], exact: ['divider'] },
 ];
 export const ROLE_LABEL = { wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', rail: '난간', other: '기타' };
 
 export const classifyLayer = name => {
-  const n = String(name).toLowerCase();
-  for (const r of LAYER_RULES) if (r.keys.some(k => n.includes(k))) return r.role;
+  const n = String(name).toLowerCase(), whole = n.trim();
+  for (const r of LAYER_RULES) if (r.keys.some(k => n.includes(k)) || r.exact?.includes(whole)) return r.role;
   return 'other';
 };
 
