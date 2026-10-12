@@ -661,7 +661,8 @@ test('[가져오기]는 가져오기 선택과 결과 스냅숏을 project.meta.
 
 // 2026-10-12 · 계획 13 Task 3: 기구 배치는 **옵션, 기본 켬**(끄면 계획 12까지와 같은 결과 — 아이템이 늘 뿐이다). 켜고 끄면 추출 옵션 equipment로
 // 다시 추출하고(dividerByNames와 같은 길), 세운 수를 알림 줄에 적는다 — 0이면 적지 않는다. 기구끼리 겹침(사전 검토 반영 5)은 0이 아닐 때만 덧붙인다.
-const EQ_STATS = { placed: 226, product: 143, generic: 83, anonymous: 42, clash: 0, overlap: 0, skipped: {} };
+// colliding(2026-10-12 · 최종 리뷰 F-3): 알림의 충돌 수는 앱 배너와 같은 collidingIds 수다 — 사동 30(기둥 8 + 기구 22). clash·overlap은 통계로만 남는다.
+const EQ_STATS = { placed: 226, product: 143, generic: 83, anonymous: 42, clash: 0, overlap: 14, colliding: 30, skipped: {} };
 test('"도면의 기구를 제품으로 배치" 칸은 기본 켬이고, 끄면 equipment: false로 다시 추출한다 · 세운 수를 알린다', async () => {
   const { w, q } = open({ file: fileOf() });
   await flush();
@@ -674,9 +675,11 @@ test('"도면의 기구를 제품으로 배치" 칸은 기본 켬이고, 끄면 
   expect(lastOpts().equipment).toBe(true);
   w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, equipment: EQ_STATS } });
   await flush();
-  expect(q('notice').textContent).toBe(DXF_EQUIPMENT(226, 143, 83, 0, 0));
-  expect(DXF_EQUIPMENT(226, 143, 83, 0, 0)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 벽과 겹침 0');
-  expect(DXF_EQUIPMENT(226, 143, 83, 2, 14)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 벽과 겹침 2 · 기구끼리 겹침 14');
+  expect(q('notice').textContent).toBe(DXF_EQUIPMENT(226, 143, 83, 30, 0));
+  expect(DXF_EQUIPMENT(226, 143, 83, 30, 0)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 충돌 30건(기둥·기구 겹침 · 빨간 테두리)');
+  expect(DXF_EQUIPMENT(226, 143, 83, 30, 2)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 충돌 30건(기둥·기구 겹침 · 빨간 테두리) · 벽·기둥과 겹침 2');
+  expect(DXF_EQUIPMENT(1, 0, 1, 0)).toBe('기구 1개 배치 — 제품 0 · 일반 1 · 충돌 0건(기둥·기구 겹침 · 빨간 테두리)');
+  expect(q('notice').textContent).not.toMatch(/벽과|기구끼리/);   // 앱 배너에 없는 수(overlap 14)는 문구에서 뺐다
   q('equipment').click();
   expect(q('import').disabled).toBe(true);                  // 최신 결과가 올 때까지 잠긴다
   vi.advanceTimersByTime(250);
@@ -695,7 +698,7 @@ test('알림 줄: 기구 수는 다른 알림 뒤에 " / "로 이어 붙는다',
   await flush();
   w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, railDividers: 2, equipment: { ...EQ_STATS, clash: 3, overlap: 14 } } });
   await flush();
-  expect(q('notice').textContent).toBe(`${DXF_RAIL_DIVIDED(2)} / ${DXF_EQUIPMENT(226, 143, 83, 3, 14)}`);
+  expect(q('notice').textContent).toBe(`${DXF_RAIL_DIVIDED(2)} / ${DXF_EQUIPMENT(226, 143, 83, 30, 3)}`);
 });
 
 // 기록하는 2D 컨텍스트(위 미리보기 테스트와 같은 관례): 호출마다 그때의 fillStyle·strokeStyle이 남는다.

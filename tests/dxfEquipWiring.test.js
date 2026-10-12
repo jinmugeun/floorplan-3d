@@ -8,6 +8,7 @@ import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { buildImportMeta, buildDxfFeedback } from '../src/io/dxfFeedback.js';
 import { importDxf } from '../src/io/dxf/client.js';
+import { collidingIds } from '../src/geom/collide.js';
 
 // DXF 좌표(y 위쪽)의 사각형 중심선 넷.
 const rect = (x0, y0, x1, y1, thickness = 200) => [
@@ -42,12 +43,13 @@ const floorOf = r => r.project.floors[0];
 const structural = it => ['door', 'window', 'opening', 'column'].includes(it.kind);
 // id(uid = 시각 + 카운터)는 실행마다 다르다 → 처음 나온 차례(#0, #1 …)로 바꿔 놓고 글자 그대로 비교한다(같은 계산이면 같은 차례다).
 const canon = v => { const ids = new Map(); return JSON.stringify(v, (k, x) => (typeof x === 'string' && /^[a-z]+_[0-9a-z]+$/.test(x) ? (ids.has(x) || ids.set(x, `#${ids.size}`), ids.get(x)) : x)); };
-// stats.equipment의 꼴: 일곱 키(spec) · skipped는 equipItems의 이유별 표 그대로(이유 이름은 equipment.js 몫이라 여기서 못 박지 않는다).
-const KEYS = ['placed', 'product', 'generic', 'anonymous', 'clash', 'overlap', 'skipped'];
+// stats.equipment의 꼴: 일곱 키(spec) + colliding(2026-10-12 · 최종 리뷰 F-3 — 앱 배너와 같은 collidingIds 수) · skipped는 equipItems의 이유별 표 그대로
+// (이유 이름은 equipment.js 몫이라 여기서 못 박지 않는다).
+const KEYS = ['placed', 'product', 'generic', 'anonymous', 'clash', 'overlap', 'colliding', 'skipped'];
 const expectZero = e => {
   expect(Object.keys(e)).toEqual(KEYS);
   expect(Object.keys(e.skipped).length).toBeGreaterThan(0);
-  expect([...KEYS.slice(0, 6).map(k => e[k]), ...Object.values(e.skipped)].every(v => v === 0)).toBe(true);
+  expect([...KEYS.slice(0, 7).map(k => e[k]), ...Object.values(e.skipped)].every(v => v === 0)).toBe(true);
 };
 
 test('기구는 개구부·기둥 뒤에 붙고, 켜든 끄든 벽·방·개구부·기둥·나머지 통계는 글자 그대로 같다', () => {
@@ -65,6 +67,16 @@ test('기구는 개구부·기둥 뒤에 붙고, 켜든 끄든 벽·방·개구�
   expect(e1).toMatchObject({ placed: 4, product: 3, generic: 1, anonymous: 1, clash: 1, overlap: 0 });
   // 전개를 넘기지 않는 옛 호출자(테스트·도구)도 같은 모양의 0이다.
   expectZero(buildProject(RAW, { height: 3500 }).stats.equipment);
+});
+
+// 2026-10-12 · 계획 13 최종 리뷰 F-3(I3-2): 검토 창은 "벽과 겹침 0 · 기구끼리 겹침 14"라 했는데 가져오자마자 앱 배너는 "충돌 30건"이었다 — clash(≥ 50 % 덮임)도
+// overlap(기구끼리 AABB)도 기둥에 닿은 기구를 세지 않는다. colliding은 완성된 층 아이템에 앱 배너와 **같은 함수**(collidingIds)를 돌린 수다.
+test('stats.equipment.colliding = 완성된 아이템의 collidingIds 수(앱 배너와 같은 수) — 기둥 몸통 안 작업대 + 그 기둥', () => {
+  const on = build(), off = build({ equipment: false });
+  expect(on.stats.equipment.colliding).toBe(collidingIds(floorOf(on).items).size);
+  expect(on.stats.equipment.colliding).toBe(2);                     // 기둥 하나 + 작업대 하나
+  expect(on.stats.equipment.overlap).toBe(0);                       // 기구끼리만 세는 수로는 0이었다
+  expect(off.stats.equipment.colliding).toBe(0);
 });
 
 test('equipItems가 받는 입력: 도면 상자(roi) · 레이어 행의 역할(layerRoles) · 앱 좌표 기둥 아이템 · 층고', () => {

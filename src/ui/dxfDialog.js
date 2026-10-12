@@ -112,7 +112,8 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     const st = last?.stats ?? {}, fixed = (st.dividers || st.annexes) && DXF_RECONCILED(st.dividers ?? 0, st.annexes ?? 0);
     const byNames = st.nameDividers > 0 && DXF_NAME_DIVIDED(st.nameDividers);
     const byRails = st.railDividers > 0 && DXF_RAIL_DIVIDED(st.railDividers);       // 2026-10-12 최종 리뷰 X-4: 늘 켜진 난간 구획선도 알린다
-    const eq = st.equipment, equip = eq?.placed > 0 && DXF_EQUIPMENT(eq.placed, eq.product, eq.generic, eq.clash, eq.overlap);   // 2026-10-12 계획 13 Task 3
+    // 2026-10-12 계획 13 Task 3 · 충돌 수는 앱 배너와 같은 colliding(최종 리뷰 F-3)
+    const eq = st.equipment, equip = eq?.placed > 0 && DXF_EQUIPMENT(eq.placed, eq.product, eq.generic, eq.colliding ?? 0, eq.clash);
     notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byRails, byNames, equip].filter(Boolean).join(' / ') || null);
   };
   const regionIdx = () => Number(q('region').value) || 0;

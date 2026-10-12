@@ -33,6 +33,18 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
   // 배너를 감추지는 않는다 — §14.8이 드래그 밖에서도 충돌을 배너로 알리라고 하므로 collisionLive로
   // 배너를 게이팅하면 드래그 밖에서까지 문구가 사라져 규격을 깬다(Task 8 리뷰 Minor 1).
   const collisionText = n => (dragging && store.get().view?.v2?.collisionLive === false ? COLLISION_BANNER_QUIET : COLLISION_BANNER)(n);
+  // 가져온 도면에서 벽이 이어지지 않은 자리(§18.6 · 문장 + [보기] · 없으면 ''). 도구 안내보다 **앞**에 둔다(최종 리뷰 I-4):
+  // 끊긴 끝점을 고치는 유일한 방법이 벽 도구를 켜는 것이라, 뒤에 두면 고치려고 도구를 켠 순간
+  // 문장도 [보기] 버튼도 사라진다 — 이 기능의 결론이 정확히 필요한 순간에만 안 보이게 된다.
+  // 이 안내는 §18.10이 "자르지 않는다"고 못 박은 하나다: 이 도면은 원리적으로 자동으로 닫히지
+  // 않으므로(식당–조리실 경계가 배식대다) 고칠 자리를 보여 주는 것이 기능의 결론이다.
+  // 안내는 **가져온 그 층**의 것이다(Task 13 재검토 I-4): 다른 층에서는 감춘다(지우지는 않는다 —
+  // 돌아오면 다시 보인다). 층은 번호가 아니라 id로 가린다 — 앞 층을 지워도 어긋나지 않는다(m-8).
+  // ui/는 view2d/를 import할 수 없으므로 이 한 줄은 view2d/openEnds2d.js의 같은 판정과 짝이다:
+  // 둘을 함께 고친다. floor를 적지 않은 안내(옛 호출자)는 층을 가리지 않는다.
+  const openEndsHtml = s => (s.openEnds?.pts?.length && (!s.openEnds.floor || activeFloor(store.get())?.id === s.openEnds.floor)
+    ? `<span class="hint">${esc(DXF_OPEN_ENDS(s.openEnds.pts.length))}</span> <button type="button" id="btnOpenEnds">${esc(DXF_OPEN_ENDS_VIEW)}</button>`
+    : '');
   function html(s) {
     if (s.fpPick) return '👆 1인칭으로 확인할 위치를 클릭해주세요. [Esc]로 취소';
     // 1인칭 중에는 이 배너가 상주한다(§15.1): 조작법과 탈출 수단이 화면에 늘 있어야 한다.
@@ -44,19 +56,12 @@ export function createBanner({ store, ui, el, stack = null, tool = () => null, o
     if (s.matPick) return '🎨 재질을 적용할 면을 클릭해주세요. [Esc]를 누르면 종료됩니다.' + (s.soloRoom ? ` ${exitSolo}` : '');
     if (s.soloRoom) return `단일 공간 모드 ${exitSolo}`;
     const clashes = collisionCount();
+    // 끊긴 끝점 안내가 살아 있으면 충돌보다 **먼저**이고 충돌 문구는 같은 줄 뒤에 붙는다(2026-10-12 · 계획 13 최종 리뷰 F-2 · I3-1):
+    // 기구를 켠 가져오기는 곧바로 충돌을 만든다(사동 30 · 신상 A 8 · 내곡 2 — 대부분 도면이 그렇게 그린 겹침). 충돌이 먼저 return하던
+    // 때는 실도면 3/4에서 이 기능의 결론([보기])이 가져오자마자 사라졌다. 빨간 테두리는 그대로라 충돌도 계속 보인다.
+    const ends = openEndsHtml(s);
+    if (ends) return clashes ? `${ends} <span class="hint">· ${esc(collisionText(clashes))}</span>` : ends;
     if (clashes) return esc(collisionText(clashes));
-    // 가져온 도면에서 벽이 이어지지 않은 자리(§18.6). 도구 안내보다 **앞**에 둔다(최종 리뷰 I-4):
-    // 끊긴 끝점을 고치는 유일한 방법이 벽 도구를 켜는 것이라, 뒤에 두면 고치려고 도구를 켠 순간
-    // 문장도 [보기] 버튼도 사라진다 — 이 기능의 결론이 정확히 필요한 순간에만 안 보이게 된다.
-    // 이 안내는 §18.10이 "자르지 않는다"고 못 박은 하나다: 이 도면은 원리적으로 자동으로 닫히지
-    // 않으므로(식당–조리실 경계가 배식대다) 고칠 자리를 보여 주는 것이 기능의 결론이다.
-    // 안내는 **가져온 그 층**의 것이다(Task 13 재검토 I-4): 다른 층에서는 감춘다(지우지는 않는다 —
-    // 돌아오면 다시 보인다). 층은 번호가 아니라 id로 가린다 — 앞 층을 지워도 어긋나지 않는다(m-8).
-    // ui/는 view2d/를 import할 수 없으므로 이 한 줄은 view2d/openEnds2d.js의 같은 판정과 짝이다:
-    // 둘을 함께 고친다. floor를 적지 않은 안내(옛 호출자)는 층을 가리지 않는다.
-    if (s.openEnds?.pts?.length && (!s.openEnds.floor || activeFloor(store.get())?.id === s.openEnds.floor)) {
-      return `<span class="hint">${esc(DXF_OPEN_ENDS(s.openEnds.pts.length))}</span> <button type="button" id="btnOpenEnds">${esc(DXF_OPEN_ENDS_VIEW)}</button>`;
-    }
     // 누를 수 있는 것만 버튼이다(§16.5 · 감사 §39). onHintClick을 구현한 도구(덕트·경로 배열·배치·
     // 구조물)에서는 "메시지를 누르면 취소"가 실제로 동작하므로 버튼이고 — 키보드로도 닿아야 한다 —
     // 그러지 않는 도구(벽·방·삭제·보조선·측정)에서는 <span>이다: 예전에는 링크처럼 보이는 탭 스톱이

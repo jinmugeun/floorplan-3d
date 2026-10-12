@@ -4,16 +4,17 @@
 import { test, expect, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
-import { createEmptyProject, createFloor, activeFloor } from '../src/state/schema.js';
+import { createEmptyProject, createFloor, createItem, activeFloor } from '../src/state/schema.js';
+import { productById } from '../src/products/catalog.js';
 import { createDxfActions } from '../src/app/dxfActions.js';
 import { openStartScreen } from '../src/ui/startScreen.js';
 import { createFileActions } from '../src/app/fileActions.js';
 import { shellHtml } from '../src/ui/shellHtml.js';
-import { addWalls } from '../src/state/floorOps.js';
+import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createOpenEnds, OPEN_END_COLOR, OPEN_END_PX } from '../src/view2d/openEnds2d.js';
 import { createBanner } from '../src/ui/banner.js';
-import { DXF_OPEN_ENDS, DXF_OPEN_ENDS_VIEW, DXF_IMPORTED, DXF_CARD_TITLE, DXF_CARD_DESC, CONFIRM_LOAD } from '../src/ui/messages.js';
+import { DXF_OPEN_ENDS, DXF_OPEN_ENDS_VIEW, DXF_IMPORTED, DXF_CARD_TITLE, DXF_CARD_DESC, CONFIRM_LOAD, COLLISION_BANNER } from '../src/ui/messages.js';
 
 // 기록용 2D 컨텍스트: 메서드는 호출을 그때의 strokeStyle·lineWidth와 함께 쌓고, 두 상태는
 // 평범한 속성이다(Proxy는 대입을 기록하지 못해 색·굵기를 검사할 수 없다 — 리뷰 I-2).
@@ -352,6 +353,38 @@ test('벽 도구를 켜도 끊긴 끝점 안내와 [보기]가 남는다', () =>
   ui.set({ openEnds: null });
   banner.render(ui.get());
   expect(el.textContent).toContain(hint);               // 안내가 끝나면 도구 힌트가 돌아온다
+  banner.destroy();
+  el.remove();
+});
+
+// 2026-10-12 · 계획 13 최종 리뷰 F-2(I3-1): 기구를 켠 가져오기는 곧바로 충돌(사동 30 · 신상 A 8 · 내곡 2)을 만들고, 충돌 문구가 끊긴 끝점 안내와
+// [보기]를 가렸다. 안내가 살아 있으면 그 문장 + [보기]가 먼저이고 충돌 수는 같은 줄 뒤에 붙는다. 충돌만·안내만이면 예전 그대로다.
+test('끊긴 끝점 안내와 충돌이 함께 있으면 안내 + [보기]가 먼저이고 충돌 문구가 뒤에 붙는다', () => {
+  const store = createStore(createEmptyProject());
+  const ui = createUiState();
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  const banner = createBanner({ store, ui, el });
+  addItem(store, createItem(productById('sofa-3'), { pos: [1000.5, 1000.25] }));
+  addItem(store, createItem(productById('sofa-3'), { pos: [1200.5, 1000.25] }));
+  banner.render(ui.get());
+  expect(el.textContent).toBe(COLLISION_BANNER(2));                     // 충돌만: 예전 그대로
+  expect(el.querySelector('#btnOpenEnds')).toBeNull();
+  ui.set({ openEnds: { pts: [[0.5, 0.25], [1.5, 2.5]], index: 0, floor: activeFloor(store.get()).id } });
+  banner.render(ui.get());
+  const text = el.textContent;
+  expect(text).toContain(DXF_OPEN_ENDS(2));
+  expect(text).toContain(COLLISION_BANNER(2));
+  expect(text.indexOf(DXF_OPEN_ENDS(2))).toBeLessThan(text.indexOf(COLLISION_BANNER(2)));   // 결론이 먼저다
+  const btn = el.querySelector('#btnOpenEnds');
+  expect(btn.textContent).toBe(DXF_OPEN_ENDS_VIEW);
+  btn.click();
+  expect(ui.get().openEnds.index).toBe(1);                              // [보기]가 그대로 동작한다
+  store.dispatch(d => { activeFloor(d).items.pop(); });                 // 충돌이 풀리면 안내만 남는다
+  banner.render(ui.get());
+  expect(el.textContent).not.toContain('충돌');
+  expect(el.textContent).toContain(DXF_OPEN_ENDS(2));
+  expect(el.querySelector('#btnOpenEnds')).not.toBeNull();
   banner.destroy();
   el.remove();
 });

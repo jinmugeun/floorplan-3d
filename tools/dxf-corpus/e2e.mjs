@@ -52,9 +52,11 @@ for (const entry of corpus()) {
     // 기구 알림(2026-10-12 · 계획 13 Task 4): 검토 창 알림의 "기구 n개 배치 — 제품 p · 일반 g"가 점수판(열 equip·equipProd · stats.equipment.generic)과
     // 같아야 한다 — 체크박스 기본 켬 = 점수판의 runDrawing 기본(equipment: true). 배치가 0이면 알림에 기구 문구가 없어야 한다(dxfDialog notes).
     const note = await page.evaluate(() => { const e = document.querySelector('#dxfDialog [name="notice"]'); return e && !e.hidden ? e.textContent : ''; });
-    const em = note.match(/기구 (\d+)개 배치 — 제품 (\d+) · 일반 (\d+)/), generic = scored.stats.equipment?.generic ?? 0;
-    check('검토 창 기구 알림 = 점수판', want.equip > 0 ? !!em && +em[1] === want.equip && +em[2] === want.equipProd && +em[3] === generic : !em,
-      `화면 "${em?.[0] ?? '기구 문구 없음'}" · 점수판 배치 ${want.equip} 제품 ${want.equipProd} 일반 ${generic}`);
+    // 충돌 수(2026-10-12 · 최종 리뷰 F-3): 알림의 "충돌 c건"은 stats.equipment.colliding(완성된 아이템의 collidingIds)이고, 가져온 뒤 앱 배너와 같아야 한다(아래).
+    const em = note.match(/기구 (\d+)개 배치 — 제품 (\d+) · 일반 (\d+) · 충돌 (\d+)건/), generic = scored.stats.equipment?.generic ?? 0;
+    const colliding = scored.stats.equipment?.colliding ?? 0;
+    check('검토 창 기구 알림 = 점수판', want.equip > 0 ? !!em && +em[1] === want.equip && +em[2] === want.equipProd && +em[3] === generic && +em[4] === colliding : !em,
+      `화면 "${em?.[0] ?? '기구 문구 없음'}" · 점수판 배치 ${want.equip} 제품 ${want.equipProd} 일반 ${generic} 충돌 ${colliding}`);
     // 화면의 체크 그대로 다시 추출해도 같은 값이어야 한다(표시 = 계산): 관계없는 옵션을 껐다 켠다.
     for (let k = 0; k < 2; k++) { await page.click('#dxfDialog [name="trace"]'); await page.waitForTimeout(700); await ready(); }
     const again = await page.evaluate(() => document.querySelector('#dxfDialog [name="nums"]')?.textContent ?? '');
@@ -62,6 +64,11 @@ for (const entry of corpus()) {
     await page.screenshot({ path: resolve(out, '1-dialog.png') });
     await page.click('#dxfDialog [name="import"]'); await page.waitForTimeout(2500);
     check('검토 창이 닫힌다', !(await page.$('#dxfDialog')));
+    // 가져온 직후 배너(2026-10-12 · 최종 리뷰 F-2 · F-3): 끊긴 끝점이 있으면 그 안내와 [보기]가 보이고(충돌이 가리지 않는다), 충돌 수는 검토 창 알림과 같다.
+    const bn = await page.evaluate(() => { const b = document.querySelector('#banner'); return { text: b && !b.hidden ? b.textContent : '', view: !!document.querySelector('#banner #btnOpenEnds') }; });
+    const bc = +(bn.text.match(/충돌 (\d+)건/)?.[1] ?? 0);
+    check('가져온 뒤 배너: 끊긴 끝점 안내 + 충돌 수 = 알림', (want.openEnds > 0 ? /이어지지 않은 곳이 \d+군데/.test(bn.text) && bn.view : true) && bc === colliding,
+      `배너 "${bn.text.slice(0, 90)}" · 끊긴 끝점 ${want.openEnds} · 알림 충돌 ${colliding}`);
     await page.screenshot({ path: resolve(out, '2-2d.png') });
     await page.mouse.move(700, 380); for (let k = 0; k < 5; k++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(100); }
     await page.waitForTimeout(400); await page.screenshot({ path: resolve(out, '3-2d-zoom.png') });
