@@ -53,6 +53,11 @@ export { DRAWING_CATEGORY };
 // 크기를 바꾼 손 배치 제품·DXF 문·창은 크기별 행이 된다(옛 행은 첫 아이템의 폭만 적어 틀렸다 — 사동 7 → 19, 내곡 6 → 12).
 // 시방서(specSheet.js)가 같은 함수를 써서 두 문서의 행·수량이 한 키에서 나온다.
 // 순서: 일반 제품 → 도면 기구(가격 0인 도면 요소를 끝에 모은다) → 이름 → 규격.
+// 가져온 기구는 제품을 바꾸기 전까지 0원(2026-10-12 · 계획 13 최종 리뷰 F-1 · 컨트롤러 결정): DXF 가져오기가 카탈로그 제품으로 맞춘 기구(dxfBlock이 있고
+// productId === dxfProduct)는 '도면 기구' 구분의 단가 0 행이다. 어휘표가 대용 제품을 일부러 쓰므로(취반기(전기) → 가스 취반기 · 오븐 → 콤비스티머)
+// 그 예시 단가는 틀린 값이고, 사동 견적이 14.25 M → 145.87 M원(≈ 10배)으로 뛰었다. 사람이 제품을 바꾸면(replaceProduct → productId ≠ dxfProduct)
+// 그때부터 그 제품 가격이다. 코드 칸은 맞춘 제품 코드 그대로(무엇으로 맞췄는지 보인다). 키에 표지를 넣어 손으로 놓은 같은 제품과 섞이지 않는다.
+export const isDrawnItem = it => !!it?.dxfBlock && !!it.dxfProduct && it.productId === it.dxfProduct;
 export function productRows(items) {
   const m = new Map();
   for (const it of items ?? []) {
@@ -61,11 +66,12 @@ export function productRows(items) {
     const s = it.size ?? p?.size ?? [0, 0, 0];
     const name = it.name || p?.name || '제품', size = fmtSize(s);
     const plan = fmtSize(s[0] >= s[1] ? s : [s[1], s[0], s[2]]);   // 방향과 무관한 규격(키 전용)
-    const key = !it.productId ? it.id : it.kind === 'column' ? it.productId : `${it.productId}|${name}|${plan}`;
+    const drawn = isDrawnItem(it);
+    const key = !it.productId ? it.id : it.kind === 'column' ? it.productId : `${it.productId}|${name}|${plan}${drawn ? '|도면' : ''}`;
     const row = m.get(key);
     if (row) { row.qty += 1; row.total = row.qty * row.unitPrice; continue; }
-    const unitPrice = p?.price ?? 0;
-    m.set(key, { key, productId: it.productId || it.id, name, code: it.code || p?.code || '', size, category: p?.category ?? '', qty: 1, unitPrice, total: unitPrice });
+    const unitPrice = drawn ? 0 : p?.price ?? 0;
+    m.set(key, { key, productId: it.productId || it.id, name, code: it.code || p?.code || '', size, category: drawn ? DRAWING_CATEGORY : p?.category ?? '', qty: 1, unitPrice, total: unitPrice });
   }
   const drawn = r => (r.category === DRAWING_CATEGORY ? 1 : 0);
   return [...m.values()].sort((a, b) => drawn(a) - drawn(b) || a.name.localeCompare(b.name, 'ko') || a.size.localeCompare(b.size, 'ko', { numeric: true }));

@@ -1,7 +1,7 @@
 // 실시간 견적서: 스토어를 구독해 배치·마감재가 바뀌면 바로 다시 계산한다.
 import { activeFloor } from '../state/schema.js';
 import { estimateRows, estimateCsv } from '../io/estimate.js';
-import { estimateLines, EST_TABLE_COLUMNS, PRICE_NOTE, EST_EMPTY } from '../io/estimateTable.js';
+import { estimateLines, EST_TABLE_COLUMNS, PRICE_NOTE, EST_EMPTY, DRAWING_PRICE_NOTE, hasDrawingRows } from '../io/estimateTable.js';
 import { downloadText, filenameFor } from '../io/file.js';
 import { printHtml } from '../io/printWindow.js';
 import { toast } from './toast.js';
@@ -40,6 +40,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
     <div class="est-foot">
       <p class="est-total" data-part="total"></p>
       <p class="est-note hint">${PRICE_NOTE}</p>
+      <p class="est-note hint" data-part="drawNote" hidden>${DRAWING_PRICE_NOTE}</p>
       <button type="button" name="csv">CSV 내려받기</button>
       <button type="button" name="print" class="primary">인쇄</button>
       <button type="button" name="closeFoot">닫기</button>
@@ -52,6 +53,8 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
     rows = estimateRows(activeFloor(store.get()));
     part('table').innerHTML = tableHtml(rows);
     part('total').textContent = `합계 ${won(rows.total)}`;
+    // 가져온 기구(0원 '도면 기구' 행)가 있을 때만 그 까닭을 한 줄로 말한다(2026-10-12 · 계획 13 최종 리뷰 F-1).
+    part('drawNote').hidden = !hasDrawingRows(rows);
     // 항목이 0이면 빈 CSV·빈 인쇄가 나가지 않게 막고 사유를 말한다(§16.2 · 감사 §5).
     const empty = estimateLines(rows).length === 0;
     for (const name of ['csv', 'print']) {
@@ -68,7 +71,7 @@ export function openEstimateDialog({ store, onClose = () => {} }) {
     if (name === 'close' || name === 'closeFoot') { close(); return; }   // 머리글 ✕ · 푸터 [닫기]
     if (name === 'csv') { downloadText(filenameFor(store.get()).replace(/\.json$/, '-견적서.csv'), estimateCsv(rows, { name: store.get().name, date: new Date() })); return; }
     if (name === 'print') {
-      const ok = printHtml(`<h1>${esc(store.get().name)} 견적서</h1>${tableHtml(rows)}<p>합계 ${won(rows.total)}</p><p>${PRICE_NOTE}</p>
+      const ok = printHtml(`<h1>${esc(store.get().name)} 견적서</h1>${tableHtml(rows)}<p>합계 ${won(rows.total)}</p><p>${PRICE_NOTE}</p>${hasDrawingRows(rows) ? `<p>${DRAWING_PRICE_NOTE}</p>` : ''}
         <style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:6px;text-align:left}</style>`, { title: '견적서' });
       if (!ok) toast(POPUP_BLOCKED);
     }

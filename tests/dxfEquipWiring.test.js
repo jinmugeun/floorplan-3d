@@ -9,6 +9,7 @@ import { productById } from '../src/products/catalog.js';
 import { buildImportMeta, buildDxfFeedback } from '../src/io/dxfFeedback.js';
 import { importDxf } from '../src/io/dxf/client.js';
 import { collidingIds } from '../src/geom/collide.js';
+import { estimateRows } from '../src/io/estimate.js';
 
 // DXF 좌표(y 위쪽)의 사각형 중심선 넷.
 const rect = (x0, y0, x1, y1, thickness = 200) => [
@@ -77,6 +78,17 @@ test('stats.equipment.colliding = 완성된 아이템의 collidingIds 수(앱 �
   expect(on.stats.equipment.colliding).toBe(2);                     // 기둥 하나 + 작업대 하나
   expect(on.stats.equipment.overlap).toBe(0);                       // 기구끼리만 세는 수로는 0이었다
   expect(off.stats.equipment.colliding).toBe(0);
+});
+
+// 2026-10-12 · 계획 13 최종 리뷰 F-1(컨트롤러 결정): 가져온 기구는 맞춘 제품 id를 dxfProduct에 남기고, 견적은 제품을 바꾸기 전까지 0원으로 센다 —
+// 기구를 켜든 끄든 견적 합계가 같다(사동 실측: 켬 145.87 M원 → 14.25 M원 = 끔).
+test('가져온 기구는 dxfProduct = productId를 남기고, 기구를 켜든 끄든 견적 합계가 같다', () => {
+  const on = build(), off = build({ equipment: false });
+  const eq = floorOf(on).items.filter(i => i.dxfBlock);
+  expect(eq).toHaveLength(4);
+  for (const it of eq) expect(it.dxfProduct).toBe(it.productId);
+  expect(eq.some(i => productById(i.productId).price > 0)).toBe(true);   // 값 있는 제품(세정대·작업대)으로 맞춘 것이 있다
+  expect(estimateRows(floorOf(on)).total).toBe(estimateRows(floorOf(off)).total);
 });
 
 test('equipItems가 받는 입력: 도면 상자(roi) · 레이어 행의 역할(layerRoles) · 앱 좌표 기둥 아이템 · 층고', () => {

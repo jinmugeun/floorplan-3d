@@ -20,6 +20,9 @@ const KIND_LABEL = { supply: '급기', exhaust: '배기' };
 // DXF 가져오기의 일반 상자(equip-generic)가 든 카테고리 — catalogDrawing.js와 같은 글자다(estimate.test.js가 못 박는다).
 // 정의를 이 잎 모듈에 두는 까닭: estimate.js가 이 파일을 다시 내보내므로, 거꾸로 import하면 순환이 된다.
 export const DRAWING_CATEGORY = '도면 기구';
+// 가져온 기구가 0원인 까닭(2026-10-12 · 계획 13 최종 리뷰 F-1): '도면 기구' 행이 있을 때만 견적 화면·인쇄·CSV 꼬리에 붙는다(estimate.productRows의 규칙).
+export const DRAWING_PRICE_NOTE = '도면에서 가져온 기구는 제품을 바꾸기 전까지 0원';
+export const hasDrawingRows = rows => (rows?.products ?? []).some(r => r.category === DRAWING_CATEGORY);
 
 // estimateRows(io/estimate.js)의 결과를 한 벌의 행으로 편다. 순서는 제품 → 도면 기구 → 마감재 → 덕트다.
 // 도면 기구(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-1): DXF 가져오기의 일반 상자는 "구분"이 '도면 기구'다 — 0원 행이
@@ -51,7 +54,7 @@ export function estimateLines(rows) {
 const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 // 프로젝트·작성일은 **파일 이름과 꼬리 한 줄에만** 둔다(§17.11(5)): 별 시트를 만들면 표가 깨진다.
 const ymd = d => { const t = d instanceof Date && !Number.isNaN(d.getTime()) ? d : new Date(); const p = n => String(n).padStart(2, '0'); return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`; };
-export const csvFooter = ({ name = '', date = new Date() } = {}) => `${PRICE_NOTE} · 프로젝트: ${String(name ?? '').trim()} · 작성일: ${ymd(date)}`;
+export const csvFooter = ({ name = '', date = new Date(), drawing = false } = {}) => `${PRICE_NOTE}${drawing ? ` · ${DRAWING_PRICE_NOTE}` : ''} · 프로젝트: ${String(name ?? '').trim()} · 작성일: ${ymd(date)}`;
 
 // 1행이 머리글이고, 마지막 주석 줄도 **8열**을 지킨다(빈 칸 7개를 붙인다 — 감사 §42).
 export function estimateCsvText(rows, { name = '', date = new Date() } = {}) {
@@ -60,6 +63,6 @@ export function estimateCsvText(rows, { name = '', date = new Date() } = {}) {
     lines.push([l.kind, l.name, l.code, l.spec, l.qty, l.unit, l.unitPrice, l.total].map(cell).join(','));
   }
   lines.push(`합계,,,,,,,${rows?.total ?? 0}`);              // 금액 열(8번째)에 합계를 적는다
-  lines.push(`${cell(csvFooter({ name, date }))},,,,,,,`);   // 단가의 출처·기준일 + 프로젝트·작성일
+  lines.push(`${cell(csvFooter({ name, date, drawing: hasDrawingRows(rows) }))},,,,,,,`);   // 단가의 출처·기준일(+ 도면 기구 0원 안내) + 프로젝트·작성일
   return `\ufeff${lines.join('\n')}`;
 }

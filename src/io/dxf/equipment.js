@@ -205,7 +205,9 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     // 이름: 이름 있는 블록은 도면 이름 정리본. 익명 블록(zw$…·*U…)은 이름을 주지 않는다 — 제품 이름 그대로라 라벨이 서지 않는다(2026-10-12 · Task 5:
     // 이름 ≠ 제품명인 아이템에 2D·3D 라벨을 단다 — 사동·신상 A 익명 73개가 "zw$5B59" 라벨이 될 뻔했다). 원 블록 이름은 모든 기구 아이템의
     // `dxfBlock`에 남긴다(도면과 대조 · 교정 기록 — normalizeItem은 모르는 칸을 그대로 둔다).
-    let patch = { ...(anon ? {} : { name: cleanName(it.name) || it.name }), dxfBlock: it.name, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 };
+    // dxfProduct = 가져올 때 맞춘 제품 id(2026-10-12 · 최종 리뷰 F-1): 견적은 productId가 이것과 같은 동안 0원 '도면 기구' 행으로 센다(estimate.productRows) —
+    // 어휘의 대용 제품(취반기(전기) → 가스 취반기 등)의 예시 단가가 사동 견적을 ≈ 10배로 부풀렸다. 사람이 제품을 바꾸면 그 제품 가격이다.
+    let patch = { ...(anon ? {} : { name: cleanName(it.name) || it.name }), dxfBlock: it.name, dxfProduct: pid, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 };
     const floorCover = patch.attach === 'floor' ? coverage(patch, bands, cols) : 0;
     const thin = patch.attach === 'floor' && Math.min(size[0], size[1]) <= THIN && floorCover >= P.equipClash;
     if (patch.attach === 'wall' || thin) {

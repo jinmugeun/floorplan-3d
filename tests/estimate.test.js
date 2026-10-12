@@ -9,7 +9,9 @@ import { materialById } from '../src/materials/catalog.js';
 import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2, DRAWING_CATEGORY } from '../src/io/estimate.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
 import { buildSampleProject } from '../src/samples/gangdang.js';
-import { estimateLines, estimateCsvText, csvFooter, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE } from '../src/io/estimateTable.js';
+import { estimateLines, estimateCsvText, csvFooter, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE, DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
+import { replaceProduct } from '../src/state/itemOps.js';
+import { parseProject } from '../src/io/file.js';
 
 function setup() {
   const store = createStore(createEmptyProject());
@@ -338,4 +340,47 @@ test('꼬리 한 줄에 프로젝트·작성일·단가 주석이 모두 든다'
   const s = csvFooter({ name: '테스트 현장', date: new Date('2026-01-02T03:04:00') });
   expect(s).toBe('단가는 예시 값(2026-09 기준) · 프로젝트: 테스트 현장 · 작성일: 2026-01-02');
   expect(csvFooter({})).toContain('프로젝트: ');       // 이름이 없어도 칸은 남는다
+});
+
+// 2026-10-12 · 계획 13 최종 리뷰 F-1(컨트롤러 결정): 카탈로그 제품으로 맞춘 도면 기구가 예시 단가(대용 제품 — 취반기(전기)에 가스 취반기 값)를 받아
+// 사동 견적이 14.25 M → 145.87 M원(≈ 10배)으로 뛰었다. 가져온 기구(dxfBlock이 있고 productId === dxfProduct)는 '도면 기구' 구분의 0원 행이고,
+// 사람이 제품을 바꾸면(replaceProduct → productId ≠ dxfProduct) 그 제품 가격이 붙는다. 견적 대화상자·CSV에 한 줄 안내가 붙는다.
+describe('가져온 기구는 제품을 바꾸기 전까지 0원(최종 리뷰 F-1)', () => {
+  const sink = productById('sink-double');
+  const drawn = (pos = [1000.5, 1000.25]) => createItem(sink, { pos, name: '세정대 2조 1500-750', size: [1500, 750, 850], dxfBlock: '세정대 2조 1500-750', dxfProduct: sink.id });
+  test('가져온 기구 행은 단가 0 · 구분 "도면 기구" · 코드는 맞춘 제품 코드이고, 손으로 놓은 같은 제품은 따로 값이 붙는다', () => {
+    expect(sink.price).toBeGreaterThan(0);
+    const hand = createItem(sink, { pos: [5000.5, 1000.25], name: '세정대 2조 1500-750', size: [1500, 750, 850] });
+    const rows = estimateRows({ walls: [], rooms: [], items: [drawn(), drawn([3000.5, 1000.25]), hand] });
+    expect(rows.products.map(r => [r.productId, r.name, r.code, r.category, r.qty, r.unitPrice, r.total])).toEqual([
+      [sink.id, '세정대 2조 1500-750', sink.code, sink.category, 1, sink.price, sink.price],
+      [sink.id, '세정대 2조 1500-750', sink.code, DRAWING_CATEGORY, 2, 0, 0],
+    ]);
+    expect(rows.total).toBe(sink.price);                                    // 가져온 둘은 합계에 영향이 없다
+    expect(estimateLines(rows).map(l => l.kind)).toEqual(['제품', DRAWING_CATEGORY]);
+  });
+
+  test('제품을 바꾸면(replaceProduct) 그때부터 그 제품 가격이 붙는다 · 저장/불러오기 뒤에도 0원이 유지된다', () => {
+    const store = createStore(createEmptyProject());
+    const a = drawn(), b = drawn([3000.5, 1000.25]);
+    addItem(store, a); addItem(store, b);
+    expect(estimateRows(activeFloor(store.get())).total).toBe(0);
+    const loaded = parseProject(JSON.stringify(store.get()));                 // 저장 → 불러오기
+    expect(activeFloor(loaded).items.map(i => i.dxfProduct)).toEqual([sink.id, sink.id]);
+    expect(estimateRows(activeFloor(loaded)).total).toBe(0);
+    const single = productById('sink-single');
+    replaceProduct(store, [a.id], single);
+    const rows = estimateRows(activeFloor(store.get()));
+    expect(rows.total).toBe(single.price);
+    expect(rows.products.find(r => r.productId === single.id)).toMatchObject({ unitPrice: single.price, category: single.category });
+  });
+
+  test('CSV 꼬리와 견적 안내: 가져온 기구 행이 있을 때만 "도면에서 가져온 기구는 제품을 바꾸기 전까지 0원"', () => {
+    expect(DRAWING_PRICE_NOTE).toBe('도면에서 가져온 기구는 제품을 바꾸기 전까지 0원');
+    const withDrawn = estimateCsvText(estimateRows({ walls: [], rooms: [], items: [drawn()] }));
+    expect(withDrawn.split('\n').at(-1)).toContain(DRAWING_PRICE_NOTE);
+    expect(withDrawn.split('\n').at(-1).split(',')).toHaveLength(EST_COLUMNS.length);   // 꼬리도 8열 그대로
+    const plain = estimateCsvText(estimateRows({ walls: [], rooms: [], items: [createItem(productById('sofa-3'), { pos: [0, 0] })] }));
+    expect(plain).not.toContain(DRAWING_PRICE_NOTE);
+  });
 });

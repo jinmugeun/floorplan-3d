@@ -124,4 +124,16 @@ describe('견적서 대화상자', () => {
     foot.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(document.querySelector('.modal.estimate')).toBeNull();
   });
+
+  // 2026-10-12 · 계획 13 최종 리뷰 F-1: 가져온 기구가 0원인 까닭을 견적 화면이 한 줄로 말한다 — 그런 행이 있을 때만.
+  test('가져온 기구 행이 있으면 "제품을 바꾸기 전까지 0원" 안내가 보이고, 없으면 숨는다', () => {
+    const a = setup();
+    const note = () => a.root.querySelector('[data-part="drawNote"]');
+    expect(note().hidden).toBe(true);                                   // 소파만 — 안내 없음
+    const sink = productById('sink-double');
+    addItem(a.store, createItem(sink, { pos: [1000, 1000], name: '세정대 2조 1500-750', dxfBlock: '세정대 2조 1500-750', dxfProduct: sink.id }));
+    expect(note().hidden).toBe(false);
+    expect(note().textContent).toBe('도면에서 가져온 기구는 제품을 바꾸기 전까지 0원');
+    expect(a.root.querySelector('[data-part="total"]').textContent).toContain('890,000원');   // 합계는 소파뿐
+  });
 });
