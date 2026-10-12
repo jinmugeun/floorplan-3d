@@ -23,10 +23,10 @@
   "equip": 226,
   "equipProd": 143,
   "equipClash": 0,
-  "equipHit": 18,
+  "equipHit": 19,
   "equipAll": 20,
   "guessed": false,
-  "ms": 1480
+  "ms": 1505
  },
  "sinsang-B": {
   "regions": 2,
@@ -55,7 +55,7 @@
   "equipHit": 0,
   "equipAll": 0,
   "guessed": false,
-  "ms": 1183
+  "ms": 926
  },
  "sinsang-A": {
   "regions": 2,
@@ -84,7 +84,7 @@
   "equipHit": 0,
   "equipAll": 0,
   "guessed": false,
-  "ms": 973
+  "ms": 889
  },
  "naegok": {
   "regions": 1,
@@ -113,6 +113,6 @@
   "equipHit": 0,
   "equipAll": 0,
   "guessed": false,
-  "ms": 962
+  "ms": 865
  }
 }

@@ -55,6 +55,8 @@ const fromFrame = (f, q) => (f ? [q[0] * f.u[0] + q[1] * f.v[0], q[0] * f.u[1] +
 // 상자(틀 좌표) [x0, y0, x1, y1] — 축 정렬이면 insertBoxes의 월드 상자, 아니면 같은 재료(선분 끝 + ARC 양 끝점)를 로컬 축에 투영한 상자.
 function frameBox(f, g, part) {
   if (!f || !part.segs.length) return g.box;
+  // 원 + 중심 십자 블록(insertBoxes.crossCircles · 2026-10-12 최종 리뷰 F-6): 원은 돌려도 원이다 — 로컬 축에서도 원의 범위.
+  if (g.circle) { const q = toFrame(f, g.circle.c), r = g.circle.r; return [q[0] - r, q[1] - r, q[0] + r, q[1] + r]; }
   const b = [Infinity, Infinity, -Infinity, -Infinity];
   const add = p => { const q = toFrame(f, p); b[0] = Math.min(b[0], q[0]); b[1] = Math.min(b[1], q[1]); b[2] = Math.max(b[2], q[0]); b[3] = Math.max(b[3], q[1]); };
   for (const s of part.segs) { add(s.a); add(s.b); }
@@ -82,8 +84,9 @@ function anonOpening(part, long) {
 }
 
 // 익명 블록의 품명 단서(Task 1 순서): 어휘에 걸리는 자식 INSERT가 하나뿐 → 안쪽 글자 → X-상자 모양.
-// X-상자는 hoodOk(레이어 역할 equip·other 또는 역할표 equip)일 때만 후드다(리뷰 M-3): 벽·개구부·축선 레이어의 X는 샤프트·EV·개구부 표기이고,
-// 후드가 되면 환기 집계에 들어간다. 지금 44장(한국 4 + 공개 40)의 X-상자 후드 11개는 모두 기구 레이어(`*미구입`·`후드`)다.
+// X-상자는 hoodOk(레이어 역할 equip 또는 역할표 equip)일 때만 후드다(리뷰 M-3): 벽·개구부·축선 레이어의 X는 샤프트·EV·개구부 표기이고,
+// 후드가 되면 환기 집계에 들어간다(가짜 후드 하나 = 실 배기 4~5천 CMH). 지금 44장(한국 4 + 공개 40)의 X-상자 후드 11개는 모두 기구 레이어(`*미구입`·`후드`)다.
+// `other`도 뺐다(2026-10-12 · 계획 13 최종 리뷰 F-7 · M2-1): 레이어 0의 X는 개구부·샤프트·EV 표기로 흔하고, Task 7 뒤에는 `*DIVIDER*` 레이어도 other다.
 function anonMatch(kidNames, part, f, b, hoodOk) {
   const kids = kidNames.map(n => (skipReason(n) ? null : matchEquip(n))).filter(Boolean);
   if (kids.length === 1) return kids[0];
@@ -181,7 +184,7 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     let v = anon ? null : matchEquip(it.name);
     if (anon) {
       if (!forced && anonOpening(part, long)) { skip('opening'); continue; }
-      v = anonMatch(kidNames.get(k), part, f, b, forced || role === 'equip' || role === 'other');
+      v = anonMatch(kidNames.get(k), part, f, b, forced || role === 'equip');   // 최종 리뷰 F-7: X-상자 후드는 equip 레이어만
       if (!v && !forced && role !== 'equip' && role !== 'wall') { skip('layer'); continue; }
     } else if (!v && !forced && NOTE_ROLES.has(role)) { skip('layer'); continue; }
     const c = fromFrame(f, [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]);

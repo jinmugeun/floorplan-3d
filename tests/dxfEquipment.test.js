@@ -33,6 +33,30 @@ test('인서트별 상자: 최상위 주인(자식 INSERT의 도형도 부모 �
   expect(insertBoxes(ex).has(1)).toBe(false);
 });
 
+// 2026-10-12 · 계획 13 최종 리뷰 F-6(T4-1): `운반카 튀김 620`(사동 6 · 신상 A `운반차` 2)은 원 r310·280·100.6(동심) + 중심을 지나는 십자 720·820이다.
+// 선분 끝만 재면 720×820으로 부풀어(정답 Ø620) 빨갛게 충돌했다. 좁은 규칙: 선분이 **전부** 가장 큰 원의 중심을 지나는 짧은 선(중점이 중심에서 5 mm 안 ·
+// 길이 ≤ 4r)이고, 다른 원·호가 그 원 안이면 상자 = 그 원의 범위. 원 밖으로 나가는 다른 선이 있거나(손세정대 r185 원 · 세탁기) 원이 없으면 그대로다.
+test('원 + 중심 십자 블록의 상자는 가장 큰 원의 범위 — 다른 선이 있거나 원이 없으면 그대로', () => {
+  const c = [1179026, -971050];
+  const cross = k => [seg([c[0], c[1] + 410], [c[0], c[1] - 410], k), seg([c[0] - 360, c[1]], [c[0] + 360, c[1]], k)];
+  const rings = k => [310, 280, 100.6].map(r => ({ c, r, ins: k }));
+  const cart = exOf([ins('운반카 튀김 620')], cross(0), { circles: rings(0) });
+  expect(insertBoxes(cart).get(0)).toMatchObject({ box: [c[0] - 310, c[1] - 310, c[0] + 310, c[1] + 310], n: 2, circle: { r: 310 } });
+  // 축이 아닌 인서트(30°)도 로컬 상자가 원의 범위다(선분 끝의 로컬 상자가 아니다).
+  expect(only(run({ ...cart, inserts: [ins('운반카 튀김 620', { rot: 30 })] })).size.slice(0, 2)).toEqual([620, 620]);
+  expect(only(run(cart)).size.slice(0, 2)).toEqual([620, 620]);              // 예전 720×820
+  // 십자 + 원 밖으로 나가는 손잡이 선 하나 → 규칙 밖(선분 끝 상자 그대로).
+  const handle = exOf([ins('운반카 튀김 620')], [...cross(0), seg([c[0] + 310, c[1] + 100], [c[0] + 600, c[1] + 100], 0)], { circles: rings(0) });
+  expect(insertBoxes(handle).get(0).box).toEqual([c[0] - 360, c[1] - 410, c[0] + 600, c[1] + 410]);
+  // 몸체 사각형 + 원(손세정대 보울) → 규칙 밖.
+  const basin = exOf([ins('손세정대 500-370')], box(0, 0, 0, 500, 370), { circles: [{ c: [250, 185], r: 185, ins: 0 }] });
+  expect(insertBoxes(basin).get(0).box).toEqual([0, 0, 500, 370]);
+  // 원이 없는 십자 → 그대로. 원 밖에 걸친 호(중심은 같아도 반지름이 더 큼)가 있으면 → 그대로.
+  expect(insertBoxes(exOf([ins('X')], cross(0))).get(0).box).toEqual([c[0] - 360, c[1] - 410, c[0] + 360, c[1] + 410]);
+  const arcOut = exOf([ins('X')], cross(0), { circles: rings(0), arcs: [{ c, r: 500, a0: 80, a1: 100, ins: 0 }] });
+  expect(insertBoxes(arcOut).get(0).box[3]).toBeGreaterThan(c[1] + 410);
+});
+
 test('이름 치수 블록 → 제품 · 자리(상자 중심) · 크기(이름) · 이름은 도면 그대로 · 코드는 제품 코드', () => {
   const it = only(run(one('다단식선반 1500-750', [1000, 1000, 2500, 1750])));
   expect(it).toMatchObject({ productId: 'shelf-steel-4', code: 'ST-SH4', name: '다단식선반 1500-750', pos: [1750, -1375], size: [1500, 750, 1800], rot: 0, attach: 'floor', z: 0 });
@@ -249,12 +273,20 @@ test('익명 X-상자(사각형 + 대각선 둘, 짧은 변 ≥ 600) → hood-bo
   expect(r.stats).toMatchObject({ anonymous: 3, product: 1 });
 });
 
-// 리뷰 M-3: 벽·개구부·축선 레이어의 X는 샤프트·EV·개구부 표기다 — 후드(환기 집계)는 기구·기타 레이어(또는 역할표 equip)의 X-상자만.
-test('X-상자 후드는 레이어 역할이 equip·other일 때만 — 벽 레이어의 X-상자는 일반 상자', () => {
+// 리뷰 M-3: 벽·개구부·축선 레이어의 X는 샤프트·EV·개구부 표기다 — 후드(환기 집계)는 기구 레이어(또는 역할표 equip)의 X-상자만.
+// 2026-10-12 · 계획 13 최종 리뷰 F-7(M2-1): `other`도 빼고 뒤집었다 — 레이어 0의 X는 한국 도면에서 개구부·샤프트·EV 표기로 흔하고, Task 7 뒤에는
+// `*DIVIDER*` 레이어도 other다. 가짜 후드 하나가 실 배기에 4~5천 CMH를 더한다. 레이어 0의 단서 없는 익명 X-상자는 기호로 빠진다(layer).
+test('X-상자 후드는 레이어 역할이 equip일 때만 — 벽 레이어는 일반 상자 · 레이어 0(other)은 후드가 아니다', () => {
   const xbox = (k, x0, y0, x1, y1, layer) => [...box(k, x0, y0, x1, y1).map(s => ({ ...s, layer })), seg([x0, y0], [x1, y1], k, layer), seg([x0, y1], [x1, y0], k, layer)];
-  const ex = exOf([ins('zw$1111', { layer: '벽' }), ins('zw$2222', { layer: '0' })], [...xbox(0, 0, 0, 1500, 1800, '벽'), ...xbox(1, 5000, 0, 6500, 1800, '0')]);
-  expect(run(ex).items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$1111', 'equip-generic'], ['zw$2222', 'hood-box']]);
-  expect(run(ex, { roles: { blocks: new Map([['zw$1111', { kind: 'equip', width: null }]]) } }).items[0].productId).toBe('hood-box');
+  const ex = exOf([ins('zw$1111', { layer: '벽' }), ins('zw$2222', { layer: '0' }), ins('zw$3333', { layer: 'TOILET DIVIDER' }), ins('zw$4444', { layer: '후드' })],
+    [...xbox(0, 0, 0, 1500, 1800, '벽'), ...xbox(1, 5000, 0, 6500, 1800, '0'), ...xbox(2, 9000, 0, 10500, 1800, 'TOILET DIVIDER'), ...xbox(3, 13000, 0, 14500, 1800, '후드')]);
+  const r = run(ex);
+  expect(r.items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$1111', 'equip-generic'], ['zw$4444', 'hood-box']]);
+  expect(r.stats.skipped.layer).toBe(2);                                  // 레이어 0 · DIVIDER의 X-상자는 기호
+  expect(r.items.filter(i => i.productId === 'hood-box')).toHaveLength(1);
+  // 역할표 equip이면(사람·도구가 기구라고 했다) 어느 레이어든 후드다.
+  const forced = run(ex, { roles: { blocks: new Map([['zw$1111', { kind: 'equip', width: null }], ['zw$2222', { kind: 'equip', width: null }]]) } });
+  expect(forced.items.filter(i => ['zw$1111', 'zw$2222'].includes(i.dxfBlock)).map(i => i.productId)).toEqual(['hood-box', 'hood-box']);
 });
 
 // 리뷰 I-1(Task 1 §7 "레이어 역할 opening → opening"): 공개 코퍼스의 DBLK@WINDOW(760×760 문)·WBLK(900×200 창)가 '도면 기구'로 섰다.
