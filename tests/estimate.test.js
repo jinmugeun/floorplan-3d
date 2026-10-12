@@ -375,6 +375,23 @@ describe('가져온 기구는 제품을 바꾸기 전까지 0원(최종 리뷰 F
     expect(rows.products.find(r => r.productId === single.id)).toMatchObject({ unitPrice: single.price, category: single.category });
   });
 
+  // 2026-10-12 · 최종 재리뷰 M-1: replaceProduct가 dxfProduct를 남기면 "다른 제품으로 갔다가 돌아오기"와 "같은 제품 다시 고르기"가 영원히 0원이다.
+  test('제품을 고르는 순간 dxfProduct가 풀린다 — 같은 제품을 다시 골라도, 갔다가 돌아와도 가격이 붙고 dxfBlock은 남는다', () => {
+    const store = createStore(createEmptyProject());
+    const a = drawn(), b = drawn([3000.5, 1000.25]);
+    addItem(store, a); addItem(store, b);
+    replaceProduct(store, [a.id], sink);                                      // 같은 제품을 다시 고름
+    const itemA = activeFloor(store.get()).items.find(i => i.id === a.id);
+    expect(itemA.dxfProduct).toBeUndefined();
+    expect(itemA.dxfBlock).toBe('세정대 2조 1500-750');
+    expect(estimateRows(activeFloor(store.get())).total).toBe(sink.price);
+    const single = productById('sink-single');
+    replaceProduct(store, [b.id], single);                                    // 다른 제품으로 갔다가
+    replaceProduct(store, [b.id], sink);                                      // 맞춘 제품으로 돌아옴
+    expect(activeFloor(store.get()).items.find(i => i.id === b.id).dxfProduct).toBeUndefined();
+    expect(estimateRows(activeFloor(store.get())).total).toBe(sink.price * 2);
+  });
+
   test('CSV 꼬리와 견적 안내: 가져온 기구 행이 있을 때만 "도면에서 가져온 기구는 제품을 바꾸기 전까지 0원"', () => {
     expect(DRAWING_PRICE_NOTE).toBe('도면에서 가져온 기구는 제품을 바꾸기 전까지 0원');
     const withDrawn = estimateCsvText(estimateRows({ walls: [], rooms: [], items: [drawn()] }));

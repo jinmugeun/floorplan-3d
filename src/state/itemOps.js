@@ -35,7 +35,9 @@ export function replaceProduct(store, ids, product, opts = {}) {
   const patches = itemsOf(store.get(), ids).map(it => {
     const kind = product.kind ?? 'product';
     const size = [...product.size];
-    const patch = { productId: product.id, name: product.name, code: product.code, kind, size, attach: product.attach, color: product.color ?? it.color, z: product.zDefault ?? 0 };
+    // dxfProduct 해제(2026-10-12 · 계획 13 최종 재리뷰 M-1): 사람이 제품을 고른 순간부터 그 제품 가격이다 — 같은 제품을 다시 고르거나
+    // 다른 제품으로 갔다가 돌아와도. 남겨 두면 estimate.isDrawnItem이 영원히 0원으로 센다. dxfBlock(원 블록 이름)은 그대로 둔다.
+    const patch = { productId: product.id, name: product.name, code: product.code, kind, size, attach: product.attach, color: product.color ?? it.color, z: product.zDefault ?? 0, dxfProduct: undefined };
     if (product.equip) patch.props = { ...product.equip };   // 설비를 다른 종류로 바꾸면 옛 종류의 props가 남지 않는다
     else if (kind !== 'equipment') patch.props = undefined;
     if (product.attach !== 'wall') patch.wallId = null;
