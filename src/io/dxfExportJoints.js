@@ -4,8 +4,9 @@
 //  - 경계(= 꺾임)는 **두꺼운 쪽 끝**에 선다(sectionsOf — 틈은 얇은 쪽이 갖는다). 그래서 두꺼운 벽은 이음 자리 X에서 정확히 끝나고
 //    얇은 벽은 X 앞 JOINT_GAP에서 끊긴다(그 틈에는 선이 하나도 없다 — runJoin 5·faceGap 20보다 넓다).
 //  - 꺾임 벽은 중심선만 그린다 — 가져오기가 그 자리에 두 중심선을 잇는 꺾임을 다시 세운다.
-// 2026-10-12 실측(사동중): 합집합 윤곽 그대로면 꺾임 11개가 사라졌고(벽 94 → 78), 이 규칙으로 94 → 91이다(남은 셋은 jogTol 20 안의
-// 13 mm 꺾임처럼 가져오기 자체가 한 중심선으로 맞추는 것).
+// 2026-10-12 실측(사동중): 합집합 윤곽 그대로면 꺾임 11개가 사라졌고(벽 94 → 78), 이 규칙(+ rectify)으로 94 → 93이다. 남은 차이는
+// jogTol 20 안의 13 mm 꺾임(가져오기가 한 중심선으로 맞춘다)과, 창 블록 구간 안에 든 경계를 블록 끝으로 옮기는 규칙(sections.sectionsOf
+// spans)에 꺾임이 밀리는 것(18427 → 17952 등)이다.
 
 const PAR = Math.sin(2 * Math.PI / 180);             // 나란함·직각 판정(2°)
 const JOG_MAX = 700;                                 // 꺾임 벽의 최대 길이(bandMax — 한 띠 폭을 넘는 꺾임은 없다)
@@ -31,22 +32,25 @@ const compatible = (P, l1, h1, l2, h2) => Math.min(h1, h2) - Math.max(l1, l2) >=
 // 호환이 아닌 꺾임(두 띠가 반 넘게 비껴 있다 — 사동중 405|230 · 신상중 150|200 맞닿음)의 **가운데 run**: 얇은 벽 T 쪽에 길이 MID_LEN만큼,
 // T의 선들에 선 하나(오프셋 e)를 더해 띠를 [e, hT](T가 위) 또는 [lT, e](T가 아래)로 넓힌다. 이 run은 T를 품고 두꺼운 벽 K는 품지 않으며
 // K와 호환이다 — 줄 잇기가 K → 가운데 → T를 한 줄로 꿰고, 구간 규칙의 "이웃을 품는 짧은 run은 그 이웃의 띠를 따른다"로 가운데가 T가
-// 되어 경계(= 꺾임)가 K의 끝 X에 선다. e는 K 중심선에서 10 mm(offTol 6보다 멀리) 비켜 둔다. 안 되면 null(꺾임을 보통 벽으로 그린다).
-function middleOffset(P, lK, hK, lT, hT) {
-  const cK = (lK + hK) / 2;
-  if ((lT + hT) / 2 > cK) {
-    const e = Math.min(cK - 10, hK - P.tMin - 5);
-    return e > lK + 10 && e < lT - 10 && lT - e <= P.bandGap && hK - e >= Math.max(P.tMin, 0.5 * Math.min(hT - e, hK - lK)) ? e : null;
-  }
-  const e = Math.max(cK + 10, lK + P.tMin + 5);
-  return e < hK - 10 && e > hT + 10 && e - hT <= P.bandGap && e - lK >= Math.max(P.tMin, 0.5 * Math.min(e - lT, hK - lK)) ? e : null;
+// 되어 경계(= 꺾임)가 K의 끝 X에 선다. e는 K 중심선에서 10 mm(offTol 6보다 멀리) 비켜 둔 값이 첫 후보이고, 그 선을 이웃 기둥이 마감선으로
+// 먹으면(columns.growLinings — 2026-10-12 리뷰 M-1: 사동중 790×855 기둥이 왕복마다 971 → 1086) 다른 e·길이를 고른다. 후보가 없으면 빈 배열.
+function middleOffsets(P, lK, hK, lT, hT) {
+  const cK = (lK + hK) / 2, up = (lT + hT) / 2 > cK;
+  const ok = up
+    ? e => e > lK + 10 && e < lT - 10 && lT - e <= P.bandGap && hK - e >= Math.max(P.tMin, 0.5 * Math.min(hT - e, hK - lK))
+    : e => e < hK - 10 && e > hT + 10 && e - hT <= P.bandGap && e - lK >= Math.max(P.tMin, 0.5 * Math.min(e - lT, hK - lK));
+  const first = up ? Math.min(cK - 10, hK - P.tMin - 5) : Math.max(cK + 10, lK + P.tMin + 5);
+  const out = [first];
+  for (let k = 1; k <= 80; k++) out.push(first - 10 * k, first + 10 * k);
+  return out.filter(ok);
 }
+const MID_LENS = [MID_LEN, 400, 700, 950];         // 가운데 run 길이 후보(< bandBreak 1000 — 그래야 이웃 띠를 따른다)
 
 // info(infoOf 꼴) → 이음들 [{ a, b, X, u, n, lo, hi, mid, gaps, extra? }]. 벽마다 fix(끝의 늘림 · 음수면 줄임)와 꺾임 표지(jog)를 단다.
-// a는 bin 방향(u)으로 앞(−u 쪽)에 있는 벽이다. P는 가져오기 파라미터(io/dxf/params.js).
-export function joints(info, P) {
+// a는 bin 방향(u)으로 앞(−u 쪽)에 있는 벽이다. P는 가져오기 파라미터(io/dxf/params.js). lining([p, q]) → 그 선을 이웃 기둥이 마감선으로 먹는가.
+export function joints(info, P, lining = () => false) {
   const out = [];
-  // 꺾임은 두 띠가 줄 잇기에서 호환일 때만 구간 경계로 다시 선다. 호환이 아니면 가운데 run(middleOffset)을 끼우고,
+  // 꺾임은 두 띠가 줄 잇기에서 호환일 때만 구간 경계로 다시 선다. 호환이 아니면 가운데 run(middleOffsets)을 끼우고,
   // 그것도 안 되면 꺾임 벽을 보통 벽으로 그린다 — 그 벽이 minWall보다 짧으면 다시 읽히지 않는다(가져오기의 한계 · 보고서).
   const add = (A, eA, B, eB, X, u, jog = null) => {
     const n = [-u[1], u[0]], band = s => { const c = dot(s.a, n); return [c - s.h, c + s.h]; };
@@ -54,13 +58,19 @@ export function joints(info, P) {
     const [la, ha] = band(a), [lb, hb] = band(b);
     if (!jog && Math.abs(la - lb) <= 1 && Math.abs(ha - hb) <= 1) return false;      // 같은 띠 — 이어 그린다
     const thinA = ha - la <= hb - lb;                                                 // 같은 두께면 a(sectionsOf의 `<=`)
-    let e = null;
+    let mid = null;
     if (!compatible(P, la, ha, lb, hb)) {
+      if (!jog) return false;
       const [lK, hK, lT, hT, T] = thinA ? [lb, hb, la, ha, a] : [la, ha, lb, hb, b];
-      e = jog && T.L >= 2 * JOINT_GAP + MID_LEN + P.minSeg ? middleOffset(P, lK, hK, lT, hT) : null;
-      if (e == null) return false;
+      const s = thinA ? -1 : 1, pt = (t, e) => at(at([0, 0], u, t), n, e);
+      search: for (const e of middleOffsets(P, lK, hK, lT, hT)) for (const len of MID_LENS) {
+        if (T.L < 2 * JOINT_GAP + len + P.minSeg) continue;
+        const seg = [pt(X + s * JOINT_GAP, e), pt(X + s * (JOINT_GAP + len), e)];
+        if (!lining(seg)) { mid = { e, len, seg }; break search; }
+      }
+      if (!mid) return false;
     }
-    out.push({ a, b, endA, endB, X, u, n, lo: Math.min(la, lb), hi: Math.max(ha, hb), mid: [Math.max(la, lb), Math.min(ha, hb)], thinA, e });
+    out.push({ a, b, endA, endB, X, u, n, lo: Math.min(la, lb), hi: Math.max(ha, hb), mid: [Math.max(la, lb), Math.min(ha, hb)], thinA, middle: mid });
     return true;
   };
   // 일직선 이음: 한 끝점을 나눠 갖고 나란하며 서로 반대쪽으로 뻗는 두 벽.
@@ -93,13 +103,38 @@ export function joints(info, P) {
     thin.fix[eThin] = -JOINT_GAP;
     const s = j.thinA ? -1 : 1, g = JOINT_GAP, span = (t0, t1) => [Math.min(t0, t1), Math.max(t0, t1)];
     j.gaps = [span(j.X, j.X + s * g)];
-    if (j.e != null) {
-      j.gaps.push(span(j.X + s * (g + MID_LEN), j.X + s * (2 * g + MID_LEN)));
-      const pt = t => at(at([0, 0], j.u, t), j.n, j.e);
-      j.extra = [pt(j.X + s * g), pt(j.X + s * (g + MID_LEN))];
+    if (j.middle) {
+      const { len, seg } = j.middle;
+      j.gaps.push(span(j.X + s * (g + len), j.X + s * (2 * g + len)));
+      j.extra = seg;
     }
   }
   return out;
+}
+
+// 거의 축에 나란한 벽(두 끝의 차이 ≤ tol mm)을 **정확히** 축에 맞춘다 — 끝점을 나눠 갖는 나란한 벽들(한 줄)은 길이 가중 평균을 정수 mm로 둔
+// 한 좌표가 된다. 왜(2026-10-12 · Task 3 리뷰 재측정): 원 도면에서 온 벽은 0.2~1 mm 기운 것이 많은데(신상중 가로벽 7526.87 → 7526.51 ·
+// 내곡중 16767 → 16768), 다시 들여오면 T자 접점이 가져오기의 교점 P(소수)와 매달린 벽 끝(정수)으로 갈려(geom/normalize의 T 분할은 교점에서
+// 자른다) 반올림 키가 어긋나 벽이 떨어져 나갔다(신상중 B 300 벽 + 창 1200). 점마다 세로 줄의 x · 가로 줄의 y를 받는다(기운 벽 끝도 그 점을 따른다).
+// walls: DXF 좌표 { a, b, … } → 새 배열(끝점만 바꾼 사본).
+export function rectify(walls, tol = 2) {
+  const key = p => `${p[0]},${p[1]}`;
+  const axisOf = w => {
+    const dx = Math.abs(w.b[0] - w.a[0]), dy = Math.abs(w.b[1] - w.a[1]);
+    return dy <= tol && dx >= 100 * dy && dx > 0 ? 1 : dx <= tol && dy >= 100 * dx && dy > 0 ? 0 : -1;   // 1: 가로(y를 맞춘다) · 0: 세로(x)
+  };
+  const fixed = [new Map(), new Map()];                // 축 → (점 키 → 좌표)
+  for (const i of [0, 1]) {
+    const list = walls.filter(w => axisOf(w) === i), par = list.map((_, k) => k);
+    const find = k => { while (par[k] !== k) k = par[k] = par[par[k]]; return k; };
+    const at = new Map();
+    list.forEach((w, k) => { for (const p of [w.a, w.b]) { const q = key(p); if (at.has(q)) par[find(k)] = find(at.get(q)); else at.set(q, k); } });
+    const sum = new Map();
+    list.forEach((w, k) => { const r = find(k), L = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), s = sum.get(r) ?? [0, 0]; s[0] += (w.a[i] + w.b[i]) / 2 * L; s[1] += L; sum.set(r, s); });
+    list.forEach((w, k) => { const s = sum.get(find(k)), v = Math.round(s[0] / s[1]); for (const p of [w.a, w.b]) fixed[i].set(key(p), v); });
+  }
+  const move = p => [fixed[0].get(key(p)) ?? p[0], fixed[1].get(key(p)) ?? p[1]];
+  return walls.map(w => ({ ...w, a: move(w.a), b: move(w.b) }));
 }
 
 // [0, 1]에서 구간들을 빼고 남은 구간들.

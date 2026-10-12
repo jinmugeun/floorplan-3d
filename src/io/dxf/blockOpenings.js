@@ -15,9 +15,15 @@
 // 본다 — "문"·"창" 한 글자로 잡으면 기구의 문 수(양문·단문)와 창고가 걸린다.
 export const DOOR_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]|^((f|s|a)?s?d|wd|pd)[-_ ]?\d{3,4}|(방화|방음|자동|현관|출입|칸막이|여닫이|미닫이|미서기|강화|유리|방풍)문/i;
 export const WINDOW_BLOCK = /^(win|window|w)[-_ ]?\d{3,4}|^window|^창[-_ ]|^(aw|pw|sw|ww)[-_ ]?\d{3,4}|(미서기|미닫이|여닫이|고정|프로젝트|픽스|붙박이|오르내리)[^\s_]{0,3}창/i;
-export const POCKET_BLOCK = /^문[-_ ]?(슬라이딩|포켓|미닫이)|^(pocket|sliding)/i;
+export const POCKET_BLOCK = /^문[-_ ]?(슬라이딩|포켓|미닫이)|^pocket/i;
+// 2026-10-12 · 계획 12 Task 3 리뷰(concern 1·2): 정규화 DXF(io/dxfExport.js)가 쓰는 두 이름. `SLIDING-<폭>-<두께>`는 외미닫이(미닫이문 — 포켓의
+// 반쪽 주머니 규칙 없이 앉는다 · blockProduct('slide')), `PASS-<폭>-<두께>`는 문 없는 통로(opening-pass). 예전에는 `^sliding`이 포켓이었고
+// 통로는 블록 종류가 없어 벽 틈으로만 읽혔다(틈을 그 폭으로 못 읽으면 통로가 사라졌다). 코퍼스(..\dxf · ..\dxf-public)에 slide·sliding·pocket·pass로
+// 시작하는 블록 이름은 0개라 점수판은 움직이지 않는다(리뷰 확인). 우리말 `문_슬라이딩 포켓`은 그대로 포켓이다.
+export const SLIDE_BLOCK = /^sliding/i;
+export const PASS_BLOCK = /^pass[-_ ]?\d{3,4}/i;
 // 창·문 블록 이름 전체(evidence.js가 긴 연장·다리의 "문·창 자리" 근거로 쓴다).
-export const OPEN_BLOCK = new RegExp(`${DOOR_BLOCK.source}|${WINDOW_BLOCK.source}|${POCKET_BLOCK.source}`, 'i');
+export const OPEN_BLOCK = new RegExp([DOOR_BLOCK, WINDOW_BLOCK, POCKET_BLOCK, SLIDE_BLOCK, PASS_BLOCK].map(r => r.source).join('|'), 'i');
 
 const PARALLEL_COS = Math.cos(3 * Math.PI / 180);
 const HOST_PAD = 50;          // 벽 몸통 여유(mm)
@@ -27,6 +33,8 @@ const LEAF_MIN = 0.75;        // 포켓 문짝 = 벽과 나란하고 호칭 폭�
 // 이름 정규식만으로 가린 종류(코퍼스 정답 blockBoxes({ byName: true })가 쓴다 — 역할표가 정답을 바꾸면 안 된다).
 export function blockKindByName(name = '') {
   if (POCKET_BLOCK.test(name)) return 'pocket';
+  if (SLIDE_BLOCK.test(name)) return 'slide';
+  if (PASS_BLOCK.test(name)) return 'pass';
   if (DOOR_BLOCK.test(name)) return 'door';
   if (WINDOW_BLOCK.test(name)) return 'window';
   return null;
@@ -35,9 +43,9 @@ export function blockKindByName(name = '') {
 // 블록 종류표(2026-10-12 · 계획 12 Task 9): 역할표의 blocks(roles.checkRoles의 Map — 이름 → { kind, width }). 워커가 parse마다
 // **먼저 비우고**(앞 파일의 표가 새지 않게) 그 파일의 표를 세운다. 모듈 수준인 까닭: 블록 종류를 묻는 자리가 다섯 파일에 흩어져 있다
 // (ownerOf·blockBoxes·blockOpenings · evidence · walls 둘 · openings의 문 호 · slideDoors) — 옵션을 그 사슬마다 넘기는 대신 한 곳에서 본다.
-// 표의 door·window·pocket·slide만 창·문이고 equip·symbol·column·other는 창·문이 아니다(이름이 DR-900이어도). 표에 없는 이름은 정규식이다.
+// 표의 door·window·pocket·slide·pass만 창·문이고 equip·symbol·column·other는 창·문이 아니다(이름이 DR-900이어도). 표에 없는 이름은 정규식이다.
 let blockTable = null;
-const TABLE_KIND = { door: 'door', window: 'window', pocket: 'pocket', slide: 'slide' };
+const TABLE_KIND = { door: 'door', window: 'window', pocket: 'pocket', slide: 'slide', pass: 'pass' };
 export function setBlockTable(table) { blockTable = table instanceof Map && table.size ? table : null; }
 const tableEntry = name => blockTable?.get(name);
 

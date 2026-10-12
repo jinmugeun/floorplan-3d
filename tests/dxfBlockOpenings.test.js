@@ -262,3 +262,31 @@ test('T자로 갈린 벽: 여닫이 문 블록은 접점을 넘어도 잇지 않
   expect(win.map(i => [i.size[0], i.wallId])).toEqual([[450, W1.id], [450, W2.id]]);
   expect(win[1].openingGroup).toBe(win[0].openingGroup);
 });
+
+// 2026-10-12 · 계획 12 Task 3 리뷰(concern 1·2): 정규화 DXF의 `SLIDING-폭-두께`(외미닫이)와 `PASS-폭-두께`(문 없는 통로) 블록.
+// 틀 사각형(폭 × 두께)을 벽 몸통에 놓는다 — 내보내기(io/dxfExport.js)가 쓰는 꼴 그대로다.
+const frame = (x0, w, ins, t = 200) => [seg(x0, -t / 2, x0 + w, -t / 2, ins, 'OPENING'), seg(x0 + w, -t / 2, x0 + w, t / 2, ins, 'OPENING'),
+  seg(x0 + w, t / 2, x0, t / 2, ins, 'OPENING'), seg(x0, t / 2, x0, -t / 2, ins, 'OPENING')];
+const one = name => [plan, { name, pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
+
+test('SLIDING- 블록은 미닫이문(slide), POCKET-은 그대로 포켓, PASS-는 통로 종류다', () => {
+  expect(['SLIDING-900-200', 'sliding 1500', 'POCKET-900-200', '문_슬라이딩 포켓 900', 'PASS-1200-200', 'pass_900', 'PASSAGE', 'PASS'].map(blockKind))
+    .toEqual(['slide', 'slide', 'pocket', 'pocket', 'pass', 'pass', null, null]);
+  for (const n of ['SLIDING-900-200', 'PASS-1200-200']) expect(OPEN_BLOCK.test(n)).toBe(true);
+  const W = makeWall({ a: [0, 0], b: [8000, 0], thickness: 200 });
+  const slide = buildOpenings({ ex: exOf(one('SLIDING-900-200'), frame(2000, 900, 1)), walls: [W], openingLayers: new Set() });
+  expect(slide.map(i => [i.productId, i.size[0], Math.round(i.t * 8000)])).toEqual([['door-slide-900', 900, 2450]]);
+  const pocket = buildOpenings({ ex: exOf(one('POCKET-900-200'), frame(2000, 900, 1)), walls: [W], openingLayers: new Set() });
+  expect(pocket.map(i => [i.productId, i.size[0], Math.round(i.t * 8000)])).toEqual([['door-pocket-900', 900, 2450]]);
+});
+
+test('PASS- 블록은 블록 폭의 통로 하나이고, 같은 자리의 벽 틈 통로와 겹쳐 놓지 않는다', () => {
+  const W = makeWall({ a: [0, 0], b: [8000, 0], thickness: 200 });
+  const ex = exOf(one('PASS-1200-200'), frame(3000, 1200, 1));
+  const block = buildOpenings({ ex, walls: [W], openingLayers: new Set() });
+  expect(block.map(i => [i.productId, i.size[0], Math.round(i.t * 8000)])).toEqual([['opening-pass', 1200, 3600]]);
+  const both = buildOpenings({ ex, walls: [W], openingLayers: new Set(), gaps: [{ p: [3600, 0], width: 1200 }] });
+  expect(both.map(i => [i.productId, i.size[0]])).toEqual([['opening-pass', 1200]]);
+  // 블록 없이 틈만 있으면 예전처럼 틈 통로다.
+  expect(buildOpenings({ ex: exOf([plan], []), walls: [W], openingLayers: new Set(), gaps: [{ p: [3600, 0], width: 1200 }] }).map(i => i.productId)).toEqual(['opening-pass']);
+});

@@ -13,6 +13,7 @@ import { pointInPolygon } from '../geom/rooms.js';
 import { DXF_PARAMS } from './dxf/params.js';
 import { buildFaces } from './dxf/faces.js';
 import { wallBands, bandRuns, wallsOfRuns } from './dxf/bands.js';
+import { growLinings } from './dxf/columns.js';
 import { joints, clipJoints, remain, infoOf, endAt, farOf, binU, dot, sub, at, cross } from './dxfExportJoints.js';
 import { WALL_LAYERS } from './dxfExportTemplate.js';
 
@@ -100,8 +101,18 @@ function insideSpan(P, R, o) {
   return [lo, hi];
 }
 
+// 기둥 마감선 오라클(2026-10-12 · Task 3 리뷰 M-1): 가져오기의 columns.growLinings가 이 선 하나로 어느 기둥을 키우는가. 중심선·가운데 run 선은
+// 원 도면에 없던 새 선이라, 기둥 면 밖 150 mm 안에 놓이면 기둥이 왕복마다 커졌다(사동중 790×855 → 971 → 1086 · 내곡중 660 → 755 → 851).
+// cols: 가져오기 꼴 { c, u, w, h }(DXF 좌표).
+export const liningOracle = cols => ([a, b]) => cols.some(c => {
+  const g = growLinings([c], [{ a, b }])[0];
+  return Math.abs(g.w - c.w) > 0.5 || Math.abs(g.h - c.h) > 0.5;
+});
+
 // 한 번 그리기: info(사다리꼴이 선 벽들) · js(이음) · gaps(벽 → 통로 구간들) → 이어 붙인 면선·중심선·문설주.
-function draw(all, info, js, gaps) {
+// 중심선은 **bandGap(520)보다 두꺼운 벽만** 긋는다(사전 검토 3의 뜻 — 그보다 얇은 벽은 두 면선만으로 띠가 선다). 그리고 그 중심선도
+// 기둥 마감선으로 먹히는 조각은 버린다(lining).
+function draw(all, info, js, gaps, lining = () => false) {
   const faces = [], centers = [], jambs = [];
   for (const s of info) {
     const own = gaps.get(s) ?? [];
@@ -133,15 +144,15 @@ function draw(all, info, js, gaps) {
     }
     // 중심선: a→b(벽 축 s0..s1). 이음에서 끊은 끝(fix < 0)은 그만큼 짧게, 통로 자리는 끊는다.
     const s0 = Math.max(0, -s.ea), s1 = s.L - Math.max(0, -s.eb), span = s1 - s0;
-    if (span >= 1) {
+    if (span >= 1 && s.w.t > DXF_PARAMS.bandGap) {
       const cuts = own.map(([c0, c1]) => [Math.max(0, (c0 - s0) / span), Math.min(1, (c1 - s0) / span)]).filter(([x, y]) => y > x);
       for (const [t0, t1] of remain(cuts)) if ((t1 - t0) * span >= 1) centers.push([at(s.a, s.u, s0 + t0 * span), at(s.a, s.u, s0 + t1 * span), s.layer]);
     }
     for (const [c0, c1] of own) for (const c of [c0, c1]) { const m = at(s.a, s.u, c); jambs.push([at(m, s.n, s.h), at(m, s.n, -s.h), s.layer]); }
   }
-  for (const J of all.filter(s => s.jog)) centers.push([J.a, J.b, WALL_LAYERS[0]]);
+  for (const J of all.filter(s => s.jog && s.w.t > DXF_PARAMS.bandGap)) centers.push([J.a, J.b, WALL_LAYERS[0]]);
   const extra = js.filter(j => j.extra).map(j => [...j.extra, (j.thinA ? j.a : j.b).layer]);
-  const f = clipJoints(faces, js), c = [...clipJoints(centers, js), ...extra];
+  const f = clipJoints(faces, js), c = [...clipJoints(centers, js).filter(seg => !lining(seg)), ...extra];
   oneLayerPerLine([...f, ...c, ...jambs], DXF_PARAMS);
   return { faces: mergeCollinear(f), centers: mergeCollinear(c), jambs };
 }
@@ -183,11 +194,12 @@ function passReadable(s, [c0, c1], lines, P = DXF_PARAMS) {
   return gaps.some(g => Math.abs(g.t - tc) <= PASS_TOL && Math.abs(g.width - (c1 - c0)) <= PASS_TOL);
 }
 
-// walls: DXF 좌표의 몸통 있는 벽({ id, a, b, t }). passes: [{ wall, c, width }](통로 — 벽 선을 끊는다).
-// → { faces, centers, jambs: [[a, b]] · skipped: 벽을 끊지 않은 통로들 }.
-export function wallOutline(walls, passes = []) {
+// walls: DXF 좌표의 몸통 있는 벽({ id, a, b, t }). passes: [{ wall, c, width }](통로 — 벽 선을 끊는다). columns: 가져오기 꼴 기둥(마감선 오라클).
+// → { faces, centers, jambs: [[a, b, layer]] · skipped: 벽을 끊지 않은 통로들 }.
+export function wallOutline(walls, passes = [], { columns = [] } = {}) {
   const all = walls.map(infoOf);
-  const js = joints(all, DXF_PARAMS);
+  const lining = columns.length ? liningOracle(columns) : () => false;
+  const js = joints(all, DXF_PARAMS, lining);
   const info = all.filter(s => !s.jog);
   colourWalls(info, WALL_LAYERS, DXF_PARAMS);
   quads(info);
@@ -198,10 +210,10 @@ export function wallOutline(walls, passes = []) {
     return { g, s, iv: [c - half, c + half] };
   }).filter(Boolean);
   const gapsOf = list => { const m = new Map(); for (const { s, iv } of list) (m.get(s) ?? m.set(s, []).get(s)).push(iv); return m; };
-  let res = draw(all, info, js, gapsOf(spans));
+  let res = draw(all, info, js, gapsOf(spans), lining);
   const lines = [...res.faces, ...res.centers];
   const bad = spans.filter(x => !passReadable(x.s, x.iv, lines));
-  if (bad.length) res = draw(all, info, js, gapsOf(spans.filter(x => !bad.includes(x))));
+  if (bad.length) res = draw(all, info, js, gapsOf(spans.filter(x => !bad.includes(x))), lining);
   return { ...res, skipped: bad.map(x => x.g) };
 }
 

@@ -93,8 +93,10 @@ export function dedupeGaps(list) {
 // 폭은 제품 폭이 아니라 블록 폭으로 앉는다.
 export function blockProduct(kind, width) {
   if (kind === 'pocket') return 'door-pocket-900';
-  // slide: 역할표만 내는 종류(2026-10-12 · 계획 12 Task 9 — 이름 규칙에는 포켓 아닌 미닫이 블록 종류가 없다) → 폭이 가장 가까운 미닫이문.
+  // slide: 역할표의 종류(2026-10-12 · 계획 12 Task 9)와 이름 `SLIDING-…`(같은 날 Task 3 리뷰 — 정규화 DXF의 외미닫이) → 폭이 가장 가까운 미닫이문.
   if (kind === 'slide') return nearestProduct(SLIDE_PRODUCTS, width);
+  // pass: 문 없는 통로 블록(2026-10-12 · Task 3 리뷰 — 정규화 DXF의 PASS-폭-두께) → 통로, 폭은 블록 폭. 같은 자리의 벽 틈 통로는 뒤에서 충돌로 빠진다.
+  if (kind === 'pass') return OPENING_FALLBACK;
   if (kind === 'window') return width < 900 ? 'window-fix-600' : width <= 1500 ? 'window-slide-1200' : 'window-slide-1800';
   return nearestProduct(DOOR_PRODUCTS.filter(([id]) => id !== 'door-slide-1500'), width);
 }

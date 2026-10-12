@@ -9,21 +9,24 @@
 //  - 문·창(OPENING): 블록 INSERT 하나가 개구부 하나 — 이름은 가져오기의 blockKind가 읽는 꼴(DR-900-200 · WIN-1200-200 ·
 //    POCKET-900-200 · SLIDING-900-200: 첫 3~4자리 수가 폭, 둘째가 벽 두께)이고, 도형은 폭 × 벽 두께 틀 사각형이다.
 //    통로(opening-pass)는 블록 종류가 없다 — 벽 선을 그 폭만큼 끊어(문설주 선 둘) 가져오기의 벽 틈 경로가 다시 읽게 하고 X 표시(개구부
-//    레이어)를 둔다. 가져오기가 그 자리·폭으로 읽지 못하는 통로는 끊지 않는다(dxfExportGeom.passReadable · skippedPasses).
+//    레이어)를 둔다. 가져오기가 그 자리·폭으로 읽지 못하는 통로는 끊지 않는다(dxfExportGeom.passReadable · uncutPasses) — 그래도 통로는
+//    `PASS-폭-두께` 블록으로 돌아온다(2026-10-12 리뷰 concern 2).
 //  - 방(ROOM): 닫힌 LWPOLYLINE(역할 '기타' — 벽이 아니다) + 실명·면적 MTEXT(ROOM-TEXT · 역할 '문자' · 높이 300/250 — roomLabels의
 //    200~600 범위). 면적은 따로 적는다("12.34㎡") — 다시 들여올 때 구획선·딸린 방 맞추기(reconcile.js)와 면적 검사가 쓴다.
 //  - 기둥(COLUMN · 역할 '벽'): 사각 기둥은 닫힌 사각형(가져오기의 findColumns가 벽 레이어에서 찾는다 — 너무 긴 것은 겹친 사각형 둘),
 //    원형 기둥은 CIRCLE(다시 들여오면 기둥으로 읽히지 않는다 — 가져오기는 사각 윤곽만 기둥으로 본다).
 //  - 기준선 치수(DIM · dxfExportDims.js): 벽마다 axisShift가 가리키는 선 — 방의 도면 기준 넓이(areaCenter)가 같게 돌아온다.
-// 2026-10-12 실파일 왕복(가져오기 → 내보내기 → 다시 가져오기): 사동중 벽 94 → 91 · 방 14/14 · 실명 14/14 · 문 17 · 창 30 · 면적 13/14,
-// 신상중 B 벽 77 → 77 · 실명 12/12, 신상중 A 실명 11/11, 내곡중 벽 116 → 103(얇게 비낀 벽·두꺼운 벽 무리 — 보고서). 두 번째 왕복은 거의 고정점이다.
+// 2026-10-12 실파일 왕복(가져오기 → 내보내기 → 다시 가져오기 · 리뷰 수정 뒤): 사동중 벽 94 → 93 · 방·실명 14/14 · 문 17 · 창 30 · 통로 5 · 면적 14/14,
+// 신상중 B 벽 77/77 끝점까지 · 통로 17/17, 신상중 A 실명 11/11, 내곡중 벽 116 → 113 · 방 22/22 · 실명 18/18(두꺼운 벽 무리 — 보고서).
+// 두 번째 왕복에서 기둥 크기는 바뀌지 않는다(마감선 오라클 · liningOracle).
 // 이 파일은 DOM을 모른다.
 import { dxfDocument, CENTER_LTYPE, PASS_LAYER, num } from './dxfExportTemplate.js';
 import { roomArea } from '../geom/rooms.js';
 import { wallOutline, interiorPoint } from './dxfExportGeom.js';
+import { rectify } from './dxfExportJoints.js';
 import { refDimensions } from './dxfExportDims.js';
 import { DXF_PARAMS } from './dxf/params.js';
-import { findColumns } from './dxf/columns.js';
+import { findColumns, findPilasters, growLinings } from './dxf/columns.js';
 
 const D = p => [p[0], -p[1]];                        // 앱 → DXF(y 위)
 const NAME_H = 300, AREA_H = 250;                    // 실명·면적 글자 높이(mm) — roomLabels가 200~600만 실명으로 본다
@@ -84,18 +87,51 @@ function splitNear(lines, groups, reach, min = DXF_PARAMS.minSeg + 10) {
 // 벽 선 넷이 닫는 작은 사각형(작은 실·PS의 바깥·안쪽 윤곽, 통로 사이 기둥 꼴 토막의 면선 + 문설주)은 가져오기가 **기둥**으로 읽는다
 // (columns.findColumns: 끝점이 맞물린 네 변 · 300~1200 · 종횡비 2.5 — 2026-10-12 내곡중 871 × 970 PS가 1041 × 1100 기둥이 되고 벽 넷이 사라졌다).
 // 기둥은 COLUMN 레이어에만 그리므로 벽 선으로 닫힌 사각형은 모두 가짜다 — 가장 긴 변을 가운데에서 두 조각으로 끊는다(같은 직선 · 면은 그대로).
+// 마주 보는 **두 변**을 끊는다(2026-10-12 · Task 3 리뷰 M-1 재측정): 한 변만 끊으면 남은 세 변이 ㄷ자가 되어 가져오기가 벽기둥(findPilasters)으로
+// 읽고 옆 기둥과 합쳐 키웠다(내곡중 740×840 → 1100×1041). 두 변이 다 짧으면(< 2 × 160) 가장 긴 변 하나만 끊는다.
 function unboxed(lines, P = DXF_PARAMS) {
-  const out = [...lines];
+  const out = [...lines], min = 2 * (P.minSeg + 10);
+  const half = i => { const [a, b, layer] = out[i], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; out.splice(i, 1, [a, m, layer]); out.push([m, b, layer]); };
   for (const r of findColumns(out.map(([a, b]) => ({ a, b })), P)) {
-    const i = r.segs.reduce((m, k) => (len(out[k]) > len(out[m]) ? k : m));
-    const [a, b, layer] = out[i], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    if (len(out[i]) < 2 * (P.minSeg + 10)) continue;
-    out.splice(i, 1, [a, m, layer]);
-    out.push([m, b, layer]);
+    const [i, j, m1, m2] = r.segs, pairs = [[i, m1], [j, m2]].filter(p => p.every(k => len(out[k]) >= min));
+    if (pairs.length) { pairs[0].forEach(half); continue; }
+    const k = r.segs.reduce((m, x) => (len(out[x]) > len(out[m]) ? x : m));
+    if (len(out[k]) >= min) half(k);
+  }
+  // 벽 선 셋이 이루는 ㄷ자(앞 변 + 같은 길이의 옆 변 둘)도 가져오기는 벽기둥(columns.findPilasters)으로 읽어 옆 기둥과 합친다 — 내곡중 PS 바깥 윤곽
+  // 1100 × 1006이 그 안의 740×840 기둥을 키웠다. 정규화 DXF의 기둥은 모두 COLUMN 사각형이므로 벽 선 ㄷ자는 가짜다 — 앞 변을 반으로 끊는다.
+  // 한 번에 찾은 ㄷ자는 옆 변을 나눠 갖는 다른 ㄷ자를 가린다(findPilasters가 쓴 변을 다시 쓰지 않는다) — 더 없을 때까지 되풀이한다.
+  for (let round = 0; round < 8; round++) {
+    const fronts = findPilasters(out.map(([a, b]) => ({ a, b })), new Set(), P).map(r => r.segs[0]).filter(k => len(out[k]) >= min);
+    if (!fronts.length) break;
+    fronts.forEach(half);
   }
   return out;
 }
 const len = ([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+
+// 기둥 곁의 짧은 벽 면선(기둥 면 밖 150 mm 안 · 기둥 면 구간 ± 150 안에 통째로 든 선)은 가져오기가 기둥 마감선으로 먹어 기둥을 키운다
+// (columns.growLinings — 2026-10-12 리뷰 M-1 재측정: 중심선을 빼고도 신상중 B 500×400 → 438, 내곡중 740×840 → 881 · 630 → 686 · 500 → 529가
+// 실제 벽 면 때문에 컸다). 그 선의 가까운 끝을 그 구간 밖으로 조금(≤ LINING_PUSH) 늘린다 — 구간을 벗어난 선은 마감선이 아니다(lo < −반폭 − 150).
+// 한쪽 면만 늘어나 그 자리에 띠는 서지 않는다. cols: 가져오기 꼴 { c, u, w, h }.
+const LINING_PUSH = 160;
+function unlined(lines, cols) {
+  const grows = (c, a, b) => { const g = growLinings([c], [{ a, b }])[0]; return Math.abs(g.w - c.w) > 0.5 || Math.abs(g.h - c.h) > 0.5; };
+  return lines.map(([a, b, layer]) => {
+    for (const c of cols) {
+      if (!grows(c, a, b)) continue;
+      const L = len([a, b]), d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
+      const along = Math.abs(d[0] * c.u[0] + d[1] * c.u[1]) > 0.7 ? c.w / 2 : c.h / 2;      // 이 선과 나란한 기둥 변의 반
+      const m = (c.c[0] - a[0]) * d[0] + (c.c[1] - a[1]) * d[1], lo = m - along - 150 - 1, hi = m + along + 150 + 1;
+      const pre = Math.max(0, -lo), post = Math.max(0, hi - L);                                // a 앞으로 · b 뒤로 늘릴 길이
+      const [k, by] = pre <= post ? ['a', pre] : ['b', post];
+      if (by > LINING_PUSH) continue;
+      const na = k === 'a' ? [a[0] - d[0] * by, a[1] - d[1] * by] : a, nb = k === 'b' ? [b[0] + d[0] * by, b[1] + d[1] * by] : b;
+      if (!grows(c, na, nb)) { a = na; b = nb; }
+    }
+    return [a, b, layer];
+  });
+}
 
 // 벽에 붙은 개구부 → [{ kind, wall(DXF), c(DXF), u(벽 방향 단위), width }]. 같은 openingGroup(창 하나가 T자 칸막이에서 나뉜 조각들 —
 // openings.js spanPieces)은 하나로 합친다: 원 도면도 INSERT 하나였고, 가져오기가 같은 자리에서 다시 나눈다.
@@ -143,24 +179,29 @@ function nameLines(name) {
 // project → DXF 텍스트. floor: 층 번호(기본 = 지금 층).
 export const exportDxf = (project, opts = {}) => buildDxf(project, opts).text;
 
-// → { text, skippedPasses }. skippedPasses: 다시 들여오면 그 폭으로 읽히지 않아 벽을 끊지 않고 X 표시만 남긴 통로 수(내보내기 알림이 쓴다).
+// → { text, skippedPasses, uncutPasses }. skippedPasses: 다시 들여오면 사라지는 통로 수(내보내기 알림이 쓴다) — 2026-10-12 리뷰 뒤로는 모든 통로가
+// PASS 블록으로 돌아오므로 0이다. uncutPasses: 가져오기가 틈을 그 자리·폭으로 읽지 못해 벽을 끊지 않은(블록만 있는) 통로 수.
 export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } = {}) {
   const floor = project?.floors?.[index] ?? project?.floors?.[0] ?? { walls: [], rooms: [], items: [] };
-  const walls = (floor.walls ?? []).map(w => ({ id: w.id, a: D(w.a), b: D(w.b), t: Math.max(1, Number(w.thickness) || 200), virtual: !!w.virtual }));
+  // 거의 축에 나란한 벽은 정확히 맞춘다(rectify — 1 mm 안팎의 기울기가 다시 들여올 때 T자 접점을 갈라놓았다).
+  const walls = rectify((floor.walls ?? []).map(w => ({ id: w.id, a: D(w.a), b: D(w.b), t: Math.max(1, Number(w.thickness) || 200), virtual: !!w.virtual, axisShift: w.axisShift })));
   const solid = walls.filter(w => !w.virtual);
   const opens = openingsOf(floor, walls);
   const entities = [];
   // ① 벽: 몸통 윤곽(통로 자리는 끊고 문설주 선) + 중심선(같은 직선 위 조각은 한 선으로). 가져오기가 읽지 못하는 통로는 벽을 끊지 않는다(skipped).
   const passes = opens.filter(o => o.kind === 'PASS');
-  const { faces, centers, jambs, skipped } = wallOutline(solid, passes);
-  const cols = (floor.items ?? []).filter(it => it.kind === 'column' && it.productId !== 'column-round').map(it => columnRects(it));
+  const square = (floor.items ?? []).filter(it => it.kind === 'column' && it.productId !== 'column-round');
+  // 기둥을 가져오기 꼴({ c, u, w, h } · DXF)로 — 벽 선 중 기둥 마감선으로 먹힐 중심선·가운데 run 선을 고르는 오라클이 쓴다(리뷰 M-1).
+  const asImported = square.map(it => { const r = -(it.rot ?? 0) * Math.PI / 180; return { c: D(it.pos), u: [Math.cos(r), Math.sin(r)], w: it.size?.[0] ?? 400, h: it.size?.[1] ?? 400 }; });
+  const { faces, centers, jambs, skipped } = wallOutline(solid, passes, { columns: asImported });
+  const cols = square.map(it => columnRects(it));
   // 끊는 것은 벽 선 상자 밖으로 삐져나온 기둥(바깥벽 기둥)뿐이다 — 상자 안의 기둥은 이미 도면 상자(ROI) 안이다.
   const wb = [Infinity, Infinity, -Infinity, -Infinity];
   for (const [a, b] of faces) for (const p of [a, b]) { wb[0] = Math.min(wb[0], p[0]); wb[1] = Math.min(wb[1], p[1]); wb[2] = Math.max(wb[2], p[0]); wb[3] = Math.max(wb[3], p[1]); }
   const outside = p => p[0] < wb[0] - 1 || p[1] < wb[1] - 1 || p[0] > wb[2] + 1 || p[1] > wb[3] + 1;
   const corners = cols.map(rects => rects.flat()).filter(pts => pts.some(outside)), reach = DXF_PARAMS.colMax / 2 + 200;
   // 벽 선의 레이어는 WALL 또는 WALL-2(나란히 붙은 이웃 벽 — dxfExportGeom.colourWalls).
-  for (const [a, b, layer] of unboxed([...splitNear(faces, corners, reach), ...jambs])) entities.push(line(layer, a, b));
+  for (const [a, b, layer] of unlined(unboxed([...splitNear(faces, corners, reach), ...jambs]), asImported)) entities.push(line(layer, a, b));
   for (const [a, b, layer] of splitNear(centers, corners, reach)) entities.push(line(layer, a, b, CENTER_LTYPE));
   for (const w of walls.filter(x => x.virtual)) entities.push(line('DIVIDER', w.a, w.b));
   // 통로 표시(X · 레이어 '개구부' = 역할 개구부): 가져오기의 줄 잇기는 줄 끝 토막(짧고 두꺼운 run)을 문·창 **근거** 없는 다리로만 붙어
@@ -171,9 +212,11 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } =
     const p = (i, j) => [o.c[0] + (o.u[0] * i + n[0] * j) * k, o.c[1] + (o.u[1] * i + n[1] * j) * k];
     entities.push(line(PASS_LAYER, p(-1, -1), p(1, 1)), line(PASS_LAYER, p(-1, 1), p(1, -1)));
   }
-  // ② 문·창: 종류·폭·두께마다 블록 하나(틀 사각형, 삽입점 = 개구부 가운데, 로컬 x = 벽 방향).
+  // ② 문·창·통로: 종류·폭·두께마다 블록 하나(틀 사각형, 삽입점 = 개구부 가운데, 로컬 x = 벽 방향). 통로도 **모두** `PASS-폭-두께` 블록을 쓴다
+  // (2026-10-12 · Task 3 리뷰 concern 2 — 가져오기의 blockKind 'pass'). 벽 틈은 가져오기가 그 자리·폭으로 읽을 때만 둔다(위 skipped) —
+  // 같은 자리의 블록 통로와 틈 통로는 가져오기가 하나로 앉힌다(openings.js의 충돌 검사).
   const blocks = new Map();
-  for (const o of opens.filter(x => x.kind !== 'PASS')) {
+  for (const o of opens) {
     const W = Math.round(o.width), T = Math.round(o.wall.t);
     const name = `${o.kind}-${W}-${T}`;
     if (!blocks.has(name)) blocks.set(name, { name, entities: [poly('0', [[-W / 2, -T / 2], [W / 2, -T / 2], [W / 2, T / 2], [-W / 2, T / 2]])] });
@@ -208,6 +251,6 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } =
   if (clean(project?.name) && any) entities.push(mtext('TITLE', [box[0], box[3]], TITLE_H, project.name, 7));
   if (!any) box.splice(0, 4, 0, 0, 0, 0);
   // ⑤ 기준선 치수(dxfExportDims.js) — 다시 들여온 방의 도면 기준 넓이가 같게.
-  const dims = any ? refDimensions(floor.walls, box) : { blocks: [], entities: [] };
-  return { text: dxfDocument({ blocks: [...blocks.values(), ...dims.blocks], entities: [...entities, ...dims.entities], box }), skippedPasses: skipped.length };
+  const dims = any ? refDimensions(walls.map(w => ({ ...w, a: D(w.a), b: D(w.b) })), box) : { blocks: [], entities: [] };
+  return { text: dxfDocument({ blocks: [...blocks.values(), ...dims.blocks], entities: [...entities, ...dims.entities], box }), skippedPasses: 0, uncutPasses: skipped.length };
 }

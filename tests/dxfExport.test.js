@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { exportDxf, buildDxf } from '../src/io/dxfExport.js';
 import { EXPORT_LAYERS, PASS_LAYER } from '../src/io/dxfExportTemplate.js';
+import { liningOracle } from '../src/io/dxfExportGeom.js';
 import { decodeDxf } from '../src/io/dxf/decode.js';
 import { classifyLayer } from '../src/io/dxf/classify.js';
 import { blockKind, nominalWidth } from '../src/io/dxf/blockOpenings.js';
@@ -163,13 +164,40 @@ test('y는 뒤집히고 원점은 그대로다 · 구획선(virtual)은 DIVIDER 
   expect(lines.some(l => l.layer === 'WALL' && l.a[1] === -3300 && l.b[1] === -3300)).toBe(true);
   expect(lines.some(l => l.layer === 'WALL' && l.a[1] === 3300)).toBe(false);
   expect(lines.filter(l => l.layer === 'DIVIDER').map(l => [l.a, l.b])).toEqual([[[-4000, 0], [0, 0]]]);
+  // 중심선은 bandGap(520)보다 두꺼운 벽만이다(리뷰 M-1) — 200·120 벽에는 없다(앱 y −3000의 200 벽 → DXF y 3000).
+  expect(lines.some(l => l.ltype === 'CENTER' && l.a[1] === 3000 && l.b[1] === 3000)).toBe(false);
+  expect(lines.filter(l => l.ltype === 'CENTER').every(l => l.a[1] === -3000 && l.b[1] === -3000)).toBe(true);
 });
 
-test('문·창은 가져오기가 읽는 이름의 블록 INSERT다(DR · WIN · POCKET · SLIDING — 폭-두께)', () => {
+test('문·창·통로는 가져오기가 읽는 이름의 블록 INSERT다(DR · WIN · POCKET · SLIDING · PASS — 폭-두께)', () => {
   const names = ents(pairs(exportDxf(synthetic())), 'INSERT').map(r => r[2]);
-  expect(names.sort()).toEqual(['DR-900-120', 'POCKET-900-200', 'SLIDING-900-200', 'WIN-1200-200', 'WIN-1800-600']);
-  expect(names.map(blockKind).sort()).toEqual(['door', 'pocket', 'pocket', 'window', 'window']);
-  expect(names.map(nominalWidth).sort((a, b) => a - b)).toEqual([900, 900, 900, 1200, 1800]);
+  expect(names.sort()).toEqual(['DR-900-120', 'PASS-1000-200', 'POCKET-900-200', 'SLIDING-900-200', 'WIN-1200-200', 'WIN-1800-600']);
+  expect(names.map(blockKind)).toEqual(['door', 'pass', 'pocket', 'slide', 'window', 'window']);
+  expect(names.map(nominalWidth)).toEqual([900, 1000, 900, 900, 1200, 1800]);
+});
+
+// 2026-10-12 · Task 3 리뷰 M-1: 내보내기가 새로 그린 선(가운데 run · 중심선)을 가져오기가 기둥 마감선으로 먹어 기둥이 왕복마다 컸다
+// (사동중 790×855 → 971 → 1086). 사동중 꼴: 호환 아닌 꺾임(405 | 230)의 얇은 쪽에 790×855 기둥 — 첫 후보 가운데 run 선(160 mm)이 기둥 면
+// 밖 115 mm라 먹힌다. 내곡중 꼴: 짧은 190 벽 끝에 660×611 기둥. 두 번 왕복해도 기둥 크기·벽이 그대로여야 한다.
+test('기둥 곁 꺾임·벽 끝: 내보낸 벽 선은 기둥 마감선이 아니고, 두 번 왕복해도 기둥 크기·벽이 그대로다', () => {
+  const W = (a, b, t) => makeWall({ a, b, thickness: t, height: 3000 });
+  const walls = normalizeWalls([W([0, 0], [5000, 0], 405), W([5000, 0], [5000, 217], 230), W([5000, 217], [10000, 217], 230),
+    W([10000, 217], [10000, 6000], 200), W([10000, 6000], [0, 6000], 200), W([0, 6000], [0, 0], 200), W([1575, 6000], [1575, 4500], 190)]);
+  const col = (pos, size) => createItem(productById('column-square'), { pos, rot: 0, size: [...size, 3000] });
+  const P0 = normalizeProject({ ...createEmptyProject('기둥'), areaMode: 'center', floors: [{ ...createFloor('1F'), height: 3000, walls, rooms: detectRooms(walls), items: [col([5300, 532.5], [790, 855]), col([2000, 4700], [660, 611])] }] });
+  // 첫 후보(160 mm · e 10)는 먹히는 선이다 — 내보내기는 먹히지 않는 길이를 고른다.
+  const cols = [{ c: [5300, -532.5], u: [1, 0], w: 790, h: 855 }, { c: [2000, -4700], u: [1, 0], w: 660, h: 611 }];
+  expect(liningOracle(cols)([[5030, 10], [5190, 10]])).toBe(true);
+  const txt = exportDxf(P0);
+  const lines = ents(pairs(txt), 'LINE').filter(r => /^WALL/.test(r[8])).map(r => [[+r[10], +r[20]], [+r[11], +r[21]]]);
+  expect(lines.filter(liningOracle(cols))).toEqual([]);
+  const size = d => d.columns.map(c => c.s.map(Math.round).join('x')).sort();
+  const A = digest({ project: P0 }), r1 = importText(txt), B = digest(r1, r1.back);
+  const r2 = importText(exportDxf(r1.project)), C = digest(r2, p => r1.back(r2.back(p)));
+  expect(size(B)).toEqual(['660x611', '790x855']);
+  expect(size(C)).toEqual(size(B));
+  sameWalls(A, B, 1);
+  sameWalls(B, C, 1);
 });
 
 test('합성 평면 왕복: 벽·두께·방 이름·도면 기준 넓이·문창 종류와 폭·기둥이 그대로다(두 번째 왕복도 같다)', () => {
@@ -180,8 +208,8 @@ test('합성 평면 왕복: 벽·두께·방 이름·도면 기준 넓이·문�
   for (const [n, v] of A.areas) expect(Math.abs(B.areas.get(n) - v)).toBeLessThanOrEqual(0.05);
   expect(A.opens.filter(o => !matchOpen(o, B.opens))).toEqual([]);
   expect(B.opens).toHaveLength(A.opens.length);
-  // 미닫이문(door-slide)은 가져오기의 블록 종류에 없다 — 포켓 미닫이문으로 돌아온다(보고서 · 같은 미닫이·같은 폭).
-  expect(B.opens.map(o => o.id).sort()).toEqual(['door-pocket-900', 'door-pocket-900', 'door-swing-900', 'opening-pass', 'window-slide-1200', 'window-slide-1800']);
+  // 미닫이문(door-slide)은 `SLIDING-` 블록 → 가져오기의 'slide' 종류로 미닫이문 그대로 돌아온다(2026-10-12 리뷰 concern 1).
+  expect(B.opens.map(o => o.id).sort()).toEqual(['door-pocket-900', 'door-slide-900', 'door-swing-900', 'opening-pass', 'window-slide-1200', 'window-slide-1800']);
   expect(B.columns.map(c => [c.p.map(Math.round), c.s.map(Math.round)])).toEqual([[[4000, -1500], [400, 400]]]);
   expect(r1.project.name).toBe('합성 평면');
   const r2 = importText(exportDxf(r1.project)), C = digest(r2, p => r1.back(r2.back(p)));
@@ -189,7 +217,7 @@ test('합성 평면 왕복: 벽·두께·방 이름·도면 기준 넓이·문�
   expect(C.opens.map(o => [o.id, o.w]).sort()).toEqual(B.opens.map(o => [o.id, o.w]).sort());
 });
 
-test('픽스처 왕복: 벽 11개가 끝점까지 같고 방·기둥·창이 같다 — 통로는 가져오기가 그 자리·폭으로 읽지 못하는 셋만 벽으로 잇는다', () => {
+test('픽스처 왕복: 벽 11개가 끝점까지 같고 방·기둥·창·통로 넷이 같다 — 틈을 그 자리·폭으로 못 읽는 셋은 벽을 잇고 PASS 블록으로 돌아온다', () => {
   const r0 = fixture(), A = digest(r0);
   const built = buildDxf(r0.project);
   const r1 = importText(built.text), B = digest(r1, r1.back);
@@ -201,11 +229,12 @@ test('픽스처 왕복: 벽 11개가 끝점까지 같고 방·기둥·창이 같
   expect(A.opens.filter(nonPass).filter(o => !matchOpen(o, B.opens))).toEqual([]);
   expect(B.opens.filter(nonPass)).toHaveLength(A.opens.filter(nonPass).length);
   // 통로 넷 중 셋은 벽 끝과의 토막이 minSeg(150)보다 짧아(동쪽 벽 끝 50·80 mm · 꺾임 앞 50 mm) 가져오기가 그 틈을 그 자리·폭으로 읽지
-  // 못한다 — 벽을 끊지 않는다(끊으면 동쪽 벽 끝 1.7 m가 사라지고, 꺾임 앞 통로는 왕복마다 50 mm씩 밀린다).
+  // 못한다 — 벽을 끊지 않는다(끊으면 동쪽 벽 끝 1.7 m가 사라지고, 꺾임 앞 통로는 왕복마다 50 mm씩 밀린다). 2026-10-12 리뷰 concern 2부터
+  // 통로는 모두 `PASS-폭-두께` 블록이라 넷 다 돌아오고(사라지는 통로 0), 끊은 하나의 틈 통로와 블록 통로는 하나로 앉는다.
   const passes = A.opens.filter(o => o.kind === 'pass');
-  expect([passes.length, built.skippedPasses]).toEqual([4, 3]);
-  expect(B.opens.filter(o => o.kind === 'pass')).toHaveLength(passes.length - built.skippedPasses);
-  expect(B.opens.filter(o => o.kind === 'pass').filter(o => !matchOpen(o, passes))).toEqual([]);
+  expect([passes.length, built.skippedPasses, built.uncutPasses]).toEqual([4, 0, 3]);
+  expect(B.opens.filter(o => o.kind === 'pass')).toHaveLength(4);
+  expect(passes.filter(o => !matchOpen(o, B.opens))).toEqual([]);
 });
 
 test('픽스처 두 번째 왕복은 바뀌는 것이 없다(정규화 DXF는 고정점이다)', () => {

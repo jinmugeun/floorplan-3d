@@ -83,7 +83,7 @@
     <tr><th>레이어</th><th>담긴 것</th><th>다시 가져올 때</th></tr>
     <tr><td><code>WALL</code></td><td>벽 면선(두 줄)과 중심선(일점쇄선)</td><td>벽</td></tr>
     <tr><td><code>COLUMN</code></td><td>기둥 사각형</td><td>기둥</td></tr>
-    <tr><td><code>OPENING</code></td><td>문·창 블록 <code>DR-폭-두께</code> · <code>WIN-</code> · <code>POCKET-</code> · <code>SLIDING-</code></td><td>문·창(블록 이름으로)</td></tr>
+    <tr><td><code>OPENING</code></td><td>문·창·통로 블록 <code>DR-폭-두께</code>(여닫이) · <code>WIN-</code>(창) · <code>POCKET-</code>(포켓 미닫이) · <code>SLIDING-</code>(외미닫이) · <code>PASS-</code>(문 없는 통로)</td><td>문·창·통로(블록 이름으로)</td></tr>
     <tr><td><code>개구부</code></td><td>통로(문 없는 개구부) 자리의 X 표시</td><td>통로의 근거</td></tr>
     <tr><td><code>ROOM-TEXT</code></td><td>실명과 그 아래 면적(<code>24.00㎡</code>)</td><td>방 이름·면적 맞추기</td></tr>
     <tr><td><code>DIM</code></td><td>벽 기준선 치수</td><td>실 면적의 기준선</td></tr>
@@ -92,15 +92,15 @@
   <h3>CAD에서 고칠 때</h3>
   <ul>
     <li>벽은 <b>면선 두 줄 + 중심선</b>으로 그려 주세요. 두께는 두 면선 사이 거리입니다.</li>
-    <li>문·창은 <code>OPENING</code>의 블록을 복사·이동해 쓰세요(블록 이름의 첫 숫자가 폭). 통로는 벽 선을 그 폭만큼 끊습니다.</li>
+    <li>문·창·통로는 <code>OPENING</code>의 블록을 복사·이동해 쓰세요(블록 이름의 첫 숫자가 폭). 통로 블록(<code>PASS-</code>) 자리의 벽 선은 끊어도 되고 그대로 두어도 됩니다.</li>
     <li>방 이름은 <code>ROOM-TEXT</code>의 글자를 고치고, 면적 글자는 이름 바로 아래에 두세요.</li>
     <li>저장은 <b>AutoCAD 2007 이상 DXF</b>로.</li>
   </ul>
 
   <h2>4. 지금 알려진 한계</h2>
   <ul class="note">
-    <li>폭이 0.6 m보다 좁거나 3 m보다 넓은 통로, 벽 끝과의 토막이 150 mm보다 짧은 통로는 벽을 끊지 않고 X로만 표시합니다(다시 가져오면 벽입니다).</li>
-    <li>외미닫이(미닫이)문은 포켓 미닫이문으로 돌아옵니다(종류·폭은 같습니다). 원형 기둥은 기둥으로 읽히지 않습니다.</li>
+    <li>폭이 0.6 m보다 좁거나 3 m보다 넓은 통로, 벽 끝과의 토막이 150 mm보다 짧은 통로는 벽을 끊지 않고 <code>PASS-</code> 블록만 둡니다(다시 가져오면 통로입니다).</li>
+    <li>원형 기둥은 기둥으로 읽히지 않습니다.</li>
     <li>두께가 바뀌며 중심이 20 mm 안으로 비낀 벽은 한 중심선으로 맞춰집니다. 앱에서 그린 구획선은 다시 가져오지 않습니다.</li>
   </ul>
 </main>

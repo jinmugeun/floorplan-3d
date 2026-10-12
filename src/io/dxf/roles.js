@@ -6,13 +6,13 @@
 //
 // 형식(tools/dxf-corpus/README.md "역할표"):
 //   { layers: { <레이어>: wall|opening|text|dim|equip|mep|grid|hatch|rail|other },
-//     blocks: { <블록>: { kind: door|window|pocket|slide|equip|symbol|column|other, width: mm|null } },
+//     blocks: { <블록>: { kind: door|window|pocket|slide|pass|equip|symbol|column|other, width: mm|null } },  (pass = 문 없는 통로 · 2026-10-12 Task 3 리뷰)
 //     texts:  { <글자 그대로(앞뒤 공백 무시)>: room|area|title|label|axis|other } }
 // 다른 최상위 칸(meta 등)은 보지 않는다. 표에 없는 이름은 규칙으로 간다. 잘못된 칸은 버리고(그 이름은 규칙으로) 이유를 errors에 적는다.
 import { ROLE_LABEL } from './classify.js';
 
 export const LAYER_ROLES = Object.freeze(Object.keys(ROLE_LABEL));
-export const BLOCK_KINDS = Object.freeze(['door', 'window', 'pocket', 'slide', 'equip', 'symbol', 'column', 'other']);
+export const BLOCK_KINDS = Object.freeze(['door', 'window', 'pocket', 'slide', 'pass', 'equip', 'symbol', 'column', 'other']);
 export const TEXT_ROLES = Object.freeze(['room', 'area', 'title', 'label', 'axis', 'other']);
 
 const isObj = v => v != null && typeof v === 'object' && !Array.isArray(v);

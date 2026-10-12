@@ -21,7 +21,7 @@ afterEach(() => setBlockTable(null));      // 모듈 수준 표가 다음 테스
 // ── 표 형식 ──────────────────────────────────────────────────────────────
 test('checkRoles: 알려진 역할만 받고 잘못된 칸은 버리며 이유를 적는다', () => {
   expect(LAYER_ROLES).toEqual(Object.keys(ROLE_LABEL));
-  expect(BLOCK_KINDS).toEqual(['door', 'window', 'pocket', 'slide', 'equip', 'symbol', 'column', 'other']);
+  expect(BLOCK_KINDS).toEqual(['door', 'window', 'pocket', 'slide', 'pass', 'equip', 'symbol', 'column', 'other']);
   expect(TEXT_ROLES).toEqual(['room', 'area', 'title', 'label', 'axis', 'other']);
   const { table, errors } = checkRoles({
     layers: { 건축: 'wall', WID: 'opening', X: 'door' },
