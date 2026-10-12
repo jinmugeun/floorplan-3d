@@ -24,12 +24,31 @@ const HOST_PAD = 50;          // 벽 몸통 여유(mm)
 const SIDE_TOL = 5;           // 벽 중심선의 "한쪽"으로 볼 최소 거리(mm)
 const LEAF_MIN = 0.75;        // 포켓 문짝 = 벽과 나란하고 호칭 폭의 이 비율 이상인 선
 
-export function blockKind(name = '') {
+// 이름 정규식만으로 가린 종류(코퍼스 정답 blockBoxes({ byName: true })가 쓴다 — 역할표가 정답을 바꾸면 안 된다).
+export function blockKindByName(name = '') {
   if (POCKET_BLOCK.test(name)) return 'pocket';
   if (DOOR_BLOCK.test(name)) return 'door';
   if (WINDOW_BLOCK.test(name)) return 'window';
   return null;
 }
+
+// 블록 종류표(2026-10-12 · 계획 12 Task 9): 역할표의 blocks(roles.checkRoles의 Map — 이름 → { kind, width }). 워커가 parse마다
+// **먼저 비우고**(앞 파일의 표가 새지 않게) 그 파일의 표를 세운다. 모듈 수준인 까닭: 블록 종류를 묻는 자리가 다섯 파일에 흩어져 있다
+// (ownerOf·blockBoxes·blockOpenings · evidence · walls 둘 · openings의 문 호 · slideDoors) — 옵션을 그 사슬마다 넘기는 대신 한 곳에서 본다.
+// 표의 door·window·pocket·slide만 창·문이고 equip·symbol·column·other는 창·문이 아니다(이름이 DR-900이어도). 표에 없는 이름은 정규식이다.
+let blockTable = null;
+const TABLE_KIND = { door: 'door', window: 'window', pocket: 'pocket', slide: 'slide' };
+export function setBlockTable(table) { blockTable = table instanceof Map && table.size ? table : null; }
+const tableEntry = name => blockTable?.get(name);
+
+export function blockKind(name = '') {
+  const t = tableEntry(name);
+  return t ? TABLE_KIND[t.kind] ?? null : blockKindByName(name);
+}
+// 표가 없으면 OPEN_BLOCK·DOOR_BLOCK 정규식 그대로다(evidence·walls·openings가 예전에 정규식을 직접 쓰던 자리).
+// 문 블록 = 문 호(스윙 궤적)를 문으로 읽을 블록: 표에서는 door·pocket·slide(포켓 이름도 DOOR_BLOCK의 `^문[-_ ]`에 걸리던 것과 같다).
+export const isOpenBlock = (name = '') => (tableEntry(name) ? !!blockKind(name) : OPEN_BLOCK.test(name));
+export const isDoorBlock = (name = '') => (tableEntry(name) ? ['door', 'pocket', 'slide'].includes(blockKind(name)) : DOOR_BLOCK.test(name));
 
 // 블록 이름의 호칭 폭(mm): 이름에서 처음 나오는 3~4자리 숫자(win-900-3 → 900 · 문 2짝다른사이즈1500-200 → 1500), 없으면 0.
 // blockOpenings(벽 위 폭)와 blockBoxes(코퍼스 정답 폭)가 같은 규칙을 쓴다(2026-10-06).
@@ -37,12 +56,14 @@ export function nominalWidth(name = '') {
   const m = String(name).match(/(\d{3,4})/);
   return m ? +m[1] : 0;
 }
+// 파이프라인의 폭: 역할표의 폭(양수)이 있으면 그것, 없으면 이름의 숫자(2026-10-12 · Task 9).
+export const blockWidth = (name = '') => tableEntry(name)?.width || nominalWidth(name);
 
 // INSERT 번호 → 그 도형을 거느리는 창·문 INSERT 번호(자기 이름이 창·문이면 자기, 아니면 부모의 주인 · 없으면 −1).
 // 전개 순서상 부모가 자식보다 앞이라 한 번 훑으면 된다. blockOpenings와 blockBoxes가 같은 규칙을 쓴다(2026-10-06).
-function ownerOf(ins) {
+function ownerOf(ins, kindOf = blockKind) {
   const owner = [];
-  ins.forEach((it, k) => { owner[k] = blockKind(it.name) ? k : it.parent != null ? owner[it.parent] ?? -1 : -1; });
+  ins.forEach((it, k) => { owner[k] = kindOf(it.name) ? k : it.parent != null ? owner[it.parent] ?? -1 : -1; });
   return owner;
 }
 
@@ -51,9 +72,12 @@ function ownerOf(ins) {
 // 네 도면에는 이런 겹침이 없지만, 있으면 Task 7의 spans가 서로 겹친다. 두 곳이 쓴다:
 // 코퍼스 점수판의 개구부 정답 자리(tools/dxf-corpus/lib.mjs), 벽 구간화가 창 도중에 경계를 두지 않게 하는 spans(walls.js → bands.sectionsOf).
 // 점은 선분 끝과 호 중심이다(blockOpenings와 같은 재료).
-export function blockBoxes(ex) {
+// byName(2026-10-12 · Task 9): 코퍼스 **정답**은 이름 정규식·이름의 숫자만 쓴다(역할표가 정답을 움직이면 표의 효과를 잴 수 없다).
+// 기본(byName 없음)은 파이프라인 쪽이다 — walls.js의 spans는 역할표를 따른다.
+export function blockBoxes(ex, { byName = false } = {}) {
+  const kindOf = byName ? blockKindByName : blockKind, widthOf = byName ? nominalWidth : blockWidth;
   const ins = ex?.inserts ?? [];
-  const owner = ownerOf(ins);
+  const owner = ownerOf(ins, kindOf);
   const box = new Map();
   const add = (k, p) => {
     if (!(k >= 0)) return;      // -1(주인 없음)뿐 아니라 undefined(ins가 없는 INSERT를 가리킴)도 거른다 — Task 7부터 모든 추출이 이 길을 지난다
@@ -64,7 +88,7 @@ export function blockBoxes(ex) {
   for (const c of [...(ex?.arcs ?? []), ...(ex?.polyArcs ?? [])]) if (c.ins != null) add(owner[c.ins], c.c);
   return [...box].map(([k, b]) => {
     const it = ins[k];
-    return { k, kind: blockKind(it.name), name: it.name, width: nominalWidth(it.name), box: b };
+    return { k, kind: kindOf(it.name), name: it.name, width: widthOf(it.name), box: b };
   });
 }
 
@@ -97,7 +121,7 @@ export function blockOpenings(ex, walls, toApp = p => p) {
     // 규칙과 같다)일 때만 넘어간다 — 두꺼운 외벽의 한쪽에만 그린 창이, 창 가운데에 T자로 붙는 칸막이 몸통에 걸린 멀리언 두 선 때문에
     // 칸막이에 폭 135로 앉고 외벽의 창이 빠질 수 있었다(합성 테스트로 확인 — 코퍼스 넷의 창·포켓 중 이 길을 타는 것은 없다).
     // 호스트가 없으면 예전처럼 넘어가고, 문은 그대로다(내곡중 SD850·방음문으로 확인한 동작).
-    const nominal = nominalWidth(it.name);
+    const nominal = blockWidth(it.name);
     const plausible = span => nominal >= 0.4 * span && nominal <= 1.1 * span;
     const seat = dir => {
       const ts = g.pts.map(p => p[0] * dir[0] + p[1] * dir[1]), lo = Math.min(...ts), hi = Math.max(...ts);

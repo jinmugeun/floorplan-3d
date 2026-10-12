@@ -18,13 +18,39 @@ export function fileOf(entry) {
 
 let onmessage = null;
 const posts = [];
-async function worker() {
+// 워커 메시지 한 번 → 마지막 응답(진행률 빼고). roles-dump.mjs도 쓴다(2026-10-12).
+export async function worker() {
   if (!onmessage) {
     globalThis.self = { postMessage: m => posts.push(m), onmessage: null };
     await import('../../src/io/dxf/worker.js');
     onmessage = globalThis.self.onmessage;
   }
   return data => { posts.length = 0; onmessage({ data }); return posts.filter(m => m.type !== 'progress').at(-1); };
+}
+
+// 역할표 `--roles <dir>`(2026-10-12 · 계획 12 Task 9): 도면 id마다 `<dir>/<id>.json`(형식은 src/io/dxf/roles.js · README "역할표")을 읽어
+// 파싱 옵션으로 넘긴다 — 표가 점수판을 얼마나 바꾸는지 재는 측정이다. 그래서 `--update`와 함께 쓰지 않는다(기준은 규칙만의 값이다).
+// → { dir, error } (error가 있으면 부르는 쪽이 종료 코드 2로 멈춘다).
+export function rolesOption(argv) {
+  const i = argv.indexOf('--roles');
+  if (i < 0) return { dir: null, error: null };
+  const dir = argv[i + 1];
+  if (dir == null || dir.startsWith('--')) return { dir: null, error: '--roles에 값(역할표 폴더)이 없다' };
+  if (argv.includes('--update')) return { dir, error: '--update는 --roles와 함께 쓰지 않는다 — 기준은 역할표 없는 규칙의 값이다' };
+  return { dir, error: null };
+}
+// `<dir>/<id>.json` → 원 JSON(워커가 checkRoles로 검사한다). 없으면 null이고 그 사실을 한 줄로 알린다(규칙만으로 돈다).
+// 형식 오류가 있으면 버려지는 칸 수를 한 줄로 알린다(그 이름들은 규칙으로 간다).
+export async function loadRoles(dir, id) {
+  if (!dir) return null;
+  const path = resolve(dir, `${id}.json`);
+  if (!existsSync(path)) { console.log(`  (역할표 없음: ${path} — 규칙만)`); return null; }
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
+  const { checkRoles } = await import('../../src/io/dxf/roles.js');
+  const { table, errors } = checkRoles(raw);
+  if (errors.length) console.log(`  (역할표 ${id}: 잘못된 칸 ${errors.length}개 버림 — ${errors.slice(0, 3).join(' · ')}${errors.length > 3 ? ' …' : ''})`);
+  if (table) console.log(`  (역할표 ${id}: 레이어 ${table.layers.size} · 블록 ${table.blocks.size} · 문자 ${table.texts.size})`);
+  return raw;
 }
 
 // DIMENSION 원문 스캔(ENTITIES 섹션만 — 블록 안 치수는 블록 좌표라 쓸 수 없다): 측정점 13/23 · 14/24, 회전 50, 종류 70.
@@ -69,9 +95,10 @@ export async function areaLabels(ex) {
 
 // 창·문 블록 정답(2026-10-06): 종류·호칭 폭·전개 도형 bbox와 그 중심(DXF 좌표). 3차 수정의 scratch 채점기(사동중 44개)가 저장소 도구로 왔다.
 // 중심(c)은 도면 상자 안인지 가리는 데만, 적합 판정은 상자(box)로 한다.
+// byName(2026-10-12 · Task 9): 정답은 이름 정규식만 쓴다 — 워커가 세운 역할표 블록 종류(모듈 수준 표)가 정답을 움직이지 않게.
 export async function blockTruth(ex) {
   const { blockBoxes } = await import('../../src/io/dxf/blockOpenings.js');
-  return blockBoxes(ex).map(b => ({ name: b.name, kind: b.kind, width: b.width, box: b.box, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] }));
+  return blockBoxes(ex, { byName: true }).map(b => ({ name: b.name, kind: b.kind, width: b.width, box: b.box, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] }));
 }
 
 // 손으로 단 개구부 정답(2026-10-12 · 계획 12 Task 2): 창·문 블록이 없는 도면(신상중 — 문·창이 풀어진 선)은 blockTruth가 0개라
@@ -97,14 +124,14 @@ export function manualTruth(id) {
 // 포켓 하나에 62 mm, 내곡중 FSD800에 100 mm 여유를 두고도 가장 가까운 진짜 빗나감(473 mm)보다 273 mm 아래다.
 export const OPN_TOL = 200;
 
-// 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }.
-export async function runDrawing(entry) {
+// 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }. roles = 역할표 원 JSON(loadRoles · 없으면 규칙만).
+export async function runDrawing(entry, { roles = null } = {}) {
   const path = fileOf(entry);
   if (!path) return null;
   const handle = await worker();
   const raw = readFileSync(path);
   const t0 = performance.now();
-  const parsed = handle({ type: 'parse', buf: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), fileName: path.split(/[\\/]/).pop() });
+  const parsed = handle({ type: 'parse', buf: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), fileName: path.split(/[\\/]/).pop(), ...(roles ? { roles } : {}) });
   if (parsed.type !== 'parsed') return { error: parsed.code ?? 'parse', path };
   const { summary } = parsed;
   const ex = handle({ type: 'extract', opts: { layers: summary.checked, region: entry.region ?? 0, trace: false } });

@@ -11,10 +11,14 @@ import { planRegions } from './regions.js';
 import { extractWalls } from './walls.js';
 import { buildProject, unitScale, drawingTitle, INSUNITS_SCALE } from './toProject.js';
 import { buildOpenings } from './openings.js';
+import { setBlockTable } from './blockOpenings.js';
+import { checkRoles } from './roles.js';
 import { DXF_PARAMS } from './params.js';
 
 const HUGE_EXTENTS = 10_000_000;   // 10 km — 여러 장이 한 파일에 흩어져 있다는 신호(§18.5)
-let doc = null, ex0 = null, ex = null, rows = null, meta = null;
+// roles: 이 도면의 역할표(roles.checkRoles의 table · 2026-10-12 계획 12 Task 9) — parse 메시지의 옵션으로 오고, prepare(레이어 행)와
+// doExtract(문자 역할)가 쓴다. 블록 종류는 blockOpenings의 모듈 수준 표로 간다(setBlockTable).
+let doc = null, ex0 = null, ex = null, rows = null, meta = null, roles = null;
 const post = (msg, transfer = []) => self.postMessage(msg, transfer);
 // blocks를 함께 보낸다: 진행 막대 2단계가 "도면 해석 중 (블록 N개)"이라 파싱이 끝나기 전에도 N이 필요하다.
 const progress = (phase, pct) => post({ type: 'progress', phase, pct, blocks: doc?.counts?.blocks ?? 0 });
@@ -25,7 +29,7 @@ const inBox = (p, b) => !b || (p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p
 // DXF_PARAMS가 전부 mm라 m 도면을 원 좌표로 돌리면 벽 0개였다. 사람이 검토 창에서 단위를 바꾸면 doExtract가 다시 부른다.
 function prepare(k) {
   ex = scaleExplode(ex0, k);
-  rows = layerStats(doc, ex);
+  rows = layerStats(doc, ex, { roles });
   const live = new Set(rows.filter(r => !r.off).map(r => r.name));
   // 도면 후보(2026-10-02): 벽 선이 든 덩어리는 모두 후보이고 첫 후보(가장 큰 것)가 기본값이다 — 고르는 것은 검토 창이다.
   const checked = defaultChecked(rows);
@@ -39,12 +43,14 @@ function prepare(k) {
   return { checked };
 }
 
-function doParse(buf, fileName) {
+function doParse(buf, fileName, rawRoles = null) {
   // 앞 파일의 전개 결과를 **맨 먼저** 비운다(Task 10 리뷰 F1). 이 줄이 없으면 재파싱이 실패했을 때
   // (A.dxf 성공 → B.dwg 거절) 앞 도면의 ex·meta가 살아남아, 뒤따르는 extract가 !ex 검사를 통과해
   // **앞 도면의 프로젝트를 조용히 돌려준다**. 비워 두면 그 extract가 정직하게 not-dxf로 떨어진다.
   // 전개 원본 ex0도 함께 비운다(2026-10-06): 남아 있으면 단위를 바꾼 extract가 prepare로 앞 도면을 되살린다.
-  doc = ex0 = ex = rows = meta = null;
+  // 역할표·블록 종류표도 함께 비운다(2026-10-12 · Task 9): 앞 파일의 표가 다음 파일(표 없이 연 것 · 실패한 것)에 새면 안 된다.
+  doc = ex0 = ex = rows = meta = roles = null;
+  setBlockTable(null);
   progress('decode', 0);
   const t0 = performance.now();
   const { txt, ver, codepage, encoding } = decodeDxf(buf);
@@ -56,6 +62,9 @@ function doParse(buf, fileName) {
   ex0 = explode(doc, { arcSteps: 12, onProgress: p => progress('explode', p) });
   const tExplode = performance.now() - t2;
   meta = { fileName };
+  // 표의 잘못된 칸은 버린다(그 이름은 규칙으로 간다) — 형식 검사는 도구(llm-roles --validate)가 사람에게 알린다.
+  roles = rawRoles ? checkRoles(rawRoles).table : null;
+  setBlockTable(roles?.blocks ?? null);
   // 단위(§18.5): $INSUNITS를 알면 바로 그 배율(1배 통계를 헛되이 내지 않는다). 모르면 원 좌표 ROI의 긴 변으로 추정한다(10~1000이면 m) —
   // 그때만 먼저 1배로 한 번 본다.
   const insunits = headerNum(doc.header, '$INSUNITS', 70, 0);
@@ -125,7 +134,7 @@ function doExtract(opts = {}) {
     autoNames: opts.autoNames !== false,
     // 방 이름은 레이어 역할로 고른다(문자 레이어 실명 우선 · 기구 라벨은 이름이 아니다 — toProject.nameRooms).
     nameRoles: new Map(rows.map(r => [r.name, r.role])),
-    columns: r.columns, rails,
+    columns: r.columns, rails, roles,
     // 면적 기준선의 근거: 이 도면(± 10 m) 안의 치수. 측정점은 건물 밖 치수줄이 아니라 재는 자리에 있다.
     dims: ex.dims.filter(d => d.p1 && inBox(d.p1, r.roi && { x0: r.roi.x0 - 10000, y0: r.roi.y0 - 10000, x1: r.roi.x1 + 10000, y1: r.roi.y1 + 10000 })),
     // 개구부는 두 재료를 함께 쓴다: 스윙 호(ex.arcs)와 **벽 틈**(r.gaps · 사전 검토 C-2).
@@ -165,7 +174,7 @@ function doExtract(opts = {}) {
 self.onmessage = ev => {
   const m = ev.data ?? {};
   try {
-    if (m.type === 'parse') doParse(m.buf, m.fileName ?? '');
+    if (m.type === 'parse') doParse(m.buf, m.fileName ?? '', m.roles ?? null);
     else if (m.type === 'extract') doExtract(m.opts);
   } catch (e) {
     // 문구는 보내지 않는다(ui/messages.js의 DXF_ERRORS[code]가 정본이다 — 워커는 ui/를 모른다).

@@ -93,6 +93,8 @@ export function dedupeGaps(list) {
 // 폭은 제품 폭이 아니라 블록 폭으로 앉는다.
 export function blockProduct(kind, width) {
   if (kind === 'pocket') return 'door-pocket-900';
+  // slide: 역할표만 내는 종류(2026-10-12 · 계획 12 Task 9 — 이름 규칙에는 포켓 아닌 미닫이 블록 종류가 없다) → 폭이 가장 가까운 미닫이문.
+  if (kind === 'slide') return nearestProduct(SLIDE_PRODUCTS, width);
   if (kind === 'window') return width < 900 ? 'window-fix-600' : width <= 1500 ? 'window-slide-1200' : 'window-slide-1800';
   return nearestProduct(DOOR_PRODUCTS.filter(([id]) => id !== 'door-slide-1500'), width);
 }

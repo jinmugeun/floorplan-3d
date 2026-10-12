@@ -14,7 +14,7 @@ import { largestCluster, ROI_LINK, buildFaces, latticeFaces } from './faces.js';
 import { wallBands, bandRuns, wallsOfRuns } from './bands.js';
 import { findColumns, findPilasters, mergeColumns, growLinings, findIslands } from './columns.js';
 import { openingEvidence, faceSupport } from './evidence.js';
-import { OPEN_BLOCK, blockBoxes } from './blockOpenings.js';
+import { isOpenBlock, blockBoxes } from './blockOpenings.js';   // isOpenBlock = OPEN_BLOCK 정규식, 역할표가 있으면 그 종류(2026-10-12)
 
 const OPEN_FACE = 'open-block';   // 창·문 블록에서 온 면선의 표지 레이어(실제 레이어 이름과 겹치지 않는다)
 
@@ -154,7 +154,7 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   const usable = s => inRoi(s.a) && inRoi(s.b) && !s.src?.endsWith(':bulge');   // 조경 곡선·라운드 코너는 벽이 아니다
   // 벽 레이어에 놓인 창·문 이름 블록(2026-10-02 내곡중: 미서기단창_7800)의 선은 벽 선이 아니라 **개구부 면선**이다 —
   // 개구부 레이어의 선과 같이 긴 것(≥ openFaceMin)만 쓰고, 표지 레이어 OPEN_FACE를 달아 창틀 띠(op)로 다룬다.
-  const inOpenBlock = s => wallLayers.has(s.layer) && OPEN_BLOCK.test(s.block ?? '');
+  const inOpenBlock = s => wallLayers.has(s.layer) && isOpenBlock(s.block ?? '');
   const openLayers = new Set([...openFaceLayers, OPEN_FACE]);
   let cand = ex.segs.filter(s => usable(s) && (inOpenBlock(s) || openFaceLayers.has(s.layer)
     ? len(s.a, s.b) >= P.openFaceMin : wallLayers.has(s.layer) && len(s.a, s.b) >= P.minSeg))
@@ -188,7 +188,7 @@ export function extractWalls(ex, { wallLayers = new Set(), openFaceLayers = new 
   // 도면(개구부 레이어·블록이 하나도 없다)은 가리지 않는다.
   const opening = openingEvidence(ex, openFaceLayers, inRoi);
   const support = faceSupport(cand.filter((s, i) => !colSegs.has(i) && !symbol(s) && wallish(s)));
-  const openSegs = ex.segs.filter(s => (openFaceLayers.has(s.layer) || OPEN_BLOCK.test(s.block ?? '')) && inRoi(s.a) && inRoi(s.b));
+  const openSegs = ex.segs.filter(s => (openFaceLayers.has(s.layer) || isOpenBlock(s.block ?? '')) && inRoi(s.a) && inRoi(s.b));
   const evidence = opening && Object.assign((p, q, th) => opening(p, q, th) || support(p, q, th), { wide: faceSupport(openSegs) });
   // 창·문 블록 구간(2026-10-06): 벽 구간 경계(꺾임)를 블록 도중에 두지 않기 위한 재료 — bin마다 bbox 네 모서리를 (t, off)로 투영한다.
   const boxes = blockBoxes(ex).filter(b => b.kind && inRoi([b.box[0], b.box[1]]) && inRoi([b.box[2], b.box[3]]));

@@ -74,12 +74,15 @@ const unspace = t => (/^([가-힣] )+[가-힣]$/.test(t) ? t.replace(/ /g, '') :
 const centerOf = pts => [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
 
 // 실명 후보: { text, p(앱 좌표), area(바로 아래 면적 표기 m² · 없으면 null), tier, h }.
-export function roomLabels(texts, toApp, { min = 200, max = 600, chars = 20, nameRoles = null } = {}) {
+// textRoles(2026-10-12 · 계획 12 Task 9): 역할표의 문자 역할(글자 그대로 → room|area|title|label|axis|other). 표에 있는 글자는 규칙(높이·레이어 층·
+// ②의 "이름 아님" 꼴·글자 수)을 건너뛴다 — room은 1층 실명 후보, area는 면적 표기, 나머지 역할은 이름도 면적도 아니다. 표에 없는 글자는 규칙 그대로.
+export function roomLabels(texts, toApp, { min = 200, max = 600, chars = 20, nameRoles = null, textRoles = null } = {}) {
   const tierOf = layer => (nameRoles ? NAME_TIER[nameRoles.get(layer)] ?? 0 : 1);
-  const all = texts.filter(t => t.h >= min && t.h <= max)
-    .map(t => ({ p: toApp(t.p), raw: String(t.text ?? '').trim(), h: t.h, tier: tierOf(t.layer) }));
-  const areas = all.filter(c => AREA_LABEL.test(c.raw));
-  let cand = all.filter(c => c.tier && c.raw.length >= 1 && c.raw.length <= chars && !notName(c.raw)).map(c => ({ ...c, text: unspace(c.raw) }));
+  const roleOf = t => textRoles?.get(String(t.text ?? '').trim());
+  const all = texts.map(t => [t, roleOf(t)]).filter(([t, role]) => (role ? role === 'room' || role === 'area' : t.h >= min && t.h <= max))
+    .map(([t, role]) => ({ p: toApp(t.p), raw: String(t.text ?? '').trim(), h: t.h, tier: role === 'room' ? 1 : role ? 0 : tierOf(t.layer), role }));
+  const areas = all.filter(c => (c.role ? c.role === 'area' : AREA_LABEL.test(c.raw)));
+  let cand = all.filter(c => (c.role ? c.role === 'room' : c.tier && c.raw.length >= 1 && c.raw.length <= chars && !notName(c.raw))).map(c => ({ ...c, text: unspace(c.raw) }));
   // ③ 두 줄 실명(앱 좌표는 y 아래쪽이다 — 아랫줄은 y가 크다)
   for (const c of cand) {
     if (c.drop || !/[/·,]$/.test(c.text)) continue;
@@ -131,6 +134,7 @@ export function drawingTitle(texts, fileName = '', titleLayers = null) {
 export function buildProject(raw, {
   height = DXF_PARAMS.height, scale = 1, texts = [], fileName = '', autoNames = true,
   params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null, nameRoles = null, columns = [], dims = [], rails = [],
+  roles = null,     // 역할표(roles.checkRoles · 2026-10-12 Task 9) — 여기서는 문자 역할(roles.texts)만 쓴다(roomLabels)
 } = {}) {
   const { toApp, box, size } = makeToApp(raw, scale);
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.
@@ -153,7 +157,7 @@ export function buildProject(raw, {
   // 방을 세기 전, 면적 표기 구획선보다 먼저 둔다 — addDividers·mergeAnnexes가 닫힌 발코니를 본다.
   walls = railDividers(walls, rails.map(s => ({ a: toApp(s.a), b: toApp(s.b) })), { height, params: P }).walls;
   // 방 구조를 도면의 실명·면적 표기에 맞춘다(reconcile.js): 트인 공간의 구획선 · 한 실로 센 딸린 방.
-  const labels = autoNames ? roomLabels(texts, toApp, { nameRoles }) : [];
+  const labels = autoNames ? roomLabels(texts, toApp, { nameRoles, textRoles: roles?.texts?.size ? roles.texts : null }) : [];
   walls = addDividers(walls, labels);
   const annexes = mergeAnnexes(walls, labels);
   // 난간 구획선 표지는 여기서 세고 지운다 — 저장 형식은 그대로(그냥 구획선)이고, stats.dividers(면적 표기로 그은 것 — 검토 창 문구)와 따로 센다.

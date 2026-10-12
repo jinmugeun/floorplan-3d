@@ -50,7 +50,10 @@ function shapeRole(r) {
 
 // 이 배열이 §18.6 체크리스트의 유일한 원천이다. 레이어 테이블에 없는데 도형만 있는 이름도
 // 행을 얻는다(블록 안에서만 쓰인 레이어).
-export function layerStats(doc, ex) {
+// roles(2026-10-12 · 계획 12 Task 9): roles.checkRoles가 낸 역할표. 표에 있는 레이어는 그 역할이 키워드·도형 신호를 **덮고**
+// byTable을 단다(guessed·byColor는 배지·알림에 묶인 "추정" 표지라 달지 않는다) — 내용으로 고치기(refineByContent)도 그 행은 건너뛰고,
+// 표가 정한 벽이 있으면 벽 추정을 하지 않는다. 표에 없는 레이어는 규칙 그대로다. 꺼짐·동결·선 수는 표가 바꾸지 못한다.
+export function layerStats(doc, ex, { roles = null } = {}) {
   const rows = new Map();
   const get = name => {
     let r = rows.get(name ?? '0');
@@ -85,7 +88,8 @@ export function layerStats(doc, ex) {
     r.medianSeg = r.lens.length ? r.lens[Math.floor(r.lens.length / 2)] : 0;
     delete r.lens;
     r.keyRole = classifyLayer(r.name);
-    r.role = shapeRole(r);
+    const byTable = roles?.layers?.get(r.name);
+    if (byTable) { r.role = byTable; r.byTable = true; } else r.role = shapeRole(r);
     out.push(r);
   }
   // 내용으로 고치기(청록 창호 · 이름으로 벽을 못 찾았을 때의 벽 추정) — 레이어별 선분은 필요할 때만 모은다.

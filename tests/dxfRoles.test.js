@@ -1,0 +1,236 @@
+// 역할표(2026-10-12 · 계획 12 Task 9): 레이어·블록·문자 역할을 규칙 대신 정하는 표가 **파싱 옵션**으로 들어온다.
+// 표에 있는 이름은 표가 이기고(키워드·도형 추정을 덮는다 — 행에 byTable), 표에 없는 이름은 규칙 그대로다.
+// 블록 종류표는 파이프라인(blockKind)만 바꾸고, 코퍼스 정답(blockBoxes byName)은 이름 정규식만 쓴다.
+import { test, expect, afterEach } from 'vitest';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { checkRoles, LAYER_ROLES, BLOCK_KINDS, TEXT_ROLES } from '../src/io/dxf/roles.js';
+import { layerStats, defaultChecked, ROLE_LABEL } from '../src/io/dxf/classify.js';
+import { setBlockTable, blockKind, blockKindByName, blockWidth, isOpenBlock, isDoorBlock, blockBoxes, blockOpenings, OPEN_BLOCK, DOOR_BLOCK } from '../src/io/dxf/blockOpenings.js';
+import { buildProject } from '../src/io/dxf/toProject.js';
+import { makeWall } from '../src/geom/walls.js';
+import { rolesOption } from '../tools/dxf-corpus/lib.mjs';
+import { parseArgs, tableFromResponse, buildRequest, RESPONSE_SCHEMA } from '../tools/dxf-corpus/llm-roles.mjs';
+
+const APP = fileURLToPath(new URL('..', import.meta.url));
+afterEach(() => setBlockTable(null));      // 모듈 수준 표가 다음 테스트로 새지 않게
+
+// ── 표 형식 ──────────────────────────────────────────────────────────────
+test('checkRoles: 알려진 역할만 받고 잘못된 칸은 버리며 이유를 적는다', () => {
+  expect(LAYER_ROLES).toEqual(Object.keys(ROLE_LABEL));
+  expect(BLOCK_KINDS).toEqual(['door', 'window', 'pocket', 'slide', 'equip', 'symbol', 'column', 'other']);
+  expect(TEXT_ROLES).toEqual(['room', 'area', 'title', 'label', 'axis', 'other']);
+  const { table, errors } = checkRoles({
+    layers: { 건축: 'wall', WID: 'opening', X: 'door' },
+    blocks: { 'BLK-A': { kind: 'window', width: 1200 }, B: { kind: 'equip', width: null }, C: { kind: 'gate' }, D: { kind: 'door', width: -5 } },
+    texts: { ' 식당 ': 'room', '(15.4m²)': 'area', 문: 'exit' },
+    meta: { model: 'dry-run' },
+  });
+  expect([...table.layers]).toEqual([['건축', 'wall'], ['WID', 'opening']]);
+  expect([...table.blocks]).toEqual([['BLK-A', { kind: 'window', width: 1200 }], ['B', { kind: 'equip', width: null }]]);
+  expect([...table.texts]).toEqual([['식당', 'room'], ['(15.4m²)', 'area']]);      // 문자 키는 앞뒤 공백을 뗀다
+  expect(errors).toHaveLength(4);
+  expect(checkRoles(null)).toEqual({ table: null, errors: ['역할표가 객체가 아니다'] });
+  expect(checkRoles({ layers: [] }).errors).toEqual(['layers는 객체여야 한다']);
+});
+
+// ── 레이어 ───────────────────────────────────────────────────────────────
+const layerRec = (name, color = 7) => [name, { name, color, ltype: '', flags: 0, lw: -3 }];
+const docOf = (...recs) => ({ layers: new Map(recs) });
+const exOf = ({ segs = [], texts = [], dims = [], inserts = [] } = {}) => ({ segs, arcs: [], circles: [], texts, dims, inserts });
+const rectSegs = (layer, x0, y0, w, h, extra = {}) => [
+  [[x0, y0], [x0 + w, y0]], [[x0 + w, y0], [x0 + w, y0 + h]], [[x0 + w, y0 + h], [x0, y0 + h]], [[x0, y0 + h], [x0, y0]],
+].map(([a, b]) => ({ a, b, layer, src: 'LINE', depth: 0, block: null, ...extra }));
+const room = (layer, x0 = 0.5, y0 = 0.25, w = 9000, h = 6000, t = 200, extra = {}) =>
+  [...rectSegs(layer, x0, y0, w, h, extra), ...rectSegs(layer, x0 + t, y0 + t, w - 2 * t, h - 2 * t, extra)];
+const rolesOf = raw => checkRoles(raw).table;
+
+test('표의 레이어 역할이 키워드 역할을 덮는다 — byTable, 표에 없는 레이어는 규칙 그대로', () => {
+  const doc = docOf(layerRec('A-WALL'), layerRec('WAL'), layerRec('DIM'));
+  const ex = exOf({ segs: [...room('A-WALL'), ...room('WAL', 20000.5), ...rectSegs('DIM', 0.5, 0.25, 100, 100)] });
+  const plain = Object.fromEntries(layerStats(doc, ex).map(r => [r.name, r]));
+  const by = Object.fromEntries(layerStats(doc, ex, { roles: rolesOf({ layers: { 'A-WALL': 'other', 없는레이어: 'wall' } }) }).map(r => [r.name, r]));
+  expect([by['A-WALL'].keyRole, by['A-WALL'].role, by['A-WALL'].byTable]).toEqual(['wall', 'other', true]);
+  // 표에 없는 레이어: 행이 규칙 그대로다(byTable 없음).
+  expect(by.WAL).toEqual(plain.WAL);
+  expect(by.DIM).toEqual(plain.DIM);
+  expect(by.WAL.byTable).toBeUndefined();
+  expect([...defaultChecked(Object.values(by))]).toEqual(['WAL']);
+  // 표가 없으면(null·빈 표) 예전 그대로다.
+  expect(layerStats(doc, ex, { roles: null })).toEqual(layerStats(doc, ex));
+  expect(layerStats(doc, ex, { roles: rolesOf({}) })).toEqual(layerStats(doc, ex));
+});
+
+test('표가 도형 추정(벽 추정 guessed · 청록 창호 byColor)을 덮는다 — guessed를 달지 않는다', () => {
+  // 내곡중 꼴: 벽 키워드 레이어가 없어 평행 짝이 긴 `건축`·`A2`가 벽으로 추정된다.
+  const doc = docOf(layerRec('건축', 8), layerRec('A2', 8), layerRec('WID', 4));
+  const segs = [...room('건축', 0.5, 0.25, 30000, 20000), ...room('A2', 40000.5, 0.25, 20000, 15000), ...room('WID', 70000.5, 0.25, 9000, 6000, 100)];
+  const plain = Object.fromEntries(layerStats(doc, exOf({ segs })).map(r => [r.name, r]));
+  expect([plain.건축.guessed, plain.A2.guessed, plain.WID.byColor]).toEqual([true, true, true]);
+  const by = Object.fromEntries(layerStats(doc, exOf({ segs }), { roles: rolesOf({ layers: { 건축: 'wall', WID: 'equip' } }) }).map(r => [r.name, r]));
+  expect([by.건축.role, by.건축.byTable, by.건축.guessed]).toEqual(['wall', true, undefined]);
+  // 표가 벽을 정했으니 이름 없는 A2를 함께 벽으로 올리지 않는다(추정은 "벽이 하나도 없을 때"만이다).
+  expect([by.A2.role, by.A2.guessed]).toEqual(['other', undefined]);
+  // 청록 창틀이어도 표가 기구라면 기구다.
+  expect([by.WID.role, by.WID.byTable, by.WID.byColor]).toEqual(['equip', true, undefined]);
+  // 표가 추정 레이어를 벽이 아니라고 하면 남은 이름 없는 레이어끼리 추정한다.
+  const only = Object.fromEntries(layerStats(doc, exOf({ segs }), { roles: rolesOf({ layers: { 건축: 'other' } }) }).map(r => [r.name, r]));
+  expect([only.건축.role, only.건축.guessed, only.A2.role, only.A2.guessed]).toEqual(['other', undefined, 'wall', true]);
+});
+
+// ── 블록 ─────────────────────────────────────────────────────────────────
+const W = makeWall({ a: [0, 0], b: [6000, 0], thickness: 200, height: 3500 });
+const bseg = (x0, y0, x1, y1, ins, layer = 'X') => ({ a: [x0, y0], b: [x1, y1], layer, src: 'LINE', ins, block: ins === 1 ? 'BLK-A' : null });
+const plan = { name: '1f plan-1', pos: [0, 0], rot: 0, scale: [1, 1], mirrored: false };
+const blkEx = () => ({
+  inserts: [plan, { name: 'BLK-A', pos: [1000.5, 0], rot: 0, scale: [1, 1], mirrored: false, parent: 0 }],
+  segs: [bseg(1000.5, -67.5, 2200.5, -67.5, 1), bseg(1000.5, 67.5, 2200.5, 67.5, 1), bseg(1000.5, -67.5, 1000.5, 67.5, 1), bseg(2200.5, -67.5, 2200.5, 67.5, 1), bseg(0, 0, 6000, 0, 0, 'WAL')],
+  arcs: [], polyArcs: [], circles: [], texts: [], dims: [], hatches: [],
+});
+
+test('블록 종류표: 이름이 아무것도 말하지 않는 블록이 창(표의 폭)이 되고, 정답 쪽(blockBoxes byName)은 그 표를 보지 않는다', () => {
+  expect(blockKind('BLK-A')).toBeNull();
+  expect(blockOpenings(blkEx(), [W])).toEqual([]);
+  setBlockTable(rolesOf({ blocks: { 'BLK-A': { kind: 'window', width: 1200 }, 'DR-900': { kind: 'equip' }, '미서기단창_1300': { kind: 'window', width: null } } }).blocks);
+  expect([blockKind('BLK-A'), blockKindByName('BLK-A'), blockWidth('BLK-A')]).toEqual(['window', null, 1200]);
+  const out = blockOpenings(blkEx(), [W]);
+  expect(out).toHaveLength(1);
+  expect(out[0]).toMatchObject({ kind: 'window', name: 'BLK-A', width: 1200, wall: W });
+  expect(out[0].t * 6000).toBeCloseTo(1600.5, 6);
+  // 파이프라인 쪽 상자(벽 구간화 spans)는 표를 따르고, 정답 쪽 상자는 이름 정규식만 본다.
+  expect(blockBoxes(blkEx())).toEqual([{ k: 1, kind: 'window', name: 'BLK-A', width: 1200, box: [1000.5, -67.5, 2200.5, 67.5] }]);
+  expect(blockBoxes(blkEx(), { byName: true })).toEqual([]);
+  // 표가 이름 규칙을 뒤집는다: DR-900이 기구면 문·창 블록이 아니다(evidence·walls·openings의 판정 모두).
+  expect([blockKind('DR-900'), isOpenBlock('DR-900'), isDoorBlock('DR-900'), blockKindByName('DR-900')]).toEqual([null, false, false, 'door']);
+  expect([isOpenBlock('BLK-A'), isDoorBlock('BLK-A')]).toEqual([true, false]);
+  // 표의 폭이 null이면 이름의 숫자다.
+  expect([blockKind('미서기단창_1300'), blockWidth('미서기단창_1300')]).toEqual(['window', 1300]);
+  // 표에 없는 이름은 규칙 그대로다.
+  expect([blockKind('win-900-3'), blockWidth('win-900-3'), isOpenBlock('win-900-3'), isDoorBlock('dr-1850')]).toEqual(['window', 900, true, true]);
+});
+
+test('표가 없으면 isOpenBlock·isDoorBlock은 OPEN_BLOCK·DOOR_BLOCK 정규식과 같다', () => {
+  const names = ['DR-900', 'dr-1850', 'win-900-3', '문_슬라이딩 포켓 900', '미서기단창_1300', '보냉고 양문1260-800', '식탁-4인', '', 'SD850', 'AW-1200'];
+  expect(names.map(isOpenBlock)).toEqual(names.map(n => OPEN_BLOCK.test(n)));
+  expect(names.map(isDoorBlock)).toEqual(names.map(n => DOOR_BLOCK.test(n)));
+  expect(names.map(blockKind)).toEqual(names.map(blockKindByName));
+  expect(names.map(blockWidth)).toEqual([900, 1850, 900, 900, 1300, 1260, 0, 0, 850, 1200]);
+});
+
+// ── 워커: 파싱 옵션 · 파싱마다 비운다 ─────────────────────────────────────────
+test('워커는 parse의 roles로 레이어 행을 덮고 블록 표를 세우며, 다음 parse마다(실패해도) 표를 비운다', async () => {
+  const posts = [];
+  const had = 'self' in globalThis, prev = globalThis.self;
+  globalThis.self = { postMessage: m => posts.push(m), onmessage: null };
+  try {
+    await import('../src/io/dxf/worker.js');
+    const handle = data => { posts.length = 0; globalThis.self.onmessage({ data }); return posts.filter(m => m.type !== 'progress').at(-1); };
+    const buf = () => { const b = readFileSync(fileURLToPath(new URL('./fixtures/plan-1f-corner.dxf', import.meta.url))); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
+    const roles = { layers: { SYM: 'equip' }, blocks: { 'BLK-A': { kind: 'window', width: 1200 } } };
+    const a = handle({ type: 'parse', buf: buf(), fileName: 'A.dxf', roles });
+    expect(a.type).toBe('parsed');
+    const sym = a.summary.layers.find(r => r.name === 'SYM');
+    expect([sym.role, sym.byTable]).toEqual(['equip', true]);
+    expect(blockKind('BLK-A')).toBe('window');
+    expect(handle({ type: 'extract', opts: { layers: a.summary.checked, trace: false } }).type).toBe('extracted');
+    // 표 없이 다시 파싱 — 앞 파일의 표가 새지 않는다.
+    const b = handle({ type: 'parse', buf: buf(), fileName: 'B.dxf' });
+    expect(b.summary.layers.find(r => r.name === 'SYM').byTable).toBeUndefined();
+    expect(blockKind('BLK-A')).toBeNull();
+    // 표가 있는 파싱 뒤 실패한 파싱도 표를 비운다.
+    handle({ type: 'parse', buf: buf(), fileName: 'C.dxf', roles });
+    const dwg = new Uint8Array(32);
+    [...'AC1032'].forEach((c, i) => { dwg[i] = c.charCodeAt(0); });
+    expect(handle({ type: 'parse', buf: dwg.buffer, fileName: 'D.dwg', roles: null })).toMatchObject({ type: 'error', code: 'dwg' });
+    expect(blockKind('BLK-A')).toBeNull();
+  } finally {
+    if (had) globalThis.self = prev; else delete globalThis.self;
+  }
+});
+
+// ── 문자 ─────────────────────────────────────────────────────────────────
+const rect = (x0, y0, x1, y1, thickness = 200) => [
+  { a: [x0, y0], b: [x1, y0], thickness }, { a: [x1, y0], b: [x1, y1], thickness }, { a: [x1, y1], b: [x0, y1], thickness }, { a: [x0, y1], b: [x0, y0], thickness },
+];
+const lay = (x, y, h, text, layer) => ({ p: [x, y], h, text, layer, depth: 0, block: null });
+const ROLES = new Map([['TEXT', 'text'], ['급식-재사용', 'equip']]);
+
+test('문자 표: room은 규칙이 버릴 글자도 실명, area는 면적 표기, 다른 역할은 이름이 아니다', () => {
+  const box = rect(100.5, 200.25, 6100.5, 4200.25);
+  // 기구 레이어의 글자(층 0) · 축선 기호 꼴(X12) · 작은 글자(h 120)는 규칙이 버린다.
+  const skipped = [lay(3100.5, 2200.25, 270, '세척실', '급식-재사용'), lay(2000.5, 3000.25, 120, '전처리', 'TEXT')];
+  expect(buildProject(box, { texts: skipped, nameRoles: ROLES }).project.floors[0].rooms[0].name).toBe('');
+  const tagged = buildProject(box, { texts: skipped, nameRoles: ROLES, roles: rolesOf({ texts: { 세척실: 'room' } }) });
+  expect(tagged.project.floors[0].rooms[0].name).toBe('세척실');
+  // 실명 둘 + 표가 면적이라고 한 글자(m² 없음): 규칙은 숫자뿐인 글자를 버려 중심에 가까운 조리실을 고르지만, 표의 area는 면적 라벨이라
+  // 그 바로 위의 식당이 "면적이 붙은 실명"으로 이긴다(nameRooms ④).
+  const two = [lay(1500.5, 3500.25, 300, '식당', 'TEXT'), lay(1500.5, 2900.25, 250, '41.3', 'TEXT'), lay(3300.5, 2300.25, 300, '조리실', 'TEXT')];
+  expect(buildProject(box, { texts: two, nameRoles: ROLES }).project.floors[0].rooms[0].name).toBe('조리실');
+  const withArea = buildProject(box, { texts: two, nameRoles: ROLES, roles: rolesOf({ texts: { '41.3': 'area' } }) });
+  expect(withArea.project.floors[0].rooms[0].name).toBe('식당');
+  // label·title·axis·other는 규칙이 받았을 글자라도 이름이 아니다.
+  const label = buildProject(box, { texts: [lay(3100.5, 2200.25, 300, '식품창고', 'TEXT')], nameRoles: ROLES, roles: rolesOf({ texts: { 식품창고: 'label' } }) });
+  expect(label.project.floors[0].rooms[0].name).toBe('');
+  expect(label.stats.unmatchedNames).toEqual([]);
+  // 표에 없는 글자는 규칙 그대로(표가 있어도).
+  const rule = buildProject(box, { texts: [lay(3100.5, 2200.25, 300, '식품창고', 'TEXT')], nameRoles: ROLES, roles: rolesOf({ texts: { 다른글자: 'room' } }) });
+  expect(rule.project.floors[0].rooms[0].name).toBe('식품창고');
+});
+
+// ── 코퍼스 도구 인자 ────────────────────────────────────────────────────────
+test('--roles 인자: 값이 없거나 --update와 함께면 오류(종료 코드 2의 근거)', () => {
+  expect(rolesOption([])).toEqual({ dir: null, error: null });
+  expect(rolesOption(['--roles', '../dxf-roles'])).toEqual({ dir: '../dxf-roles', error: null });
+  expect(rolesOption(['--roles']).error).toMatch(/값/);
+  expect(rolesOption(['--roles', '--update']).error).toMatch(/값/);
+  expect(rolesOption(['--roles', 'x', '--update']).error).toMatch(/--update/);
+});
+
+test('score.mjs·public.mjs: --roles와 --update를 함께 주면 종료 코드 2', () => {
+  for (const tool of ['tools/dxf-corpus/score.mjs', 'tools/dxf-corpus/public.mjs']) {
+    const r = spawnSync(process.execPath, [tool, '--roles', 'nowhere', '--update'], { cwd: APP, encoding: 'utf8' });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toMatch(/--update/);
+  }
+});
+
+// ── llm-roles.mjs (API는 부르지 않는다 — 인자·검사 경로만) ────────────────────────
+test('llm-roles: --model이 없으면 2, 키가 없으면 2 "키 필요", --validate는 표 형식만 검사한다', () => {
+  expect(parseArgs(['--in', 'a.json', '--out', 'b.json']).error).toMatch(/--model/);
+  expect(parseArgs(['--model', 'claude-haiku-4-5', '--in', 'a.json']).error).toMatch(/--out/);
+  expect(parseArgs(['--model', 'claude-haiku-4-5', '--in', 'a.json', '--out', 'b.json'])).toMatchObject({ model: 'claude-haiku-4-5', inPath: 'a.json', outPath: 'b.json', error: null });
+  const dir = mkdtempSync(join(tmpdir(), 'llm-roles-'));
+  try {
+    const env = { ...process.env };
+    delete env.ANTHROPIC_API_KEY;
+    const run = (...args) => spawnSync(process.execPath, ['tools/dxf-corpus/llm-roles.mjs', ...args], { cwd: APP, encoding: 'utf8', env });
+    expect(run('--in', 'a.json', '--out', 'b.json').status).toBe(2);
+    const noKey = run('--model', 'claude-haiku-4-5', '--in', 'a.json', '--out', 'b.json');
+    expect(noKey.status).toBe(2);
+    expect(noKey.stdout + noKey.stderr).toMatch(/키 필요/);
+    const good = join(dir, 'good.json'), bad = join(dir, 'bad.json');
+    writeFileSync(good, JSON.stringify({ layers: { WAL: 'wall' }, blocks: { 'DR-900': { kind: 'door', width: 900 } }, texts: { 식당: 'room' } }));
+    writeFileSync(bad, JSON.stringify({ layers: { WAL: 'walls' } }));
+    expect(run('--validate', good).status).toBe(0);
+    expect(run('--validate', bad).status).toBe(1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('llm-roles: 응답(배열 꼴) → 역할표(사전 꼴), 요청은 명시한 모델·JSON 스키마 출력이다', () => {
+  const table = tableFromResponse({
+    layers: [{ name: 'WAL', role: 'wall' }, { name: 'WID', role: 'opening' }],
+    blocks: [{ name: 'DR-900', kind: 'door', width: 900 }, { name: '보냉고 양문1260-800', kind: 'equip', width: null }],
+    texts: [{ text: '식당', role: 'room' }],
+  });
+  expect(table).toEqual({ layers: { WAL: 'wall', WID: 'opening' }, blocks: { 'DR-900': { kind: 'door', width: 900 }, '보냉고 양문1260-800': { kind: 'equip', width: null } }, texts: { 식당: 'room' } });
+  expect(checkRoles(table).errors).toEqual([]);
+  const body = buildRequest({ meta: { file: 'x.dxf' }, layers: [], blocks: [], texts: [] }, 'claude-haiku-4-5');
+  expect(body.model).toBe('claude-haiku-4-5');
+  expect(body.output_config.format).toEqual({ type: 'json_schema', schema: RESPONSE_SCHEMA });
+  expect(RESPONSE_SCHEMA.additionalProperties).toBe(false);
+});

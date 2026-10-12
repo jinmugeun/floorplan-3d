@@ -10,6 +10,9 @@
 | `npm run dxf:e2e [-- URL] [-- --only id]` | 실제 브라우저에서 올리기 → 검토 창 → 도면 고르기 → 가져오기 → 2D·3D를 돌린다. 검토 창 숫자가 점수판과 같은지, 다시 추출해도 같은지(표시 = 계산)를 본다. 캡처는 `out/<id>/`. |
 | `npm run dxf:public [-- --fetch] [-- --update]` | 공개 정답 코퍼스(아래 절)를 채점하고 `public-baseline.json`과 견준다. `--update`는 지금 값을 기준에 병합해 쓴다. |
 | `npm run dxf:public -- --only "<이름>"` | 한 도면만 채점한다(기준은 쓰지 않는다 — `--update`와 함께 쓰면 종료 코드 2). |
+| `npm run dxf:score -- --roles <폴더>` · `npm run dxf:public -- --roles <폴더>` | 도면마다 역할표 `<폴더>/<id>.json`(아래 "역할표")을 파싱 옵션으로 넘겨 기준(규칙만)과 견준다. 표가 없는 도면은 규칙만으로 돈다. `--update`와 함께 쓰면 종료 코드 2. |
+| `node tools/dxf-corpus/roles-dump.mjs [--public] [--only <id>]… [--out <폴더>]` | 역할 판정용 특징 덤프 `<id>.dump.json`(기본 `../dxf-roles/dumps`). |
+| `node tools/dxf-corpus/llm-roles.mjs --model <모델> --in <덤프> --out <역할표>` | 덤프 → Anthropic API 한 번 → 역할표. `--validate <역할표>`는 형식만 검사, `--print`는 요청 본문만 낸다(둘 다 키 없이). |
 
 브라우저 테스트의 URL 기본값은 `http://localhost:5173/`다(`npm run build && npx vite preview --port 5173`).
 배포 사이트를 보려면 `npm run dxf:e2e -- https://jinmugeun.github.io/floorplan-3d/`.
@@ -72,3 +75,43 @@ bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 �
 - **캐시**: 저장소 밖 `../dxf-public`(환경 변수 `DXF_PUBLIC_DIR`로 바꾼다). 한 번 받으면 다시 받지 않는다.
 - **오프라인**: 목록을 못 받으면(네트워크 없음 · API 한도 403) "목록을 못 받아 캐시를 쓴다"를 찍고 캐시 폴더의 파일로 채점한다 —
   점수판은 네트워크 없이 돈다. 캐시 폴더도 없으면 목록 오류로 멈춘다.
+
+## 역할표 (2026-10-12 · 계획 12 Task 9)
+
+레이어·블록·문자의 역할을 **규칙 대신** 정하는 표다. 사무소마다 다른 이름 관례(내곡중 `건축` 한 레이어 · 신상중 창 `WID` ·
+"보냉고 양문"은 문이 아니다)를 키워드 사전으로 쫓지 않고, 도면당 한 번 언어 모델(또는 사람)이 이름과 통계를 읽어 쓴다.
+**기하 계산은 그대로 결정적이다** — 표는 역할 이름만 바꾼다. 앱은 파싱 메시지의 옵션 `{ type: 'parse', buf, fileName, roles }`로
+받는다(앱 화면은 아직 넘기지 않는다 · 앱 번들에는 API 키도 호출도 없다 — 언어 모델은 이 폴더의 도구에서만 부른다).
+
+형식(`src/io/dxf/roles.js`의 `checkRoles`가 검사한다 · 드라이런 표와 `llm-roles.mjs`가 쓰는 표가 같은 형식이다):
+
+```json
+{
+  "layers": { "<레이어>": "wall|opening|text|dim|equip|mep|grid|hatch|rail|other" },
+  "blocks": { "<블록>": { "kind": "door|window|pocket|slide|equip|symbol|column|other", "width": 900 } },
+  "texts":  { "<글자 그대로>": "room|area|title|label|axis|other" }
+}
+```
+
+- `width`는 mm 양수 또는 `null`(그러면 이름의 숫자). 문자 키는 앞뒤 공백을 뗀 글자 그대로다. 다른 최상위 칸(`meta` 등)은 보지 않는다.
+- 표에 없는 이름은 **규칙 그대로**다. 잘못된 칸(모르는 역할·종류, 음수 폭)은 버려 그 이름도 규칙으로 가고, 점수판은 버린 칸 수를 한 줄로 알린다.
+- **표가 바꾸는 것**: 레이어 역할(키워드·도형 신호·청록 창호·벽 추정을 덮는다 — 행에 `byTable`, 그 행에는 `guessed`·`byColor`를 달지 않는다;
+  표가 벽을 하나라도 정하면 벽 추정을 하지 않는다), 그 역할로 정해지는 기본 체크(벽)·개구부 재료·난간·실명/제목 후보 레이어, 블록 종류와 폭
+  (`door`·`window`·`pocket`·`slide`만 창·문 · `equip`·`symbol`·`column`·`other`는 이름이 `DR-900`이어도 창·문이 아니다 — 블록 개구부·벽 구간의
+  창 자리·긴 연장의 근거·문 호·외미닫이 기호의 제외가 모두 따른다), 문자 역할(`room` = 규칙이 버릴 글자도 실명 후보 · `area` = 면적 표기 ·
+  나머지 = 이름 아님).
+- **표가 바꾸지 못하는 것**: 꺼짐·동결(꺼진 레이어를 켜지 않는다), 선·호·문자의 기하와 모든 문턱(params.js), 도면 후보·단위, 검토 창에서
+  사람이 바꾼 체크, 그리고 **점수판의 정답**(블록 정답은 이름 정규식만 쓴다 — `blockBoxes(ex, { byName: true })`).
+- 표는 파싱마다 새로 세운다: 워커가 parse를 받을 때마다 앞 파일의 표를 먼저 비운다(표 없이 연 파일·실패한 파일에 새지 않는다).
+
+도구:
+
+- `roles-dump.mjs`: 도면마다 `<id>.dump.json` — `layers[]`(이름 · 색 · 켜짐 · 선/호/문자/치수/인서트 수 · 선 길이 중앙값·90 % · 지금 규칙의 역할 ·
+  추정 여부), `blocks[]`(이름 · INSERT 수 · 첫 INSERT가 거느린 선/호 수 · 그 INSERT 로컬 축의 상자 크기 · 지금 이름 규칙의 종류),
+  `texts[]`(서로 다른 글자 최대 150개 — 도면 안 · 블록 밖 · 실명 레이어의 짧은 글자부터), `meta`(파일 · `$INSUNITS` · 배율 · 선 수).
+  기본은 실파일 넷, `--public`은 공개 39쌍(캐시만). `--only`는 여러 번 줄 수 있다.
+- `llm-roles.mjs`: 덤프 → Messages API 한 번(`fetch` · `x-api-key` · `anthropic-version: 2023-06-01` · 구조화 출력 `output_config.format`
+  JSON 스키마) → 역할표. **모델은 `--model`로만** 받고 폴백이 없다(`claude-haiku-4-5` 등 — 없으면 종료 코드 2). `ANTHROPIC_API_KEY`가
+  없으면 "키 필요"로 종료 코드 2. 응답은 덤프에 없는 이름을 버리고 형식 검사를 지난 칸만 쓴다(`meta`에 모델·사용량·버린 수).
+- 측정: `npm run dxf:score -- --roles ../dxf-roles` · `npm run dxf:public -- --roles ../dxf-roles`(파일 이름은 실파일 id · 공개 도면 이름,
+  예 `../dxf-roles/naegok.json` · `../dxf-roles/2suite (1).json`).

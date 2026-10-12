@@ -12,7 +12,7 @@
 // 스윙 호가 있으면 그쪽이 이기고, 같은 자리에 겹쳐 놓지 않는다.
 // 이 파일은 워커가 import하므로 DOM·ui를 건드리지 않는다.
 import { DXF_PARAMS } from './params.js';
-import { DOOR_BLOCK, OPEN_BLOCK, blockOpenings } from './blockOpenings.js';
+import { DOOR_BLOCK, OPEN_BLOCK, isDoorBlock, blockOpenings } from './blockOpenings.js';
 import { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, nearestProduct, makeItem, spanPieces } from './openingSeat.js';
 import { slideDoors } from './slideDoors.js';
 import { uid } from '../../state/schema.js';
@@ -40,7 +40,7 @@ const normSweep = d => ((d % 360) + 360) % 360;
 export function doorHinges(arcs, layers, toApp = p => p, scale = 1) {
   const clusters = [];
   for (const a of arcs ?? []) {
-    if (!layers.has(a.layer) && !DOOR_BLOCK.test(a.block ?? '')) continue;
+    if (!layers.has(a.layer) && !isDoorBlock(a.block ?? '')) continue;   // 표가 없으면 DOOR_BLOCK 그대로(역할표 · 2026-10-12)
     const r = (a.r ?? 0) * scale;
     if (r < DOOR_R[0] || r > DOOR_R[1]) continue;
     const sweep = normSweep((a.a1 ?? 0) - (a.a0 ?? 0));

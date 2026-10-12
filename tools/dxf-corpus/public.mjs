@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { APP, OPN_TOL, explodeRaw } from './lib.mjs';
+import { APP, OPN_TOL, explodeRaw, rolesOption, loadRoles } from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIR = process.env.DXF_PUBLIC_DIR ?? resolve(APP, '../dxf-public');
@@ -25,6 +25,10 @@ const only = hasOnly ? argv[argv.indexOf(ends ? '--ends' : '--only') + 1] : null
 // 않는다(아래 병합이 안전망이고, 이 거절이 정책이다).
 if (hasOnly && (only == null || only.startsWith('--'))) { console.log(`해당 도면 없음: ${only ?? '(값 없음)'}`); process.exit(2); }
 if (hasOnly && flag('--update')) { console.log('--update는 --only와 함께 쓰지 않는다 — 기준은 전체 실행으로만 쓴다'); process.exit(2); }
+// --roles <dir>(2026-10-12 · 계획 12 Task 9): 도면마다 `<dir>/<도면 이름>.json` 역할표(예 `2suite (1).json`)를 파싱 옵션으로 넘긴다 —
+// 측정이라 --update와 함께면 종료 코드 2(--only와 같은 정책).
+const rolesArg = rolesOption(argv);
+if (rolesArg.error) { console.log(rolesArg.error); process.exit(2); }
 const UA = { headers: { 'User-Agent': 'floorplan-3d dxf-corpus' } };
 
 // `<n>suite (k).dxf`만 쓴다: sample.dxf는 2suite (6)과 같은 파일이고 정답 이름 꼴(sample_Annotated)이 다르다. 숫자 순.
@@ -89,9 +93,10 @@ async function score(name) {
   const path = resolve(DIR, name), gtPath = resolve(DIR, gtName(name));
   if (!existsSync(path) || !existsSync(gtPath)) return { name, error: '파일 없음(--fetch)' };
   const handle = await worker();
+  const roles = await loadRoles(rolesArg.dir, name.replace(/\.dxf$/i, ''));
   const raw = readFileSync(path);
   const t0 = performance.now();
-  const parsed = handle({ type: 'parse', buf: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), fileName: name });
+  const parsed = handle({ type: 'parse', buf: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), fileName: name, ...(roles ? { roles } : {}) });
   if (parsed.type !== 'parsed') return { name, error: parsed.code ?? 'parse' };
   const ex = handle({ type: 'extract', opts: { layers: parsed.summary.checked, region: 0, trace: false } });
   if (ex.type !== 'extracted') return { name, error: ex.code ?? 'extract', summary: parsed.summary };

@@ -4,19 +4,22 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { corpus, runDrawing, WORSE, DXF_DIR } from './lib.mjs';
+import { corpus, runDrawing, WORSE, DXF_DIR, rolesOption, loadRoles } from './lib.mjs';
 
 const BASE = resolve(dirname(fileURLToPath(import.meta.url)), 'baseline.json');
 const update = process.argv.includes('--update');
+// --roles <dir>(2026-10-12 · 계획 12 Task 9): 도면 id별 역할표 `<dir>/<id>.json`을 파싱 옵션으로 넘겨 기준(규칙만)과 견준다. --update와 함께면 종료 코드 2.
+const rolesArg = rolesOption(process.argv.slice(2));
+if (rolesArg.error) { console.log(rolesArg.error); process.exit(2); }
 const base = existsSync(BASE) ? JSON.parse(readFileSync(BASE, 'utf8')) : {};
 const COLS = ['regions', 'walls', 'rooms', 'named', 'unmatched', 'openEnds', 'tiny', 'dimFit', 'areaOk', 'areaAll', 'doors', 'windows', 'passes', 'columns', 'opnAll', 'opnHit', 'opnWidth', 'opnKind', 'areaM2', 'ms'];
 const detail = process.argv.includes('--areas');
 const now = {};
 let worse = 0, skipped = 0;
-console.log(`DXF_DIR ${DXF_DIR}`);
+console.log(`DXF_DIR ${DXF_DIR}${rolesArg.dir ? ` · 역할표 ${resolve(rolesArg.dir)}` : ''}`);
 console.log(['id'.padEnd(11), ...COLS.map(c => c.padStart(9))].join(''));
 for (const entry of corpus()) {
-  const r = await runDrawing(entry);
+  const r = await runDrawing(entry, { roles: await loadRoles(rolesArg.dir, entry.id) });
   if (!r) { skipped++; console.log(`${entry.id.padEnd(11)} (파일 없음: *${entry.match}*.dxf)`); continue; }
   if (r.error) { worse++; console.log(`${entry.id.padEnd(11)} 오류 ${r.error}`); continue; }
   now[entry.id] = r.metrics;

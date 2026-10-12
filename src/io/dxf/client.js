@@ -61,7 +61,8 @@ export function createDxfClient({ workerFactory = defaultWorkerFactory } = {}) {
     pump();
   });
   return {
-    parse: (buf, opts = {}) => send({ type: 'parse', buf, fileName: opts.fileName ?? '' }, [buf], opts).then(m => m.summary),
+    // roles(2026-10-12 · 계획 12 Task 9): 역할표(형식은 roles.js) — 있을 때만 메시지에 싣는다. 앱 화면은 아직 넘기지 않는다(도구·다음 계획의 중계 서버가 쓴다).
+    parse: (buf, opts = {}) => send({ type: 'parse', buf, fileName: opts.fileName ?? '', ...(opts.roles ? { roles: opts.roles } : {}) }, [buf], opts).then(m => m.summary),
     extract: (extractOpts = {}, opts = {}) => send({ type: 'extract', opts: extractOpts }, [], opts),
     cancel() {
       if (!worker) return;
@@ -76,10 +77,10 @@ export function createDxfClient({ workerFactory = defaultWorkerFactory } = {}) {
 
 // 한 번에 끝내는 편의 경로(브라우저 프로브·통합 테스트). 대화상자는 재추출을 해야 하므로
 // createDxfClient를 직접 들고 워커를 살려 둔다.
-export async function importDxf(file, { workerFactory, onProgress, fileName, ...extractOpts } = {}) {
+export async function importDxf(file, { workerFactory, onProgress, fileName, roles, ...extractOpts } = {}) {
   const client = createDxfClient({ workerFactory });
   try {
-    const summary = await client.parse(await file.arrayBuffer(), { fileName: fileName ?? file.name ?? '', onProgress });
+    const summary = await client.parse(await file.arrayBuffer(), { fileName: fileName ?? file.name ?? '', onProgress, roles });
     const out = await client.extract({ layers: summary.checked, thickness: DXF_PARAMS.thickness, ...extractOpts }, { onProgress });
     return { project: out.project, report: { summary, stats: out.stats, trace: out.trace } };
   } finally {

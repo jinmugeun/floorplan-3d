@@ -2,13 +2,14 @@
 // 자리를 지나는가 / 벽 선이 받치는가"를 묻는다 — 근거 없이 빈 바닥을 건너면 없는 벽이 선다(세척실 날개벽 3.1 m ·
 // 현관 벽 2.8 m · 405 벽 안의 100 모서리 띠).
 import { mergeIv } from './faces.js';
-import { OPEN_BLOCK } from './blockOpenings.js';
+import { isOpenBlock } from './blockOpenings.js';
 
 // 문·창 근거 점(2026-09-30): 개구부 레이어의 선·호와 창·문 이름 블록(OPEN_BLOCK)의 선·호. 반환 evidence(p, q, th) —
 // 길 p → q(반폭 th/2 + EVIDENCE_PAD) 안에 근거 점이 있는가. 근거가 하나도 없는 도면은 가릴 수 없어 null이다.
 const EVIDENCE_PAD = 100;
 export function openingEvidence(ex, openFaceLayers, inRoi) {
-  const ok = x => openFaceLayers.has(x.layer) || OPEN_BLOCK.test(x.block ?? '');
+  // isOpenBlock = 표가 없으면 OPEN_BLOCK 정규식 그대로, 역할표가 있으면 그 블록 종류(2026-10-12 · 계획 12 Task 9).
+  const ok = x => openFaceLayers.has(x.layer) || isOpenBlock(x.block ?? '');
   const pts = [];
   for (const s of ex.segs) if (ok(s) && (inRoi(s.a) || inRoi(s.b))) pts.push(s.a, s.b, [(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2]);
   for (const a of [...(ex.arcs ?? []), ...(ex.polyArcs ?? [])]) if (ok(a) && inRoi(a.c)) pts.push(a.c);
