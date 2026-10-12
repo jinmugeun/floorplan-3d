@@ -7,6 +7,7 @@ import { createDxfClient } from '../io/dxf/client.js';
 import { traceBackground } from '../io/dxf/trace.js';
 import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
+import { buildImportMeta } from '../io/dxfFeedback.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED, DXF_MANY_PLANS, DXF_REGION, DXF_REGION_LABEL, DXF_RECONCILED,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
@@ -67,7 +68,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   const heightMm = () => clampTo(Number(q('height').value) || 3500, DXF_HEIGHT_RANGE);
   const thicknessMm = () => clampTo(Number(q('thickness').value) || 200, DXF_THICKNESS_RANGE);
   const client = createDxfClient({ workerFactory });
-  let summary = null, initial = new Set(), checked = new Set(), last = null, timer = 0, closed = false, importing = false;
+  let summary = null, initial = new Set(), checked = new Set(), last = null, timer = 0, closed = false, importing = false, fileName = '';
   // want: 지금까지 요청된 재추출의 번호. 결과는 **그 번호가 아직 최신일 때만** 가져올 수 있다 — 옵션을 바꾼 순간부터
   // 최신 결과가 올 때까지 [가져오기]를 잠근다(2026-09-29 리뷰: 층고를 바꾸고 곧바로 누르면 옛 결과가 들어갔다).
   let want = 0, pending = false;
@@ -137,24 +138,26 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     drawDxfPreview(q('preview'), { trace, walls: floor.walls, rooms: floor.rooms, openEnds: stats.openEnds ?? [] });
   };
 
+  // 추출 옵션 한 곳(2026-10-12 · 계획 12 Task 10): 재추출과 교정 기록(가져온 순간의 선택)이 같은 값을 본다.
+  const extractOpts = () => ({
+    layers: [...checked],
+    region: regionIdx(),
+    thickness: thicknessMm(),
+    height: heightMm(),
+    scale: Number(q('units').value) || summary.unitScale,
+    useOpeningFaces: q('openFaces').checked,
+    autoNames: q('autoNames').checked,
+    dividerByNames: q('nameDividers').checked,     // 기본 꺼짐(사용자 결정 2026-10-02 · 계획 12 Task 6)
+    openings: q('openings').checked,
+    trace: q('trace').checked,
+  });
   const runExtract = () => {
     if (!summary || closed) return;
     showError(null);
     q('import').disabled = true;
     progress(3);
     const id = want;
-    client.extract({
-      layers: [...checked],
-      region: regionIdx(),
-      thickness: thicknessMm(),
-      height: heightMm(),
-      scale: Number(q('units').value) || summary.unitScale,
-      useOpeningFaces: q('openFaces').checked,
-      autoNames: q('autoNames').checked,
-      dividerByNames: q('nameDividers').checked,     // 기본 꺼짐(사용자 결정 2026-10-02 · 계획 12 Task 6)
-      openings: q('openings').checked,
-      trace: q('trace').checked,
-    }, { onProgress })
+    client.extract(extractOpts(), { onProgress })
       .then(m => {
         if (closed) return;
         last = m;
@@ -178,6 +181,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     try {
       summary = await client.parse(await f.arrayBuffer(), { fileName: f.name ?? '', onProgress });
       if (closed) return;
+      fileName = f.name ?? '';
       initial = new Set(summary.checked);
       checked = new Set(summary.checked);
       q('units').value = String(summary.unitScale);
@@ -202,7 +206,11 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     if (!last || closed || importing || pending) return;
     importing = true;
     q('import').disabled = true;
-    const { project, stats, trace } = last;
+    const { stats, trace } = last;
+    // 교정 기록(2026-10-12 · 계획 12 Task 10): 사람이 검토를 마친 이 순간의 선택과 결과 스냅숏을 meta.dxfImport에 남긴다(스토어에 들어가기 전 —
+    // 자동 저장본에도 함께 간다). 워커 결과(last.project)는 고치지 않는다(얕은 복사): 확인 창에서 취소하고 다시 누르면 새 시각으로 다시 만든다.
+    const project = { ...last.project };
+    project.meta = { ...project.meta, dxfImport: buildImportMeta({ project, fileName, opts: extractOpts(), stats }) };
     if (q('trace').checked && trace?.segs?.length) {
       // 래스터는 **메인 스레드**에서 한 번만 한다(워커 OffscreenCanvas를 쓰지 않는 이유는 §18.6).
       const bg = traceBackground(trace.segs, trace.box);

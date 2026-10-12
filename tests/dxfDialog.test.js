@@ -599,3 +599,42 @@ test('미리보기는 구획선(virtual)을 두께 폴리곤이 아니라 중심
   expect([dashed[0].dash, dashed[0].strokeStyle]).toEqual([[6, 4], PREVIEW_COLORS.wall]);
   expect(ctx.dash).toEqual([]);                                                          // 점선을 되돌려 놓았다
 });
+
+// 2026-10-12 · 계획 12 Task 10: [가져오기]를 누른 순간(사람이 검토를 마친 뒤 · 스토어에 들어가기 전)의 선택과 결과 스냅숏을
+// project.meta.dxfImport에 남긴다 — 나중에 "교정 기록 내보내기"가 지금 프로젝트와의 차이를 낸다(io/dxfFeedback.js).
+test('[가져오기]는 가져오기 선택과 결과 스냅숏을 project.meta.dxfImport에 남긴다(워커 결과는 고치지 않는다)', async () => {
+  vi.setSystemTime(new Date('2026-10-12T05:06:07.000Z'));
+  const onImported = vi.fn(async () => true);
+  const { w, q } = open({ file: fileOf('사동중.dxf'), onImported });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const floor = {
+    id: 'f1', name: '1F',
+    walls: [{ id: 'w1', a: [-100.54, -50.26], b: [200.5, -50.26], thickness: 200, height: 3500, colorIn: '#ffffff' }, { id: 'v1', a: [0, 0], b: [0, 900], thickness: 20, virtual: true }],
+    rooms: [{ id: 'r1', name: '교실', area: 10.5, areaCenter: 12.346, points: [[0, 0]], wallIds: ['w1'] }],
+    items: [{ id: 'i1', kind: 'door', productId: 'door-swing-900', wallId: 'w1', t: 0.5, size: [900, 40, 2100], pos: [1, 2], attach: 'wall' }],
+  };
+  const ext = { ...EXTRACTED, project: { ...EXTRACTED.project, floors: [floor] }, stats: { ...EXTRACTED.stats, guessed: false } };
+  w.emit(ext);
+  await flush();
+  q('import').click();
+  await flush();
+  const { project } = onImported.mock.calls[0][0];
+  const meta = project.meta.dxfImport;
+  expect(meta.at).toBe('2026-10-12T05:06:07.000Z');
+  expect(meta.fileName).toBe('사동중.dxf');
+  const sent = w.posted.filter(m => m.type === 'extract').at(-1).opts;
+  expect(meta.checked).toEqual(sent.layers);                                 // 이 결과를 낸 체크 그대로
+  expect(meta.checked.sort()).toEqual([...SUMMARY.checked].sort());
+  const { layers, ...rest } = sent;
+  expect(meta.options).toEqual({ ...rest, rolesGiven: false, layersGuessed: false });
+  expect(meta.options).toMatchObject({ region: 0, dividerByNames: false, openings: true });
+  expect(meta.snapshot).toEqual({
+    walls: [{ id: 'w1', a: [-100.5, -50.3], b: [200.5, -50.3], thickness: 200, virtual: false }, { id: 'v1', a: [0, 0], b: [0, 900], thickness: 20, virtual: true }],
+    rooms: [{ id: 'r1', name: '교실', area: 12.35 }],
+    items: [{ id: 'i1', productId: 'door-swing-900', wallId: 'w1', t: 0.5, size: [900, 40, 2100] }],
+  });
+  expect(project.floors).toBe(ext.project.floors);                           // 층은 워커가 낸 그대로다
+  expect(ext.project.meta).toBeUndefined();                                  // 워커 결과 객체에는 붙이지 않는다(취소 뒤 다시 눌러도 새 기록)
+});

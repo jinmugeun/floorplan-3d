@@ -9,7 +9,8 @@ import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createProjectActions } from '../src/app/projectActions.js';
 import { createDirtyTracker, createSaveIndicator } from '../src/app/dirty.js';
-import { DXF_EXPORTED } from '../src/ui/messages.js';
+import { DXF_EXPORTED, DXF_FEEDBACK_NONE, DXF_FEEDBACK_EXPORTED } from '../src/ui/messages.js';
+import { buildImportMeta } from '../src/io/dxfFeedback.js';
 
 function setup({ dirty = true, restored = null } = {}) {
   const store = createStore(createEmptyProject());
@@ -90,6 +91,32 @@ test('정규화 DXF 내보내기는 .dxf 파일을 내려받고 알린다', asyn
   expect(names[0]).toMatch(/\.dxf$/);
   expect(blobs[0].type).toBe('application/dxf');
   expect(a.toasts).toEqual([DXF_EXPORTED]);
+});
+
+// 2026-10-12 · 계획 12 Task 10: 교정 기록은 DXF로 가져온 프로젝트(meta.dxfImport)에서만 — 아니면 알리기만 하고 아무것도 쓰지 않는다.
+test('교정 기록 내보내기: DXF로 가져온 프로젝트가 아니면 알리고 파일을 쓰지 않는다', () => {
+  const a = setup();
+  addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  a.actions.exportDxfFeedback();
+  expect(click).not.toHaveBeenCalled();
+  click.mockRestore();
+  expect(a.toasts).toEqual([DXF_FEEDBACK_NONE]);
+});
+
+test('교정 기록 내보내기는 <이름>-dxf-feedback.json(application/json)을 내려받고 수를 알린다', () => {
+  const a = setup();
+  addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
+  a.store.swap({ ...a.store.get(), meta: { dxfImport: buildImportMeta({ project: a.store.get(), fileName: 'a.dxf', opts: { layers: ['WAL'] } }) } });
+  const blobs = [], names = [];
+  global.URL.createObjectURL = b => { blobs.push(b); return 'blob:x'; };
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () { names.push(this.download); });
+  a.actions.exportDxfFeedback();
+  click.mockRestore();
+  expect(names).toHaveLength(1);
+  expect(names[0]).toMatch(/^새 프로젝트_\d{8}-\d{4}-dxf-feedback\.json$/);
+  expect(blobs[0].type).toBe('application/json');
+  expect(a.toasts).toEqual([DXF_FEEDBACK_EXPORTED({ changes: 0 })]);
 });
 
 // 리뷰 M1: 새로 만든 직후 상단 바가 "HH:MM 자동 저장됨"이라고 적혀 있었다(저장은 일어나지 않았다).

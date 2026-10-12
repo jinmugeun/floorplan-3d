@@ -46,16 +46,17 @@ describe('상단 바', () => {
   });
 
   // 2026-10-12 · 계획 12 Task 3: "정규화 DXF 내보내기"가 JSON 내보내기 바로 뒤에 선다(가져온 도면을 CAD에서 고쳐 다시 들여오는 고리).
-  test('더보기 메뉴 4항목이 actions를 부른다', () => {
+  // 2026-10-12 · 계획 12 Task 10: "교정 기록 내보내기"가 그 바로 뒤다(가져온 직후와 지금의 차이 — 학습 데이터의 씨앗).
+  test('더보기 메뉴 5항목이 actions를 부른다', () => {
     const calls = [];
-    const a = setup({ saveAsTemplate: () => calls.push('tpl'), exportJson: () => calls.push('json'), exportDxf: () => calls.push('dxf'), exit: () => calls.push('exit') });
+    const a = setup({ saveAsTemplate: () => calls.push('tpl'), exportJson: () => calls.push('json'), exportDxf: () => calls.push('dxf'), exportDxfFeedback: () => calls.push('feedback'), exit: () => calls.push('exit') });
     a.click('btnMore');
-    expect(menuLabels()).toEqual(['템플릿으로 저장', 'JSON 내보내기', '정규화 DXF 내보내기', '나가기']);
-    for (let i = 0; i < 4; i++) {
+    expect(menuLabels()).toEqual(['템플릿으로 저장', 'JSON 내보내기', '정규화 DXF 내보내기', '교정 기록 내보내기', '나가기']);
+    for (let i = 0; i < 5; i++) {
       if (i) a.click('btnMore');
       document.querySelectorAll('.ctx-item')[i].click();
     }
-    expect(calls).toEqual(['tpl', 'json', 'dxf', 'exit']);
+    expect(calls).toEqual(['tpl', 'json', 'dxf', 'feedback', 'exit']);
   });
 
   test('새로만들기는 actions.newProject를 부른다', () => {
