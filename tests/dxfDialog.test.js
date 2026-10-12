@@ -7,7 +7,7 @@ import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_S
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
-import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK } from '../src/ui/messages.js';
+import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED } from '../src/ui/messages.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -558,4 +558,44 @@ test('구획선을 긋거나 딸린 방을 합쳤으면 알림 줄에 적는다'
   expect(DXF_RECONCILED(2, 0)).toBe('도면의 면적 표기에 맞춰 구획선 2개를 그었습니다');
   expect(DXF_RECONCILED(0, 3)).toBe('도면의 면적 표기에 맞춰 딸린 방 3곳을 합쳤습니다');
   expect(q('notice').hidden).toBe(false);
+});
+
+// 2026-10-12 · 계획 12 Task 6: 실명만으로 구획선은 **옵션, 기본 꺼짐**(사용자 결정 2026-10-02). 켜면 추출 옵션 dividerByNames로 다시 추출하고,
+// 그은 수를 알림 줄에 적는다(제안이라 점선을 확인하게).
+test('"실명만으로 구획선 제안" 칸은 기본 꺼짐이고, 켜면 dividerByNames로 다시 추출하고 그은 수를 알린다', async () => {
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const lastOpts = () => w.posted.filter(m => m.type === 'extract').at(-1).opts;
+  expect(q('nameDividers').checked).toBe(false);
+  expect(q('nameDividers').closest('label').textContent.trim()).toBe(DXF_NAME_DIVIDERS);
+  expect(DXF_NAME_DIVIDERS).toBe('실명만으로 구획선 제안(면적 표기 없을 때)');
+  expect(lastOpts().dividerByNames).toBe(false);
+  w.emit(EXTRACTED);
+  await flush();
+  q('nameDividers').click();
+  expect(q('import').disabled).toBe(true);                  // 최신 결과가 올 때까지 잠긴다
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(lastOpts().dividerByNames).toBe(true);
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, nameDividers: 3 } });
+  await flush();
+  expect(q('notice').textContent).toBe(DXF_NAME_DIVIDED(3));
+  expect(DXF_NAME_DIVIDED(3)).toBe('실명만으로 구획선 3개를 제안했습니다 — 미리보기의 점선을 확인해 주세요');
+  expect(q('import').disabled).toBe(false);
+});
+
+test('미리보기는 구획선(virtual)을 두께 폴리곤이 아니라 중심선 점선으로 긋는다', () => {
+  const calls = [];
+  const ctx = { strokeStyle: '', fillStyle: '', lineWidth: 0, globalAlpha: 1, dash: [] };
+  for (const op of ['clearRect', 'beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'stroke']) ctx[op] = (...args) => calls.push({ op, args, dash: ctx.dash, strokeStyle: ctx.strokeStyle });
+  ctx.setLineDash = d => { ctx.dash = d; };
+  const walls = [{ a: [-3000, 0], b: [3000, 0], thickness: 200 }, { a: [0, -2000], b: [0, 2000], thickness: 20, virtual: true }];
+  drawDxfPreview({ width: 560, height: 420, getContext: () => ctx }, { walls, box: [-3000, -2000, 3000, 2000] });
+  expect(calls.filter(c => c.op === 'fill')).toHaveLength(1);                           // 벽 하나만 폴리곤
+  const dashed = calls.filter(c => c.op === 'stroke' && c.dash.length);
+  expect(dashed).toHaveLength(1);
+  expect([dashed[0].dash, dashed[0].strokeStyle]).toEqual([[6, 4], PREVIEW_COLORS.wall]);
+  expect(ctx.dash).toEqual([]);                                                          // 점선을 되돌려 놓았다
 });

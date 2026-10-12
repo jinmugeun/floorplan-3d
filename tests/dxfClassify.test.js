@@ -146,10 +146,12 @@ test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되�
     doorLeaf: [700, 1300], slideOffset: 200, slideArrowLen: [400, 600],
     // 2026-10-12 난간 구획선(공개 코퍼스 실측 — params.js 주석)
     railMin: 600, railSnap: 150, railPair: 300,
+    // 2026-10-12 이름 구획선(옵션 · 계획 12 Task 6 — params.js 주석)
+    dividerMinArea: 2_000_000,
   });
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
   expect(Object.isFrozen(DXF_PARAMS.doorLeaf) && Object.isFrozen(DXF_PARAMS.slideArrowLen)).toBe(true);   // 범위 배열도 얼어 있다
-  expect(Object.keys(DXF_PARAMS)).toHaveLength(46);
+  expect(Object.keys(DXF_PARAMS)).toHaveLength(47);
 });
 
 // ── 2026-10-02 다른 사무소 도면 둘(신상중 · 내곡중)에서 드러난 판정 오류 ──────────────────────────

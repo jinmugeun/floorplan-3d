@@ -43,6 +43,11 @@
 //    railPair 300 = 두 줄로 그린 난간을 가운데 한 줄로 볼 간격 상한: 난간 레이어의 나란한 짝 간격은
 //    25~275(281쌍 · 그중 100이 231)와 ≥ 500(84쌍 — 따로 선 난간: 6suite (10)·3suite (10)의 발코니 앞 난간과 실외기 받침 난간 600)으로 갈린다
 //    (200~400 같음).
+//  - 이름 구획선(nameDividers.js · 2026-10-12 계획 12 Task 6 · **옵션, 기본 꺼짐**): dividerMinArea 2,000,000 mm²(2 m²) = 실명만으로 그은 구획선이
+//    남기는 조각의 최소 넓이. 공개 코퍼스 1층 문자에 두 글자 설비 표지(`强电`·`弱电`·`水井` — 실명 꼴이라 글자 수로는 못 거른다)가 섞여 있고 그 자리는
+//    벽감·샤프트다 — 그 표지 하나로 방을 가르지 않게 한다(사전 검토가 정한 값). 공개 정답 1,916방 중 2 m² 미만은 171(샤프트 水机房·电机房·风机房
+//    0.45~ · 储藏间 0.60~ · 花园·玄关·阳台·过道의 아래 꼬리)이고 卫生间(2.20~)·卧室·厨房·餐厅·客厅은 모두 그 위다 — 이 규칙은 주 공간만 가른다.
+//    민감도(옵션 켬 · Σ roomHit): 0.4 m² 1402 · 1 m² 1402 · 2 m² 1401 · 3 m² 1398 — 값에 둔하다.
 export const DXF_PARAMS = Object.freeze({
   minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
   tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20, spanEdge: 10, spanOverlap: 0.25,
@@ -54,4 +59,5 @@ export const DXF_PARAMS = Object.freeze({
   minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
   doorLeaf: Object.freeze([700, 1300]), slideOffset: 200, slideArrowLen: Object.freeze([400, 600]),
   railMin: 600, railSnap: 150, railPair: 300,
+  dividerMinArea: 2_000_000,
 });

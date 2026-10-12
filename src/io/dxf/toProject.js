@@ -11,6 +11,7 @@ import { DXF_PARAMS } from './params.js';
 import { dimLines, assignRefs } from './refLines.js';
 import { addDividers, mergeAnnexes, claimOutside } from './reconcile.js';
 import { railDividers } from './railDividers.js';
+import { addDividersByNames } from './nameDividers.js';
 
 // 점 p에서 선분 a–b까지의 거리.
 const distSeg = (p, a, b) => {
@@ -135,6 +136,7 @@ export function buildProject(raw, {
   height = DXF_PARAMS.height, scale = 1, texts = [], fileName = '', autoNames = true,
   params: P = DXF_PARAMS, openings = () => [], titleTexts = null, titleLayers = null, nameRoles = null, columns = [], dims = [], rails = [],
   roles = null,     // 역할표(roles.checkRoles · 2026-10-12 Task 9) — 여기서는 문자 역할(roles.texts)만 쓴다(roomLabels)
+  dividerByNames = false,     // 실명만으로 구획선(nameDividers.js · 2026-10-12 Task 6) — 옵션, 기본 꺼짐(사용자 결정 2026-10-02)
 } = {}) {
   const { toApp, box, size } = makeToApp(raw, scale);
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.
@@ -159,10 +161,22 @@ export function buildProject(raw, {
   // 방 구조를 도면의 실명·면적 표기에 맞춘다(reconcile.js): 트인 공간의 구획선 · 한 실로 센 딸린 방.
   const labels = autoNames ? roomLabels(texts, toApp, { nameRoles, textRoles: roles?.texts?.size ? roles.texts : null }) : [];
   walls = addDividers(walls, labels);
+  // 실명만으로 구획선(옵션): 면적 표기 구획선 뒤(표기가 든 방은 건드리지 않는다), 딸린 방 앞(나뉜 조각은 실명을 하나씩 가져 "이름 없는 방"이 아니다).
+  // 개구부를 구획선 없이 먼저 한 번 앉혀 그 자리를 넘긴다 — 구획선 끝이 문·창 한가운데에서 벽을 나누면 그 개구부가 앉지 못한다(옵션을 켤 때만 드는 비용).
+  let byNames = { walls, added: 0 };
+  if (dividerByNames) {
+    const solid = walls.filter(w => !w.virtual), byId = new Map(solid.map(w => [w.id, w]));
+    const spans = (openings({ walls: solid, rooms: [], toApp }) ?? []).flatMap(it => (byId.has(it.wallId) ? [{ wall: byId.get(it.wallId), t: it.t, width: it.size[0] }] : []));
+    byNames = addDividersByNames(walls, labels, { params: P, height, openings: spans });
+  }
+  walls = byNames.walls;
   const annexes = mergeAnnexes(walls, labels);
-  // 난간 구획선 표지는 여기서 세고 지운다 — 저장 형식은 그대로(그냥 구획선)이고, stats.dividers(면적 표기로 그은 것 — 검토 창 문구)와 따로 센다.
-  const railIds = new Set();
-  for (const w of walls) if (w.rail) { railIds.add(w.id); delete w.rail; }
+  // 난간·이름 구획선 표지는 여기서 세고 지운다 — 저장 형식은 그대로(그냥 구획선)이고, stats.dividers(면적 표기로 그은 것 — 검토 창 문구)와 따로 센다.
+  const railIds = new Set(), nameIds = new Set();
+  for (const w of walls) {
+    if (w.rail) { railIds.add(w.id); delete w.rail; }
+    if (w.byName) { nameIds.add(w.id); delete w.byName; }
+  }
   const rooms = detectRooms(walls);
   for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
   const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { labels }).unmatched : [];
@@ -200,7 +214,8 @@ export function buildProject(raw, {
     unmatchedNames,
     items: floor.items.length,
     columns: colItems.length,
-    dividers: floor.walls.filter(w => w.virtual && !railIds.has(w.id)).length, railDividers: railIds.size, annexes,
+    dividers: floor.walls.filter(w => w.virtual && !railIds.has(w.id) && !nameIds.has(w.id)).length, railDividers: railIds.size,
+    nameDividers: byNames.added, annexes,
     size,
     // DXF 좌표 → 앱 좌표의 원점·배율(앱 = (DXF × stats.unitScale − origin) × scale, y 뒤집기 — 워커가 전개를 unitScale배로 mm로
     // 만든 뒤 이 함수가 받는다 · 2026-10-06 최종 리뷰). 치수·면적선을 평면도와 맞댈 때 쓴다.

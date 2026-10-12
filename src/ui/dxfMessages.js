@@ -28,6 +28,10 @@ export const DXF_REGION = (i, wM, hM, hint) => `도면 ${i} · ${wM} m × ${hM} 
 export const DXF_REGION_LABEL = '도면';
 // 가져오기가 방 구조를 도면의 실명·면적 표기에 맞췄다(io/dxf/reconcile.js): 구획선 = 방만 나누는 점선, 딸린 방 = 한 실로 센 칸.
 export const DXF_RECONCILED = (dividers, annexes) => '도면의 면적 표기에 맞춰 ' + (dividers ? '구획선 ' + dividers + '개를 ' + (annexes ? '긋고 ' : '그었습니다') : '') + (annexes ? '딸린 방 ' + annexes + '곳을 합쳤습니다' : '');
+// 실명만으로 구획선(2026-10-12 · 계획 12 Task 6 · io/dxf/nameDividers.js): 검토 창 체크박스(기본 꺼짐 — 사용자 결정 2026-10-02: 면적 표기 없이
+// 자동으로 긋지 않는다)와 켰을 때 그은 수. 제안이므로 미리보기의 점선을 사람이 확인하게 말한다.
+export const DXF_NAME_DIVIDERS = '실명만으로 구획선 제안(면적 표기 없을 때)';
+export const DXF_NAME_DIVIDED = n => `실명만으로 구획선 ${n}개를 제안했습니다 — 미리보기의 점선을 확인해 주세요`;
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
 export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
 export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;

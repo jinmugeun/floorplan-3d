@@ -11,6 +11,7 @@
 | `npm run dxf:public [-- --fetch] [-- --update]` | 공개 정답 코퍼스(아래 절)를 채점하고 `public-baseline.json`과 견준다. `--update`는 지금 값을 기준에 병합해 쓴다. |
 | `npm run dxf:public -- --only "<이름>"` | 한 도면만 채점한다(기준은 쓰지 않는다 — `--update`와 함께 쓰면 종료 코드 2). |
 | `npm run dxf:score -- --roles <폴더>` · `npm run dxf:public -- --roles <폴더>` | 도면마다 역할표 `<폴더>/<id>.json`(아래 "역할표")을 파싱 옵션으로 넘겨 기준(규칙만)과 견준다. 표가 없는 도면은 규칙만으로 돈다. `--update`와 함께 쓰면 종료 코드 2. |
+| `npm run dxf:score -- --dividers` · `npm run dxf:public -- --dividers` | 실명만으로 구획선(추출 옵션 `dividerByNames` · 검토 창 "실명만으로 구획선 제안" · 기본 꺼짐 — 2026-10-12 계획 12 Task 6)을 켜고 기준(꺼진 값)과 견준다. `--update`와 함께 쓰면 종료 코드 2. |
 | `node tools/dxf-corpus/roles-dump.mjs [--public] [--only <id>]… [--out <폴더>]` | 역할 판정용 특징 덤프 `<id>.dump.json`(기본 `../dxf-roles/dumps`). |
 | `node tools/dxf-corpus/llm-roles.mjs --model <모델> --in <덤프> --out <역할표>` | 덤프 → Anthropic API 한 번 → 역할표. `--validate <역할표>`는 형식만 검사, `--print`는 요청 본문만 낸다(둘 다 키 없이). |
 

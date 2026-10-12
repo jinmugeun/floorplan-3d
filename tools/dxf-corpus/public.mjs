@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { APP, OPN_TOL, explodeRaw, rolesOption, loadRoles } from './lib.mjs';
+import { APP, OPN_TOL, explodeRaw, rolesOption, loadRoles, dividersOption } from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIR = process.env.DXF_PUBLIC_DIR ?? resolve(APP, '../dxf-public');
@@ -29,6 +29,9 @@ if (hasOnly && flag('--update')) { console.log('--update는 --only와 함께 쓰
 // 측정이라 --update와 함께면 종료 코드 2(--only와 같은 정책).
 const rolesArg = rolesOption(argv);
 if (rolesArg.error) { console.log(rolesArg.error); process.exit(2); }
+// --dividers(2026-10-12 · 계획 12 Task 6): 실명만으로 구획선 옵션을 켜고 잰다 — 측정이라 --update와 함께면 종료 코드 2(기준은 꺼진 값).
+const divArg = dividersOption(argv);
+if (divArg.error) { console.log(divArg.error); process.exit(2); }
 const UA = { headers: { 'User-Agent': 'floorplan-3d dxf-corpus' } };
 
 // `<n>suite (k).dxf`만 쓴다: sample.dxf는 2suite (6)과 같은 파일이고 정답 이름 꼴(sample_Annotated)이 다르다. 숫자 순.
@@ -99,7 +102,7 @@ async function score(name) {
   const t0 = performance.now();
   const parsed = handle({ type: 'parse', buf: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), fileName: name, ...(roles ? { roles } : {}) });
   if (parsed.type !== 'parsed') return { name, error: parsed.code ?? 'parse' };
-  const ex = handle({ type: 'extract', opts: { layers: parsed.summary.checked, region: 0, trace: false } });
+  const ex = handle({ type: 'extract', opts: { layers: parsed.summary.checked, region: 0, trace: false, ...(divArg.on ? { dividerByNames: true } : {}) } });
   if (ex.type !== 'extracted') return { name, error: ex.code ?? 'extract', summary: parsed.summary };
   const ms = Math.round(performance.now() - t0);
   const { stats, project } = ex, fl = project.floors[0];

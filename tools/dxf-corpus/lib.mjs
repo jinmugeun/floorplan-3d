@@ -39,6 +39,12 @@ export function rolesOption(argv) {
   if (argv.includes('--update')) return { dir, error: '--update는 --roles와 함께 쓰지 않는다 — 기준은 역할표 없는 규칙의 값이다' };
   return { dir, error: null };
 }
+// `--dividers`(2026-10-12 · 계획 12 Task 6): 실명만으로 구획선(옵션 dividerByNames)을 켜고 잰다 — 측정이라 `--update`와 함께면 error(종료 코드 2 ·
+// 기준은 꺼진 값이다 — 사용자 결정 2026-10-02: 면적 표기 없이 자동으로 긋지 않는다).
+export function dividersOption(argv) {
+  const on = argv.includes('--dividers');
+  return { on, error: on && argv.includes('--update') ? '--update는 --dividers와 함께 쓰지 않는다 — 기준은 옵션이 꺼진 값이다' : null };
+}
 // `<dir>/<id>.json` → 원 JSON(워커가 checkRoles로 검사한다). 없으면 null이고 그 사실을 한 줄로 알린다(규칙만으로 돈다).
 // 형식 오류가 있으면 버려지는 칸 수를 한 줄로 알린다(그 이름들은 규칙으로 간다).
 export async function loadRoles(dir, id) {
@@ -125,7 +131,8 @@ export function manualTruth(id) {
 export const OPN_TOL = 200;
 
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }. roles = 역할표 원 JSON(loadRoles · 없으면 규칙만).
-export async function runDrawing(entry, { roles = null } = {}) {
+// dividers = 실명만으로 구획선 옵션(dividersOption · 기본 꺼짐).
+export async function runDrawing(entry, { roles = null, dividers = false } = {}) {
   const path = fileOf(entry);
   if (!path) return null;
   const handle = await worker();
@@ -134,7 +141,7 @@ export async function runDrawing(entry, { roles = null } = {}) {
   const parsed = handle({ type: 'parse', buf: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), fileName: path.split(/[\\/]/).pop(), ...(roles ? { roles } : {}) });
   if (parsed.type !== 'parsed') return { error: parsed.code ?? 'parse', path };
   const { summary } = parsed;
-  const ex = handle({ type: 'extract', opts: { layers: summary.checked, region: entry.region ?? 0, trace: false } });
+  const ex = handle({ type: 'extract', opts: { layers: summary.checked, region: entry.region ?? 0, trace: false, ...(dividers ? { dividerByNames: true } : {}) } });
   if (ex.type !== 'extracted') return { error: ex.code ?? 'extract', path, summary };
   const ms = Math.round(performance.now() - t0);
   const { project, stats } = ex, fl = project.floors[0];

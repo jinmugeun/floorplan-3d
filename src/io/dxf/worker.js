@@ -135,6 +135,8 @@ function doExtract(opts = {}) {
     // 방 이름은 레이어 역할로 고른다(문자 레이어 실명 우선 · 기구 라벨은 이름이 아니다 — toProject.nameRooms).
     nameRoles: new Map(rows.map(r => [r.name, r.role])),
     columns: r.columns, rails, roles,
+    // 실명만으로 구획선(2026-10-12 · 계획 12 Task 6): 검토 창 체크박스·점수판 --dividers가 켤 때만(기본 꺼짐 — 사용자 결정 2026-10-02).
+    dividerByNames: opts.dividerByNames === true,
     // 면적 기준선의 근거: 이 도면(± 10 m) 안의 치수. 측정점은 건물 밖 치수줄이 아니라 재는 자리에 있다.
     dims: ex.dims.filter(d => d.p1 && inBox(d.p1, r.roi && { x0: r.roi.x0 - 10000, y0: r.roi.y0 - 10000, x1: r.roi.x1 + 10000, y1: r.roi.y1 + 10000 })),
     // 개구부는 두 재료를 함께 쓴다: 스윙 호(ex.arcs)와 **벽 틈**(r.gaps · 사전 검토 C-2).

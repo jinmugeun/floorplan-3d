@@ -1,5 +1,5 @@
 // 검토 대화상자의 미리보기 캔버스(§18.6): 원 도면 옅은 회색 · 검출 방 파스텔 ·
-// 추출 벽 두께 폴리곤 · **끊긴 끝점 빨간 ✚**. 색은 §18.6이 글자로 정한 값이다.
+// 추출 벽 두께 폴리곤 · 구획선 점선 · **끊긴 끝점 빨간 ✚**. 색은 §18.6이 글자로 정한 값이다.
 export const PREVIEW_COLORS = {
   trace: '#dcdcdc', wall: '#475569', openEnd: '#dc2626',
   room: ['#fde68a', '#bfdbfe', '#bbf7d0', '#fbcfe8', '#ddd6fe', '#fecaca', '#a5f3fc', '#fed7aa', '#d9f99d', '#e9d5ff'],
@@ -56,12 +56,25 @@ export function drawDxfPreview(canvas, { trace = null, walls = [], rooms = [], o
   });
   ctx.fillStyle = PREVIEW_COLORS.wall;
   for (const w of walls) {
+    if (w.virtual) continue;
     const d = [w.b[0] - w.a[0], w.b[1] - w.a[1]], L = Math.hypot(d[0], d[1]) || 1;
     const n = [-d[1] / L * w.thickness / 2, d[0] / L * w.thickness / 2];
     const pts = [[w.a[0] + n[0], w.a[1] + n[1]], [w.b[0] + n[0], w.b[1] + n[1]], [w.b[0] - n[0], w.b[1] - n[1]], [w.a[0] - n[0], w.a[1] - n[1]]].map(p => t.at(p));
     ctx.beginPath();
     pts.forEach((p, k) => { if (k) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); });
     ctx.closePath(); ctx.fill();
+  }
+  // 구획선(wall.virtual — 면적 표기·난간·실명으로 그은 것)은 몸통이 없으므로 2D 평면(view2d/walls2d.js)처럼 중심선 점선 한 줄이다(2026-10-12 · 계획 12
+  // Task 6: 실명만으로 그은 구획선은 제안이라 사람이 미리보기에서 알아봐야 한다 — 20 mm 두께 폴리곤은 벽과 구별되지 않았다).
+  const dividers = walls.filter(w => w.virtual);
+  if (dividers.length) {
+    ctx.strokeStyle = PREVIEW_COLORS.wall;
+    ctx.lineWidth = 1;
+    ctx.setLineDash?.([6, 4]);
+    ctx.beginPath();
+    for (const w of dividers) { const a = t.at(w.a), c = t.at(w.b); ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]); }
+    ctx.stroke();
+    ctx.setLineDash?.([]);
   }
   // 끊긴 끝점이 이 기능의 결론이다 — 마지막에 그려 아무것도 덮지 못하게 한다.
   ctx.strokeStyle = PREVIEW_COLORS.openEnd;
