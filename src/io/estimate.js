@@ -41,11 +41,16 @@ export function ductRows(floor) {
 // 견적 표·CSV의 "구분" 칸은 도면 기구 행을 '제품' 대신 이 이름으로 부른다(정의는 잎 모듈 estimateTable.js).
 export { DRAWING_CATEGORY };
 
-// 제품 행(견적서·시방서 공용). 묶음 키는 `productId|이름|규격`이고 행의 productId 필드는 제품 id 그대로다.
+// 제품 행(견적서·시방서 공용). 묶음 키는 `productId|이름|평면 두 변(정렬)×높이`이고 행의 productId 필드는 제품 id 그대로다.
 // 왜(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-1): productId 하나로 묶고 첫 아이템의 이름·크기를 행에 썼더니,
 // 사동중 가져오기의 도면 기구(equip-generic ≈ 205개 — 이름 = 도면 블록 이름)가 "운반카 튀김 620 · 수량 205" 한 줄로,
-// 제품으로 맞춘 `세정대 1조 900-750`·`1500-750`이 첫 크기 한 줄로 뭉쳤다. 이름·크기가 같은 것만 수량으로 센다 —
-// 손으로 놓은 아이템은 이름 = 제품명이고 크기도 제품 크기라 지금과 같은 행이 된다(크기를 바꾼 것만 따로 선다).
+// 제품으로 맞춘 `세정대 1조 900-750`·`1500-750`이 첫 크기 한 줄로 뭉쳤다. 이름·크기가 같은 것만 수량으로 센다.
+// 평면 두 변은 정렬해 키에 넣는다(리뷰 I-1): DXF 가져오기는 축 정렬 기구의 방향을 rot 0 + w/d 교환으로 적으므로 같은
+// `고정식작업대 1500-750`이 1500×750과 750×1500 두 행으로 갈렸다(사동 8 · 신상 A 6). 표시 규격은 첫 아이템 그대로다.
+// 10 mm 반올림은 하지 않는다 — fmtSize의 1 mm뿐(실제 규격을 틀리게 적지 않게).
+// 기둥(kind 'column')은 예전처럼 productId 하나로 묶는다(리뷰 I-2 · 컨트롤러 결정): 사는 물건이 아닌 구조물(0원)이고
+// 크기가 기둥마다 도면 측정값이라, 크기로 가르면 기구 없는 사동중 가져오기가 7 → 45행(기둥 27행)이 됐다.
+// 크기를 바꾼 손 배치 제품·DXF 문·창은 크기별 행이 된다(옛 행은 첫 아이템의 폭만 적어 틀렸다 — 사동 7 → 19, 내곡 6 → 12).
 // 시방서(specSheet.js)가 같은 함수를 써서 두 문서의 행·수량이 한 키에서 나온다.
 // 순서: 일반 제품 → 도면 기구(가격 0인 도면 요소를 끝에 모은다) → 이름 → 규격.
 export function productRows(items) {
@@ -53,8 +58,10 @@ export function productRows(items) {
   for (const it of items ?? []) {
     if (!it || it.kind === 'opening' || it.hidden) continue;   // 벽 구멍은 살 물건이 아니고, 숨긴 것은 세지 않는다
     const p = productById(it.productId);
-    const name = it.name || p?.name || '제품', size = fmtSize(it.size ?? p?.size ?? [0, 0, 0]);
-    const key = it.productId ? `${it.productId}|${name}|${size}` : it.id;
+    const s = it.size ?? p?.size ?? [0, 0, 0];
+    const name = it.name || p?.name || '제품', size = fmtSize(s);
+    const plan = fmtSize(s[0] >= s[1] ? s : [s[1], s[0], s[2]]);   // 방향과 무관한 규격(키 전용)
+    const key = !it.productId ? it.id : it.kind === 'column' ? it.productId : `${it.productId}|${name}|${plan}`;
     const row = m.get(key);
     if (row) { row.qty += 1; row.total = row.qty * row.unitPrice; continue; }
     const unitPrice = p?.price ?? 0;
@@ -65,7 +72,6 @@ export function productRows(items) {
 }
 
 export function estimateRows(floor) {
-
   const area = new Map();
   const add = (a, m2) => { if (a?.id && m2 > 0) area.set(a.id, (area.get(a.id) ?? 0) + m2); };
   for (const w of floor.walls ?? []) {

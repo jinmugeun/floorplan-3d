@@ -8,6 +8,7 @@ import { productById } from '../src/products/catalog.js';
 import { materialById } from '../src/materials/catalog.js';
 import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2, DRAWING_CATEGORY } from '../src/io/estimate.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
+import { buildSampleProject } from '../src/samples/gangdang.js';
 import { estimateLines, estimateCsvText, csvFooter, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE } from '../src/io/estimateTable.js';
 
 function setup() {
@@ -280,6 +281,26 @@ describe('제품 행 묶음: productId · 이름 · 크기(계획 13 Task 5)', (
     expect(rows.total).toBe(4 * sink.price);                                 // 행이 갈라져도 합계는 같다
   });
 
+  // 리뷰 I-1(2026-10-12): DXF 가져오기는 축 정렬 기구의 방향을 rot 0 + w/d 교환으로 적는다 — 같은 `고정식작업대 1500-750`이
+  // `1500×750`과 `750×1500` 두 행으로 갈렸다(사동 8 · 신상 A 6 · 신상 B 1 · 내곡 1). 키는 평면 두 변을 정렬해 만든다(높이는 그대로);
+  // 표시 규격은 첫 아이템의 것이다. 10 mm 반올림은 하지 않는다(fmtSize의 1 mm만 — 실제 규격을 틀리게 적지 않게).
+  test('같은 물건을 돌려 놓은 것(w/d 교환)은 한 행이다 — 표시 규격은 첫 아이템', () => {
+    const rows = estimateRows({ walls: [], rooms: [], items: [gen('고정식작업대 1500-750', [1500, 750, 850]), gen('고정식작업대 1500-750', [750, 1500, 850], [3000, 1000])] });
+    expect(rows.products.map(r => [r.name, r.size, r.qty])).toEqual([['고정식작업대 1500-750', '1500×750×850', 2]]);
+    // 높이가 다르면 다른 물건이다(정렬은 평면 두 변만).
+    const tall = estimateRows({ walls: [], rooms: [], items: [gen('선반', [1500, 750, 850]), gen('선반', [750, 1500, 1800])] });
+    expect(tall.products.map(r => [r.size, r.qty])).toEqual([['750×1500×1800', 1], ['1500×750×850', 1]]);   // 규격은 숫자 순
+  });
+
+  // 리뷰 I-2(컨트롤러 결정, 2026-10-12): 기둥은 사는 물건이 아니라 구조물(0원)이고 크기가 기둥마다 도면 측정값이라, 크기로 가르면
+  // 기구 없는 사동중 가져오기가 7 → 45행(기둥 27행)이 됐다. 기둥(kind 'column')은 예전처럼 productId 하나로 묶는다(규격은 첫 기둥).
+  test('기둥은 크기가 달라도 제품 하나에 한 행이다', () => {
+    const col = productById('column-square');
+    const items = [[310, 300], [500, 525], [790, 855], [400, 160], [650, 1300]].map(([w, d], i) => createItem(col, { pos: [i * 2000, 0], size: [w, d, 3500] }));
+    const rows = estimateRows({ walls: [], rooms: [], items });
+    expect(rows.products.map(r => [r.productId, r.size, r.qty])).toEqual([['column-square', '310×300×3500', 5]]);
+  });
+
   test('견적 표·CSV: 도면 기구 행은 구분이 "도면 기구"이고 제품 행 뒤에 이름별로 놓인다', () => {
     expect(productById('equip-generic').category).toBe(DRAWING_CATEGORY);   // 카탈로그(catalogDrawing.js)와 같은 글자
     const items = [gen('컵자동세척기', [900, 600, 850]), createItem(productById('sofa-3'), { pos: [5000, 5000] }), gen('운반카 튀김 620', [620, 720, 850])];
@@ -293,6 +314,24 @@ describe('제품 행 묶음: productId · 이름 · 크기(계획 13 Task 5)', (
     expect(csv).toContain('\n도면 기구,운반카 튀김 620,DR-EQ,620×720×850,1,개,0,0\n');
     expect(csv.slice(1).split('\n').every(l => (l.match(/,/g) ?? []).length === 7)).toBe(true);   // 8열 그대로
   });
+});
+
+// 리뷰 I-2(2026-10-12): 내장 강당중 샘플의 제품 행 수를 못 박는다. 옛 규칙(productId 하나)은 11행이었고 지금은 16행이다 —
+// 늘어난 5행은 모두 **후드**(kind 'equipment')다: 샘플 데이터(gangdang.json — 도면 M-106)가 후드마다 조리기구에 맞춘 크기를
+// 따로 적는다(hood-box 1000×1100 · 1200×1100 ×2 · 1600×1200 · 1700×1500 ×2 · 2000×1000 → 5행, hood-box-filter
+// 1700×1500 · 1800×1100 ×2 → 2행). 크기가 다른 후드는 다른 물건이므로 의도된 분할이다. 카탈로그 제품이 샘플에서 우연히
+// 다른 크기를 얻어 갈린 행은 없다(디퓨저·팬·환기캡·조리기구는 모두 제품 크기 그대로 한 행씩).
+test('강당중 샘플은 16행(후드만 크기별)이고 수량 합은 아이템 수와 같다', () => {
+  const floor = buildSampleProject().floors[0];
+  const rows = estimateRows(floor);
+  expect(rows.products).toHaveLength(16);
+  const byId = id => rows.products.filter(r => r.productId === id).map(r => `${r.size}×${r.qty}`);
+  expect(byId('hood-box')).toEqual(['1000×1100×600×1', '1200×1100×600×2', '1600×1200×600×1', '1700×1500×600×2', '2000×1000×600×1']);
+  expect(byId('hood-box-filter')).toEqual(['1700×1500×600×1', '1800×1100×600×2']);
+  // 후드 말고는 제품마다 한 행이다.
+  const others = rows.products.filter(r => !r.productId.startsWith('hood-box'));
+  expect(new Set(others.map(r => r.productId)).size).toBe(others.length);
+  expect(rows.products.reduce((s, r) => s + r.qty, 0)).toBe(floor.items.filter(i => i.kind !== 'opening' && !i.hidden).length);
 });
 
 test('꼬리 한 줄에 프로젝트·작성일·단가 주석이 모두 든다', () => {
