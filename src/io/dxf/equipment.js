@@ -5,14 +5,14 @@
 //  - 자리: 인서트의 전개 상자 중심(insertBoxes — INSERT 점은 블록 base라 멀다). 크기: 이름 치수를 상자 방향에 맞춰(긴 변끼리 — 사전 검토 I-3:
 //    이름 W-D 순서가 로컬 축과 21 % 반대), 이름 긴 변이 상자 긴 변과 20 % 넘게 다르면 상자. 식탁은 카탈로그 크기(상자가 의자를 품는다).
 //    축 정렬이 아닌 인서트(이동 카트·작업대 14개)만 rot을 쓰고 크기는 로컬 상자(앱 rot = −DXF rot — 앱 y가 뒤집혀 기둥과 같은 부호).
-//  - 이름: item.name = 도면 이름 정리본(제품명으로 덮지 않는다 — 사람이 도면과 대조한다), item.code = 제품 코드.
+//  - 이름: item.name = 도면 이름 정리본(제품명으로 덮지 않는다 — 사람이 도면과 대조한다 · 익명 블록은 제품 이름), item.code = 제품 코드,
+//    item.dxfBlock = 원 블록 이름(모든 기구 아이템).
 //  - 겹침: 벽 띠·기둥과 equipClash 이상 겹쳐도 **세우고** 센다(자동으로 옮기지 않는다 — 사람이 본다). 아이템끼리 겹침도 센다(사전 검토 I-4).
 // 이 파일도 워커의 import 사슬이다: DOM·ui를 건드리지 않는다. 앱 좌표의 벽(walls)·기둥 아이템(columns)과 DXF → 앱 변환(toApp)을 받는다.
 import { createItem } from '../../state/schema.js';
 import { productById } from '../../products/catalog.js';
 import { placeOnWall, wallAxis, itemAABB, pointInItem, normDeg } from '../../geom/items.js';
-import { nearestWall } from './openingSeat.js';
-import { blockKindByName, OPEN_BLOCK } from './blockOpenings.js';
+import { blockKind, OPEN_BLOCK } from './blockOpenings.js';
 import { classifyLayer } from './classify.js';
 import { DXF_PARAMS } from './params.js';
 import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous } from './equipVocab.js';
@@ -27,6 +27,7 @@ const DUP = 50;            // 같은 이름 · 중심이 이 안이면 같은 �
 const XBOX_MIN = 600;      // X-상자 후드의 짧은 변 하한(실측 1000~1800 · 사동 8 · 신상 A 3)
 const SWING = [500, 1.35]; // 익명 블록의 문: 반지름 ≥ 500인 4분원(80~100°)이 있고 상자 긴 변 ≤ 1.35 r(신상 zw$FCE6 r 1040 · 내곡 adafdsaf r 1091)
 const PIECE = [100, 4000]; // 벽 레이어 위 벽 조각 블록: 선 ≥ 100 · 긴 변 > 4 m(내곡 1층_방풍실_식당 1140×6900)
+const THIN_MIN = 60;       // 짧은 변이 이보다 작으면 막대·선이다(Task 1 §4-6: 사동 *B1203~1205 38 mm · 리뷰 M-4: 공개 14×750 · 71×1205 창 선)
 const SAMPLE = 20;         // 겹침 비율 표본 격자(20×20)
 const DEFAULT_H = 850, WALL_Z = 900;
 const HOLES = new Set(['door', 'window', 'pocket', 'slide', 'pass']);
@@ -38,7 +39,7 @@ const look = (tbl, key) => (tbl instanceof Map ? tbl.get(key) : tbl && Object.pr
 const r0 = v => Math.round(v) || 0;     // -0을 접는다(toEqual이 -0과 +0을 가른다 — explode.js 머리 주석)
 const emptyStats = () => ({
   placed: 0, product: 0, generic: 0, anonymous: 0, named: 0, namedProduct: 0, wallMounted: 0, ceiling: 0, offAxis: 0, clash: 0, overlap: 0, overlapPairs: 0,
-  skipped: { opening: 0, fixture: 0, symbol: 0, frame: 0, composite: 0, layer: 0, wallPiece: 0, big: 0, small: 0, dup: 0 },
+  skipped: { opening: 0, fixture: 0, symbol: 0, frame: 0, composite: 0, layer: 0, wallPiece: 0, big: 0, small: 0, thin: 0, dup: 0 },
 });
 
 // 인서트의 틀: 축 정렬이면 null(월드 축), 아니면 로컬 축 u(= 블록 로컬 x의 월드 방향 · 거울이어도 rotOf가 낸 x축)과 v.
@@ -81,25 +82,38 @@ function anonOpening(part, long) {
 }
 
 // 익명 블록의 품명 단서(Task 1 순서): 어휘에 걸리는 자식 INSERT가 하나뿐 → 안쪽 글자 → X-상자 모양.
-function anonMatch(kidNames, part, f, b) {
+// X-상자는 hoodOk(레이어 역할 equip·other 또는 역할표 equip)일 때만 후드다(리뷰 M-3): 벽·개구부·축선 레이어의 X는 샤프트·EV·개구부 표기이고,
+// 후드가 되면 환기 집계에 들어간다. 지금 44장(한국 4 + 공개 40)의 X-상자 후드 11개는 모두 기구 레이어(`*미구입`·`후드`)다.
+function anonMatch(kidNames, part, f, b, hoodOk) {
   const kids = kidNames.map(n => (skipReason(n) ? null : matchEquip(n))).filter(Boolean);
   if (kids.length === 1) return kids[0];
   for (const t of part.texts) { const v = matchEquip(String(t.text ?? '').trim()); if (v) return v; }
-  return isXBox(f, b, part.segs) ? HOOD : null;
+  return hoodOk && isXBox(f, b, part.segs) ? HOOD : null;
 }
 
-// 벽 부착 자리: 가장 가까운 벽(openingSeat.nearestWall — 중심선)의 면이 상자에서 WALL_GAP 안이면 placeOnWall(뒷면을 벽 면에).
-// size[0]은 벽 방향 폭이다 — 상자 방향(rot)을 벽 방향으로 투영해 다시 잡는다(이름 순서가 아니라 — 사전 검토 m-5).
+// 벽 부착 자리: 기구 중심의 투영이 벽 **안**(0 ≤ t ≤ 1)에 드는 벽 중에서, 상자 뒷면 → 벽 면 간격(수직)이 WALL_GAP 안이고 가장 작은 벽에
+// placeOnWall(뒷면을 벽 면에). 없으면 null(바닥 · z는 부르는 쪽이 지킨다). size[0]은 벽 방향 폭이다 — 상자 방향(rot)을 벽 방향으로 투영해 다시
+// 잡는다(이름 순서가 아니라 — 사전 검토 m-5).
+// 왜 중심 투영을 보나(2026-10-12 리뷰 M-2): 처음엔 openingSeat.nearestWall(중심선까지 거리 · t를 0~1로 자름)을 썼는데, 사동 zw$A96E(공기살균기)가
+// 진짜 벽(면 간격 333 > 300) 대신 끝 너머 444 mm에 있는 204 mm 벽 토막의 끝에 붙어 90° 돌고 직각 벽 안으로 111 mm 파고들었다.
+// 반폭까지 벽 안에 들라고는 하지 않는다: normalizeWalls가 T자 접합에서 한 직선 벽을 조각으로 나누므로, 조각 경계에 걸친 기구(중심은 한 조각 안)를
+// 바닥으로 떨어뜨리게 된다 — 중심이 든 조각에 붙으면 나머지 반폭은 같은 면의 이웃 조각 앞이다.
 function wallSeat(walls, pos, rot, size) {
-  const hit = walls.length ? nearestWall(walls, pos, Infinity) : null;
-  if (!hit) return null;
-  const { wall } = hit, ax = wallAxis(wall), dr = (rot - ax.rot) * Math.PI / 180;
-  const c = Math.abs(Math.cos(dr)), s = Math.abs(Math.sin(dr));
-  const sz = [r0(c * size[0] + s * size[1]), r0(s * size[0] + c * size[1]), size[2]];
-  if (hit.dist - wall.thickness / 2 - sz[1] / 2 > WALL_GAP) return null;
-  const off = (pos[0] - wall.a[0]) * ax.n[0] + (pos[1] - wall.a[1]) * ax.n[1], side = off >= 0 ? 1 : -1;
-  const at = placeOnWall(wall, hit.t, side, sz);
-  return { attach: 'wall', wallId: wall.id, t: hit.t, side, size: sz, pos: at.pos.map(r0), rot: at.rot };
+  let best = null;
+  for (const wall of walls) {
+    const ax = wallAxis(wall);
+    if (!(ax.len > 0)) continue;
+    const q = [pos[0] - wall.a[0], pos[1] - wall.a[1]], along = q[0] * ax.dir[0] + q[1] * ax.dir[1];
+    if (along < 0 || along > ax.len) continue;
+    const dr = (rot - ax.rot) * Math.PI / 180, c = Math.abs(Math.cos(dr)), s = Math.abs(Math.sin(dr));
+    const sz = [r0(c * size[0] + s * size[1]), r0(s * size[0] + c * size[1]), size[2]];
+    const off = q[0] * ax.n[0] + q[1] * ax.n[1], gap = Math.abs(off) - wall.thickness / 2 - sz[1] / 2;
+    if (gap > WALL_GAP || (best && gap >= best.gap)) continue;
+    best = { wall, gap, t: along / ax.len, side: off >= 0 ? 1 : -1, sz };
+  }
+  if (!best) return null;
+  const at = placeOnWall(best.wall, best.t, best.side, best.sz);
+  return { attach: 'wall', wallId: best.wall.id, t: best.t, side: best.side, size: best.sz, pos: at.pos.map(r0), rot: at.rot };
 }
 
 // 바닥 상자 중 벽 띠(중심선 ± 두께/2)·기둥 아이템 안에 드는 비율(표본 격자).
@@ -128,13 +142,14 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
   const o0 = toApp([0, 0]), o1 = toApp([1e6, 0]), sc = Math.hypot(o1[0] - o0[0], o1[1] - o0[1]) / 1e6 || 1;
   const inRoi = c => !roi || (c[0] >= roi.x0 && c[0] <= roi.x1 && c[1] >= roi.y0 && c[1] <= roi.y1);
   const roleOf = layer => look(layerRoles, layer) ?? look(roles?.layers, layer) ?? classifyLayer(layer);
-  // ① 후보: 최상위 · 도형 있음 · 영역 안 · 창·문 블록 아님(역할표가 이기고, 표에 없으면 이름 규칙).
+  // ① 후보: 최상위 · 도형 있음 · 영역 안 · 창·문 블록 아님(넘겨받은 역할표가 이기고, 없으면 blockKind — 워커가 세운 모듈 표 → 이름 규칙.
+  //    리뷰 M-1: 이름 규칙만 보면 roles를 넘기지 않은 부르는 쪽에서 표가 문이라 한 블록이 문과 기구 둘 다로 섰다).
   const cand = [];
   ins.forEach((it, k) => {
     const g = owner[k] === k ? boxes.get(k) : null;
     if (!g || !inRoi([(g.box[0] + g.box[2]) / 2, (g.box[1] + g.box[3]) / 2])) return;
     const kind = look(roles?.blocks, it.name)?.kind ?? null;
-    if (kind ? HOLES.has(kind) : blockKindByName(it.name)) return;
+    if (kind ? HOLES.has(kind) : blockKind(it.name)) return;
     cand.push({ k, it, g, kind });
   });
   const parts = insertParts(ex, cand.map(x => x.k), owner);
@@ -155,13 +170,18 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     const bw = (b[2] - b[0]) * sc, bd = (b[3] - b[1]) * sc, long = Math.max(bw, bd);
     if (long < P.equipMin) { skip('small'); continue; }
     if (long > P.equipMax) { skip('big'); continue; }
+    if (Math.min(bw, bd) < THIN_MIN) { skip('thin'); continue; }
     const role = roleOf(it.layer), anon = isAnonymous(it.name), forced = kind === 'equip';
     if (role === 'wall' && g.n >= PIECE[0] && long > PIECE[1]) { skip('wallPiece'); continue; }
+    // 개구부 레이어 위의 블록은 창·문이다(Task 1 §7 "레이어 역할 opening → opening" · 리뷰 I-1): 이 규칙이 없을 때 공개 코퍼스 40장에서 1,687개 중
+    // 494개가 개구부 레이어(DBLK@WINDOW 181 · WBLK 92 …) 위에 '도면 기구'로 섰고 383개는 이미 놓인 문·창 위였다. 한국 넷은 0개 — 수치 불변.
+    // 역할표 equip은 이긴다(사람·도구가 기구라고 했다).
+    if (!forced && role === 'opening') { skip('opening'); continue; }
     // ③ 품명: 이름 어휘, 익명이면 자식·글자·모양. 단서 없는 익명이 기구·벽 레이어 밖이면 기호(창 블록·발판·지시선 — Task 1 §4-2 (a) 34개).
     let v = anon ? null : matchEquip(it.name);
     if (anon) {
       if (!forced && anonOpening(part, long)) { skip('opening'); continue; }
-      v = anonMatch(kidNames.get(k), part, f, b);
+      v = anonMatch(kidNames.get(k), part, f, b, forced || role === 'equip' || role === 'other');
       if (!v && !forced && role !== 'equip' && role !== 'wall') { skip('layer'); continue; }
     } else if (!v && !forced && NOTE_ROLES.has(role)) { skip('layer'); continue; }
     const c = fromFrame(f, [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]);
@@ -182,12 +202,16 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     size = [r0(size[0]), r0(size[1]), r0(nd?.[2] || v?.height || DEFAULT_H)];
     const pos = toApp(c).map(r0), rot = f ? normDeg(-f.r) : 0;
     const pid = v?.productId ?? GEN, product = productById(pid);
-    let patch = { name: cleanName(it.name) || it.name, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 };
+    // 이름: 이름 있는 블록은 도면 이름 정리본. 익명 블록(zw$…·*U…)은 이름을 주지 않는다 — 제품 이름 그대로라 라벨이 서지 않는다(2026-10-12 · Task 5:
+    // 이름 ≠ 제품명인 아이템에 2D·3D 라벨을 단다 — 사동·신상 A 익명 73개가 "zw$5B59" 라벨이 될 뻔했다). 원 블록 이름은 모든 기구 아이템의
+    // `dxfBlock`에 남긴다(도면과 대조 · 교정 기록 — normalizeItem은 모르는 칸을 그대로 둔다).
+    let patch = { ...(anon ? {} : { name: cleanName(it.name) || it.name }), dxfBlock: it.name, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 };
     const floorCover = patch.attach === 'floor' ? coverage(patch, bands, cols) : 0;
     const thin = patch.attach === 'floor' && Math.min(size[0], size[1]) <= THIN && floorCover >= P.equipClash;
     if (patch.attach === 'wall' || thin) {
-      const z = v?.attach === 'wall' ? v.z : WALL_Z;
-      patch = { ...patch, z, ...(wallSeat(solid, pos, rot, size) ?? { attach: 'floor' }) };
+      // 벽을 못 찾으면 바닥: 벽걸이 어휘는 높이(z)를 지키고(기둥에 건 워터릴), 벽 판넬(thin)은 z 0 + 겹침으로 센다(리뷰 M-5 — 떠 있는 상자가 통계에 안 보였다).
+      const seat = wallSeat(solid, pos, rot, size);
+      patch = seat ? { ...patch, z: v?.attach === 'wall' ? v.z : WALL_Z, ...seat } : { ...patch, attach: 'floor', z: v?.attach === 'wall' ? v.z : 0 };
     } else if (patch.attach === 'ceiling') patch.z = Math.max(0, r0(height - size[2]));
     // 후드 번호 1..n(놓는 차례 — 사전 검토 m-1: 번호가 모두 1이면 라벨이 전부 ①이다).
     if (product.equip?.type === 'hood') patch.props = { ...product.equip, no: Math.min(99, ++hoods) };
@@ -199,7 +223,7 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     if (item.attach === 'wall') stats.wallMounted++;
     if (item.attach === 'ceiling') stats.ceiling++;
     if (f) stats.offAxis++;
-    if (item.attach === 'floor' && !thin && floorCover >= P.equipClash) stats.clash++;
+    if (item.attach === 'floor' && floorCover >= P.equipClash) stats.clash++;
   }
   // ⑤ 바닥 아이템끼리 겹침(AABB · 1 mm 넘게) — 앱이 3D에서 빨갛게 칠할 후보(사전 검토 I-4). 자리는 도면 그대로 둔다.
   const floor = items.filter(i => i.attach === 'floor').map(i => itemAABB(i)), hitSet = new Set();

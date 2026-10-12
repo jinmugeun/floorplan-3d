@@ -82,6 +82,7 @@ test('이름 정리: _ → 공백, 끝의 -, 회사명(선경인케이·선경�
     '청소 소독기 700-600 선경': '청소 소독기 700-600',
     'xref-전체평면도$0$책상L형1812': '책상L형1812',
     '500인-': '500인',
+    'HK-1200': '1200',                       // 앞의 회사명을 뺀 뒤 남는 앞머리 `-`도 뺀다(리뷰 Nit)
     'zw$E75B': 'zw$E75B',
   };
   expect(Object.fromEntries(Object.keys(want).map(n => [n, cleanName(n)]))).toEqual(want);

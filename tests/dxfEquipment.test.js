@@ -5,8 +5,11 @@ import { equipItems } from '../src/io/dxf/equipment.js';
 import { insertBoxes, topOwner } from '../src/io/dxf/insertBoxes.js';
 import { DXF_PARAMS } from '../src/io/dxf/params.js';
 import { makeWall } from '../src/geom/walls.js';
-import { createItem } from '../src/state/schema.js';
+import { createItem, createFloor, createEmptyProject, normalizeProject, migrate } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
+import { setBlockTable } from '../src/io/dxf/blockOpenings.js';
+import { explode, mat, apply } from '../src/io/dxf/explode.js';
+import { buildImportMeta, buildDxfFeedback } from '../src/io/dxfFeedback.js';
 
 const FAR = [-741000.5, 338000.25];
 const toApp = p => [p[0], -p[1]];
@@ -49,13 +52,28 @@ test('이름의 높이(세 번째 수)가 어휘 높이를 이긴다', () => {
   expect(it).toMatchObject({ productId: 'ricecooker-gas', name: '취반기(전기) 150인용 570x600x1460', size: [570, 600, 1460], kind: 'equipment' });
 });
 
-test('어휘에 없는 이름 · 익명 블록 → 도면 기구(상자 크기 · 이름은 블록 이름)', () => {
+// 2026-10-12 수정 wave(Task 5 라벨 규칙): 이름 ≠ 제품명이면 라벨이 선다 — 익명 블록은 제품 이름(라벨 없음), 원 블록 이름은 dxfBlock에.
+test('어휘에 없는 이름 → 도면 기구(정리한 도면 이름) · 익명 블록 → 도면 기구(제품 이름) · 원 이름은 모두 dxfBlock', () => {
   const r = run(exOf([ins('500인-'), ins('zw$5B59')], [...box(0, 0, 0, 1200, 800), ...box(1, 5000, 0, 7400, 1776)]));
-  expect(r.items.map(i => [i.productId, i.code, i.name, i.size])).toEqual([
-    ['equip-generic', 'DR-EQ', '500인', [1200, 800, 850]],
-    ['equip-generic', 'DR-EQ', 'zw$5B59', [2400, 1776, 850]],
+  expect(r.items.map(i => [i.productId, i.code, i.name, i.dxfBlock, i.size])).toEqual([
+    ['equip-generic', 'DR-EQ', '500인', '500인-', [1200, 800, 850]],
+    ['equip-generic', 'DR-EQ', '도면 기구', 'zw$5B59', [2400, 1776, 850]],
   ]);
   expect(r.stats).toMatchObject({ placed: 2, product: 0, generic: 2, anonymous: 1, named: 1 });
+  expect(only(run(one('세정대 2조 1500-750-', [0, 0, 1500, 750])))).toMatchObject({ name: '세정대 2조 1500-750', dxfBlock: '세정대 2조 1500-750-' });
+});
+
+test('dxfBlock은 저장·불러오기 왕복(normalizeProject → JSON → migrate)과 교정 기록 스냅숏을 지난다', () => {
+  const r = run(exOf([ins('zw$E75B'), ins('워터릴')], [...box(0, 0, 0, 1500, 1800), seg([0, 0], [1500, 1800], 0), seg([0, 1800], [1500, 0], 0), ...box(1, 5000, 0, 5550, 420)]));
+  const floor = { ...createFloor('1F'), items: r.items };
+  const project = normalizeProject({ ...createEmptyProject(), floors: [floor] });
+  const back = migrate(JSON.parse(JSON.stringify(project)));
+  expect(back.floors[0].items.map(i => [i.name, i.dxfBlock])).toEqual([['천장형 배기 후드(박스형)', 'zw$E75B'], ['워터릴', '워터릴']]);
+  const withMeta = { ...back, meta: { dxfImport: buildImportMeta({ project: back, fileName: 'a.dxf', opts: { layers: [] } }) } };
+  const edited = { ...withMeta, floors: [{ ...withMeta.floors[0], items: withMeta.floors[0].items.slice(1) }] };
+  const fb = buildDxfFeedback(edited);
+  expect(fb.summary).toMatchObject({ importedItems: 2, itemsDeleted: 1 });
+  expect(fb.items.deleted).toEqual([back.floors[0].items[0].id]);
 });
 
 test('냉장고 4도어는 제외가 아니다(숫자 뒤의 도어 = 문짝 수)', () => {
@@ -79,8 +97,29 @@ test('45° 회전 블록 — 로컬 상자 크기 · rot 315(= −45)', () => {
   expect(run(ex).stats.offAxis).toBe(1);
 });
 
-test('거울 인서트도 자리는 전개 도형의 상자 중심', () => {
-  expect(only(run(one('세정대 2조 1500-750', [3000, 2000, 4500, 2750], { mirrored: true, rot: 180 })))).toMatchObject({ productId: 'sink-double', pos: [3750, -2375], size: [1500, 750, 850] });
+// 리뷰 M-6: 거울 테스트는 실제 전개(explode)로 — 도형을 base에서 떨어뜨린 블록을 같은 점·각도에 거울/비거울로 넣으면 상자 중심이 달라야 하고,
+// 각 아이템은 제 전개 도형의 중심에 서야 한다. 축이 아닌 거울 인서트의 rot은 합성 행렬의 x축(rotOf — 30°에 x 거울이면 210°)에서 온다.
+test('거울 인서트(실제 전개): 자리 = 제 전개 도형 중심(비거울과 다르다) · 축 아닌 거울의 rot = −rotOf(합성 행렬)', () => {
+  const rect = [[100, 50], [1300, 50], [1300, 650], [100, 650]];
+  const block = { base: [0, 0], entities: rect.map((p, i) => ({ type: 'LINE', layer: '0', x: p[0], y: p[1], x2: rect[(i + 1) % 4][0], y2: rect[(i + 1) % 4][1] })) };
+  const insert = (x, xscale, a0) => ({ type: 'INSERT', name: '이동식작업대1200-600', layer: '급식기구', x, y: 0, xscale, yscale: 1, a0 });
+  const doc = { entities: [insert(10000, 1, 30), insert(20000, -1, 30), insert(30000, 1, 0), insert(40000, -1, 0)], blocks: new Map([['이동식작업대1200-600', block]]) };
+  const r = run(explode(doc));
+  const centre = (x, xscale, a0) => apply(mat(x, 0, xscale, 1, a0), [700, 350]);
+  const want = [[10000, 1, 30], [20000, -1, 30], [30000, 1, 0], [40000, -1, 0]].map(([x, s, a]) => toApp(centre(x, s, a)).map(v => Math.round(v) || 0));
+  expect(r.items.map(i => i.pos)).toEqual(want);
+  expect(r.items.map(i => i.rot)).toEqual([330, 150, 0, 0]);
+  expect(r.items.map(i => i.size)).toEqual([[1200, 600, 850], [1200, 600, 850], [1200, 600, 850], [1200, 600, 850]]);
+  // 거울이면 삽입점에서 본 중심이 반대쪽이다(거울을 무시하면 같았을 것이다)
+  expect(want[3][0] - 40000).toBe(-(want[2][0] - 30000));
+  expect(want[1][0] - 20000).not.toBe(want[0][0] - 10000);
+});
+
+test('거울 식탁(실제 전개): 길이 방향은 거울이어도 블록 로컬 x', () => {
+  const rect = [[0, -263], [1200, -263], [1200, 1063], [0, 1063]];   // 식탁 1200(로컬 x) + 의자 → 1200×1326
+  const block = { base: [0, 0], entities: rect.map((p, i) => ({ type: 'LINE', layer: '0', x: p[0], y: p[1], x2: rect[(i + 1) % 4][0], y2: rect[(i + 1) % 4][1] })) };
+  const doc = { entities: [{ type: 'INSERT', name: '식탁4인', layer: '급식기구', x: 0, y: 0, xscale: -1, yscale: 1, a0: 90 }, { type: 'INSERT', name: '식탁4인', layer: '급식기구', x: 5000, y: 0, xscale: 1, yscale: -1, a0: 0 }], blocks: new Map([['식탁4인', block]]) };
+  expect(run(explode(doc)).items.map(i => i.size)).toEqual([[800, 1200, 750], [1200, 800, 750]]);
 });
 
 // Task 1 §3: 식탁 상자는 의자를 품는다(6인 1800×1326 · 4인 1200×1326 — 4인은 상자 긴 변이 의자 방향). 크기는 카탈로그, 방향은 블록 로컬 x(= 식탁 길이).
@@ -148,6 +187,25 @@ test('벽 방향 크기: 세로 벽에 붙는 온수기는 벽 방향 폭이 siz
   expect(it.pos[0]).toBeCloseTo(300, 6);
 });
 
+// 리뷰 M-2: 가장 가까운 중심선(끝에서 잘린 t)만 보면 끝 너머의 짧은 벽 토막 끝에 붙어 돌고 옆 벽 안으로 파고들었다(사동 zw$A96E).
+// 중심의 투영이 벽 안에 드는 벽만 본다 — 토막이 더 가까워도 긴 벽(면 간격 300)에 붙고, 그것도 없으면 바닥(z 유지).
+test('벽 부착은 중심 투영이 벽 안인 벽에만 — 끝 너머의 토막 벽 끝에 붙지 않는다', () => {
+  const H = makeWall({ a: [0, 1000], b: [6000, 1000], thickness: 200 });      // 앱 좌표 가로 벽(면 y 900)
+  const S = makeWall({ a: [3200, 800], b: [3200, 1000], thickness: 200 });    // 200 mm 토막(아래 끝 y 800)
+  const reel = one('워터릴', [2600, -600, 3000, -200]);                        // 앱 x 2600~3000 · y 200~600 → 중심 (2800, 400)
+  const it = only(run(reel, { walls: [H, S] }));
+  expect(it).toMatchObject({ attach: 'wall', wallId: H.id, side: -1, pos: [2800, 700], rot: 180, z: 1000 });
+  const far = only(run(one('워터릴', [2600, -550, 3000, -150]), { walls: [H, S] }));   // 면 간격 350 → 바닥
+  expect(far).toMatchObject({ attach: 'floor', wallId: null, pos: [2800, 350], z: 1000 });
+});
+
+test('한 직선 벽이 T자 접합에서 조각으로 나뉘어도 조각 경계에 걸친 기구는 중심이 든 조각에 붙는다', () => {
+  const A = makeWall({ a: [0, 1000], b: [3000, 1000], thickness: 200 }), B = makeWall({ a: [3000, 1000], b: [6000, 1000], thickness: 200 });
+  const it = only(run(one('온수기 560-400', [2670, -900, 3230, -500]), { walls: [A, B] }));   // 앱 x 2670~3230(중심 2950) · y 500~900
+  expect(it).toMatchObject({ attach: 'wall', wallId: A.id, size: [560, 400, 600] });
+  expect(it.pos).toEqual([2950, 700]);
+});
+
 test('모양으로 본 벽 부착: 짧은 변 ≤ 200이고 벽 겹침 ≥ 0.5 → 벽에 붙이고 겹침으로 세지 않는다', () => {
   const W = makeWall({ a: [0, 0], b: [6000, 0], thickness: 200 });
   const r = run(exOf([ins('zw$A460', { layer: '급식-기구NO' })], box(0, 3000, -75, 4760, 75)), { walls: [W] });
@@ -186,9 +244,42 @@ test('익명 X-상자(사각형 + 대각선 둘, 짧은 변 ≥ 600) → hood-bo
   const bars = (k, x0, y0, x1, y1) => [...box(k, x0, y0, x1, y1), seg([x0 + 100, y0], [x0 + 100, y1], k), seg([x0 + 200, y0], [x0 + 200, y1], k)];
   const ex = exOf([ins('zw$E75B', { layer: '후드' }), ins('zw$AAAA'), ins('zw$BBBB')], [...xbox(0, 0, 0, 1500, 1800), ...bars(1, 5000, 0, 6500, 1800), ...xbox(2, 9000, 0, 9500, 500)]);
   const r = run(ex, { height: 3500 });
-  expect(r.items.map(i => [i.name, i.productId])).toEqual([['zw$E75B', 'hood-box'], ['zw$AAAA', 'equip-generic'], ['zw$BBBB', 'equip-generic']]);
-  expect(r.items[0]).toMatchObject({ size: [1500, 1800, 600], attach: 'ceiling', z: 2900 });
+  expect(r.items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$E75B', 'hood-box'], ['zw$AAAA', 'equip-generic'], ['zw$BBBB', 'equip-generic']]);
+  expect(r.items[0]).toMatchObject({ name: '천장형 배기 후드(박스형)', size: [1500, 1800, 600], attach: 'ceiling', z: 2900 });
   expect(r.stats).toMatchObject({ anonymous: 3, product: 1 });
+});
+
+// 리뷰 M-3: 벽·개구부·축선 레이어의 X는 샤프트·EV·개구부 표기다 — 후드(환기 집계)는 기구·기타 레이어(또는 역할표 equip)의 X-상자만.
+test('X-상자 후드는 레이어 역할이 equip·other일 때만 — 벽 레이어의 X-상자는 일반 상자', () => {
+  const xbox = (k, x0, y0, x1, y1, layer) => [...box(k, x0, y0, x1, y1).map(s => ({ ...s, layer })), seg([x0, y0], [x1, y1], k, layer), seg([x0, y1], [x1, y0], k, layer)];
+  const ex = exOf([ins('zw$1111', { layer: '벽' }), ins('zw$2222', { layer: '0' })], [...xbox(0, 0, 0, 1500, 1800, '벽'), ...xbox(1, 5000, 0, 6500, 1800, '0')]);
+  expect(run(ex).items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$1111', 'equip-generic'], ['zw$2222', 'hood-box']]);
+  expect(run(ex, { roles: { blocks: new Map([['zw$1111', { kind: 'equip', width: null }]]) } }).items[0].productId).toBe('hood-box');
+});
+
+// 리뷰 I-1(Task 1 §7 "레이어 역할 opening → opening"): 공개 코퍼스의 DBLK@WINDOW(760×760 문)·WBLK(900×200 창)가 '도면 기구'로 섰다.
+test('개구부 레이어 위의 블록은 창·문 — 제외(opening) · 역할표 equip이면 선다', () => {
+  const ex = exOf([ins('DBLK', { layer: 'WINDOW' }), ins('M_A2ZXL', { layer: 'A-FIX' })], [...box(0, 0, 0, 760, 760), ...box(1, 3000, 0, 3900, 200)]);
+  const r = run(ex, { layerRoles: new Map([['A-FIX', 'opening'], ['WINDOW', 'opening']]) });
+  expect(r.items).toEqual([]);
+  expect(r.stats.skipped.opening).toBe(2);
+  expect(run(ex).stats.skipped.opening).toBe(1);                 // 레이어 행이 없으면 이름 규칙(WINDOW → opening · A-FIX → other)
+  const forced = run(ex, { roles: { blocks: new Map([['DBLK', { kind: 'equip', width: null }]]) }, layerRoles: new Map([['WINDOW', 'opening']]) });
+  expect(forced.items.map(i => i.dxfBlock)).toEqual(['DBLK', 'M_A2ZXL']);
+});
+
+// 리뷰 M-1: 역할표를 넘기지 않아도 워커가 세운 블록 종류표(setBlockTable)의 창·문은 후보가 아니다(문과 기구 둘 다로 서지 않게).
+test('워커의 블록 종류표가 문이라 한 블록은 roles 없이도 후보가 아니다', () => {
+  const ex = one('출입구표시-A', [0, 0, 900, 300]);
+  expect(run(ex).items).toHaveLength(1);
+  setBlockTable(new Map([['출입구표시-A', { kind: 'door', width: 900 }]]));
+  try { expect(run(ex).items).toEqual([]); } finally { setBlockTable(null); }
+});
+
+test('짧은 변 < 60 mm는 막대·선(thin)', () => {
+  const r = run(exOf([ins('막대표시'), ins('작업대 1000-600')], [...box(0, 0, 0, 1703, 38), ...box(1, 3000, 0, 4000, 600)]));
+  expect(r.items.map(i => i.name)).toEqual(['작업대 1000-600']);
+  expect(r.stats.skipped.thin).toBe(1);
 });
 
 test('익명 블록: 기구·벽이 아닌 레이어 + 단서 없음 → 제외(layer) · 안쪽 글자 · 하나뿐인 어휘 자식으로 맞춘다', () => {
@@ -197,10 +288,10 @@ test('익명 블록: 기구·벽이 아닌 레이어 + 단서 없음 → 제외(
     [...box(0, 0, 0, 1600, 450), ...box(1, 3000, 0, 3580, 1200), ...box(3, 6000, 0, 6600, 550)],
     { texts: [{ p: [3200, 600], h: 100, text: '옷장', layer: 'AZ-LEAL', ins: 1 }, { p: [6300, 300], h: 100, text: '상부장', layer: '0', ins: 2 }] });
   const r = run(ex);
-  expect(r.items.map(i => [i.name, i.productId])).toEqual([['zw$6F3E', 'locker-12'], ['zw$8EEB', 'sink-single']]);
+  expect(r.items.map(i => [i.dxfBlock, i.productId, i.name])).toEqual([['zw$6F3E', 'locker-12', '12칸 사물함'], ['zw$8EEB', 'sink-single', '1조 싱크대']]);
   expect(r.stats.skipped.layer).toBe(1);
   // 레이어 역할을 넘기면 그것을 쓴다(검토 창의 역할 — 워커 rows)
-  expect(run(ex, { layerRoles: new Map([['0', 'equip']]) }).items.map(i => i.name)).toContain('zw$B4B3');
+  expect(run(ex, { layerRoles: new Map([['0', 'equip']]) }).items.map(i => i.dxfBlock)).toContain('zw$B4B3');
 });
 
 test('익명 블록이 문이면 제외(opening): 큰 4분원 스윙 · 안쪽 글자가 문 기호(ASD 1,500)', () => {

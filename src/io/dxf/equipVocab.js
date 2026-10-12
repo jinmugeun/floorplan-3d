@@ -29,6 +29,7 @@ export const EQUIP_VOCAB = [
   // 바닥 — 카탈로그 제품
   { keys: ['식탁6인', '6인식탁'], productId: 'dining-6', height: 750, attach: 'floor', size: 'product' },          // 89 (21 %)
   { keys: ['식탁4인', '4인식탁'], productId: 'dining-4', height: 750, attach: 'floor', size: 'product' },          // 7
+  // 인원 없는 '식탁'은 카탈로그 크기를 강요하지 않는다(리뷰 M-8 — 네 도면 0건): 몇 인용인지 모르니 이름 치수 → 상자 순서 그대로다.
   { keys: ['식탁'], productId: 'dining-6', height: 750, attach: 'floor' },
   { keys: ['회의용테이블', '회의테이블', '회의탁자'], productId: 'meeting-table-2400', height: 750, attach: 'floor' },   // 1
   { keys: ['책상'], productId: 'desk-1400', height: 750, attach: 'floor' },                                      // 2 (xref 책상L형 — 영양사실 L자 책상)
@@ -110,11 +111,12 @@ export function matchEquip(name) {
 }
 
 // 사람이 도면과 대조할 이름(item.name): `_` → 공백, 회사명(Task 1 §4-7: 선경인케이 · 선경산업 · 선경 · HK · LG트롬 · LG · 원더텍) 빼기,
-// 빈 괄호 · 끝의 `-` 빼기, xref 접두(`xref-전체평면도$0$`) 빼기. 치수 꼬리는 남긴다(`1500-750` — 사전 검토 m-7: `-`는 끝의 것만).
+// 빈 괄호 · 양 끝의 `-` 빼기(회사명이 앞에 있으면 `HK-1200` → `-1200`이 남았다 — 리뷰 Nit), xref 접두(`xref-전체평면도$0$`) 빼기.
+// 치수 꼬리는 남긴다(`1500-750` — 사전 검토 m-7: 가운데 `-`는 건드리지 않는다).
 const MAKER = /선경인케이|선경산업|선경|원더텍|lg트롬|(?<![a-z])(hk|lg)(?![a-z])/gi;
 export function cleanName(name) {
   return String(name ?? '').replace(/^xref-[^$]*\$\d+\$/i, '').replace(/_/g, ' ').replace(MAKER, ' ').replace(/\(\s*\)/g, ' ')
-    .replace(/\s+/g, ' ').trim().replace(/[-\s]+$/, '');
+    .replace(/\s+/g, ' ').trim().replace(/^[-\s]+|[-\s]+$/g, '');
 }
 
 // 이름의 치수 → [W, D] 또는 [W, D, H] (mm, 이름 순서 그대로 — 방향은 equipment.js가 상자에 맞춘다) | null.
