@@ -74,6 +74,21 @@ export async function blockTruth(ex) {
   return blockBoxes(ex).map(b => ({ name: b.name, kind: b.kind, width: b.width, box: b.box, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] }));
 }
 
+// 손으로 단 개구부 정답(2026-10-12 · 계획 12 Task 2): 창·문 블록이 없는 도면(신상중 — 문·창이 풀어진 선)은 blockTruth가 0개라
+// 개구부 지표가 아무것도 재지 못한다. truth/<코퍼스 id>.json의 openings[]({ kind, width, c: 원 DXF 좌표, along: 벽 방향 축 'x'|'y' })를
+// blockTruth와 같은 꼴로 내고, 상자는 벽 방향 ±폭/2 · 가로 ±MANUAL_ACROSS다(블록 정답과 같은 상자까지 거리 규칙으로 잰다).
+// 이 파일은 코퍼스 주인이 도면에서 단 값이다 — 파이프라인 결과에 맞추려고 고치지 않는다.
+const MANUAL_ACROSS = 150;
+export function manualTruth(id) {
+  const path = resolve(HERE, 'truth', `${id}.json`);
+  if (!existsSync(path)) return [];
+  return (JSON.parse(readFileSync(path, 'utf8')).openings ?? []).map((o, i) => {
+    const h = o.width / 2, [x, y] = o.c;
+    const box = o.along === 'x' ? [x - h, y - MANUAL_ACROSS, x + h, y + MANUAL_ACROSS] : [x - MANUAL_ACROSS, y - h, x + MANUAL_ACROSS, y + h];
+    return { name: `manual:${id}#${i + 1}`, kind: o.kind, width: o.width, box, c: [x, y] };
+  });
+}
+
 // 개구부 적합 허용 거리(mm, 2026-10-06): 우리 개구부 중심에서 정답 블록 **상자**까지(상자 안이면 0). 처음엔 상자 **중심**까지를
 // max(300, 폭/2 + 50) 안에서 봤는데, 포켓(절반이 벽 속 주머니)과 여닫이(열린 문짝까지 그림)는 상자 중심이 개구부 중심에서 ≈ 폭/2
 // 비껴 있어 여유가 없었고(사동중 포켓 453~460·502 mm / 허용 500, 내곡중 SD850 446 / 475), 긴 창은 거꾸로 너무 느슨했다(4800 창은
@@ -130,9 +145,9 @@ export async function runDrawing(entry) {
     return { name: a.name, label: a.value, got: got == null ? null : Math.round(got * 100) / 100, room: room?.name ?? null, ok };
   });
   // 개구부 적합: 정답 블록 상자에서 OPN_TOL 안에 우리 개구부(문·창·개구부 아이템) 중심이 있는가, 있으면 폭이 50 mm 안인가
-  // (이름에 폭이 없는 블록은 폭 검사를 늘 통과한다).
+  // (이름에 폭이 없는 블록은 폭 검사를 늘 통과한다). 정답 = 블록 정답 + 손 정답(truth/<id>.json · 2026-10-12).
   const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
-  const truth = (await blockTruth(exRaw)).filter(t => near(toApp(t.c)));
+  const truth = [...(await blockTruth(exRaw)), ...manualTruth(entry.id)].filter(t => near(toApp(t.c)));
   let opnHit = 0, opnWidth = 0;
   for (const t of truth) {
     // 상자 네 귀를 앱 좌표로 옮긴 뒤 min·max를 다시 잡는다 — toApp는 y를 뒤집는다.

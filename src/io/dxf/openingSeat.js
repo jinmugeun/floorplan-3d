@@ -6,6 +6,8 @@ import { productById } from '../../products/catalog.js';
 import { placeOnWall } from '../../geom/items.js';
 
 export const DOOR_PRODUCTS = [['door-swing-900', 900], ['door-swing-1000', 1000], ['door-slide-1500', 1500], ['door-double-1800', 1800]];
+// 외미닫이 문 기호(slideDoors.js · 2026-10-12 신상중 A-DOOR)가 앉는 미닫이문. 여닫이 목록(DOOR_PRODUCTS)과 따로 둔다.
+export const SLIDE_PRODUCTS = [['door-slide-900', 900], ['door-slide-1500', 1500]];
 export const WINDOW_PRODUCTS = [['window-fix-600', 600], ['window-slide-1200', 1200], ['window-slide-1800', 1800]];
 export const OPENING_FALLBACK = 'opening-pass';
 export const OPENING_MATCH_DIST = 900;     // 개구부 중심 → 벽 중심선 최대 거리(mm)

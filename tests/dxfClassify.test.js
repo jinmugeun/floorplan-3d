@@ -141,9 +141,12 @@ test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되�
     extend: 4000, bareReach: 1000, joinMargin: 50, passes: 3, spur: 1000,
     refOut: 200, refGrid: 3, refCore: 60,
     minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
+    // 2026-10-12 외미닫이 문 기호(신상중 A-DOOR 실측 — params.js 주석)
+    doorLeaf: [700, 1300], slideOffset: 200, slideArrowLen: [400, 600],
   });
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
-  expect(Object.keys(DXF_PARAMS)).toHaveLength(40);
+  expect(Object.isFrozen(DXF_PARAMS.doorLeaf) && Object.isFrozen(DXF_PARAMS.slideArrowLen)).toBe(true);   // 범위 배열도 얼어 있다
+  expect(Object.keys(DXF_PARAMS)).toHaveLength(43);
 });
 
 // ── 2026-10-02 다른 사무소 도면 둘(신상중 · 내곡중)에서 드러난 판정 오류 ──────────────────────────

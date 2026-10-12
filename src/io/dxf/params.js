@@ -33,6 +33,9 @@
 //    방을 둘러싸지 못하면서 옆 벽 끝을 먼저 붙잡아 진짜 접합을 막는다(실파일 식당 서쪽 벽).
 //  - minCompLen 3000: 벽 minComp개 미만 덩어리라도 이만큼 길면 남긴다(기둥에 가로막혀 떨어진 실제 벽).
 //  - blockShare 0.1: 벽 레이어 선 길이가 주 평면 블록의 이 비율 미만인 블록은 기호다(트럭·조경·싱크대).
+//  - 외미닫이 문 기호(slideDoors.js · 2026-10-12 신상중 A-DOOR 실측): 문짝 선 길이 doorLeaf [700, 1300](실측 900·940·1000·1008·900 ·
+//    닫힌 자리에 그린 것 1000 · 주차 자리 800), 문짝이 벽 면에서 벗어나도 되는 거리 slideOffset 200(실측: 벽 중심선에서 두께/2 + 0~20 mm —
+//    면 위에 겹치거나 문틀 바깥 면에 붙는다), 미닫이 화살표 축선 길이 slideArrowLen [400, 600](실측 일곱 개 모두 491 mm).
 export const DXF_PARAMS = Object.freeze({
   minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
   tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20, spanEdge: 10, spanOverlap: 0.25,
@@ -42,4 +45,5 @@ export const DXF_PARAMS = Object.freeze({
   extend: 4000, bareReach: 1000, joinMargin: 50, passes: 3, spur: 1000,
   refOut: 200, refGrid: 3, refCore: 60,
   minWall: 250, minComp: 4, minCompLen: 3000, blockShare: 0.1, height: 3500, thickness: 200,
+  doorLeaf: Object.freeze([700, 1300]), slideOffset: 200, slideArrowLen: Object.freeze([400, 600]),
 });

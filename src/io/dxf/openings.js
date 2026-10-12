@@ -1,7 +1,8 @@
 // 문·창(§18.4). 차례가 규칙이다: ① 창·문 블록 INSERT(blockOpenings.js — 2026-09-30, 인서트마다 **전개된 월드
 // 도형**을 모아 자리·종류·폭을 읽는다. INSERT 점과 블록 로컬 bbox는 쓰지 않는다: 블록 로컬 좌표가 base에서
 // 수십만 mm 떨어져 있어 bbox가 33 m × 13 m로 나왔다 — 프로토타입이 21개 중 9개만 맞힌 원인) → ② 문 원호의
-// 중심 → ③ 개구부 레이어의 긴 면선이 벽을 덮는 구간(창) → ④ 벽 틈. 뒤 경로는 앞 경로가 앉힌 자리를 비켜 간다.
+// 중심 → ②′ 외미닫이 문 기호(slideDoors.js — 2026-10-12 신상중 A-DOOR: 벽과 나란한 문짝 선 + 미닫이 화살표)
+// → ③ 개구부 레이어의 긴 면선이 벽을 덮는 구간(창) → ④ 벽 틈. 뒤 경로는 앞 경로가 앉힌 자리를 비켜 간다.
 // 이 도면의 문은 두 가지다(2026-09-29 정정 — 계획 10의 "스윙 원호가 없다"는 ARC만 센 오판이었다):
 //  ① 여닫이 6짝(양개 4 · 외짝 2): 역할 "기타"인 WID 레이어의 DR-900·DR-1800·dr-1850 블록에 있고 궤적은
 //     **폴리선 bulge**다 — 그래서 문 블록 이름(DOOR_BLOCK)과 polyArcs를 함께 본다.
@@ -12,12 +13,13 @@
 // 이 파일은 워커가 import하므로 DOM·ui를 건드리지 않는다.
 import { DXF_PARAMS } from './params.js';
 import { DOOR_BLOCK, OPEN_BLOCK, blockOpenings } from './blockOpenings.js';
-import { DOOR_PRODUCTS, WINDOW_PRODUCTS, OPENING_EDGE, OPENING_MIN, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, makeItem } from './openingSeat.js';
+import { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, OPENING_EDGE, OPENING_MIN, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, makeItem } from './openingSeat.js';
+import { slideDoors } from './slideDoors.js';
 
-export { DOOR_BLOCK, OPEN_BLOCK };
+export { DOOR_BLOCK, OPEN_BLOCK, slideDoors };
 // 제품 목록·폭 맞추기·틈 중복 제거·벽 찾기·아이템 만들기(순수 도우미)는 openingSeat.js로 옮겼다(2026-10-12 · 300줄 예산).
 // 테스트·워커가 이 경로로 부르던 이름은 그대로 다시 내보낸다.
-export { DOOR_PRODUCTS, WINDOW_PRODUCTS, OPENING_FALLBACK, OPENING_MATCH_DIST, OPENING_EDGE, nearestWall, productForWidth, fitOpening, fitT, dedupeGaps } from './openingSeat.js';
+export { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, OPENING_FALLBACK, OPENING_MATCH_DIST, OPENING_EDGE, nearestWall, productForWidth, fitOpening, fitT, dedupeGaps } from './openingSeat.js';
 
 const DOOR_R = [600, 1200];                // 문 회전 궤적의 반지름 범위(mm)
 const DOOR_SWEEP = [60, 110];              // 스윕 각 범위(°)
@@ -99,7 +101,8 @@ export function windowSpans(segs, layers, walls, P = DXF_PARAMS) {
   return out;
 }
 
-export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openingLayers = new Set(), gaps = [], params: P = DXF_PARAMS } = {}) {
+// wallLayers: 벽을 뽑은 레이어(외미닫이 기호의 개구부 = 벽 레이어 면선이 없는 구간 — 없으면 그 경로를 건너뛴다).
+export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openingLayers = new Set(), wallLayers = new Set(), gaps = [], params: P = DXF_PARAMS } = {}) {
   const items = [], placed = new Map();
   const wallLen = w => Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
   const clash = (wall, t, width) => (placed.get(wall.id) ?? []).some(o => Math.abs(o.t - t) * o.L < (o.width + width) / 2);
@@ -167,6 +170,9 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
     seat(DOOR_PRODUCTS, sum, A.wall, clamp01((A.tHinge + B.tHinge) / 2));
   }
   leaves.forEach((f, i) => { if (!paired.has(i)) seat(DOOR_PRODUCTS, f.width, f.wall, clamp01(f.tMid)); });
+  // ②′ 외미닫이 문 기호(2026-10-12 · 신상중 A-DOOR 문짝 선 + 미닫이 화살표 — 여섯 자리): 스윙 호 뒤 · 창 앞. 그 자리의 문틀·레일 선
+  // (개구부 + 주차 자리, 1,700~2,000 mm)은 windowSpans가 창으로 읽던 재료라, 문을 먼저 앉혀 창 구간이 충돌로 비켜 가게 한다.
+  for (const d of slideDoors(ex, walls, openingLayers, toApp, P, wallLayers)) seat(SLIDE_PRODUCTS, d.width, d.wall, clamp01(d.t));
   // 차례가 규칙이다(Task 6 재리뷰): 스윙 호 → **창(면선)** → 벽 틈. 개구부 레이어의 면선은 그 자리가
   // 창이라는 직접 증거라 같은 자리의 일반 틈을 이긴다. 틈은 마지막 폴백이고, 이미 앉은 개구부와
   // 겹치면 놓지 않는다(사전 검토 C-2의 "같은 자리에 겹쳐 놓지 않는다").

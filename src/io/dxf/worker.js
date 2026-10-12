@@ -101,12 +101,14 @@ function doExtract(opts = {}) {
     thickness: opts.thickness ?? DXF_PARAMS.thickness,
     roi: meta.regions[opts.region] ?? meta.regions[0] ?? null,
   });
-  let r = run(new Set(opts.layers ?? []));
+  // wallSet: 결과 r을 낸 벽 레이어(외미닫이 기호가 개구부 = 벽 레이어 면선이 없는 구간을 볼 때 쓴다 · 2026-10-12).
+  let wallSet = new Set(opts.layers ?? []);
+  let r = run(wallSet);
   // 체크가 비어 도형 추정으로 떨어졌으면 **그 추정 레이어로 다시** 추출한다(2026-10-02 내곡중 실측): 검토 창은 추정
   // 레이어를 켜진 것으로 보여 주므로, 결과도 "그 체크로 추출한 것"이어야 한다 — 폴백(두께 상위 여섯만)의 결과를
   // 그대로 내면 표시(벽 135개가 나올 체크)와 계산(47개)이 어긋난다.
   const guessedLayers = r.guessed ? [...r.guessedLayers] : [];
-  if (guessedLayers.length) { const again = run(new Set(guessedLayers)); if (again.walls.length) r = again; }
+  if (guessedLayers.length) { const g = new Set(guessedLayers), again = run(g); if (again.walls.length) { r = again; wallSet = g; } }
   const tWalls = performance.now() - t0;
   if (!r.walls.length) throw new DxfError('no-walls');
   progress('rooms', 0);
@@ -124,7 +126,7 @@ function doExtract(opts = {}) {
     dims: ex.dims.filter(d => d.p1 && inBox(d.p1, r.roi && { x0: r.roi.x0 - 10000, y0: r.roi.y0 - 10000, x1: r.roi.x1 + 10000, y1: r.roi.y1 + 10000 })),
     // 개구부는 두 재료를 함께 쓴다: 스윙 호(ex.arcs)와 **벽 틈**(r.gaps · 사전 검토 C-2).
     openings: opts.openings === false ? () => [] : ({ walls, toApp }) =>
-      buildOpenings({ ex, walls, toApp, scale: 1, openingLayers: openRole, gaps: r.gaps }),
+      buildOpenings({ ex, walls, toApp, scale: 1, openingLayers: openRole, wallLayers: wallSet, gaps: r.gaps }),
   });
   const tRooms = performance.now() - t1;
   // 트레이스는 **ROI 안 · 꺼지지 않은 레이어를 전부** 그린다(체크 여부와 무관): 사람이 이어야 할

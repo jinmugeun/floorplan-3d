@@ -111,6 +111,15 @@ describe('제품 카탈로그', () => {
     expect(p.opening).toEqual({ w: 900, h: 2100, sill: 0 });
     expect(p.price).toBe(390000);
   });
+
+  // 2026-10-12(계획 12 Task 2): 신상중 A-DOOR 외미닫이 기호(문짝 900~1008)가 앉을 900 미닫이 — 그 전에는 미닫이문이 1500 하나뿐이었다.
+  test('미닫이문 900 제품이 있다', () => {
+    const p = productById('door-slide-900');
+    expect(p).toMatchObject({ name: '미닫이문 900', code: 'DR-S090', category: '문/창문', sub: '문', size: [900, 40, 2100], attach: 'wall', symbol: 'door', kind: 'door' });
+    expect(p.opening).toEqual({ w: 900, h: 2100, sill: 0 });
+    expect(p.price).toBe(300000);
+    expect(searchProducts('외미닫이').map(x => x.id)).toEqual(['door-slide-900']);
+  });
 });
 
 test('카테고리마다 타일 색이 있다', () => {

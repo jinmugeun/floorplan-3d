@@ -2,7 +2,7 @@
 // 모아 읽고(tests/dxfBlockOpenings.test.js), 여기서는 그 뒤 경로(문 원호의 중심 · 창 면선 · 벽 틈)를 본다.
 // 좌표는 전부 앱 좌표(mm · y 남쪽)이고 소수를 섞는다.
 import { test, expect } from 'vitest';
-import { doorHinges, gapOpenings, dedupeGaps, windowSpans, nearestWall, productForWidth, buildOpenings, DOOR_PRODUCTS, WINDOW_PRODUCTS, OPENING_FALLBACK, OPENING_MATCH_DIST } from '../src/io/dxf/openings.js';
+import { doorHinges, gapOpenings, dedupeGaps, windowSpans, nearestWall, productForWidth, buildOpenings, slideDoors, DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, OPENING_FALLBACK, OPENING_MATCH_DIST } from '../src/io/dxf/openings.js';
 import { DXF_PARAMS as P } from '../src/io/dxf/params.js';
 import { makeWall } from '../src/geom/walls.js';
 
@@ -235,4 +235,67 @@ test('창 면선이 같은 자리의 벽 틈을 이기고, 떨어진 틈은 그�
   expect(same[0].productId).toBe('window-slide-1200');       // 면선은 창이라는 직접 증거다
   const apart = buildOpenings({ ex: exOf({ segs }), walls: [WALL], openingLayers: OPEN, gaps: [{ p: [-2500.5, 1500.25], width: 900 }] });
   expect(apart.map(i => i.productId).sort()).toEqual([OPENING_FALLBACK, 'window-slide-1200']);
+});
+
+// --- 계획 12 Task 2(2026-10-12): 외미닫이 문 기호 — 신상중 A-DOOR 문짝 선 다섯 + 미닫이 화살표 ---
+// 실측 모양: 문짝은 열린(주차) 자리에 벽과 나란히(면에서 0~20 mm) 그리고, 화살표(축선 491 · 꺾쇠 67 mm)는 **개구부 앞**에 서서
+// 문짝 쪽을 가리킨다(일곱 개 모두). 벽 A (0,0)→(6000,0) 두께 200 · 벽 레이어 면선 y ±100이 x 0~2000 · 3000~6000을 덮는다(2000~3000이 개구부).
+const WALL_A = makeWall({ a: [0, 0], b: [6000, 0], thickness: 200, height: 3500 });
+const SLIDE_OPEN = new Set(['WIN', 'A-DOOR']), SLIDE_WALL = new Set(['WAL']);
+const faces = () => [seg(0, 100, 2000, 100, 'WAL'), seg(0, -100, 2000, -100, 'WAL'), seg(3000, 100, 6000, 100, 'WAL'), seg(3000, -100, 6000, -100, 'WAL')];
+const leafA = () => seg(1000, 130, 2000, 130, 'A-DOOR');
+// 축선 (2700,300)→(2200,300): 개구부 앞에서 문짝(−x) 쪽을 가리키고, 꺾쇠 둘이 머리 (2200,300)에서 뒤쪽으로 34°씩 벌어진다.
+const arrowA = (head = true) => [seg(2700, 300, 2200, 300, 'A-DOOR'), ...(head ? [seg(2200, 300, 2260, 260, 'A-DOOR'), seg(2200, 300, 2260, 340, 'A-DOOR')] : [])];
+
+test('외미닫이 기호(벽과 나란한 문짝 선 + 미닫이 화살표)는 문짝 옆 빈 구간에 미닫이문 900으로 앉고 그 자리의 창 면선을 비켜 가게 한다', () => {
+  expect(SLIDE_PRODUCTS).toEqual([['door-slide-900', 900], ['door-slide-1500', 1500]]);
+  expect(DOOR_PRODUCTS.map(p => p[0])).toEqual(['door-swing-900', 'door-swing-1000', 'door-slide-1500', 'door-double-1800']);   // 여닫이 목록은 그대로
+  const cand = slideDoors(exOf({ segs: [...faces(), leafA(), ...arrowA()] }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL);
+  expect(cand).toHaveLength(1);
+  expect(cand[0].wall).toBe(WALL_A);
+  expect(cand[0].width).toBe(1000);                           // min(문짝 1000, 빈 구간 1000)
+  expect(cand[0].t * 6000).toBeCloseTo(2500, 6);
+  // 문틀·레일 선(창 레이어 1,700 mm, 개구부 + 주차 자리)은 창 재료지만 같은 자리에 문이 먼저 앉아 창이 되지 않는다(문짝 선 자체도).
+  const items = buildOpenings({ ex: exOf({ segs: [...faces(), leafA(), ...arrowA(), seg(1000, 0, 2700, 0, 'WIN')] }), walls: [WALL_A], openingLayers: SLIDE_OPEN, wallLayers: SLIDE_WALL });
+  expect(items.map(i => i.productId)).toEqual(['door-slide-900']);
+  expect(items[0].t * 6000).toBeCloseTo(2500, 6);
+  expect(items[0].size).toEqual([900, 40, 2100]);
+  // 벽 레이어를 모르면(빈 집합) 빈 구간을 볼 수 없어 이 경로는 아무것도 내지 않는다 — 창 면선이 예전처럼 창이 된다.
+  const blind = buildOpenings({ ex: exOf({ segs: [...faces(), leafA(), ...arrowA(), seg(1000, 0, 2700, 0, 'WIN')] }), walls: [WALL_A], openingLayers: SLIDE_OPEN });
+  expect(blind.map(i => i.productId)).toEqual(['window-slide-1800']);
+});
+
+test('외미닫이 기호가 아닌 것은 읽지 않는다 — 화살표·꺾쇠가 없거나, 문짝이 벽과 수직이거나, 창·문 블록 안이거나, 짧거나, 화살표가 문짝 옆에 서 있다', () => {
+  const run = segs => slideDoors(exOf({ segs }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL);
+  expect(run([...faces(), leafA()])).toEqual([]);                                     // 화살표 없음
+  expect(run([...faces(), leafA(), ...arrowA(false)])).toEqual([]);                   // 꺾쇠 없는 축선은 화살표가 아니다
+  expect(run([...faces(), seg(2000, 100, 2000, 1100, 'A-DOOR'), ...arrowA()])).toEqual([]);   // 문짝이 벽과 수직(여닫이 문짝 꼴)
+  expect(run([...faces(), seg(1500, 130, 2000, 130, 'A-DOOR'), ...arrowA()])).toEqual([]);    // 500 mm는 문짝이 아니다(doorLeaf 700~1300)
+  expect(run([...faces(), { ...leafA(), layer: 'EQUIP' }, ...arrowA().map(s => ({ ...s, layer: 'EQUIP' }))])).toEqual([]);   // 개구부 역할이 아닌 레이어
+  // 창·문 블록(win-900-3) 안의 선은 블록 경로가 이미 앉혔다 — 부모 INSERT를 거슬러 올라가 본다.
+  const inserts = [{ name: 'win-900-3', parent: undefined }, { name: 'frame', parent: 0 }];
+  expect(slideDoors({ ...exOf({ segs: [...faces(), { ...leafA(), ins: 1 }, ...arrowA()] }), inserts }, [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL)).toEqual([]);
+  // 화살표가 문짝 옆(벽 방향으로 겹침)에 서 있으면 개구부가 어느 쪽인지 알 수 없다(실측 일곱 개는 모두 문짝 끝 너머에 섰다).
+  expect(run([...faces(), leafA(), seg(1100, 300, 1600, 300, 'A-DOOR'), seg(1600, 300, 1540, 260, 'A-DOOR'), seg(1600, 300, 1540, 340, 'A-DOOR')])).toEqual([]);
+  // 개구부 양쪽이 다 벽 레이어 면선으로 덮여 있으면(벽이 끊기지 않았다) 문이 아니다.
+  expect(run([seg(0, 100, 6000, 100, 'WAL'), seg(0, -100, 6000, -100, 'WAL'), leafA(), ...arrowA()])).toEqual([]);
+  // 빈 구간이 문짝의 80 %보다 짧으면(2000~2300 뒤에 면선 조각) 문이 아니다 — 300 mm 개구부 조각을 만들지 않는다.
+  expect(run([...faces(), seg(2300, 100, 2400, 100, 'WAL'), leafA(), ...arrowA()])).toEqual([]);
+});
+
+test('화살표 쪽이 막혀 있으면 문짝의 반대쪽 빈 구간을 본다', () => {
+  // 화살표가 문짝 왼쪽 끝(x 1000) 너머에 서 있지만 그쪽(0~1000)은 벽 면선이 덮었다 → 오른쪽 2000~3000.
+  const left = [seg(300, 300, 800, 300, 'A-DOOR'), seg(800, 300, 740, 260, 'A-DOOR'), seg(800, 300, 740, 340, 'A-DOOR')];
+  const cand = slideDoors(exOf({ segs: [...faces(), leafA(), ...left] }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL);
+  expect(cand).toHaveLength(1);
+  expect(cand[0].t * 6000).toBeCloseTo(2500, 6);
+});
+
+test('주차 쪽 벽이 문짝 끝보다 앞에서 끝나면 개구부는 그 벽 끝에서 잰다 (신상중 문짝이 개구부에 40~100 mm 걸친다)', () => {
+  // 면선이 1900에서 끝나고 개구부는 1900~2800(900) — 문짝(1000~2000)이 개구부에 100 mm 걸쳐 있다. 오른쪽 벽은 2800부터.
+  const segs = [seg(0, 100, 1900, 100, 'WAL'), seg(0, -100, 1900, -100, 'WAL'), seg(2800, 100, 6000, 100, 'WAL'), seg(2800, -100, 6000, -100, 'WAL'), leafA(), ...arrowA()];
+  const cand = slideDoors(exOf({ segs }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL);
+  expect(cand).toHaveLength(1);
+  expect(cand[0].width).toBe(900);
+  expect(cand[0].t * 6000).toBeCloseTo(2350, 6);              // (1900 + 2800) / 2
 });
