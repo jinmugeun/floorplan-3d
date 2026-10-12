@@ -697,9 +697,10 @@ test('applyAssignment는 assignment.scale로 반복·오프셋을 잡고 텍스�
   expect(materialById('tile-white-300').scale).toEqual([300, 300]);
 });
 
-// 2026-10-12 · 계획 12 Task 7 리뷰 M-1: 개구부 벽 조각 박스가 같은 선 위 이어짐 쪽 끝을 두께/2만큼 늘려, T자로 갈린 두 조각에 이어 앉힌
-// 창(사동중 win-4800-3 둘째) 가운데에 벽 두께만 한 통높이 기둥이 섰다(W1 [4000, 4100] · W2 [−100, 0]). 2D wallRange와 같은 규칙(geom/walls.wallExtent)이다.
-test('T자로 갈린 같은 선 두 벽에 이어 앉힌 창: 창 구간에 통높이 벽 박스가 없고 두 벽의 박스는 접점에서 맞닿는다', async () => {
+// 2026-10-12 · 계획 12 Task 7 리뷰 M-1 후속: 2D wallRange와 같은 geom/walls.wallExtent. T자로 갈린 두 조각에 접점에 딱 붙게 이어 앉힌 창
+// (사동중 win-4800-3 둘째)에서 개구부 벽 조각 박스가 접점 쪽으로 t/2 늘어 창 가운데에 통높이 기둥이 섰고(W1 [4000, 4100] · W2 [−100, 0]),
+// 개구부 없는 칸막이의 돌출(wallPolygon)도 외벽 몸통을 거의 가로질렀다(y −50). 딱 붙은 개구부가 없으면 모두 예전대로 늘린다.
+test('T자로 갈린 같은 선 두 벽에 이어 앉힌 창: 통높이 기둥 박스가 없고 칸막이는 외벽 중심선에서 멈춘다 — 개구부가 없으면 예전대로 늘린다', async () => {
   const { createItem } = await import('../src/state/schema.js');
   const { productById } = await import('../src/products/catalog.js');
   const H = 2300;
@@ -707,14 +708,28 @@ test('T자로 갈린 같은 선 두 벽에 이어 앉힌 창: 창 구간에 통�
   const part = makeWall({ a: [4000, 0], b: [4000, 3000], thickness: 100, height: H });
   const p = productById('window-slide-1800'), size = [2000, p.size[1], p.size[2]];
   const items = [createItem(p, { attach: 'wall', wallId: w1.id, t: 0.75, size }), createItem(p, { attach: 'wall', wallId: w2.id, t: 0.25, size })];
+  // 메시의 평면 범위(mm): 박스는 position ± 폭/2, 돌출(개구부 없는 벽)은 경계 상자 — 평면 y는 three z다.
+  const span = (g, id) => g.children.filter(c => c.name === 'wall' && c.userData.wallId === id).map(c => {
+    if (c.geometry.type === 'BoxGeometry') {
+      const { width, height } = c.geometry.parameters;
+      return { x0: Math.round(c.position.x * 1000 - width * 500), x1: Math.round(c.position.x * 1000 + width * 500), full: Math.abs(height * 1000 - H) < 1 };
+    }
+    c.geometry.computeBoundingBox();
+    const b = c.geometry.boundingBox;
+    return { x0: Math.round(b.min.x * 1000), x1: Math.round(b.max.x * 1000), y0: Math.round(b.min.z * 1000), full: true };
+  });
   const g = buildFloorGroup({ walls: [w1, part, w2], rooms: [], items, height: H }, { wallOpacity: 1, v3: {} });
-  // 박스의 월드 x 구간(mm): 벽이 x축과 나란하므로 position.x ± 폭/2.
-  const boxes = id => g.children.filter(c => c.name === 'wall' && c.userData.wallId === id)
-    .map(c => ({ x0: Math.round(c.position.x * 1000 - c.geometry.parameters.width * 500), x1: Math.round(c.position.x * 1000 + c.geometry.parameters.width * 500), full: Math.abs(c.geometry.parameters.height * 1000 - H) < 1 }));
-  const all = [...boxes(w1.id), ...boxes(w2.id)];
-  expect(all.filter(b => b.full && b.x1 > 2000 && b.x0 < 6000)).toEqual([]);          // 창 x 2000~6000 안에 통높이 박스 없음
-  expect(Math.max(...boxes(w1.id).map(b => b.x1))).toBe(4000);                        // W1은 접점까지(창 밑·위 박스)
-  expect(Math.min(...boxes(w2.id).map(b => b.x0))).toBe(4000);
-  expect(boxes(w1.id).filter(b => b.full)).toEqual([{ x0: 0, x1: 2000, full: true }]);   // 반대 끝(접합 없음)은 늘지 않는다
+  const all = [...span(g, w1.id), ...span(g, w2.id)];
+  expect(all.filter(b => b.full && b.x1 > 2000 && b.x0 < 6000)).toEqual([]);          // 창 x 2000~6000 안에 통높이 박스 없음(예전 기둥 둘)
+  expect(Math.max(...span(g, w1.id).map(b => b.x1))).toBe(4000);                      // W1은 접점까지(창 밑·위 박스)
+  expect(Math.min(...span(g, w2.id).map(b => b.x0))).toBe(4000);
+  expect(span(g, w1.id).filter(b => b.full)).toEqual([{ x0: 0, x1: 2000, full: true }]);   // 반대 끝(접합 없음)은 늘지 않는다
+  expect(span(g, part.id)).toEqual([{ x0: 3950, x1: 4050, y0: 0, full: true }]);      // 칸막이 끝 = 외벽 중심선(예전 y −50)
   disposeGroup(g);
+  // 같은 꼴에 개구부가 없으면 예전 그대로: 같은 선 두 벽은 접점에서 t/2씩 겹치고 칸막이는 t/2 늘어 외벽 몸통에 든다.
+  const bare = buildFloorGroup({ walls: [w1, part, w2], rooms: [], items: [], height: H }, { wallOpacity: 1, v3: {} });
+  expect(span(bare, w1.id)).toEqual([{ x0: 0, x1: 4100, y0: -100, full: true }]);
+  expect(span(bare, w2.id)).toEqual([{ x0: 3900, x1: 8000, y0: -100, full: true }]);
+  expect(span(bare, part.id)).toEqual([{ x0: 3950, x1: 4050, y0: -50, full: true }]);
+  disposeGroup(bare);
 });

@@ -196,10 +196,15 @@ export function buildFloorGroup(floor, view) {
       }
     });
   }
+  // 벽 끝 연장(geom/walls.wallExtent)은 이웃 벽의 구멍도 본다 — 구멍 색인을 벽마다 한 번 만든다. 본체(개구부 없는 벽의 돌출)·윗면·밑동과
+  // 개구부 벽 조각이 모두 같은 범위를 쓴다(2026-10-12 · 계획 12 Task 7 리뷰 M-1 후속 — 2D wallRange와 같은 함수).
+  const holesById = new Map(floor.walls.map(w => [w.id, openingsOnWall(floor.items, w)]));
+  const holesOf = w => holesById.get(w.id) ?? [];
   for (const w of floor.walls) {
     if (w.virtual) continue;            // 구획선은 방만 나눈다 — 3D에 서지 않는다
-    const poly = wallPolygon(w, floor.walls);
-    const openings = openingsOnWall(floor.items, w);
+    const ext = wallExtent(w, floor.walls, holesOf);
+    const poly = wallPolygon(w, floor.walls, ext);
+    const openings = holesOf(w);
     const { dir, rot } = wallAxis(w);
     // 벽 본체 메시 하나(및 hiddenLine이면 그 엣지)를 그룹에 넣는다. 개구부가 있는 벽은 이 함수를
     // 조각마다 부른다 — 모두 같은 name: 'wall' / userData.wallId라 컷어웨이가 그대로 동작한다.
@@ -220,11 +225,9 @@ export function buildFloorGroup(floor, view) {
       geo.rotateX(Math.PI / 2); geo.translate(0, M(w.height), 0);
       addWallMesh(geo);
     } else {
-      // 개구부가 있는 벽은 조각 박스로 쌓는다. 벽 접합(다른 벽이 끝점을 공유)만큼 범위를 늘려
-      // 모서리에서 빈틈이 생기지 않게 한다 — 같은 선 위 이어짐 쪽 끝은 늘리지 않는다(2026-10-12 · 계획 12 Task 7 리뷰 M-1:
-      // 늘린 상자가 이웃 조각으로 이어 앉힌 창 가운데에 벽 두께만 한 기둥을 세웠다). 2D wallRange와 같은 geom/walls.wallExtent다.
-      const { start, end } = wallExtent(w, floor.walls);
-      for (const pc of wallPieces(w, openings, { start, end })) {
+      // 개구부가 있는 벽은 조각 박스로 쌓는다. 벽 접합(다른 벽이 끝점을 공유)만큼 범위를 늘려 모서리에서 빈틈이 생기지 않게 한다 —
+      // 같은 선 이어짐의 접점에 딱 붙은 개구부가 있는 끝은 빼고(ext · 리뷰 M-1: 늘린 상자가 이어 앉힌 창 가운데에 벽 두께만 한 기둥을 세웠다).
+      for (const pc of wallPieces(w, openings, ext)) {
         // uv를 벽 축 미터로 다시 써서 조각끼리도, 개구부 없는 벽과도 무늬가 이어진다(회전 각도가 있어도).
         const geo = metricBoxUv(new THREE.BoxGeometry(M(pc.u1 - pc.u0), M(pc.z1 - pc.z0), M(w.thickness)), pc, w.thickness);
         const c = add(w.a, mul(dir, (pc.u0 + pc.u1) / 2));

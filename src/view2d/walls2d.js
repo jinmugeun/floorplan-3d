@@ -10,21 +10,23 @@ import { itemVisible } from './items2d.js';
 
 export const GLASS_DIV = 6;   // 창 유리선은 벽 두께의 1/6만큼 중심선에서 벌어진다
 
-// 벽 축 u 좌표의 범위. 접합 벽이 있는 끝은 두께/2만큼 연장한다 — 같은 선 위 이어짐 쪽 끝은 빼고(2026-10-12 · 계획 12 Task 7 리뷰 M-1).
-// 규칙은 geom/walls.wallExtent 한 곳이고 3D(build.js의 개구부 벽 조각)도 같은 함수를 부른다.
-export const wallRange = (wall, walls = []) => wallExtent(wall, walls);
+// 벽 축 u 좌표의 범위. 접합 벽이 있는 끝은 두께/2만큼 연장한다 — 같은 선으로 이어지는 벽의 접점에 딱 붙은 개구부가 있는 끝은 빼고
+// (2026-10-12 · 계획 12 Task 7 리뷰 M-1 후속). 규칙은 geom/walls.wallExtent 한 곳이고 3D(build.js)도 같은 함수를 부른다.
+// items: 아이템 배열 또는 벽 → 구멍 함수(drawWalls가 한 번 만든 색인).
+export const wallRange = (wall, walls = [], items = []) => wallExtent(wall, walls, items);
 
 // 개구부를 뺀 조각의 u 구간. 평면도는 벽을 위에서 내려다본 그림이라 개구부의 높이(sill·lintel)는
 // 뜻이 없다: 개구부의 z 구간을 벽 전체 높이로 눌러 wallPieces에 넘기면 창 밑·문 위 조각이 생기지
 // 않고 좌·우 조각만 남는다(= u 구간만 비운 것과 같다).
 // openings를 주면 그 벽의 개구부를 다시 구하지 않는다(그리는 쪽이 이미 한 번 구했다 — m-1).
-// 그때는 items 필터도 부르는 쪽이 이미 지난 것으로 본다.
-export function wallSpans(wall, walls = [], items = [], { flags = null, openings = null } = {}) {
-  const { start, end } = wallRange(wall, walls);
+// 그때는 items 필터도 부르는 쪽이 이미 지난 것으로 본다. holesOf(벽 → 구멍)를 주면 끝 연장 판정이 이웃 벽의 구멍도 그 색인에서 읽는다.
+export function wallSpans(wall, walls = [], items = [], { flags = null, openings = null, holesOf = null } = {}) {
   // 보기 옵션으로 문·창·개구부를 숨겼으면 평면도 끊지 않는다(심벌은 없는데 구멍만 남으면
   // 도면을 잘못 읽는다 — 결정 38). flags를 주지 않으면 예전처럼 hidden만 본다.
   const shownItem = it => !flags || itemVisible(it, flags);
-  const found = openings ?? openingsOnWall(items.filter(shownItem), wall);
+  const shown = holesOf ? null : items.filter(shownItem);
+  const { start, end } = wallRange(wall, walls, holesOf ?? shown);
+  const found = openings ?? (holesOf ? holesOf(wall) : openingsOnWall(shown, wall));
   const holes = found.map(o => ({ ...o, z0: 0, z1: wall.height }));
   return wallPieces(wall, holes, { start, end }).map(({ u0, u1 }) => ({ u0, u1 }));
 }
@@ -83,6 +85,9 @@ export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags =
   // id 색인은 루프 밖에서 한 번 만들고, 개구부는 벽마다 한 번만 구해 wallSpans에 넘긴다.
   const shown = items.filter(it => itemVisible(it, flags));
   const byId = new Map(items.map(it => [it.id, it]));
+  // 벽 끝 연장 판정이 이웃 벽의 구멍도 보므로(geom/walls.wallExtent) 구멍 색인을 벽마다 한 번 만든다(2026-10-12 · 리뷰 M-1 후속).
+  const holesById = new Map((floor.walls ?? []).map(wl => [wl.id, openingsOnWall(shown, wl)]));
+  const holesOf = wl => holesById.get(wl.id) ?? [];
   for (const wl of floor.walls ?? []) {
     ctx.globalAlpha = soloWalls && !soloWalls.has(wl.id) ? 0.25 : 1;
     if (wl.virtual) { drawDivider(ctx, v, wl, sel?.type === 'wall' && sel.id === wl.id ? v.COLORS.wallSel : v.COLORS.wall); ctx.globalAlpha = 1; continue; }
@@ -91,8 +96,8 @@ export function drawWalls(ctx, v, floor, { sel = null, soloWalls = null, flags =
       ctx.globalAlpha = 1;
       continue;
     }
-    const holes = openingsOnWall(shown, wl);
-    for (const span of wallSpans(wl, floor.walls, shown, { flags, openings: holes })) v.poly(spanQuad(wl, span), v.COLORS.wall, null);
+    const holes = holesOf(wl);
+    for (const span of wallSpans(wl, floor.walls, shown, { flags, openings: holes, holesOf })) v.poly(spanQuad(wl, span), v.COLORS.wall, null);
     for (const o of holes) {
       const kind = byId.get(o.itemId)?.kind;
       if (kind === 'window') drawWindow(ctx, v, wl, o);

@@ -1,5 +1,6 @@
 import { uid } from '../state/schema.js';
 import { add, sub, mul, dot, cross, dist, norm, perp, eq } from './vec.js';
+import { openingsOnWall } from './openings.js';
 
 export const WALL_COLOR_IN = '#f2efe9';
 export const WALL_COLOR_OUT = '#e9e6e0';
@@ -13,37 +14,42 @@ export const wallDir = w => norm(sub(w.b, w.a));
 export const wallLength = w => dist(w.a, w.b);
 export const wallNormal = w => perp(wallDir(w));
 
-export function wallPolygon(w, walls = []) {
+// ext({ start, end } · 벽 축 u)를 주면 그 범위의 사각형이다 — 3D 본체·윗면·밑동이 wallExtent와 같은 끝을 쓴다(2026-10-12 · 리뷰 M-1 후속).
+export function wallPolygon(w, walls = [], ext = null) {
   const d = wallDir(w), n = wallNormal(w), h = w.thickness / 2;
   const joined = p => walls.some(o => o.id !== w.id && !o.virtual && (eq(o.a, p) || eq(o.b, p)));   // 구획선은 벽 접합이 아니다
-  const a = joined(w.a) ? sub(w.a, mul(d, h)) : w.a;
-  const b = joined(w.b) ? add(w.b, mul(d, h)) : w.b;
+  const a = ext ? add(w.a, mul(d, ext.start)) : joined(w.a) ? sub(w.a, mul(d, h)) : w.a;
+  const b = ext ? add(w.a, mul(d, ext.end)) : joined(w.b) ? add(w.b, mul(d, h)) : w.b;
   return [add(a, mul(n, h)), add(b, mul(n, h)), sub(b, mul(n, h)), sub(a, mul(n, h))];
 }
 
-// 개구부 자리를 비우는 두 렌더러(2D view2d/walls2d.wallRange · 3D view3d/build.js의 개구부 벽 조각)가 함께 쓰는 벽 축 u 범위.
-// 다른 벽(구획선 제외)이 끝점을 공유하면 그 끝을 두께/2만큼 늘린다 — 모서리·T자에서 빈틈이 없게(wallPolygon과 같은 뿌리).
-// 단 그 끝에 **같은 선 위 이어짐**(끝점을 공유하고 그 끝에서 바깥으로 2° 안에 뻗는 벽 · 두께 무관)이 있으면 늘리지 않는다
-// (2026-10-12 · 계획 12 Task 7 리뷰 M-1): 늘린 t/2 상자는 제 벽의 개구부로만 잘려, T자로 갈린 이웃 조각으로 이어 앉힌 창
-// (io/dxf/openingSeat.spanPieces) 가운데에 벽 두께만 한 통높이 기둥이 섰다(사동중 win-4800-3 둘째 360 mm · x 2654~3014).
-// 두 조각은 접점에서 딱 맞닿아 빈틈이 없고, T자 칸막이는 제 끝을 그대로 늘린다(칸막이 쪽에서 보면 둘 다 같은 선이 아니다).
+// 두 렌더러(2D view2d/walls2d.wallRange · 3D view3d/build.js)가 함께 쓰는 벽 축 u 범위 — 규칙은 여기 한 곳이다.
+// 다른 벽(구획선 제외)이 끝점 P를 공유하면 그 끝을 두께/2만큼 늘린다(모서리·T자에서 빈틈이 없게 — wallPolygon과 같은 뿌리). 예외 하나
+// (2026-10-12 · 계획 12 Task 7 리뷰 M-1 후속): P를 공유하는 벽(자기 자신 포함) 가운데 **P에 딱 붙은(1 mm 안) 개구부**를 가진 벽이 있고
+// 그 벽이 P에서 같은 선으로 이어지면(다른 벽이 P에서 그 벽의 바깥 방향 2° 안으로 뻗는다), P를 공유하는 벽은 모두 늘리지 않는다.
+//  - 왜: T자로 갈린 같은 선 조각들에 이어 앉힌 창(io/dxf/openingSeat.spanPieces · 사동중 win-4800-3 둘째)은 접점에 딱 붙는다. 늘린 t/2 상자는
+//    제 벽 개구부로만 잘려 창 가운데에 벽 두께만 한 통높이 기둥(360 mm)이 섰고, T자 칸막이의 연장은 외벽 겉면 2.5 mm 안까지 와 유리를
+//    가로질렀다. 이제 두 조각은 접점에서 맞닿고 칸막이는 외벽 중심선(유리 자리)에서 멈춘다.
+//  - 그 밖은 예전 그대로다: 개구부 없는 같은 선 분할(splitWall · 개구부 없는 T자)은 t/2씩 겹쳐 2D 캔버스 이음매·3D 숨은선 모서리가 생기지 않고,
+//    모서리는 늘 늘린다 — 도면 개구부는 벽 끝에서 OPENING_EDGE(50) 떨어지고, 손으로 끝에 붙인 창도 같은 선 이어짐이 아니면 예외가 아니다.
+// items: 아이템 배열(openingsOnWall로 구멍을 구한다) 또는 벽 → 구멍([{ u0, u1 }]) 함수(그리는 쪽이 이미 구한 색인).
 const COLLINEAR_COS = Math.cos(2 * Math.PI / 180);
-export function wallEndExtends(w, q, walls = []) {
-  const out = sub(q, q === w.b || (q !== w.a && !eq(q, w.a)) ? w.a : w.b), ol = Math.hypot(out[0], out[1]);   // 이 끝에서 벽 바깥 방향
-  let joined = false;
-  for (const o of walls ?? []) {
-    if (o.id === w.id || o.virtual) continue;
-    const atA = eq(o.a, q);
-    if (!atA && !eq(o.b, q)) continue;
-    joined = true;
-    const v = sub(atA ? o.b : o.a, q), vl = Math.hypot(v[0], v[1]);
-    if (ol > 0 && vl > 0 && dot(v, out) >= vl * ol * COLLINEAR_COS) return false;
-  }
-  return joined;
+const FLUSH_TOL = 1;
+export function wallEndExtends(w, P, walls = [], items = []) {
+  const holesOf = typeof items === 'function' ? items : o => openingsOnWall(items ?? [], o);
+  const at = [w, ...(walls ?? []).filter(o => o.id !== w.id && !o.virtual && (eq(o.a, P) || eq(o.b, P)))];
+  if (at.length < 2) return false;                                   // 접합이 없다
+  const far = o => (eq(o.a, P) ? o.b : o.a);
+  const continues = o => {
+    const out = sub(P, far(o)), ol = Math.hypot(out[0], out[1]);     // P에서 o의 바깥 방향
+    return at.some(x => { if (x === o) return false; const v = sub(far(x), P), vl = Math.hypot(v[0], v[1]); return ol > 0 && vl > 0 && dot(v, out) >= vl * ol * COLLINEAR_COS; });
+  };
+  const flush = o => { const L = wallLength(o), atA = eq(o.a, P); return (holesOf(o) ?? []).some(hl => (atA ? Math.abs(hl.u0) : Math.abs(hl.u1 - L)) <= FLUSH_TOL); };
+  return !at.some(o => flush(o) && continues(o));
 }
-export function wallExtent(w, walls = []) {
+export function wallExtent(w, walls = [], items = []) {
   const h = w.thickness / 2;
-  return { start: wallEndExtends(w, w.a, walls) ? -h : 0, end: wallLength(w) + (wallEndExtends(w, w.b, walls) ? h : 0) };
+  return { start: wallEndExtends(w, w.a, walls, items) ? -h : 0, end: wallLength(w) + (wallEndExtends(w, w.b, walls, items) ? h : 0) };
 }
 
 export function rectWalls(p, q, thickness = 200, height = 2300) {
