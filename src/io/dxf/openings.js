@@ -129,10 +129,14 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
     // 문설주는 제자리에 둔다(옮기면 문설주가 치수에서 어긋나고 이웃 개구부와 겹쳐 통째로 빠졌다).
     // 2026-10-12 · 계획 12 Task 7 — 사동중 win-4800-3 둘째(T자 칸막이): 넘친 끝을 **같은 선 위 이웃 조각**이 이어 받으면
     // 자르지 않고 그 조각에 나머지를 앉힌다(spanPieces — 공유 접점은 여유 면제). 조각마다 충돌을 따로 보고, 둘 이상 앉으면
-    // 같은 openingGroup 표지를 단다(코퍼스 점수판이 그 폭을 더해 블록 폭과 맞댄다). 제품은 조각이 아니라 창 전체 폭으로 고른다
-    // (1200 창의 600 조각이 고정창이 되지 않게 — 두 조각의 높이·sill이 같아야 한다).
+    // 같은 openingGroup 표지를 단다(코퍼스 점수판이 그 폭을 더해 블록 폭과 맞댄다). 렌더러는 같은 선 이어짐 쪽 벽 끝을 늘리지 않아
+    // (geom/walls.wallExtent · 리뷰 M-1) 두 조각이 접점에서 이어진 창으로 보인다 — 그 전에는 접점에 벽 두께만 한 기둥이 섰다.
+    // 제품은 조각이 아니라 창 전체 폭으로, 충돌 검사 **전에** 고른다(1200 창의 600 조각이 고정창이 되지 않게 — 조각들의 높이·sill이 같아야
+    // 한다; 한 조각이 충돌로 빠져도 남은 조각은 도면이 이름 붙인 창 전체의 제품이다 · 리뷰 m-5).
+    // 잇는 것은 창·포켓 미닫이뿐이다(2026-10-12 리뷰 m-3): 여닫이 문 한가운데에 벽이 T자로 붙으면 칸막이가 문길을 막는다 — 문짝 하나가
+    // 접점을 넘을 수 없다. 포켓·미닫이 문짝은 벽을 따라 미끄러지므로 넘을 수 있다. 문은 지금처럼 호스트 안으로 자른다.
     const L = wallLen(o.wall), c = o.t * L, half = o.width / 2;
-    const pieces = spanPieces(walls, o.wall, c - half, c + half, P.bandTol);
+    const pieces = spanPieces(o.kind === 'window' || o.kind === 'pocket' ? walls : [], o.wall, c - half, c + half, P.bandTol);
     const id = blockProduct(o.kind, pieces.reduce((a, p) => a + p.width, 0));
     const group = [];
     for (const { wall, width, t } of pieces) {

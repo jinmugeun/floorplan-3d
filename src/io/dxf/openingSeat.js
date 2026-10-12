@@ -1,6 +1,9 @@
 // 문·창(§18.4)을 벽에 앉히는 순수 도우미 — 제품 목록·폭 맞추기(productForWidth·fitOpening·fitT)·틈 중복 제거(dedupeGaps)·벽 찾기(nearestWall)·블록 제품(blockProduct)·아이템 만들기(makeItem).
 // 2026-10-12 · 300줄 예산 · 계획 12 Task 0: openings.js에서 그대로 옮겼다(동작 불변) — openings.js가 예전 공개 이름을 다시 내보낸다.
 // 이 파일도 워커가 import하므로 DOM·ui를 건드리지 않는다.
+// 알려진 한계(2026-10-12 · 계획 12 Task 7 리뷰 — spanPieces):
+//  - m-4: 이어 앉힌 창의 **가운데** 조각(벽 전체)이 OPENING_MIN(300)보다 짧으면 빠져 창 안에 벽 토막이 남고 무리의 폭 합이 그만큼 모자란다.
+//  - m-5: 제품은 조각별 충돌 검사 **전에** 창 전체 폭으로 고른다 — 한 조각이 충돌로 빠져도 남은 조각은 창 전체의 제품(높이·sill)을 그대로 쓴다.
 import { createItem } from '../../state/schema.js';
 import { productById } from '../../products/catalog.js';
 import { placeOnWall } from '../../geom/items.js';
@@ -103,11 +106,14 @@ export function nearestProduct(list, width) {
 // 블록 개구부 구간 [c0, c1](호스트 벽 a→b 축 mm)을 벽 조각들에 나눠 앉힐 자리 → [{ wall, width, t }](벽 축 차례 · 빈 배열 = 놓지 않는다).
 // 2026-10-12 · 계획 12 Task 7 — 사동중 win-4800-3 둘째(T자 칸막이): 창 도중 x 1176986에 355 칸막이가 T자로 붙어 normalizeWalls가 외벽을
 // 같은 끝점을 나눠 갖는 두 조각(a→p · p→b)으로 갈랐고, 창이 호스트 조각(2834) 안으로 잘려 2700만 앉았다. 구간이 벽 끝을 넘고 그 끝점을
-// **같은 방향(2° 안)·같은 두께(±tol)**의 벽이 공유하면 그 조각으로 잇는다(T자로 붙는 칸막이는 방향이 달라 잇지 않는다).
-//  - 공유 접점에서는 OPENING_EDGE를 면제한다 — 지키면 4000 창이 1950 + 1950이 된다. geom/openings.js의 clipRectByOpenings가
-//    벽 끝에 닿는 개구부를 그대로 다룬다. 바깥 끝은 지금처럼 여유를 지키고, 넘치면 잘리지 않은 쪽(접점) 문설주를 제자리에 둔다.
+// **같은 방향(호스트 축에서 2° 안)·호스트와 같은 두께(±tol)**의 벽이 공유하면 그 조각으로 잇는다(T자로 붙는 칸막이는 방향이 달라 잇지 않는다).
+// 두께는 바로 앞 조각이 아니라 **호스트**와 잰다(2026-10-12 리뷰 m-2: 앞 조각과 재면 200 → 250 → 300이 사슬로 이어졌다).
+//  - 공유 접점에서는 OPENING_EDGE를 면제한다 — 지키면 4000 창이 1950 + 1950이 된다. 바깥 끝은 지금처럼 여유를 지키고, 넘치면 잘리지 않은 쪽(접점) 문설주를 제자리에 둔다.
+//  - 그리기: 두 렌더러(2D walls2d.wallRange · 3D build.js 개구부 벽 조각)는 같은 선 위 이어짐 쪽 끝을 늘리지 않으므로(geom/walls.wallExtent ·
+//    2026-10-12 리뷰 M-1) 두 조각의 구멍이 접점에서 맞닿아 이어진다(사동중 그 창: 보이는 유리 4390 → 4750). 그 전에는 접점마다 늘린 t/2 상자가
+//    제 벽 개구부로만 잘려 벽 두께만 한 통높이 기둥(360 mm)이 섰다. T자 칸막이 자신의 끝 연장(두께/2)은 남는다 — 그 창에서는 355 칸막이 끝이 외벽 겉면 2.5 mm 안까지 온다.
 //  - 양 끝 조각이 OPENING_MIN 미만이면 버리고 남은 이웃의 그 끝을 벽 끝으로 다시 잰다(잇지 않던 지금의 자르기와 같다).
-//  - 이웃이 없으면 결과는 예전 호스트 자르기와 똑같다(조각 하나).
+//  - 이웃이 없으면 결과는 예전 호스트 자르기와 똑같다(조각 하나). 문 블록은 부르는 쪽(openings.js)이 이웃을 주지 않는다(리뷰 m-3).
 const JOINT_COS = Math.cos(2 * Math.PI / 180);
 const JOINT_EPS = 1;                       // 공유 끝점으로 볼 거리(mm) — normalizeWalls 뒤에는 정확히 같다
 export function spanPieces(walls, host, c0, c1, tol) {
@@ -117,9 +123,9 @@ export function spanPieces(walls, host, c0, c1, tol) {
   const s = p => (p[0] - host.a[0]) * d[0] + (p[1] - host.a[1]) * d[1];        // 호스트 축 좌표
   const span = w => { const sa = s(w.a), sb = s(w.b); return { wall: w, L: Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), sa, sign: sb >= sa ? 1 : -1, S: Math.min(sa, sb), E: Math.max(sa, sb) }; };
   const chain = [span(host)], used = new Set([host]);
-  // J를 끝점으로 갖고, 호스트와 나란하며, J에서 바깥(out = −1: a 쪽 · +1: b 쪽)으로 뻗는 같은 두께의 벽.
-  const next = (from, J, out) => (walls ?? []).find(w => {
-    if (used.has(w) || Math.abs(w.thickness - from.thickness) > tol) return false;
+  // J를 끝점으로 갖고, 호스트와 나란하며, J에서 바깥(out = −1: a 쪽 · +1: b 쪽)으로 뻗는, 호스트와 같은 두께의 벽.
+  const next = (J, out) => (walls ?? []).find(w => {
+    if (used.has(w) || Math.abs(w.thickness - host.thickness) > tol) return false;
     const atA = Math.hypot(w.a[0] - J[0], w.a[1] - J[1]) <= JOINT_EPS;
     if (!atA && Math.hypot(w.b[0] - J[0], w.b[1] - J[1]) > JOINT_EPS) return false;
     const far = atA ? w.b : w.a, v = [far[0] - J[0], far[1] - J[1]], l = Math.hypot(v[0], v[1]);
@@ -128,7 +134,7 @@ export function spanPieces(walls, host, c0, c1, tol) {
   for (const out of [-1, 1]) {
     for (let cur = chain.at(out < 0 ? 0 : -1); out < 0 ? cur.S > c0 : cur.E < c1;) {
       const J = (cur.sign > 0) === (out < 0) ? cur.wall.a : cur.wall.b;
-      const w = next(cur.wall, J, out);
+      const w = next(J, out);
       if (!w) break;
       used.add(w); cur = span(w);
       if (out < 0) chain.unshift(cur); else chain.push(cur);

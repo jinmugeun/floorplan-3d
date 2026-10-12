@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { activeFloor } from '../state/schema.js';
-import { wallPolygon } from '../geom/walls.js';
+import { wallPolygon, wallExtent } from '../geom/walls.js';
 import { roomInnerPolygon } from '../geom/rooms.js';
 import { add, mul, eq } from '../geom/vec.js';
 import { openingsOnWall, wallPieces, clipRectByOpenings } from '../geom/openings.js';
@@ -200,7 +200,7 @@ export function buildFloorGroup(floor, view) {
     if (w.virtual) continue;            // 구획선은 방만 나눈다 — 3D에 서지 않는다
     const poly = wallPolygon(w, floor.walls);
     const openings = openingsOnWall(floor.items, w);
-    const { dir, len, rot } = wallAxis(w);
+    const { dir, rot } = wallAxis(w);
     // 벽 본체 메시 하나(및 hiddenLine이면 그 엣지)를 그룹에 넣는다. 개구부가 있는 벽은 이 함수를
     // 조각마다 부른다 — 모두 같은 name: 'wall' / userData.wallId라 컷어웨이가 그대로 동작한다.
     // 지오메트리는 모두 벽 축 미터 uv라 반복은 월드 uv(미터당 반복 수)로 잡는다.
@@ -221,10 +221,9 @@ export function buildFloorGroup(floor, view) {
       addWallMesh(geo);
     } else {
       // 개구부가 있는 벽은 조각 박스로 쌓는다. 벽 접합(다른 벽이 끝점을 공유)만큼 범위를 늘려
-      // 모서리에서 빈틈이 생기지 않게 한다(wallPolygon과 같은 규칙).
-      const joined = q => floor.walls.some(o => o.id !== w.id && !o.virtual && (eq(o.a, q) || eq(o.b, q)));
-      const start = joined(w.a) ? -w.thickness / 2 : 0;
-      const end = len + (joined(w.b) ? w.thickness / 2 : 0);
+      // 모서리에서 빈틈이 생기지 않게 한다 — 같은 선 위 이어짐 쪽 끝은 늘리지 않는다(2026-10-12 · 계획 12 Task 7 리뷰 M-1:
+      // 늘린 상자가 이웃 조각으로 이어 앉힌 창 가운데에 벽 두께만 한 기둥을 세웠다). 2D wallRange와 같은 geom/walls.wallExtent다.
+      const { start, end } = wallExtent(w, floor.walls);
       for (const pc of wallPieces(w, openings, { start, end })) {
         // uv를 벽 축 미터로 다시 써서 조각끼리도, 개구부 없는 벽과도 무늬가 이어진다(회전 각도가 있어도).
         const geo = metricBoxUv(new THREE.BoxGeometry(M(pc.u1 - pc.u0), M(pc.z1 - pc.z0), M(w.thickness)), pc, w.thickness);

@@ -2,22 +2,17 @@
 // (개구부 절단이 view3d/build.js에만 있었다) 여닫이문의 호만 벽 바깥에 떠 있었다.
 // 같은 geom/openings.js를 써서 평면에서도 개구부 자리를 비운다 — 겹치는 개구부의 합집합 규칙과
 // 접합 벽의 연장분이 3D와 한 곳에서 온다. 미니맵·캡처는 같은 createView2D를 쓰므로 함께 바뀐다.
-import { wallPolygon, wallLength } from '../geom/walls.js';
+import { wallPolygon, wallExtent } from '../geom/walls.js';
 import { openingsOnWall, wallPieces } from '../geom/openings.js';
 import { wallAxis } from '../geom/items.js';
-import { add, mul, eq } from '../geom/vec.js';
+import { add, mul } from '../geom/vec.js';
 import { itemVisible } from './items2d.js';
 
 export const GLASS_DIV = 6;   // 창 유리선은 벽 두께의 1/6만큼 중심선에서 벌어진다
 
-// 벽 축 u 좌표의 범위. 접합 벽이 있는 끝은 두께/2만큼 연장한다(wallPolygon·build.js와 같은 규칙).
-export function wallRange(wall, walls = []) {
-  const joined = q => (walls ?? []).some(o => o.id !== wall.id && !o.virtual && (eq(o.a, q) || eq(o.b, q)));
-  return {
-    start: joined(wall.a) ? -wall.thickness / 2 : 0,
-    end: wallLength(wall) + (joined(wall.b) ? wall.thickness / 2 : 0),
-  };
-}
+// 벽 축 u 좌표의 범위. 접합 벽이 있는 끝은 두께/2만큼 연장한다 — 같은 선 위 이어짐 쪽 끝은 빼고(2026-10-12 · 계획 12 Task 7 리뷰 M-1).
+// 규칙은 geom/walls.wallExtent 한 곳이고 3D(build.js의 개구부 벽 조각)도 같은 함수를 부른다.
+export const wallRange = (wall, walls = []) => wallExtent(wall, walls);
 
 // 개구부를 뺀 조각의 u 구간. 평면도는 벽을 위에서 내려다본 그림이라 개구부의 높이(sill·lintel)는
 // 뜻이 없다: 개구부의 z 구간을 벽 전체 높이로 눌러 wallPieces에 넘기면 창 밑·문 위 조각이 생기지

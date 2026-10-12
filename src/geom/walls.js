@@ -21,6 +21,31 @@ export function wallPolygon(w, walls = []) {
   return [add(a, mul(n, h)), add(b, mul(n, h)), sub(b, mul(n, h)), sub(a, mul(n, h))];
 }
 
+// 개구부 자리를 비우는 두 렌더러(2D view2d/walls2d.wallRange · 3D view3d/build.js의 개구부 벽 조각)가 함께 쓰는 벽 축 u 범위.
+// 다른 벽(구획선 제외)이 끝점을 공유하면 그 끝을 두께/2만큼 늘린다 — 모서리·T자에서 빈틈이 없게(wallPolygon과 같은 뿌리).
+// 단 그 끝에 **같은 선 위 이어짐**(끝점을 공유하고 그 끝에서 바깥으로 2° 안에 뻗는 벽 · 두께 무관)이 있으면 늘리지 않는다
+// (2026-10-12 · 계획 12 Task 7 리뷰 M-1): 늘린 t/2 상자는 제 벽의 개구부로만 잘려, T자로 갈린 이웃 조각으로 이어 앉힌 창
+// (io/dxf/openingSeat.spanPieces) 가운데에 벽 두께만 한 통높이 기둥이 섰다(사동중 win-4800-3 둘째 360 mm · x 2654~3014).
+// 두 조각은 접점에서 딱 맞닿아 빈틈이 없고, T자 칸막이는 제 끝을 그대로 늘린다(칸막이 쪽에서 보면 둘 다 같은 선이 아니다).
+const COLLINEAR_COS = Math.cos(2 * Math.PI / 180);
+export function wallEndExtends(w, q, walls = []) {
+  const out = sub(q, q === w.b || (q !== w.a && !eq(q, w.a)) ? w.a : w.b), ol = Math.hypot(out[0], out[1]);   // 이 끝에서 벽 바깥 방향
+  let joined = false;
+  for (const o of walls ?? []) {
+    if (o.id === w.id || o.virtual) continue;
+    const atA = eq(o.a, q);
+    if (!atA && !eq(o.b, q)) continue;
+    joined = true;
+    const v = sub(atA ? o.b : o.a, q), vl = Math.hypot(v[0], v[1]);
+    if (ol > 0 && vl > 0 && dot(v, out) >= vl * ol * COLLINEAR_COS) return false;
+  }
+  return joined;
+}
+export function wallExtent(w, walls = []) {
+  const h = w.thickness / 2;
+  return { start: wallEndExtends(w, w.a, walls) ? -h : 0, end: wallLength(w) + (wallEndExtends(w, w.b, walls) ? h : 0) };
+}
+
 export function rectWalls(p, q, thickness = 200, height = 2300) {
   const x0 = Math.min(p[0], q[0]), x1 = Math.max(p[0], q[0]);
   const y0 = Math.min(p[1], q[1]), y1 = Math.max(p[1], q[1]);

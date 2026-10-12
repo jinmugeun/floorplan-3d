@@ -82,6 +82,44 @@ describe('2D 벽 조각', () => {
     expect(wallSpans(walls[0], walls, [])).toEqual([{ u0: -100, u1: r.end }]);
   });
 
+  // 2026-10-12 · 계획 12 Task 7 리뷰 M-1: 같은 선 위로 이어지는 벽 쪽 끝을 늘리면 그 t/2 상자가 제 벽의 개구부로만 잘려, 이웃 조각으로
+  // 이어 앉힌 창(사동중 win-4800-3 둘째) 가운데에 벽 두께만 한 기둥이 섰다. 같은 선 이어짐(두께 무관) 쪽 끝은 늘리지 않는다.
+  const W1 = () => makeWall({ a: [0, 0], b: [4000, 0], thickness: 200 });
+  test('같은 선 위로 이어지는 벽 쪽 끝은 늘리지 않는다(이웃이 거꾸로여도 · 두께가 달라도) — 모서리는 예전대로 늘린다', () => {
+    const w1 = W1();
+    for (const w2 of [makeWall({ a: [4000, 0], b: [8000, 0], thickness: 200 }), makeWall({ a: [8000, 0], b: [4000, 0], thickness: 400 })]) {
+      expect(wallRange(w1, [w1, w2])).toEqual({ start: 0, end: 4000 });
+      expect(wallRange(w2, [w1, w2])).toEqual({ start: 0, end: 4000 });   // 접점(x 4000)이 a든 b든 늘지 않는다 · 반대 끝은 접합이 없다
+    }
+    const corner = makeWall({ a: [4000, 0], b: [4000, 3000], thickness: 200 });
+    expect(wallRange(w1, [w1, corner])).toEqual({ start: 0, end: 4100 });
+    expect(wallRange(corner, [w1, corner])).toEqual({ start: -100, end: 3000 });
+    // 2° 안은 같은 선, 그 밖은 꺾임이다.
+    const bent = deg => makeWall({ a: [4000, 0], b: [4000 + 4000 * Math.cos(deg * Math.PI / 180), 4000 * Math.sin(deg * Math.PI / 180)], thickness: 200 });
+    expect(wallRange(w1, [w1, bent(1.9)]).end).toBe(4000);
+    expect(wallRange(w1, [w1, bent(2.1)]).end).toBe(4100);
+  });
+
+  test('T자: 같은 선 두 조각은 접점에서 딱 맞닿고(늘리지 않음) 칸막이는 제 끝을 늘려 접점을 덮는다 — 이어 앉힌 창 가운데에 기둥이 없다', () => {
+    const w1 = W1(), w2 = makeWall({ a: [4000, 0], b: [8000, 0], thickness: 200 }), part = makeWall({ a: [4000, 0], b: [4000, 3000], thickness: 100 });
+    const walls = [w1, part, w2];
+    expect(wallRange(w1, walls)).toEqual({ start: 0, end: 4000 });
+    expect(wallRange(w2, walls)).toEqual({ start: 0, end: 4000 });
+    expect(wallRange(part, walls)).toEqual({ start: -50, end: 3000 });
+    // 기하로 확인: 두 조각의 사각형이 x 4000에서 맞닿아(빈틈·겹침 없음) 벽 몸통(y ±100)이 이어지고, 칸막이 사각형이 접점(x 3950~4050)을 y −50부터 덮는다.
+    const q1 = spanQuad(w1, wallSpans(w1, walls, []).at(-1)), q2 = spanQuad(w2, wallSpans(w2, walls, [])[0]), qp = spanQuad(part, wallSpans(part, walls, [])[0]);
+    expect(Math.max(...q1.map(p => p[0]))).toBe(4000);
+    expect(Math.min(...q2.map(p => p[0]))).toBe(4000);
+    expect([Math.min(...q1.map(p => p[1])), Math.max(...q1.map(p => p[1]))]).toEqual([-100, 100]);
+    expect([Math.min(...q2.map(p => p[1])), Math.max(...q2.map(p => p[1]))]).toEqual([-100, 100]);
+    expect([Math.min(...qp.map(p => p[0])), Math.max(...qp.map(p => p[0])), Math.min(...qp.map(p => p[1]))]).toEqual([3950, 4050, -50]);
+    // 이어 앉힌 창(x 2000~6000 = W1 2000 + W2 2000): 두 벽 모두 창 구간에 칠한 조각이 없다(예전에는 W1 [4000, 4100] · W2 [−100, 0] 기둥).
+    const size = [2000, ...productById('window-slide-1800').size.slice(1)];
+    const items = [on(w1, 'window-slide-1800', { t: 0.75, size }), on(w2, 'window-slide-1800', { t: 0.25, size })];
+    expect(wallSpans(w1, walls, items)).toEqual([{ u0: 0, u1: 2000 }]);
+    expect(wallSpans(w2, walls, items)).toEqual([{ u0: 2000, u1: 4000 }]);
+  });
+
   test('drawWalls는 조각마다 칠하고 창에는 유리선을, 선택된 벽은 통짜로 그린다', () => {
     const w = wall();
     const win = on(w, 'window-slide-1200', { t: 0.5 });
