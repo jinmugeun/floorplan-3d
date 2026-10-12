@@ -62,11 +62,11 @@ export const DXF_EXPORT_MENU = '정규화 DXF 내보내기';
 export const DXF_EXPORTED = '정규화 DXF를 내보냈습니다 — CAD에서 고친 뒤 다시 가져오세요';
 export const DXF_EXPORTED_SKIPPED = n => `${DXF_EXPORTED} (통로 ${n}곳은 다시 가져올 때 읽히지 않아 벽을 잇고 X로만 표시했습니다)`;
 // 교정 기록 내보내기(2026-10-12 · 계획 12 Task 10 — io/dxfFeedback.js): 더보기 메뉴 · DXF로 가져온 프로젝트가 아닐 때 · 내보낸 뒤의 수.
-// 수는 사용자가 "무엇이 담겼나"를 알 만큼만(벽 셋 · 방 이름 · 문·창 둘) — 전체 목록은 파일 안의 summary다.
+// 수는 사용자가 "무엇이 담겼나"를 알 만큼만(벽 셋 · 방 이름 · 문·창 둘 · 종류 — 제품 교체, 수정 wave 리뷰 M-1) — 전체 목록은 파일 안의 summary다.
 export const DXF_FEEDBACK_MENU = '교정 기록 내보내기';
 export const DXF_FEEDBACK_NONE = 'DXF로 가져온 프로젝트가 아닙니다';
 export const DXF_FEEDBACK_EXPORTED = s => (s?.changes
-  ? `교정 기록을 내보냈습니다 — 벽 지움 ${s.wallsDeleted} · 그림 ${s.wallsAdded} · 옮김 ${s.wallsMoved} · 방 이름 ${s.roomsRenamed} · 문·창 지움 ${s.itemsDeleted} · 옮김 ${s.itemsMoved}`
+  ? `교정 기록을 내보냈습니다 — 벽 지움 ${s.wallsDeleted} · 그림 ${s.wallsAdded} · 옮김 ${s.wallsMoved} · 방 이름 ${s.roomsRenamed} · 문·창 지움 ${s.itemsDeleted} · 옮김 ${s.itemsMoved} · 종류 ${s.itemsRetyped ?? 0}`
   : '교정 기록을 내보냈습니다 — 가져온 뒤 고친 것이 없습니다');
 // 검토 창의 입력 도면 안내 줄(사전 검토 3): 선 수 · 체크한 벽 레이어 수 + 안내 페이지(public/dxf-guide.html · 새 탭).
 export const DXF_GUIDE_LINE = (segs, layers) => `선 ${Number(segs || 0).toLocaleString('en-US')}개 중 벽 레이어 ${layers}개`;

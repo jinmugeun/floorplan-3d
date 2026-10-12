@@ -67,11 +67,11 @@ test('고친 것이 없으면 목록은 모두 비고 요약은 0이다', () => 
   expect(fb.import).toEqual({ at: '2026-10-12T03:04:05.000Z', fileName: '사동중.dxf', checked: ['WAL', 'FIN'], options: expect.objectContaining({ region: 1, dividerByNames: true, rolesGiven: false }) });
   expect(fb.walls).toEqual({ deleted: [], added: [], moved: [] });
   expect(fb.rooms).toEqual({ renamed: [], added: [], deleted: [] });
-  expect(fb.items).toEqual({ deleted: [], moved: [], resized: [], added: [] });
+  expect(fb.items).toEqual({ deleted: [], moved: [], resized: [], retyped: [], added: [] });
   expect(fb.summary).toEqual({
     importedWalls: 6, importedRooms: 3, importedItems: 3,
     wallsDeleted: 0, wallsAdded: 0, wallsMoved: 0, dividersDeleted: 0, dividersAdded: 0,
-    roomsRenamed: 0, roomsAdded: 0, roomsDeleted: 0, itemsDeleted: 0, itemsMoved: 0, itemsResized: 0, itemsAdded: 0, changes: 0,
+    roomsRenamed: 0, roomsAdded: 0, roomsDeleted: 0, itemsDeleted: 0, itemsMoved: 0, itemsResized: 0, itemsRetyped: 0, itemsAdded: 0, changes: 0,
   });
   // 받는 쪽이 지운 id를 풀 수 있게 가져온 직후의 스냅숏을 함께 싣는다(id는 uid라 다시 가져와도 같은 값이 나오지 않는다).
   expect(fb.snapshot).toEqual(withMeta(imported()).meta.dxfImport.snapshot);
@@ -114,11 +114,33 @@ test('지운·그린·옮긴 벽 · 구획선 · 방 이름 · 지운·옮긴 �
   expect(fb.items.moved).toEqual([{ id: 'd1', from: { wallId: 'w1', t: 0.25 }, to: { wallId: 'w1', t: 0.3 } }]);
   expect(fb.items.resized).toEqual([{ id: 'c1', from: [400, 400, 2300], to: [500, 500, 2300] }]);
   expect(fb.items.added).toEqual([{ id: 'd2', productId: 'door-swing-1000', wallId: 'w5', t: 0.5, size: [1000, 40, 2100] }]);
+  expect(fb.items.retyped).toEqual([]);                                                // 제품을 바꾼 것은 없다
   expect(fb.summary).toMatchObject({
     wallsDeleted: 2, wallsAdded: 2, wallsMoved: 2, dividersDeleted: 1, dividersAdded: 1,
     roomsRenamed: 1, roomsAdded: 1, roomsDeleted: 1, itemsDeleted: 1, itemsMoved: 1, itemsResized: 1, itemsAdded: 1, changes: 13,
   });
   expect(MOVE_TOL).toBe(1);
+});
+
+// 수정 wave(Task 10 리뷰 M-1): 검사기의 "제품 교체"(itemOps.replaceProduct)는 아이템 id를 지킨 채 productId·kind를 바꾼다 — 잘못 읽은
+// 개구부를 고치는 가장 흔한 방법인데, 예전에는 같은 크기면 아무것도 남지 않고 "가져온 뒤 고친 것이 없습니다"라고 알렸다.
+test('제품을 바꾼 개구부는 retyped로 낸다 — 같은 크기면 그것 하나, 크기도 바뀌면 resized에도 함께', () => {
+  const f = imported();
+  f.items = f.items.map(it => (it.id === 'd1' ? { ...it, productId: 'door-slide-900' } : it));                  // 여닫이 → 미닫이(같은 크기)
+  let fb = buildDxfFeedback(withMeta(f), { now: NOW });
+  expect(fb.items.retyped).toEqual([{ id: 'd1', from: 'door-swing-900', to: 'door-slide-900', kind: 'door' }]);
+  expect([fb.items.resized, fb.items.moved, fb.items.deleted, fb.items.added]).toEqual([[], [], [], []]);
+  expect([fb.summary.itemsRetyped, fb.summary.changes]).toEqual([1, 1]);
+  expect(DXF_FEEDBACK_EXPORTED(fb.summary)).toContain('종류 1');                                                 // "고친 것이 없습니다"가 아니다
+  // 창 → 통로(개구부): 크기도 달라졌다 — 두 목록에 함께 나온다(종류와 폭은 따로 쓰이는 라벨이다).
+  f.items = f.items.map(it => (it.id === 'n1' ? { ...it, kind: 'opening', productId: 'opening-pass', size: [900, 40, 2100] } : it));
+  fb = buildDxfFeedback(withMeta(f), { now: NOW });
+  expect(fb.items.retyped).toEqual([
+    { id: 'd1', from: 'door-swing-900', to: 'door-slide-900', kind: 'door' },
+    { id: 'n1', from: 'window-slide-1200', to: 'opening-pass', kind: 'opening' },
+  ]);
+  expect(fb.items.resized).toEqual([{ id: 'n1', from: [1200, 40, 1200], to: [900, 40, 2100] }]);
+  expect([fb.summary.itemsRetyped, fb.summary.itemsResized, fb.summary.changes]).toEqual([2, 1, 3]);
 });
 
 test('id가 바뀐 방은 도면 기준 면적이 가까운 짝으로 맞춘다 — 이름이 같은 짝이 먼저, 문턱 밖이면 지움 + 새 방', () => {
@@ -190,8 +212,8 @@ test('가져오기 배선부터 내보내기까지: 교체한 프로젝트가 �
 test('교정 기록 문구', () => {
   expect(DXF_FEEDBACK_MENU).toBe('교정 기록 내보내기');
   expect(DXF_FEEDBACK_NONE).toBe('DXF로 가져온 프로젝트가 아닙니다');
-  const zero = { wallsDeleted: 0, wallsAdded: 0, wallsMoved: 0, roomsRenamed: 0, itemsDeleted: 0, itemsMoved: 0, changes: 0 };
+  const zero = { wallsDeleted: 0, wallsAdded: 0, wallsMoved: 0, roomsRenamed: 0, itemsDeleted: 0, itemsMoved: 0, itemsRetyped: 0, changes: 0 };
   expect(DXF_FEEDBACK_EXPORTED(zero)).toBe('교정 기록을 내보냈습니다 — 가져온 뒤 고친 것이 없습니다');
-  expect(DXF_FEEDBACK_EXPORTED({ ...zero, wallsDeleted: 2, wallsAdded: 1, wallsMoved: 3, roomsRenamed: 4, itemsDeleted: 5, itemsMoved: 6, changes: 21 }))
-    .toBe('교정 기록을 내보냈습니다 — 벽 지움 2 · 그림 1 · 옮김 3 · 방 이름 4 · 문·창 지움 5 · 옮김 6');
+  expect(DXF_FEEDBACK_EXPORTED({ ...zero, wallsDeleted: 2, wallsAdded: 1, wallsMoved: 3, roomsRenamed: 4, itemsDeleted: 5, itemsMoved: 6, itemsRetyped: 7, changes: 28 }))
+    .toBe('교정 기록을 내보냈습니다 — 벽 지움 2 · 그림 1 · 옮김 3 · 방 이름 4 · 문·창 지움 5 · 옮김 6 · 종류 7');
 });

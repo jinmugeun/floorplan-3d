@@ -107,7 +107,7 @@ function diffRooms(before, after) {
 function diffItems(before, after, walls) {
   const now = new Map(after.map(it => [it.id, it])), was = new Set(before.map(s => s.id));
   const len = new Map(arr(walls).map(w => [w.id, dist(w.a, w.b)]));
-  const moved = [], resized = [];
+  const moved = [], resized = [], retyped = [];
   for (const s of before) {
     const it = now.get(s.id);
     if (!it) continue;
@@ -116,11 +116,16 @@ function diffItems(before, after, walls) {
     if (wallId !== s.wallId || Math.abs(t - s.t) * (len.get(wallId) ?? 0) > MOVE_TOL) moved.push({ id: s.id, from: { wallId: s.wallId, t: s.t }, to: { wallId, t } });
     const size = arr(it.size).map(r1);
     if (size.some((v, i) => Math.abs(v - (arr(s.size)[i] ?? 0)) > MOVE_TOL)) resized.push({ id: s.id, from: s.size, to: size });
+    // 제품을 바꿨다(수정 wave 2026-10-12 · Task 10 리뷰 M-1): 검사기의 "제품 교체"(itemOps.replaceProduct)는 id를 지킨 채 productId·kind를
+    // 바꾼다 — 잘못 읽은 개구부 종류(통로 → 문 · 여닫이 → 미닫이 · 문 → 창)를 고치는 가장 흔한 길이고, 점수판의 opnKind가 재는 그 라벨이다.
+    // kind는 바꾼 뒤의 종류(door·window·opening·column). 크기도 달라졌으면 resized에도 함께 나온다(종류와 폭은 따로 쓰이는 라벨이라 둘 다 남긴다).
+    if ((it.productId ?? '') !== s.productId) retyped.push({ id: s.id, from: s.productId, to: it.productId ?? '', kind: it.kind ?? '' });
   }
-  return { deleted: before.filter(s => !now.has(s.id)).map(s => s.id), moved, resized, added: after.filter(it => !was.has(it.id) && TRACKED.has(it.kind)).map(itemRec) };
+  return { deleted: before.filter(s => !now.has(s.id)).map(s => s.id), moved, resized, retyped, added: after.filter(it => !was.has(it.id) && TRACKED.has(it.kind)).map(itemRec) };
 }
 
-// 요약 수. dividers*는 walls*의 부분집합(구획선 = virtual 벽)이고 changes에는 한 번만 센다.
+// 요약 수. dividers*는 walls*의 부분집합(구획선 = virtual 벽)이고 changes에는 한 번만 센다. changes는 목록 항목의 합이라 종류와 크기를
+// 함께 바꾼 아이템은 retyped·resized 두 번 센다(목록이 둘이다).
 function summarize(snap, walls, rooms, items) {
   const virt = new Set(snap.walls.filter(w => w.virtual).map(w => w.id));
   const s = {
@@ -128,10 +133,10 @@ function summarize(snap, walls, rooms, items) {
     wallsDeleted: walls.deleted.length, wallsAdded: walls.added.length, wallsMoved: walls.moved.length,
     dividersDeleted: walls.deleted.filter(id => virt.has(id)).length, dividersAdded: walls.added.filter(w => w.virtual).length,
     roomsRenamed: rooms.renamed.length, roomsAdded: rooms.added.length, roomsDeleted: rooms.deleted.length,
-    itemsDeleted: items.deleted.length, itemsMoved: items.moved.length, itemsResized: items.resized.length, itemsAdded: items.added.length,
+    itemsDeleted: items.deleted.length, itemsMoved: items.moved.length, itemsResized: items.resized.length, itemsRetyped: items.retyped.length, itemsAdded: items.added.length,
   };
   s.changes = s.wallsDeleted + s.wallsAdded + s.wallsMoved + s.roomsRenamed + s.roomsAdded + s.roomsDeleted
-    + s.itemsDeleted + s.itemsMoved + s.itemsResized + s.itemsAdded;
+    + s.itemsDeleted + s.itemsMoved + s.itemsResized + s.itemsRetyped + s.itemsAdded;
   return s;
 }
 
