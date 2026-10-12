@@ -1,0 +1,27 @@
+{
+  "layers": {
+    "家具": "equip", "WC": "equip", "WALL": "wall", "WINDOW": "opening", "PUB_DIM": "dim", "DOTE": "grid",
+    "STAIR": "other", "BALCONY": "wall", "LVTRY": "equip", "K_EQUIPMENT": "equip", "SPACE": "text"
+  },
+  "blocks": {
+    "$DorLib2D$00000001": { "kind": "door", "width": 900 },
+    "$TCHSYS$WIN2D": { "kind": "window", "width": 1200 },
+    "$TCHSYS$DOOR2D": { "kind": "door", "width": 850 },
+    "$DorLib2D$00000116": { "kind": "door", "width": 800 },
+    "$DorLib2D$00000131": { "kind": "slide", "width": 1200 },
+    "$DorLib2D$00000138": { "kind": "slide", "width": 2000 },
+    "$DorLib2D$00000128": { "kind": "slide", "width": 1100 },
+    "$DorLib2D$00000025": { "kind": "door", "width": 1200 },
+    "CHUANG": { "kind": "equip", "width": null }, "CHAIR-09": { "kind": "equip", "width": null }, "D": { "kind": "equip", "width": null },
+    "KTJ": { "kind": "equip", "width": null }, "SOF1": { "kind": "equip", "width": null }, "_ARROW": { "kind": "symbol", "width": null },
+    "淋浴间800x800": { "kind": "equip", "width": null }, "111": { "kind": "equip", "width": null }, "$PLAN$00000401": { "kind": "equip", "width": null },
+    "A$C4CF52FF8": { "kind": "equip", "width": null }, "A$C7D3573B7": { "kind": "equip", "width": null }, "A$C2A793C51": { "kind": "equip", "width": null },
+    "A$C1287145A": { "kind": "equip", "width": null }, "A$C166D65F0": { "kind": "equip", "width": null }, "A$C169C22A5": { "kind": "equip", "width": null },
+    "A$C31110A14": { "kind": "equip", "width": null }, "A$C46F64526": { "kind": "equip", "width": null }, "A$C52241BEE": { "kind": "equip", "width": null },
+    "A$C7B15679A": { "kind": "equip", "width": null }, "A$C30434410": { "kind": "equip", "width": null }, "A$C6FBB0586": { "kind": "other", "width": null }
+  },
+  "texts": {
+    "卧室": "room", "厨房": "room", "客厅": "room", "阳台": "room", "餐厅": "room", "前室": "room",
+    "B1": "label", "C": "label", "上": "label", "下": "label", "AC": "label"
+  }
+}

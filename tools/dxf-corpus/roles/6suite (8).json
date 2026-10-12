@@ -1,0 +1,28 @@
+{
+  "layers": {
+    "FUR": "equip", "厨洁": "hatch", "WINDOW": "opening", "WALL": "wall", "结构墙柱": "wall", "LVTRY": "equip", "STAIR": "other",
+    "BACONY": "wall", "PUB_DIM": "dim", "看线": "other", "0": "other", "Text(文字)": "text", "PUB_TEXT": "text",
+    "WINDOW_TEXT": "other", "rname": "text", "家具": "equip"
+  },
+  "blocks": {
+    "$DorLib2D$00000001": { "kind": "door", "width": 600 },
+    "$TCHSYS$WIN2D": { "kind": "window", "width": 1200 },
+    "$DorLib2D$00000020": { "kind": "slide", "width": 700 },
+    "$DorLib2D$00000025": { "kind": "door", "width": 1100 },
+    "$DorLib2D$00000038": { "kind": "slide", "width": 3300 },
+    "$DorLib2D$00000019": { "kind": "slide", "width": 1800 },
+    "$DorLib2D$00000002": { "kind": "door", "width": 1200 },
+    "_LIFTD": { "kind": "other", "width": null },
+    "A$C2D356BCF": { "kind": "equip", "width": null }, "A$C3D92468E": { "kind": "equip", "width": null }, "_E0BEL": { "kind": "equip", "width": null },
+    "A$C6A1B0631": { "kind": "equip", "width": null }, "$plan$00001557": { "kind": "other", "width": null }, "-CHAI6": { "kind": "equip", "width": null },
+    "12121": { "kind": "equip", "width": null }, "12PCOU13": { "kind": "equip", "width": null }, "12PSTG02": { "kind": "equip", "width": null },
+    "322342": { "kind": "equip", "width": null }, "434": { "kind": "equip", "width": null }, "M_C5": { "kind": "equip", "width": null },
+    "drr": { "kind": "equip", "width": null }, "ewerw": { "kind": "equip", "width": null }, "5345": { "kind": "equip", "width": null },
+    "A$C182C7DDB": { "kind": "equip", "width": null }, "2123121": { "kind": "other", "width": null }
+  },
+  "texts": {
+    "主卧室": "room", "卧室": "room", "卫生间": "room", "厨房": "room", "客厅": "room", "阳台": "room", "餐厅": "room", "花池": "room",
+    "E": "label", "F": "label", "G": "label", "上": "label", "下": "label", "水": "label", "电": "label",
+    "MLC13": "label", "TC21'": "label", "（乙）": "label", "FM06": "label", "FM10": "label", "FM12": "label"
+  }
+}

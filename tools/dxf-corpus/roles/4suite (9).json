@@ -1,0 +1,110 @@
+{
+  "layers": {
+    "0": "opening",
+    "2": "hatch",
+    "3": "rail",
+    "8": "other",
+    "JJ": "equip",
+    "WALL": "wall",
+    "STAIR": "other",
+    "WINDOW": "opening",
+    "TOTHER": "other",
+    "AXIS": "dim",
+    "CTEXT": "other",
+    "text": "text"
+  },
+  "blocks": {
+    "_DBLK": {
+      "kind": "door",
+      "width": 900
+    },
+    "_WBLK": {
+      "kind": "window",
+      "width": 2100
+    },
+    "00111210321464": {
+      "kind": "window",
+      "width": 1470
+    },
+    "M_A17ORW": {
+      "kind": "door",
+      "width": 1200
+    },
+    "M_E13": {
+      "kind": "equip",
+      "width": null
+    },
+    "RC31": {
+      "kind": "equip",
+      "width": null
+    },
+    "RDC1": {
+      "kind": "equip",
+      "width": null
+    },
+    "_C17": {
+      "kind": "equip",
+      "width": null
+    },
+    "_C61": {
+      "kind": "equip",
+      "width": null
+    },
+    "_E12": {
+      "kind": "equip",
+      "width": null
+    },
+    "_E33DZE": {
+      "kind": "equip",
+      "width": null
+    },
+    "DZY1": {
+      "kind": "equip",
+      "width": null
+    },
+    "M_E17": {
+      "kind": "equip",
+      "width": null
+    },
+    "M_E19": {
+      "kind": "equip",
+      "width": null
+    },
+    "SFJ15": {
+      "kind": "equip",
+      "width": null
+    },
+    "SZ2": {
+      "kind": "equip",
+      "width": null
+    },
+    "TV12": {
+      "kind": "equip",
+      "width": null
+    },
+    "TV22": {
+      "kind": "equip",
+      "width": null
+    },
+    "YG11": {
+      "kind": "equip",
+      "width": null
+    },
+    "_C38": {
+      "kind": "equip",
+      "width": null
+    },
+    "C": {
+      "kind": "equip",
+      "width": null
+    }
+  },
+  "texts": {
+    "主卧室": "room",
+    "卧室": "room",
+    "客厅": "room",
+    "餐厅": "room",
+    "L1": "label",
+    "L2": "label"
+  }
+}

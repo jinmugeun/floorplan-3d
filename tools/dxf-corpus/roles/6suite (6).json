@@ -1,0 +1,161 @@
+{
+  "layers": {
+    "0": "other",
+    "JG": "hatch",
+    "厨房": "hatch",
+    "WALL": "wall",
+    "WC": "equip",
+    "WINDOW": "opening",
+    "家具": "equip",
+    "PL": "other",
+    "面积": "other",
+    "STAIR": "other",
+    "FURNITURE": "equip",
+    "TOTHER": "other",
+    "洁具": "equip",
+    "JIAJU": "equip",
+    "DOTE": "grid",
+    "PUB_TEXT": "text",
+    "BALCONY": "wall",
+    "EA": "other",
+    "GROUND": "other",
+    "PUB_DIM": "dim"
+  },
+  "blocks": {
+    "M_A2ZXL": {
+      "kind": "door",
+      "width": 800
+    },
+    "_DBLK": {
+      "kind": "door",
+      "width": 750
+    },
+    "M_A17ORW": {
+      "kind": "door",
+      "width": 1200
+    },
+    "$DorLib2D$00000002": {
+      "kind": "door",
+      "width": 1500
+    },
+    "M_B0OPK": {
+      "kind": "window",
+      "width": 850
+    },
+    "UC1F3FR1": {
+      "kind": "window",
+      "width": 1200
+    },
+    "_A0GGR": {
+      "kind": "door",
+      "width": 900
+    },
+    "_ARROW": {
+      "kind": "symbol",
+      "width": null
+    },
+    "-FLOW4": {
+      "kind": "symbol",
+      "width": null
+    },
+    "12PPLT03": {
+      "kind": "symbol",
+      "width": null
+    },
+    "F-FLOW5": {
+      "kind": "symbol",
+      "width": null
+    },
+    "A$C316D69A5": {
+      "kind": "equip",
+      "width": null
+    },
+    "A$C46BA648A": {
+      "kind": "equip",
+      "width": null
+    },
+    "M_E33IEP": {
+      "kind": "equip",
+      "width": null
+    },
+    "M_E7": {
+      "kind": "equip",
+      "width": null
+    },
+    "A$C651D3A54": {
+      "kind": "equip",
+      "width": null
+    },
+    "M_C25MYD": {
+      "kind": "equip",
+      "width": null
+    },
+    "M_E16": {
+      "kind": "equip",
+      "width": null
+    },
+    "M_E19": {
+      "kind": "equip",
+      "width": null
+    },
+    "U_B6PVR": {
+      "kind": "equip",
+      "width": null
+    },
+    "_C19XRJ": {
+      "kind": "equip",
+      "width": null
+    },
+    "_C10CTM": {
+      "kind": "equip",
+      "width": null
+    },
+    "A$C136D1407": {
+      "kind": "equip",
+      "width": null
+    },
+    "A$C2617630B": {
+      "kind": "equip",
+      "width": null
+    },
+    "A$C766825E1": {
+      "kind": "equip",
+      "width": null
+    },
+    "A$C034B62A7": {
+      "kind": "equip",
+      "width": null
+    },
+    "$plan$00000285": {
+      "kind": "equip",
+      "width": null
+    }
+  },
+  "texts": {
+    "主卧室": "room",
+    "卧室": "room",
+    "厨房": "room",
+    "客厅": "room",
+    "餐厅": "room",
+    "阳台": "room",
+    "生活阳台": "room",
+    "玄关": "room",
+    "储": "room",
+    "卫": "room",
+    "电梯厅": "room",
+    "防烟前室": "room",
+    "暖井": "room",
+    "水暖井": "room",
+    "电井": "room",
+    "风井": "room",
+    "及消防合用前室": "room",
+    "H-A": "label",
+    "H-A反": "label",
+    "H-B": "label",
+    "H-B反": "label",
+    "H-C": "label",
+    "H-C反": "label",
+    "上": "label",
+    "下": "label"
+  }
+}

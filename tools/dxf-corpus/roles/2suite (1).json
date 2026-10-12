@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "0": "hatch", "F": "opening", "WALL": "wall", "WINDOW": "opening",
+    "Furniture(家具)": "equip", "FURNITURE": "equip", "FUR": "equip", "家具": "equip",
+    "BATH": "equip", "KT": "equip", "Lvtry(厨卫)": "equip", "厨卫": "equip", "TOTHER": "other",
+    "STAIR": "other", "屋顶轮廓阳台": "rail",
+    "PUB_DIM": "dim", "DIM_SYMB": "dim", "DOTE": "grid", "PUB_TEXT": "text"
+  },
+  "blocks": {},
+  "texts": {
+    "主卧室": "room", "卧室": "room", "厨房": "room", "客厅": "room", "餐厅": "room", "阳台": "room", "花池": "room", "入户花园": "room",
+    "上": "label", "下": "label", "水": "label", "电": "label", "HE-1": "label", "HE-2": "label", "A.C.": "label", "R": "other"
+  }
+}

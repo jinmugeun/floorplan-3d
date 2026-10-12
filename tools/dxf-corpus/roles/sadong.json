@@ -1,0 +1,33 @@
+{
+  "layers": {
+    "기존": "wall", "WAL-2": "wall", "WAL": "wall", "FIN": "wall", "ST-PL": "wall", "BLO": "wall", "COL": "wall",
+    "04창호": "opening", "WIN": "opening", "DOOR": "opening", "WID": "opening",
+    "급식-재사용": "equip", "급식기구": "equip", "급식-기구구입": "equip", "급식-미구입": "equip", "급식-기구NO": "equip",
+    "급식-전기1": "mep", "급식-급배수2": "mep", "후드": "equip",
+    "SYM": "hatch", "HAT": "hatch",
+    "CEN": "grid", "A-GUIDE": "grid",
+    "전기": "mep", "급배수": "mep", "ELLINE": "mep", "el-line": "mep", "트렌치": "mep",
+    "AZ-LEAL": "dim", "DIMENSION": "dim", "AZ-TABL": "other",
+    "Layer 1": "other", "0": "other", "ETC": "other", "목재": "other", "6": "other", "T": "other", "TEX": "other",
+    "A-SHE": "other", "TITLE": "other", "TEXT": "text", "DIM": "other", "NUMBER": "other", "TEXT2": "other", "def-보조": "other"
+  },
+  "blocks": {
+    "문_슬라이딩 포켓 900": { "kind": "pocket", "width": 900 },
+    "문_슬라이딩 포켓 800": { "kind": "pocket", "width": 800 },
+    "에어커튼 1490-222": { "kind": "equip", "width": null },
+    "에어커튼 890-222": { "kind": "equip", "width": null },
+    "실외기-1": { "kind": "equip", "width": null },
+    "식탁6인": { "kind": "equip", "width": null },
+    "아연도각재-30": { "kind": "symbol", "width": null },
+    "각재-30-2": { "kind": "symbol", "width": null }
+  },
+  "texts": {
+    "샤워실(여)": "room", "세척실": "room", "소모품창고": "room", "식 당": "room", "식품창고": "room", "영양관리실": "room",
+    "온수기실": "room", "전처리실": "room", "조리실": "room", "준비실": "room", "홀": "room",
+    "화장실(남)": "room", "화장실(여)": "room", "휴게실(남)": "room", "휴게실(여)": "room",
+    "영양상담/": "label", "청소용수전": "label", "(366석)": "label", "배식동선": "label", "퇴식동선": "label",
+    "KEY PLAN": "label", "주차장": "label", "경사로": "label", "OPEN": "label",
+    "경산 사동중": "title", "1층 평면도(변경후)": "title",
+    "Y17": "axis", "Y20": "axis", "Y22": "axis"
+  }
+}

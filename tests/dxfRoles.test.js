@@ -2,7 +2,7 @@
 // 표에 있는 이름은 표가 이기고(키워드·도형 추정을 덮는다 — 행에 byTable), 표에 없는 이름은 규칙 그대로다.
 // 블록 종류표는 파이프라인(blockKind)만 바꾸고, 코퍼스 정답(blockBoxes byName)은 이름 정규식만 쓴다.
 import { test, expect, afterEach } from 'vitest';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -216,6 +216,24 @@ test('score.mjs·public.mjs: --roles와 --update를 함께 주면 종료 코드 
     const r = spawnSync(process.execPath, [tool, '--roles', 'nowhere', '--update'], { cwd: APP, encoding: 'utf8' });
     expect(r.status).toBe(2);
     expect(r.stdout).toMatch(/--update/);
+  }
+});
+
+// 2026-10-12 · 계획 13 Task 7: 드라이런 역할표 9장(계획 12 Task 9 — 사람이 손으로 쓴 표)이 저장소에 있다(tools/dxf-corpus/roles · README "역할표").
+// 그 표로 잰 수치(실파일 sadong 문 18 · sinsang-A 문 16 · 공개 Σ 방 1216 · 정답 없는 방 231 · 문 1336)가 저장소만으로 재현되려면 표의 칸이 하나도
+// 버려지면 안 된다 — 버린 칸은 조용히 규칙으로 가서 수치가 바뀐다. 표에는 이름과 역할만 있다(파일 경로·좌표 없음).
+test('저장소 역할표 9장: 모두 checkRoles를 오류 없이 지나고 버려지는 칸이 없다', () => {
+  const dir = join(APP, 'tools/dxf-corpus/roles');
+  const files = readdirSync(dir).filter(f => f.endsWith('.json')).sort();
+  expect(files).toEqual(['2suite (1).json', '4suite (10).json', '4suite (9).json', '6suite (6).json', '6suite (8).json',
+    'naegok.json', 'sadong.json', 'sinsang-A.json', 'sinsang-B.json']);
+  for (const f of files) {
+    const raw = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    const { table, errors } = checkRoles(raw);
+    expect([f, errors]).toEqual([f, []]);
+    const n = k => Object.keys(raw[k] ?? {}).length;
+    expect([f, table.layers.size, table.blocks.size, table.texts.size]).toEqual([f, n('layers'), n('blocks'), n('texts')]);   // 문자 키 trim 겹침도 없다
+    expect([f, Object.keys(raw).filter(k => !['layers', 'blocks', 'texts'].includes(k))]).toEqual([f, []]);
   }
 });
 

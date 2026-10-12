@@ -121,8 +121,17 @@ bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 �
 - `llm-roles.mjs`: 덤프 → Messages API 한 번(`fetch` · `x-api-key` · `anthropic-version: 2023-06-01` · 구조화 출력 `output_config.format`
   JSON 스키마) → 역할표. **모델은 `--model`로만** 받고 폴백이 없다(`claude-haiku-4-5` 등 — 없으면 종료 코드 2). `ANTHROPIC_API_KEY`가
   없으면 "키 필요"로 종료 코드 2. 응답은 덤프에 없는 이름을 버리고 형식 검사를 지난 칸만 쓴다(`meta`에 모델·사용량·버린 수).
-- 측정: `npm run dxf:score -- --roles ../dxf-roles` · `npm run dxf:public -- --roles ../dxf-roles`(파일 이름은 실파일 id · 공개 도면 이름,
-  예 `../dxf-roles/naegok.json` · `../dxf-roles/2suite (1).json`).
+- 측정: `npm run dxf:score -- --roles <폴더>` · `npm run dxf:public -- --roles <폴더>`(파일 이름은 실파일 id · 공개 도면 이름,
+  예 `<폴더>/naegok.json` · `<폴더>/2suite (1).json`).
+- **저장소 역할표 `roles/`**(2026-10-12 · 계획 13 Task 7): 계획 12 Task 9 드라이런에서 사람이 손으로 쓴 표 9장 — 실파일 넷(`sadong` · `sinsang-A` ·
+  `sinsang-B` · `naegok`)과 공개 5장(`2suite (1)` · `4suite (9)` · `4suite (10)` · `6suite (6)` · `6suite (8)`). 레이어·블록·문자 **이름과 역할만** 담는다
+  (도면 파일 이름·경로·좌표 없음 · 제목 칸의 학교 이름은 `corpus.json`에 이미 있다). 앱 폴더에서 재현한다:
+  `npm run dxf:score -- --roles tools/dxf-corpus/roles` · `node tools/dxf-corpus/public.mjs --roles tools/dxf-corpus/roles`.
+  잰 값(기준 → 표): 실파일 sadong 문 17 → 18 · 통로 5 → 4(벽 96 → 94), sinsang-A 문 6 → 16 · unmatched 5 → 0(창 17 → 16 · 통로 19 → 9),
+  sinsang-B unmatched 3 → 0, naegok unmatched 3 → 2 — 나빠진 지표 없음(종료 0). 공개 Σ 방 1212 → 1216/1916 · 정답 없는 방 227 → 231 ·
+  과분할 정답 방 49 → 52 · 문 1334 → 1336/1505 — 2suite (1)의 falseRooms 3 → 6 · splitRooms 1 → 4와 4suite (9)의 falseRooms 2 → 3이 ✗라
+  종료 1이다(측정이다 — 표의 값은 기준에 넣지 않는다). 표를 고치면 이 수치를 다시 재고, `tests/dxfRoles.test.js`가 아홉 장 모두 칸 하나
+  버리지 않고 `checkRoles`를 지나는지 본다(버린 칸은 조용히 규칙으로 가서 수치가 바뀐다).
 - **few-shot 누수(2026-10-12 · 계획 12 최종 리뷰 M9-7)**: `llm-roles.mjs`의 프롬프트 예시에 사동중·내곡중·신상중의 정답(벽 레이어 · 블록 종류 · 실명)이
   들어 있다. 모델 역할표(ⓓ)를 드라이런 표·규칙과 견줄 때는 **공개 5장**(2suite (1) · 4suite (9) · 4suite (10) · 6suite (6) · 6suite (8) — 도면별 정답이
   프롬프트에 없는 도면)으로만 판단하고, 실파일 넷의 수치는 **"참고(누수)"** 로 따로 적는다. 공개 5장도 완전한 홀드아웃은 아니다 — `DOTE = grid` 예시는

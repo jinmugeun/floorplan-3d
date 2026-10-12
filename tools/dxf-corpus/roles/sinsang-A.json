@@ -1,0 +1,164 @@
+{
+  "layers": {
+    "0": "other",
+    "2": "other",
+    "3": "other",
+    "4": "opening",
+    "6": "other",
+    "7": "other",
+    "8": "other",
+    "252": "other",
+    "급식-기구구입": "equip",
+    "급식기구": "equip",
+    "급식기구1": "equip",
+    "급식-재사용": "equip",
+    "급식-미구입": "equip",
+    "급식-기구NO": "equip",
+    "급식-전기1": "mep",
+    "급식-급배수2": "mep",
+    "급식기구-트렌치": "mep",
+    "door": "opening",
+    "WID": "opening",
+    "A-DOOR": "opening",
+    "D4": "opening",
+    "A-FUR-H": "equip",
+    "주방-보조실선": "equip",
+    "주방-중심선": "other",
+    "COL": "wall",
+    "CON": "wall",
+    "FIN": "other",
+    "CL - SYM": "other",
+    "SYM": "other",
+    "DET": "other",
+    "SOL-252": "other",
+    "E4": "other",
+    "T-HID": "other",
+    "WC-OUTL": "equip",
+    "WC-DET1": "equip",
+    "트렌치": "mep",
+    "전기": "mep",
+    "급배수": "mep",
+    "A-ELE": "mep",
+    "_ELEV": "other",
+    "CEN": "grid",
+    "DIM": "dim",
+    "defpoint": "other",
+    "Defpoints": "other",
+    "TEX": "other",
+    "TIT": "other",
+    "시트지": "other",
+    "작업": "other",
+    "A-CON": "text",
+    "RXCOBAL": "other",
+    "T_L": "other"
+  },
+  "blocks": {
+    "포켓도어800": {
+      "kind": "pocket",
+      "width": 800
+    },
+    "포켓도어900": {
+      "kind": "pocket",
+      "width": 900
+    },
+    "문 2짝다른사이즈1500-200": {
+      "kind": "door",
+      "width": 1500
+    },
+    "문 800": {
+      "kind": "door",
+      "width": 800
+    },
+    "에어커튼 890-222": {
+      "kind": "equip",
+      "width": null
+    },
+    "에어커튼 1490-222": {
+      "kind": "equip",
+      "width": null
+    },
+    "배전함": {
+      "kind": "equip",
+      "width": null
+    },
+    "권-효성a3": {
+      "kind": "other",
+      "width": null
+    },
+    "Z_DOT": {
+      "kind": "symbol",
+      "width": null
+    },
+    "sssssssssssdfdfsa": {
+      "kind": "symbol",
+      "width": null
+    },
+    "육가": {
+      "kind": "equip",
+      "width": null
+    },
+    "그레이팅 600x600": {
+      "kind": "equip",
+      "width": null
+    },
+    "식탁6인": {
+      "kind": "equip",
+      "width": null
+    },
+    "식탁4인": {
+      "kind": "equip",
+      "width": null
+    },
+    "회의용테이블3인": {
+      "kind": "equip",
+      "width": null
+    },
+    "xref-전체평면도$0$책상L형1812": {
+      "kind": "equip",
+      "width": null
+    }
+  },
+  "texts": {
+    "1": "axis",
+    "2": "axis",
+    "3": "axis",
+    "4": "axis",
+    "5": "axis",
+    "샤워실": "room",
+    "세척실": "room",
+    "세탁실": "room",
+    "소모품": "room",
+    "식당 (168석)": "room",
+    "식당 (196석)": "room",
+    "식품창고": "room",
+    "영양관리실": "room",
+    "전처리실": "room",
+    "조리실": "room",
+    "준비실": "room",
+    "화장실(남)": "room",
+    "화장실(여)": "room",
+    "휴게실(남)": "room",
+    "휴게실(여)": "room",
+    "데크": "label",
+    "비가림": "label",
+    "슬로프": "label",
+    "그리스트랩": "label",
+    "FL 1500 낮은벽": "label",
+    "메쉬휀스 슬라이딩도어": "label",
+    "바닥난방": "label",
+    "구입": "label",
+    "미구입": "label",
+    "재사용": "label",
+    "입실": "label",
+    "퇴실": "label",
+    "상부장": "label",
+    "1 층 평 면 도": "title",
+    "경산 신상중": "title",
+    "신상중학교 급식소 증축": "title",
+    "건축 레이아웃 도면": "title",
+    "260928 도면작업": "title",
+    "X": "axis",
+    "Y": "axis",
+    "온수기": "room"
+  }
+}
