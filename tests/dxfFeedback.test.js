@@ -53,7 +53,8 @@ test('가져오기 기록은 시각·파일 이름·체크한 레이어·옵션�
   expect(s.walls[4]).toEqual({ id: 'v0', a: [1000, 0], b: [1000, 4000], thickness: 20, virtual: true });
   // 방 면적은 도면 기준(areaCenter, m²) — 도면의 면적 표기와 같은 기준이다.
   expect(s.rooms).toEqual([{ id: 'r1', name: '교실', area: 12 }, { id: 'r2', name: '준비실', area: 12.5 }, { id: 'r3', name: '창고', area: 5 }]);
-  expect(s.items[0]).toEqual({ id: 'd1', productId: 'door-swing-900', wallId: 'w1', t: 0.25, size: [900, 40, 2100] });
+  // kind · pos(2026-10-12 · 계획 13 최종 리뷰 F-5): 기구와 문·창을 가르고 바닥 아이템의 이동을 잰다. dxfBlock은 기구에만(아래 기구 테스트).
+  expect(s.items[0]).toEqual({ id: 'd1', productId: 'door-swing-900', kind: 'door', wallId: 'w1', t: 0.25, pos: [1, 2], size: [900, 40, 2100] });
   expect(s.items[2].wallId).toBe(null);
   // 좌표는 0.1 mm로 반올림해 둔다(크기 절약 — 문턱 1 mm보다 한참 작다).
   expect(importSnapshot({ walls: [W('x', [0.04, 1.26], [10.55, 3], 199.96)] }).walls[0]).toEqual({ id: 'x', a: [0, 1.3], b: [10.6, 3], thickness: 200, virtual: false });
@@ -71,7 +72,8 @@ test('고친 것이 없으면 목록은 모두 비고 요약은 0이다', () => 
   expect(fb.summary).toEqual({
     importedWalls: 6, importedRooms: 3, importedItems: 3,
     wallsDeleted: 0, wallsAdded: 0, wallsMoved: 0, dividersDeleted: 0, dividersAdded: 0,
-    roomsRenamed: 0, roomsAdded: 0, roomsDeleted: 0, itemsDeleted: 0, columnsDeleted: 0, itemsMoved: 0, itemsResized: 0, itemsRetyped: 0, itemsAdded: 0, changes: 0,
+    roomsRenamed: 0, roomsAdded: 0, roomsDeleted: 0, itemsDeleted: 0, columnsDeleted: 0, equipDeleted: 0, itemsMoved: 0, columnsMoved: 0, equipMoved: 0,
+    itemsResized: 0, equipResized: 0, itemsRetyped: 0, itemsAdded: 0, changes: 0,
   });
   // 받는 쪽이 지운 id를 풀 수 있게 가져온 직후의 스냅숏을 함께 싣는다(id는 uid라 다시 가져와도 같은 값이 나오지 않는다).
   expect(fb.snapshot).toEqual(withMeta(imported()).meta.dxfImport.snapshot);
@@ -113,7 +115,7 @@ test('지운·그린·옮긴 벽 · 구획선 · 방 이름 · 지운·옮긴 �
   expect(fb.items.deleted).toEqual(['n1']);
   expect(fb.items.moved).toEqual([{ id: 'd1', from: { wallId: 'w1', t: 0.25 }, to: { wallId: 'w1', t: 0.3 } }]);
   expect(fb.items.resized).toEqual([{ id: 'c1', from: [400, 400, 2300], to: [500, 500, 2300] }]);
-  expect(fb.items.added).toEqual([{ id: 'd2', productId: 'door-swing-1000', wallId: 'w5', t: 0.5, size: [1000, 40, 2100] }]);
+  expect(fb.items.added).toEqual([{ id: 'd2', productId: 'door-swing-1000', kind: 'door', wallId: 'w5', t: 0.5, pos: [1, 2], size: [1000, 40, 2100] }]);
   expect(fb.items.retyped).toEqual([]);                                                // 제품을 바꾼 것은 없다
   expect(fb.summary).toMatchObject({
     wallsDeleted: 2, wallsAdded: 2, wallsMoved: 2, dividersDeleted: 1, dividersAdded: 1,
@@ -236,4 +238,40 @@ test('교정 기록 알림: 지운 기둥은 기둥으로 · 숨던 범주(방 �
   const msg = DXF_FEEDBACK_EXPORTED(s);
   expect(msg).toBe('교정 기록을 내보냈습니다 — 고친 것 3건: 새 방 1 · 문·창·기둥 크기 1 · 문·창·기둥 추가 1');
   expect(msg).not.toMatch(/ 0( |$)/);
+});
+
+// 2026-10-12 · 계획 13 최종 리뷰 F-5(I3-3 + M2-3): 기구가 가져오기의 70 %(사동 226/312)인데 교정 기록은 기구를 지우면 "문·창 지움", 크기를 고치면
+// "문·창·기둥 크기"로 셌고, 바닥 기구를 옮긴 것은 아예 잡지 못했다(스냅숏에 pos가 없었다 — 벽 없는 아이템은 t가 늘 0). 일반 상자 → 제품 교체(retyped)는
+// 어휘 학습에 가장 값진 신호인데 어느 블록인지 몰랐다. 스냅숏 itemRec에 kind · dxfBlock · pos를 싣고, 기구(dxfBlock 있는 아이템)를 따로 센다.
+test('교정 기록의 기구: 지움·옮김(바닥 pos)·크기는 기구로 세고, 스냅숏에 dxfBlock · 종류 교체에 블록 이름', () => {
+  const EQ = (id, productId, pos, size = [1500, 750, 850], extra = {}) => ({ id, kind: 'product', productId, wallId: null, t: 0, size, attach: 'floor', pos, name: 'x', dxfBlock: `${id} 블록`, ...extra });
+  const src = imported();
+  src.items.push(EQ('e1', 'sink-double', [3000, 2000]), EQ('e2', 'equip-generic', [4000, 2000]), EQ('e3', 'worktable-1800', [5000, 2000]));
+  const snap = importSnapshot(src);
+  expect(snap.items.find(i => i.id === 'e1')).toEqual({ id: 'e1', productId: 'sink-double', kind: 'product', dxfBlock: 'e1 블록', wallId: null, t: 0, pos: [3000, 2000], size: [1500, 750, 850] });
+  expect('dxfBlock' in snap.items.find(i => i.id === 'd1')).toBe(false);                 // 문·창·기둥에는 없다
+  const after = structuredClone(src);
+  after.items = after.items.filter(i => i.id !== 'e1');                                    // 기구 하나 지움
+  after.items.find(i => i.id === 'e2').pos = [4005, 2000];                                 // 바닥 기구 5 mm 옮김
+  after.items.find(i => i.id === 'e3').size = [1800, 600, 850];                            // 기구 크기
+  Object.assign(after.items.find(i => i.id === 'e2'), { productId: 'sink-single' });       // 일반 상자 → 제품(종류)
+  after.items.find(i => i.id === 'c1').pos = [1, 2.5];                                     // 0.5 mm — 옮긴 것이 아니다
+  const fb = buildDxfFeedback(withMeta(after, src), { now: NOW });
+  expect(fb.items.deleted).toEqual(['e1']);
+  expect(fb.items.moved).toEqual([{ id: 'e2', from: { wallId: null, t: 0, pos: [4000, 2000] }, to: { wallId: null, t: 0, pos: [4005, 2000] } }]);
+  expect(fb.items.retyped).toEqual([{ id: 'e2', from: 'equip-generic', to: 'sink-single', kind: 'product', dxfBlock: 'e2 블록' }]);
+  expect(fb.summary).toMatchObject({ itemsDeleted: 1, columnsDeleted: 0, equipDeleted: 1, itemsMoved: 1, columnsMoved: 0, equipMoved: 1, itemsResized: 1, equipResized: 1, itemsRetyped: 1, changes: 4 });
+  const msg = DXF_FEEDBACK_EXPORTED(fb.summary);
+  expect(msg).toBe('교정 기록을 내보냈습니다 — 고친 것 4건: 기구 지움 1 · 기구 옮김 1 · 기구 크기 1 · 종류 1');
+  expect(msg).not.toMatch(/문·창/);
+  // 기둥(바닥 아이템)을 옮기면 이제 잡히고, "문·창"이 아니라 "기둥 옮김"이다.
+  const col = structuredClone(src);
+  col.items.find(i => i.id === 'c1').pos = [1, 300];
+  const cs = buildDxfFeedback(withMeta(col, src), { now: NOW }).summary;
+  expect([cs.itemsMoved, cs.columnsMoved, cs.equipMoved]).toEqual([1, 1, 0]);
+  expect(DXF_FEEDBACK_EXPORTED(cs)).toBe('교정 기록을 내보냈습니다 — 고친 것 1건: 기둥 옮김 1');
+  // 옛 기록(스냅숏에 pos가 없다 — 계획 12)은 바닥 이동을 재지 않는다(거짓 "옮김"을 만들지 않는다).
+  const old = withMeta(col, src);
+  for (const it of old.meta.dxfImport.snapshot.items) delete it.pos;
+  expect(buildDxfFeedback(old, { now: NOW }).summary.itemsMoved).toBe(0);
 });

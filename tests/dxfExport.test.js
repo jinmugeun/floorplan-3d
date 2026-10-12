@@ -17,7 +17,11 @@ import { normalizeWalls } from '../src/geom/normalize.js';
 import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
 import { DXF_PARAMS } from '../src/io/dxf/params.js';
-import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE } from '../src/ui/dxfMessages.js';
+import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT } from '../src/ui/dxfMessages.js';
+import { matchEquip, sizeInName, skipReason } from '../src/io/dxf/equipVocab.js';
+import { importSnapshot } from '../src/io/dxfFeedback.js';
+import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
+import { ITEM_RANGE } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 
 let handle;
@@ -201,6 +205,36 @@ test('입력 도면 안내는 내보내기와 맞는다 — 중심선 조건 · 
   expect(html).toContain('자동으로 보내지 않습니다');
   expect(html).toContain('CAD에서 고치기 전에 교정 기록을 먼저 내보내 주세요');
   expect(html).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
+});
+
+// 2026-10-12 · 계획 13 최종 리뷰 F-4: 안내가 기구 배치와 반대로 "기구·가구를 빼 주세요"라 했고(검토 창이 링크하고 설계 사무소에 보내는 페이지다),
+// 정규화 DXF에 기구가 빠진다는 말 · 교정 기록에 기구가 든다는 말 · 기구의 한계가 없었다. 기구 문장을 코드 값으로 고정한다.
+test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 남기기 · 이름 관례 · 끄는 체크 · 정규화 DXF에 없음 · 교정 기록 · 한계', () => {
+  const html = readFileSync(fileURLToPath(new URL('../public/dxf-guide.html', import.meta.url)), 'utf8');
+  const card = cls => html.match(new RegExp(`<div class="card ${cls}">(.*?)</div>`, 's'))?.[1] ?? '';
+  // §1: 기구는 남길 것(블록 그대로 · 품명 + W-D) — 안내의 예시 이름이 실제로 제품 + 치수로 읽힌다. 빼 달라는 카드에는 기구가 없다.
+  const EXAMPLE = '세정대 2조 1500-750';
+  expect(card('keep')).toContain(`<code>${EXAMPLE}</code>`);
+  expect(card('keep')).toContain('기구 블록');
+  expect(matchEquip(EXAMPLE)).toMatchObject({ productId: 'sink-double' });
+  expect(sizeInName(EXAMPLE)).toEqual([1500, 750]);
+  expect(card('drop')).not.toMatch(/기구|급식/);
+  expect(html).toContain(DXF_EQUIPMENT_OPT);                                     // 검토 창의 체크 이름 그대로
+  // 바닥 기호는 세우지 않는다(제외 어휘).
+  for (const w of ['육가', '그레이팅', '점자블럭']) { expect(html).toContain(w); expect(skipReason(w)).toBe('fixture'); }
+  // §3: 정규화 DXF에는 기구가 들어가지 않는다(dxfExport는 벽·개구부·기둥만 쓴다).
+  expect(html).toContain('정규화 DXF에는 기구가 들어가지 않습니다');
+  const p = normalizeProject({ ...createEmptyProject('기구'), floors: [{ ...createFloor('1F'), height: 3000, walls: rectWalls([0, 0], [4000, 3000], 200, 3000), rooms: [],
+    items: [createItem(productById('sink-double'), { pos: [2000, 1500], name: EXAMPLE, dxfBlock: EXAMPLE, dxfProduct: 'sink-double' })] }] });
+  expect(exportDxf(p)).not.toContain('세정대');
+  // §4: 교정 기록에는 기구와 원 블록 이름(dxfBlock)이 든다.
+  expect(html).toContain('기구(제품·자리·크기와 원 블록 이름)');
+  expect(importSnapshot(p.floors[0]).items[0]).toMatchObject({ dxfBlock: EXAMPLE, kind: 'product' });
+  // §5: 한계 — 견적 0원 문구 그대로 · 이름 없는 블록은 '도면 기구' 상자 · 기구끼리 겹침은 도면 그대로 · 크기 상한.
+  expect(html).toContain(DRAWING_PRICE_NOTE);
+  expect(html).toContain(`'${productById('equip-generic').name}' 상자`);
+  expect(html).toContain('기구끼리 겹친 자리는 도면 그대로');
+  expect(html).toContain(`긴 변이 ${DXF_PARAMS.equipMax / 1000} m를 넘는 블록은 세우지 않고, ${ITEM_RANGE.size[1] / 1000} m를 넘는 기구는 ${ITEM_RANGE.size[1] / 1000} m로 잘립니다`);
 });
 
 // 가져오기는 레이어가 겹치지 않는 두 면선 사이 틈(≥ cavityMin 150)에서만 붙은 두 벽을 가른다 — 한 레이어면 두 벽이 550 띠 하나가 된다(내곡중).

@@ -29,7 +29,12 @@ const areaOf = r => r2(r?.areaCenter > 0 ? r.areaCenter : r?.area);
 const wallRec = w => ({ id: w.id, a: pt(w.a), b: pt(w.b), thickness: r1(w.thickness), virtual: !!w.virtual });
 const roomRec = r => ({ id: r.id, name: r.name ?? '', area: areaOf(r) });
 // t(벽 위 0~1)는 반올림하지 않는다: 40 m 벽에서 t 0.0001이 4 mm라 반올림이 거짓 "옮김"을 만든다.
-const itemRec = it => ({ id: it.id, productId: it.productId ?? '', wallId: it.wallId ?? null, t: Number(it.t) || 0, size: arr(it.size).map(r1) });
+// kind · dxfBlock · pos(2026-10-12 · 계획 13 최종 리뷰 F-5 · I3-3 + M2-3): 기구가 가져오기의 70 %(사동 226/312)인데 기록이 기구를 문·창으로 셌고,
+// 바닥 기구를 옮긴 것은 잡지 못했다(벽 없는 아이템은 wallId null · t 0). dxfBlock(원 블록 이름)은 기구에만 있다 — 어느 블록을 고쳤는지가 어휘 학습의 신호다.
+const itemRec = it => ({
+  id: it.id, productId: it.productId ?? '', kind: it.kind ?? '', ...(it.dxfBlock != null ? { dxfBlock: String(it.dxfBlock) } : {}),
+  wallId: it.wallId ?? null, t: Number(it.t) || 0, pos: pt(it.pos), size: arr(it.size).map(r1),
+});
 
 export const importSnapshot = (floor = {}) => ({
   walls: arr(floor?.walls).map(wallRec), rooms: arr(floor?.rooms).map(roomRec), items: arr(floor?.items).map(itemRec),
@@ -113,13 +118,17 @@ function diffItems(before, after, walls) {
     if (!it) continue;
     const wallId = it.wallId ?? null, t = Number(it.t) || 0;
     // 같은 벽 위의 자리는 t 차이를 지금 벽 길이로 mm로 바꿔 잰다(벽이 없는 기둥은 t가 늘 0이다).
-    if (wallId !== s.wallId || Math.abs(t - s.t) * (len.get(wallId) ?? 0) > MOVE_TOL) moved.push({ id: s.id, from: { wallId: s.wallId, t: s.t }, to: { wallId, t } });
+    // 벽 없는 아이템(바닥 기구 · 기둥)은 pos 거리로 잰다(2026-10-12 · 최종 리뷰 F-5). 옛 기록(스냅숏에 pos 없음)은 재지 않는다 — 거짓 "옮김"이 된다.
+    const floorMove = !s.wallId && !wallId && Array.isArray(s.pos) && dist(s.pos, it.pos) > MOVE_TOL;
+    if (floorMove) moved.push({ id: s.id, from: { wallId: null, t: s.t, pos: s.pos }, to: { wallId: null, t, pos: pt(it.pos) } });
+    else if (wallId !== s.wallId || Math.abs(t - s.t) * (len.get(wallId) ?? 0) > MOVE_TOL) moved.push({ id: s.id, from: { wallId: s.wallId, t: s.t }, to: { wallId, t } });
     const size = arr(it.size).map(r1);
     if (size.some((v, i) => Math.abs(v - (arr(s.size)[i] ?? 0)) > MOVE_TOL)) resized.push({ id: s.id, from: s.size, to: size });
     // 제품을 바꿨다(수정 wave 2026-10-12 · Task 10 리뷰 M-1): 검사기의 "제품 교체"(itemOps.replaceProduct)는 id를 지킨 채 productId·kind를
     // 바꾼다 — 잘못 읽은 개구부 종류(통로 → 문 · 여닫이 → 미닫이 · 문 → 창)를 고치는 가장 흔한 길이고, 점수판의 opnKind가 재는 그 라벨이다.
     // kind는 바꾼 뒤의 종류(door·window·opening·column). 크기도 달라졌으면 resized에도 함께 나온다(종류와 폭은 따로 쓰이는 라벨이라 둘 다 남긴다).
-    if ((it.productId ?? '') !== s.productId) retyped.push({ id: s.id, from: s.productId, to: it.productId ?? '', kind: it.kind ?? '' });
+    // 기구는 원 블록 이름을 함께 싣는다(최종 리뷰 F-5): 일반 상자 → 제품 교체가 "이 블록 이름은 이 제품"이라는 어휘 학습 신호다.
+    if ((it.productId ?? '') !== s.productId) retyped.push({ id: s.id, from: s.productId, to: it.productId ?? '', kind: it.kind ?? '', ...(s.dxfBlock != null ? { dxfBlock: s.dxfBlock } : {}) });
   }
   return { deleted: before.filter(s => !now.has(s.id)).map(s => s.id), moved, resized, retyped, added: after.filter(it => !was.has(it.id) && TRACKED.has(it.kind)).map(itemRec) };
 }
@@ -128,17 +137,22 @@ function diffItems(before, after, walls) {
 // 함께 바꾼 아이템은 retyped·resized 두 번 센다(목록이 둘이다).
 // columnsDeleted(2026-10-12 · 최종 리뷰 X-7 · M10-1): itemsDeleted 중 기둥(스냅숏 제품 `column-…`) — dividers*처럼 부분집합이라 changes에 다시
 // 더하지 않는다. 알림이 지운 기둥을 "문·창 지움"으로 세던 것을 가른다.
+// equip*(2026-10-12 · 계획 13 최종 리뷰 F-5): items*의 기구(스냅숏에 dxfBlock이 있는 아이템) 부분 — 같은 까닭으로 changes에 다시 더하지 않는다.
+// columnsMoved: 바닥 이동을 pos로 재게 되면서 기둥 이동도 잡힌다 — "문·창 옮김"에 섞이지 않게 가른다(예전에는 못 쟀다 — M10-5).
 const isColumn = productId => /^column-/.test(String(productId ?? ''));
 function summarize(snap, walls, rooms, items) {
   const virt = new Set(snap.walls.filter(w => w.virtual).map(w => w.id));
   const cols = new Set(snap.items.filter(it => isColumn(it.productId)).map(it => it.id));
+  const equip = new Set(snap.items.filter(it => it.dxfBlock != null).map(it => it.id));
+  const n = (list, set) => list.filter(x => set.has(typeof x === 'string' ? x : x.id)).length;
   const s = {
     importedWalls: snap.walls.length, importedRooms: snap.rooms.length, importedItems: snap.items.length,
     wallsDeleted: walls.deleted.length, wallsAdded: walls.added.length, wallsMoved: walls.moved.length,
     dividersDeleted: walls.deleted.filter(id => virt.has(id)).length, dividersAdded: walls.added.filter(w => w.virtual).length,
     roomsRenamed: rooms.renamed.length, roomsAdded: rooms.added.length, roomsDeleted: rooms.deleted.length,
-    itemsDeleted: items.deleted.length, columnsDeleted: items.deleted.filter(id => cols.has(id)).length,
-    itemsMoved: items.moved.length, itemsResized: items.resized.length, itemsRetyped: items.retyped.length, itemsAdded: items.added.length,
+    itemsDeleted: items.deleted.length, columnsDeleted: n(items.deleted, cols), equipDeleted: n(items.deleted, equip),
+    itemsMoved: items.moved.length, columnsMoved: n(items.moved, cols), equipMoved: n(items.moved, equip),
+    itemsResized: items.resized.length, equipResized: n(items.resized, equip), itemsRetyped: items.retyped.length, itemsAdded: items.added.length,
   };
   s.changes = s.wallsDeleted + s.wallsAdded + s.wallsMoved + s.roomsRenamed + s.roomsAdded + s.roomsDeleted
     + s.itemsDeleted + s.itemsMoved + s.itemsResized + s.itemsRetyped + s.itemsAdded;

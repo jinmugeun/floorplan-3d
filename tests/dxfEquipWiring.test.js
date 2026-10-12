@@ -10,6 +10,7 @@ import { buildImportMeta, buildDxfFeedback } from '../src/io/dxfFeedback.js';
 import { importDxf } from '../src/io/dxf/client.js';
 import { collidingIds } from '../src/geom/collide.js';
 import { estimateRows } from '../src/io/estimate.js';
+import { DXF_FEEDBACK_EXPORTED } from '../src/ui/messages.js';
 
 // DXF 좌표(y 위쪽)의 사각형 중심선 넷.
 const rect = (x0, y0, x1, y1, thickness = 200) => [
@@ -123,7 +124,10 @@ test('교정 기록: 가져온 직후 스냅숏에 기구가 들고, 도면 기�
   const after = { ...project, floors: [{ ...fl, items: fl.items.filter(i => i !== gone) }], meta: { dxfImport: meta } };
   const fb = buildDxfFeedback(after);
   expect(fb.items.deleted).toEqual([gone.id]);
-  expect(fb.summary).toMatchObject({ importedItems: 6, itemsDeleted: 1, columnsDeleted: 0, changes: 1 });
+  expect(fb.summary).toMatchObject({ importedItems: 6, itemsDeleted: 1, columnsDeleted: 0, equipDeleted: 1, changes: 1 });
+  // 2026-10-12 · 최종 리뷰 F-5: 스냅숏의 기구에는 원 블록 이름이 있고, 알림은 "문·창 지움"이 아니라 "기구 지움"이다.
+  expect(meta.snapshot.items.filter(i => i.dxfBlock).map(i => i.dxfBlock)).toEqual(['세정대 2조 1500-750', '후드1500-1300', 'zw$AB12', '고정식작업대 700-600']);
+  expect(DXF_FEEDBACK_EXPORTED(fb.summary)).toBe('교정 기록을 내보냈습니다 — 고친 것 1건: 기구 지움 1');
 });
 
 // 워커 전체(가짜 self): 이중선 방 하나 + 기구 블록 하나(세정대 2조 1500-750 · 레이어 급식기구). 옵션 equipment는 기본 켬이고 false면 끈다.

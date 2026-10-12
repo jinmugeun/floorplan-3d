@@ -76,14 +76,18 @@ export const DXF_EXPORT_FAILED = '정규화 DXF를 내보내지 못했습니다.
 // 교정 기록 내보내기(2026-10-12 · 계획 12 Task 10 — io/dxfFeedback.js): 더보기 메뉴 · DXF로 가져온 프로젝트가 아닐 때 · 내보낸 뒤의 수.
 // 알림은 합계(changes)를 먼저, 그다음 **0이 아닌 범주만**(2026-10-12 · 최종 리뷰 X-7 · M10-1): 예전 알림은 범주 일곱만 늘 적어, 새 방·크기·추가만
 // 바뀐 기록이 "벽 지움 0 · 그림 0 · …" 0만 늘어놓았고, 지운 기둥을 "문·창 지움"으로 셌다. 지운 것은 문·창(개구부)과 기둥(columnsDeleted)을 가른다.
-// 옮김은 벽 위 자리(t)만 재므로 문·창뿐이다(기둥 이동은 못 잰다 — M10-5). 전체 목록은 파일 안의 summary다.
+// 전체 목록은 파일 안의 summary다.
+// 기구를 가른다(2026-10-12 · 계획 13 최종 리뷰 F-5): 기구(dxfBlock 있는 아이템 — equipDeleted·equipMoved·equipResized ⊂ items*)를 "문·창"으로 세던 것을
+// "기구 지움/옮김/크기"로 뺀다. 바닥 이동을 pos로 재게 되어 기둥 이동(columnsMoved)도 잡힌다 — "기둥 옮김"으로 따로 센다(예전 M10-5: 못 쟀다).
 export const DXF_FEEDBACK_MENU = '교정 기록 내보내기';
 export const DXF_FEEDBACK_NONE = 'DXF로 가져온 프로젝트가 아닙니다';
+const z = v => Number(v) || 0;
 const FEEDBACK_PARTS = [
   ['벽 지움', s => s.wallsDeleted], ['벽 그림', s => s.wallsAdded], ['벽 옮김', s => s.wallsMoved],
   ['방 이름', s => s.roomsRenamed], ['새 방', s => s.roomsAdded], ['없어진 방', s => s.roomsDeleted],
-  ['문·창 지움', s => (s.itemsDeleted ?? 0) - (s.columnsDeleted ?? 0)], ['기둥 지움', s => s.columnsDeleted], ['문·창 옮김', s => s.itemsMoved],
-  ['문·창·기둥 크기', s => s.itemsResized], ['종류', s => s.itemsRetyped], ['문·창·기둥 추가', s => s.itemsAdded],
+  ['문·창 지움', s => z(s.itemsDeleted) - z(s.columnsDeleted) - z(s.equipDeleted)], ['기둥 지움', s => s.columnsDeleted], ['기구 지움', s => s.equipDeleted],
+  ['문·창 옮김', s => z(s.itemsMoved) - z(s.columnsMoved) - z(s.equipMoved)], ['기둥 옮김', s => s.columnsMoved], ['기구 옮김', s => s.equipMoved],
+  ['문·창·기둥 크기', s => z(s.itemsResized) - z(s.equipResized)], ['기구 크기', s => s.equipResized], ['종류', s => s.itemsRetyped], ['문·창·기둥 추가', s => s.itemsAdded],
 ];
 export const DXF_FEEDBACK_EXPORTED = s => {
   if (!s?.changes) return '교정 기록을 내보냈습니다 — 가져온 뒤 고친 것이 없습니다';

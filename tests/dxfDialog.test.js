@@ -653,7 +653,7 @@ test('[가져오기]는 가져오기 선택과 결과 스냅숏을 project.meta.
   expect(meta.snapshot).toEqual({
     walls: [{ id: 'w1', a: [-100.5, -50.3], b: [200.5, -50.3], thickness: 200, virtual: false }, { id: 'v1', a: [0, 0], b: [0, 900], thickness: 20, virtual: true }],
     rooms: [{ id: 'r1', name: '교실', area: 12.35 }],
-    items: [{ id: 'i1', productId: 'door-swing-900', wallId: 'w1', t: 0.5, size: [900, 40, 2100] }],
+    items: [{ id: 'i1', productId: 'door-swing-900', kind: 'door', wallId: 'w1', t: 0.5, pos: [1, 2], size: [900, 40, 2100] }],   // kind · pos: 최종 리뷰 F-5
   });
   expect(project.floors).toBe(ext.project.floors);                           // 층은 워커가 낸 그대로다
   expect(ext.project.meta).toBeUndefined();                                  // 워커 결과 객체에는 붙이지 않는다(취소 뒤 다시 눌러도 새 기록)
