@@ -56,18 +56,29 @@ export const DXF_BADGE_COLOR = '색으로 판정';
 export const DXF_CARD_TITLE = 'DXF 도면 가져오기';
 export const DXF_CARD_DESC = '캐드 도면(.dxf)에서 벽을 자동으로 뽑아 평면도를 만듭니다.';
 
-// 정규화 DXF 내보내기(2026-10-12 · 계획 12 Task 3 — io/dxfExport.js): 더보기 메뉴 · 내보낸 뒤 알림. 통로 중 다시 들여올 때 그 자리·폭으로
-// 읽히지 않는 것(벽 끝과의 토막이 150 mm 미만 · 폭 3 m 초과 등)은 벽을 끊지 않고 X로만 표시하므로 그 수를 함께 말한다.
+// 정규화 DXF 내보내기(2026-10-12 · 계획 12 Task 3 — io/dxfExport.js): 더보기 메뉴 · 내보낸 뒤 알림 · 실패 알림.
+// 통로 "n곳 읽히지 않음" 문구는 지웠다(2026-10-12 · 최종 리뷰 X-6 · N3-3): 모든 통로가 `PASS-` 블록으로 돌아와 그 수가 늘 0이었다.
+// 실패(최종 리뷰 X-6 · M3-3): 재배포 뒤 옛 탭이 내보내기 청크를 못 불러오는 것이 가장 흔한 원인이라 새로 고침을 말한다(저장이 먼저).
 export const DXF_EXPORT_MENU = '정규화 DXF 내보내기';
 export const DXF_EXPORTED = '정규화 DXF를 내보냈습니다 — CAD에서 고친 뒤 다시 가져오세요';
-export const DXF_EXPORTED_SKIPPED = n => `${DXF_EXPORTED} (통로 ${n}곳은 다시 가져올 때 읽히지 않아 벽을 잇고 X로만 표시했습니다)`;
+export const DXF_EXPORT_FAILED = '정규화 DXF를 내보내지 못했습니다. 작업을 저장한 뒤 페이지를 새로 고쳐 다시 시도해 주세요';
 // 교정 기록 내보내기(2026-10-12 · 계획 12 Task 10 — io/dxfFeedback.js): 더보기 메뉴 · DXF로 가져온 프로젝트가 아닐 때 · 내보낸 뒤의 수.
-// 수는 사용자가 "무엇이 담겼나"를 알 만큼만(벽 셋 · 방 이름 · 문·창 둘 · 종류 — 제품 교체, 수정 wave 리뷰 M-1) — 전체 목록은 파일 안의 summary다.
+// 알림은 합계(changes)를 먼저, 그다음 **0이 아닌 범주만**(2026-10-12 · 최종 리뷰 X-7 · M10-1): 예전 알림은 범주 일곱만 늘 적어, 새 방·크기·추가만
+// 바뀐 기록이 "벽 지움 0 · 그림 0 · …" 0만 늘어놓았고, 지운 기둥을 "문·창 지움"으로 셌다. 지운 것은 문·창(개구부)과 기둥(columnsDeleted)을 가른다.
+// 옮김은 벽 위 자리(t)만 재므로 문·창뿐이다(기둥 이동은 못 잰다 — M10-5). 전체 목록은 파일 안의 summary다.
 export const DXF_FEEDBACK_MENU = '교정 기록 내보내기';
 export const DXF_FEEDBACK_NONE = 'DXF로 가져온 프로젝트가 아닙니다';
-export const DXF_FEEDBACK_EXPORTED = s => (s?.changes
-  ? `교정 기록을 내보냈습니다 — 벽 지움 ${s.wallsDeleted} · 그림 ${s.wallsAdded} · 옮김 ${s.wallsMoved} · 방 이름 ${s.roomsRenamed} · 문·창 지움 ${s.itemsDeleted} · 옮김 ${s.itemsMoved} · 종류 ${s.itemsRetyped ?? 0}`
-  : '교정 기록을 내보냈습니다 — 가져온 뒤 고친 것이 없습니다');
+const FEEDBACK_PARTS = [
+  ['벽 지움', s => s.wallsDeleted], ['벽 그림', s => s.wallsAdded], ['벽 옮김', s => s.wallsMoved],
+  ['방 이름', s => s.roomsRenamed], ['새 방', s => s.roomsAdded], ['없어진 방', s => s.roomsDeleted],
+  ['문·창 지움', s => (s.itemsDeleted ?? 0) - (s.columnsDeleted ?? 0)], ['기둥 지움', s => s.columnsDeleted], ['문·창 옮김', s => s.itemsMoved],
+  ['문·창·기둥 크기', s => s.itemsResized], ['종류', s => s.itemsRetyped], ['문·창·기둥 추가', s => s.itemsAdded],
+];
+export const DXF_FEEDBACK_EXPORTED = s => {
+  if (!s?.changes) return '교정 기록을 내보냈습니다 — 가져온 뒤 고친 것이 없습니다';
+  const parts = FEEDBACK_PARTS.map(([label, n]) => [label, Number(n(s)) || 0]).filter(([, n]) => n > 0).map(([label, n]) => `${label} ${n}`);
+  return `교정 기록을 내보냈습니다 — 고친 것 ${s.changes}건${parts.length ? `: ${parts.join(' · ')}` : ''}`;
+};
 // 검토 창의 입력 도면 안내 줄(사전 검토 3): 선 수 · 체크한 벽 레이어 수 + 안내 페이지(public/dxf-guide.html · 새 탭).
 export const DXF_GUIDE_LINE = (segs, layers) => `선 ${Number(segs || 0).toLocaleString('en-US')}개 중 벽 레이어 ${layers}개`;
 export const DXF_GUIDE_LINK = '입력 도면 안내 ↗';

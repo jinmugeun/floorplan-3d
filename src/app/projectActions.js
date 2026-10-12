@@ -11,7 +11,7 @@ import { openBackgroundDialog } from '../ui/backgroundDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
 import { promptDialog } from '../ui/promptDialog.js';
 import { projectIsEmpty, confirmLeave } from './topbar.js';
-import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN, DXF_EXPORTED, DXF_EXPORTED_SKIPPED, DXF_FEEDBACK_NONE, DXF_FEEDBACK_EXPORTED } from '../ui/messages.js';
+import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN, DXF_EXPORTED, DXF_EXPORT_FAILED, DXF_FEEDBACK_NONE, DXF_FEEDBACK_EXPORTED } from '../ui/messages.js';
 import { buildDxfFeedback } from '../io/dxfFeedback.js';
 
 // onProjectSwap: 프로젝트를 갈아 끼운 직후(view.fit()과 같은 자리) 부른다 — 첫 방 자동 fit 래치를
@@ -67,11 +67,18 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
     exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); toast(JSON_EXPORTED); },
     // 정규화 DXF(2026-10-12 · 계획 12 Task 3): 지금 층을 레이어 몇 개뿐인 DXF로 — CAD에서 틀린 벽만 고쳐 다시 가져온다. 내보내기 코드(벽 윤곽·
     // 이음·띠 스윕 판정)는 누를 때만 불러온다(첫 화면 번들에 넣지 않는다).
+    // try/catch(2026-10-12 · 최종 리뷰 X-6 · M3-3): 탭을 연 채 재배포를 지나면 그 청크를 못 불러오고("Failed to fetch dynamically imported
+    // module"), 내보내기 예외도 있을 수 있다 — 거절이 토스트 없이 사라지면 메뉴가 "먹지 않는" 것처럼 보인다. 알리고 파일은 쓰지 않는다.
     exportDxf: async () => {
-      const { buildDxf } = await import('../io/dxfExport.js');
-      const { text, skippedPasses } = buildDxf(store.get());
-      downloadText(filenameFor(store.get()).replace(/\.json$/, '.dxf'), text, 'application/dxf');
-      toast(skippedPasses ? DXF_EXPORTED_SKIPPED(skippedPasses) : DXF_EXPORTED);
+      try {
+        const { buildDxf } = await import('../io/dxfExport.js');
+        const { text } = buildDxf(store.get());
+        downloadText(filenameFor(store.get()).replace(/\.json$/, '.dxf'), text, 'application/dxf');
+        toast(DXF_EXPORTED);
+      } catch (e) {
+        console.warn('dxf export:', e?.message ?? e);
+        toast(DXF_EXPORT_FAILED);
+      }
     },
     // 교정 기록(2026-10-12 · 계획 12 Task 10): 가져온 직후 스냅숏(meta.dxfImport)과 지금 층의 차이 + 가져오기 선택을 JSON으로.
     // 자동 전송은 없다(서버 없음 · 동의) — 사용자가 이 파일을 보내 주면 코퍼스 라벨이 된다. DXF로 가져온 프로젝트가 아니면 알리기만 한다.

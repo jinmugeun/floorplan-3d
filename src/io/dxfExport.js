@@ -180,8 +180,8 @@ function nameLines(name) {
 // project → DXF 텍스트. floor: 층 번호(기본 = 지금 층).
 export const exportDxf = (project, opts = {}) => buildDxf(project, opts).text;
 
-// → { text, skippedPasses, uncutPasses }. skippedPasses: 다시 들여오면 사라지는 통로 수(내보내기 알림이 쓴다) — 2026-10-12 리뷰 뒤로는 모든 통로가
-// PASS 블록으로 돌아오므로 0이다. uncutPasses: 가져오기가 틈을 그 자리·폭으로 읽지 못해 벽을 끊지 않은(블록만 있는) 통로 수.
+// → { text, uncutPasses }. uncutPasses: 가져오기가 틈을 그 자리·폭으로 읽지 못해 벽을 끊지 않은(블록만 있는) 통로 수. 옛 skippedPasses(다시
+// 들여오면 사라지는 통로 수)는 모든 통로가 PASS 블록으로 돌아온 뒤로 늘 0이라 지웠다(2026-10-12 · 최종 리뷰 X-6 · N3-3).
 export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } = {}) {
   const floor = project?.floors?.[index] ?? project?.floors?.[0] ?? { walls: [], rooms: [], items: [] };
   // 거의 축에 나란한 벽은 정확히 맞춘다(rectify — 1 mm 안팎의 기울기가 다시 들여올 때 T자 접점을 갈라놓았다).
@@ -239,7 +239,9 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } =
     const lines = nameLines(room.name), p = interiorPoint(pts);
     const top = p[1] + (lines.length - 1) * NAME_H * 0.75 + NAME_H * 0.6;
     lines.forEach((t, i) => entities.push(mtext('ROOM-TEXT', [p[0], top - i * NAME_H * 1.5], NAME_H, t)));
-    const area = roomArea(room, project.areaMode === 'center' ? 'center' : 'net');
+    // 면적은 표시 방식(areaMode)과 상관없이 늘 도면 기준(벽 중심선) 넓이다(2026-10-12 · 최종 리뷰 X-6 · M3-1): 다시 들여오면 가져오기가 면적
+    // 표기를 중심선 넓이로 읽는다(reconcile.fits) — 손으로 그린 프로젝트의 기본 'net'을 따르면 안목 넓이(합성 평면 24.00 → 21.50)가 적혔다.
+    const area = roomArea(room, 'center');
     if (area > 0) entities.push(mtext('ROOM-TEXT', [p[0], top - (lines.length - 1) * NAME_H * 1.5 - NAME_H * 1.2], AREA_H, `${area.toFixed(2)}㎡`));
   }
   // 상자: 벽·구획선의 끝점. 제목은 왼쪽 위 모서리에 붙여 위로 쓴다(삽입점이 상자 안이어야 가져오기의 ROI 문자로 남는다).
@@ -253,5 +255,5 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } =
   if (!any) box.splice(0, 4, 0, 0, 0, 0);
   // ⑤ 기준선 치수(dxfExportDims.js) — 다시 들여온 방의 도면 기준 넓이가 같게.
   const dims = any ? refDimensions(walls.map(w => ({ ...w, a: D(w.a), b: D(w.b) })), box) : { blocks: [], entities: [] };
-  return { text: dxfDocument({ blocks: [...blocks.values(), ...dims.blocks], entities: [...entities, ...dims.entities], box }), skippedPasses: 0, uncutPasses: skipped.length };
+  return { text: dxfDocument({ blocks: [...blocks.values(), ...dims.blocks], entities: [...entities, ...dims.entities], box }), uncutPasses: skipped.length };
 }

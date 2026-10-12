@@ -277,7 +277,8 @@ test('픽스처 왕복: 벽 11개가 끝점까지 같고 방·기둥·창·통�
   // 못한다 — 벽을 끊지 않는다(끊으면 동쪽 벽 끝 1.7 m가 사라지고, 꺾임 앞 통로는 왕복마다 50 mm씩 밀린다). 2026-10-12 리뷰 concern 2부터
   // 통로는 모두 `PASS-폭-두께` 블록이라 넷 다 돌아오고(사라지는 통로 0), 끊은 하나의 틈 통로와 블록 통로는 하나로 앉는다.
   const passes = A.opens.filter(o => o.kind === 'pass');
-  expect([passes.length, built.skippedPasses, built.uncutPasses]).toEqual([4, 0, 3]);
+  expect([passes.length, built.uncutPasses]).toEqual([4, 3]);
+  expect('skippedPasses' in built).toBe(false);                    // 늘 0이던 죽은 값은 지웠다(2026-10-12 · 최종 리뷰 X-6 · N3-3)
   expect(B.opens.filter(o => o.kind === 'pass')).toHaveLength(4);
   expect(passes.filter(o => !matchOpen(o, B.opens))).toEqual([]);
 });
@@ -297,4 +298,16 @@ test('실명·면적은 따로 적는다(문자 레이어 · 높이 200~600 · "
   expect(room.map(t => t[1]).sort()).toEqual(['24.00㎡', '24.00㎡', '사무실', '창고']);
   expect(room.every(t => t[2] >= 200 && t[2] <= 600)).toBe(true);
   expect(texts.find(t => t[0] === 'TITLE')).toEqual(['TITLE', '합성 평면', 1000]);
+});
+
+// 2026-10-12 · 최종 리뷰 X-6(M3-1): 면적 글자가 화면의 면적 표시 방식(project.areaMode)을 따라, 손으로 그린 프로젝트(기본 'net')는 안목 넓이를
+// 적었다 — 다시 들여오면 가져오기는 면적 표기를 도면 기준(중심선) 넓이로 읽는다(reconcile · AREA_TOL 5 %). 내보내기는 늘 중심선 넓이다.
+test('면적 글자는 표시 방식과 상관없이 벽 중심선 넓이다 — 다시 들여온 도면 기준 넓이가 같다', () => {
+  const label = p => ents(pairs(exportDxf(p)), 'MTEXT').filter(r => r[8] === 'ROOM-TEXT' && /㎡$/.test(r[1])).map(r => r[1]).sort();
+  const net = synthetic();
+  net.areaMode = 'net';
+  expect(label(net)).toEqual(label(synthetic()));
+  expect(label(net)).toEqual(['24.00㎡', '24.00㎡']);
+  const A = digest({ project: net }), r = importText(exportDxf(net)), B = digest(r, r.back);
+  for (const [n, v] of A.areas) expect(Math.abs(B.areas.get(n) - v)).toBeLessThanOrEqual(0.05);
 });

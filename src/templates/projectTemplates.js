@@ -36,8 +36,15 @@ const writeAll = list => { try { localStorage.setItem(TEMPLATE_KEY, JSON.stringi
 
 // 배경 이미지는 dataURL이라 용량이 커서 뺀다. 같은 이름의 템플릿은 덮어쓴다.
 // 저장이 실패하면(용량 초과 등) null을 돌려준다.
+// DXF 가져오기 기록(meta.dxfImport)도 뺀다(2026-10-12 · 계획 12 최종 리뷰 X-8 · M10-3): 그 기록은 "이 프로젝트를 가져온 직후"의 스냅숏이라,
+// 템플릿에 실리면 그 템플릿으로 시작한 모든 프로젝트가 남의 가져오기를 기준으로 교정 기록을 냈다. 다른 meta 필드는 그대로 두고,
+// 가져오기 기록뿐이던 meta는 통째로 뺀다(옛 파일처럼 meta 없는 템플릿).
 export function saveTemplate(name, project) {
   const clean = { ...structuredClone(project), background: null };
+  if (clean.meta && typeof clean.meta === 'object' && 'dxfImport' in clean.meta) {
+    delete clean.meta.dxfImport;
+    if (!Object.keys(clean.meta).length) delete clean.meta;
+  }
   clean.name = String(name ?? '').trim() || project.name || '템플릿';
   // id에 난수 4자를 붙인다: 같은 밀리초에 두 번 저장하면 Date.now()만으로는 겹친다.
   const entry = { id: `tpl_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: clean.name, savedAt: new Date().toISOString(), project: clean };

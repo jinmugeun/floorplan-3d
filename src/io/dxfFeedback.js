@@ -126,14 +126,19 @@ function diffItems(before, after, walls) {
 
 // 요약 수. dividers*는 walls*의 부분집합(구획선 = virtual 벽)이고 changes에는 한 번만 센다. changes는 목록 항목의 합이라 종류와 크기를
 // 함께 바꾼 아이템은 retyped·resized 두 번 센다(목록이 둘이다).
+// columnsDeleted(2026-10-12 · 최종 리뷰 X-7 · M10-1): itemsDeleted 중 기둥(스냅숏 제품 `column-…`) — dividers*처럼 부분집합이라 changes에 다시
+// 더하지 않는다. 알림이 지운 기둥을 "문·창 지움"으로 세던 것을 가른다.
+const isColumn = productId => /^column-/.test(String(productId ?? ''));
 function summarize(snap, walls, rooms, items) {
   const virt = new Set(snap.walls.filter(w => w.virtual).map(w => w.id));
+  const cols = new Set(snap.items.filter(it => isColumn(it.productId)).map(it => it.id));
   const s = {
     importedWalls: snap.walls.length, importedRooms: snap.rooms.length, importedItems: snap.items.length,
     wallsDeleted: walls.deleted.length, wallsAdded: walls.added.length, wallsMoved: walls.moved.length,
     dividersDeleted: walls.deleted.filter(id => virt.has(id)).length, dividersAdded: walls.added.filter(w => w.virtual).length,
     roomsRenamed: rooms.renamed.length, roomsAdded: rooms.added.length, roomsDeleted: rooms.deleted.length,
-    itemsDeleted: items.deleted.length, itemsMoved: items.moved.length, itemsResized: items.resized.length, itemsRetyped: items.retyped.length, itemsAdded: items.added.length,
+    itemsDeleted: items.deleted.length, columnsDeleted: items.deleted.filter(id => cols.has(id)).length,
+    itemsMoved: items.moved.length, itemsResized: items.resized.length, itemsRetyped: items.retyped.length, itemsAdded: items.added.length,
   };
   s.changes = s.wallsDeleted + s.wallsAdded + s.wallsMoved + s.roomsRenamed + s.roomsAdded + s.roomsDeleted
     + s.itemsDeleted + s.itemsMoved + s.itemsResized + s.itemsRetyped + s.itemsAdded;

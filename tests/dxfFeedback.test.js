@@ -71,7 +71,7 @@ test('고친 것이 없으면 목록은 모두 비고 요약은 0이다', () => 
   expect(fb.summary).toEqual({
     importedWalls: 6, importedRooms: 3, importedItems: 3,
     wallsDeleted: 0, wallsAdded: 0, wallsMoved: 0, dividersDeleted: 0, dividersAdded: 0,
-    roomsRenamed: 0, roomsAdded: 0, roomsDeleted: 0, itemsDeleted: 0, itemsMoved: 0, itemsResized: 0, itemsRetyped: 0, itemsAdded: 0, changes: 0,
+    roomsRenamed: 0, roomsAdded: 0, roomsDeleted: 0, itemsDeleted: 0, columnsDeleted: 0, itemsMoved: 0, itemsResized: 0, itemsRetyped: 0, itemsAdded: 0, changes: 0,
   });
   // 받는 쪽이 지운 id를 풀 수 있게 가져온 직후의 스냅숏을 함께 싣는다(id는 uid라 다시 가져와도 같은 값이 나오지 않는다).
   expect(fb.snapshot).toEqual(withMeta(imported()).meta.dxfImport.snapshot);
@@ -212,8 +212,28 @@ test('가져오기 배선부터 내보내기까지: 교체한 프로젝트가 �
 test('교정 기록 문구', () => {
   expect(DXF_FEEDBACK_MENU).toBe('교정 기록 내보내기');
   expect(DXF_FEEDBACK_NONE).toBe('DXF로 가져온 프로젝트가 아닙니다');
-  const zero = { wallsDeleted: 0, wallsAdded: 0, wallsMoved: 0, roomsRenamed: 0, itemsDeleted: 0, itemsMoved: 0, itemsRetyped: 0, changes: 0 };
+  const zero = buildDxfFeedback(withMeta(imported()), { now: NOW }).summary;
   expect(DXF_FEEDBACK_EXPORTED(zero)).toBe('교정 기록을 내보냈습니다 — 가져온 뒤 고친 것이 없습니다');
-  expect(DXF_FEEDBACK_EXPORTED({ ...zero, wallsDeleted: 2, wallsAdded: 1, wallsMoved: 3, roomsRenamed: 4, itemsDeleted: 5, itemsMoved: 6, itemsRetyped: 7, changes: 28 }))
-    .toBe('교정 기록을 내보냈습니다 — 벽 지움 2 · 그림 1 · 옮김 3 · 방 이름 4 · 문·창 지움 5 · 옮김 6 · 종류 7');
+  // 합계를 먼저, 0이 아닌 범주만(2026-10-12 · 최종 리뷰 X-7 · M10-1). 지운 기둥은 "문·창"이 아니라 "기둥"으로 센다(columnsDeleted ⊂ itemsDeleted).
+  expect(DXF_FEEDBACK_EXPORTED({ ...zero, wallsDeleted: 2, wallsAdded: 1, wallsMoved: 3, roomsRenamed: 4, itemsDeleted: 5, columnsDeleted: 1, itemsMoved: 6, itemsRetyped: 7, changes: 28 }))
+    .toBe('교정 기록을 내보냈습니다 — 고친 것 28건: 벽 지움 2 · 벽 그림 1 · 벽 옮김 3 · 방 이름 4 · 문·창 지움 4 · 기둥 지움 1 · 문·창 옮김 6 · 종류 7');
+});
+
+// 2026-10-12 · 최종 리뷰 X-7(M10-1): 토스트가 지운 기둥을 "문·창 지움"으로 세고, 새 방·없어진 방·크기·추가를 숨겨 changes가 0이 아니어도
+// "벽 지움 0 · 그림 0 · …"처럼 0만 늘어놓았다.
+test('교정 기록 알림: 지운 기둥은 기둥으로 · 숨던 범주(방 생김·없어짐 · 크기 · 추가)도 0이 아니면 나온다 · 0인 범주는 없다', () => {
+  const f = imported();
+  f.items = f.items.filter(it => it.id !== 'c1');                                       // 기둥만 지웠다
+  let s = buildDxfFeedback(withMeta(f), { now: NOW }).summary;
+  expect([s.itemsDeleted, s.columnsDeleted, s.changes]).toEqual([1, 1, 1]);
+  expect(DXF_FEEDBACK_EXPORTED(s)).toBe('교정 기록을 내보냈습니다 — 고친 것 1건: 기둥 지움 1');
+  const g = imported();
+  g.rooms = [...g.rooms, R('r8', '교무실', 30)];                                         // 새 방 하나
+  g.items = g.items.map(it => (it.id === 'c1' ? { ...it, size: [500, 500, 2300] } : it));  // 기둥 크기
+  g.items.push(I('d2', 'door', 'door-swing-1000', 'w2', 0.5, [1000, 40, 2100]));          // 새 문
+  s = buildDxfFeedback(withMeta(g), { now: NOW }).summary;
+  expect(s.changes).toBe(3);
+  const msg = DXF_FEEDBACK_EXPORTED(s);
+  expect(msg).toBe('교정 기록을 내보냈습니다 — 고친 것 3건: 새 방 1 · 문·창·기둥 크기 1 · 문·창·기둥 추가 1');
+  expect(msg).not.toMatch(/ 0( |$)/);
 });

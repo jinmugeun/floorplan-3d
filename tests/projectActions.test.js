@@ -10,7 +10,9 @@ import { rectWalls } from '../src/geom/walls.js';
 import { createProjectActions } from '../src/app/projectActions.js';
 import { createDirtyTracker, createSaveIndicator } from '../src/app/dirty.js';
 import { DXF_EXPORTED, DXF_FEEDBACK_NONE, DXF_FEEDBACK_EXPORTED } from '../src/ui/messages.js';
+import * as M from '../src/ui/messages.js';
 import { buildImportMeta } from '../src/io/dxfFeedback.js';
+import { saveTemplate, templateProject } from '../src/templates/projectTemplates.js';
 
 function setup({ dirty = true, restored = null } = {}) {
   const store = createStore(createEmptyProject());
@@ -91,6 +93,30 @@ test('정규화 DXF 내보내기는 .dxf 파일을 내려받고 알린다', asyn
   expect(names[0]).toMatch(/\.dxf$/);
   expect(blobs[0].type).toBe('application/dxf');
   expect(a.toasts).toEqual([DXF_EXPORTED]);
+  // 2026-10-12 · 최종 리뷰 X-6(N3-3): 통로 "n곳 읽히지 않음" 알림은 죽은 코드였다(skippedPasses가 늘 0) — 문구째 지웠다.
+  expect(M.DXF_EXPORTED_SKIPPED).toBeUndefined();
+});
+
+// 2026-10-12 · 최종 리뷰 X-6(M3-3): 내보내기 코드는 누를 때 불러오는 청크라, 탭을 연 채 재배포를 지나면 "Failed to fetch dynamically imported
+// module"로 실패한다 — 그 거절이 토스트 없이 사라졌다. 청크 로드 실패든 내보내기 예외든 알리고, 파일은 쓰지 않으며, 동작은 던지지 않는다.
+test('정규화 DXF 내보내기가 실패하면(청크 로드 실패 · 내보내기 예외) 알리고 파일을 쓰지 않는다', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  for (const factory of [
+    () => { throw new TypeError('Failed to fetch dynamically imported module'); },
+    () => ({ buildDxf: () => { throw new Error('boom'); } }),
+  ]) {
+    vi.resetModules();
+    vi.doMock('../src/io/dxfExport.js', factory);
+    const a = setup();
+    addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
+    await expect(a.actions.exportDxf()).resolves.toBeUndefined();
+    expect(a.toasts).toEqual([M.DXF_EXPORT_FAILED]);
+    vi.doUnmock('../src/io/dxfExport.js');
+  }
+  expect(click).not.toHaveBeenCalled();
+  click.mockRestore(); warn.mockRestore();
+  expect(typeof M.DXF_EXPORT_FAILED).toBe('string');
 });
 
 // 2026-10-12 · 계획 12 Task 10: 교정 기록은 DXF로 가져온 프로젝트(meta.dxfImport)에서만 — 아니면 알리기만 하고 아무것도 쓰지 않는다.
@@ -117,6 +143,27 @@ test('교정 기록 내보내기는 <이름>-dxf-feedback.json(application/json)
   expect(names[0]).toMatch(/^새 프로젝트_\d{8}-\d{4}-dxf-feedback\.json$/);
   expect(blobs[0].type).toBe('application/json');
   expect(a.toasts).toEqual([DXF_FEEDBACK_EXPORTED({ changes: 0 })]);
+});
+
+// 2026-10-12 · 최종 리뷰 X-8(M10-3): 템플릿이 meta.dxfImport(가져온 직후 스냅숏 · 파일 이름)를 복사해, 그 템플릿으로 시작한 모든 프로젝트가
+// 남의 가져오기를 기준으로 "교정 기록"을 냈다. 템플릿에는 가져오기 기록을 싣지 않는다(다른 meta 필드는 그대로 · 원 프로젝트도 그대로).
+test('템플릿으로 저장한 프로젝트에서 시작하면 교정 기록이 없다 — "DXF로 가져온 프로젝트가 아닙니다"', () => {
+  const a = setup();
+  addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
+  a.store.swap({ ...a.store.get(), meta: { dxfImport: buildImportMeta({ project: a.store.get(), fileName: 'a.dxf', opts: { layers: ['WAL'] } }), other: { keep: 1 } } });
+  const saved = saveTemplate('가져온 평면', a.store.get());
+  expect(a.store.get().meta.dxfImport.fileName).toBe('a.dxf');                  // 원 프로젝트의 기록은 그대로다
+  const p = templateProject(saved.id);
+  expect(p.meta).toEqual({ other: { keep: 1 } });
+  a.store.swap(p);
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  a.actions.exportDxfFeedback();
+  expect(click).not.toHaveBeenCalled();
+  click.mockRestore();
+  expect(a.toasts).toEqual([DXF_FEEDBACK_NONE]);
+  // meta가 가져오기 기록뿐이면 meta째 뺀다(옛 파일처럼 meta 없는 템플릿).
+  a.store.swap({ ...a.store.get(), meta: { dxfImport: buildImportMeta({ project: a.store.get(), fileName: 'b.dxf' }) } });
+  expect('meta' in templateProject(saveTemplate('둘째', a.store.get()).id)).toBe(false);
 });
 
 // 리뷰 M1: 새로 만든 직후 상단 바가 "HH:MM 자동 저장됨"이라고 적혀 있었다(저장은 일어나지 않았다).
