@@ -6,7 +6,7 @@ import { applyMaterial, setWallRegions } from '../src/state/materialOps.js';
 import { rectWalls, wallLength } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
 import { materialById } from '../src/materials/catalog.js';
-import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2 } from '../src/io/estimate.js';
+import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2, DRAWING_CATEGORY } from '../src/io/estimate.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
 import { estimateLines, estimateCsvText, csvFooter, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE } from '../src/io/estimateTable.js';
 
@@ -242,6 +242,57 @@ test('CSV는 머리글 1행 + 데이터이고 모든 줄이 8열이다', () => {
   expect(lines.at(-1)).toContain('2026-09-23');
   expect(lines.at(-1)).toContain('단가는 예시 값(2026-09 기준)');
   expect(lines.at(-1).endsWith(',,,,,,,')).toBe(true); // 꼬리 주석도 8열이다
+});
+
+// 계획 13 Task 5 · 사전 검토 I-1(2026-10-12): 제품 행을 productId 하나로 묶고 첫 아이템의 이름·크기를 썼더니
+// DXF로 가져온 도면 기구(equip-generic ≈ 205개, 이름 = 도면 블록 이름)가 "운반카 튀김 620 · 수량 205" 한 줄로 뭉쳤다.
+// 묶음 키는 productId·이름·크기다 — 행의 productId 필드는 제품 id 그대로다(기존 find(r => r.productId === …)가 산다).
+describe('제품 행 묶음: productId · 이름 · 크기(계획 13 Task 5)', () => {
+  const gen = (name, size, pos = [1000.5, 1000.25]) => createItem(productById('equip-generic'), { pos, name, size });
+  test('이름이 다른 도면 기구 둘은 두 행, 이름·크기가 같으면 한 행 수량 2', () => {
+    const items = [gen('운반카 튀김 620', [620, 720, 850]), gen('컵자동세척기', [900.5, 600, 850]), gen('운반카 튀김 620', [620, 720, 850], [3000, 1000])];
+    const rows = estimateRows({ walls: [], rooms: [], items });
+    expect(rows.products.map(r => [r.productId, r.name, r.code, r.size, r.qty, r.unitPrice, r.total])).toEqual([
+      ['equip-generic', '운반카 튀김 620', 'DR-EQ', '620×720×850', 2, 0, 0],
+      ['equip-generic', '컵자동세척기', 'DR-EQ', '901×600×850', 1, 0, 0],
+    ]);
+    expect(rows.total).toBe(0);                                              // 도면 기구는 0원 — 합계에 영향 없음
+    // 같은 이름이라도 크기가 다르면 다른 행이다(도면의 다른 기구).
+    const two = estimateRows({ walls: [], rooms: [], items: [gen('작업대', [1500, 750, 850]), gen('작업대', [1800, 750, 850])] });
+    expect(two.products.map(r => [r.size, r.qty])).toEqual([['1500×750×850', 1], ['1800×750×850', 1]]);
+  });
+
+  test('제품으로 맞춘 기구도 이름·크기별 행이고 금액은 단가 × 행 수량이다', () => {
+    const sink = productById('sink-single');
+    const items = [
+      createItem(sink, { pos: [1000.5, 1000.25], name: '세정대 1조 900-750', size: [900, 750, 850] }),
+      createItem(sink, { pos: [3000.5, 1000.25], name: '세정대 1조 1500-750', size: [1500, 750, 850] }),
+      createItem(sink, { pos: [5000.5, 1000.25] }),                         // 손으로 놓은 것(이름 = 제품명)
+      createItem(sink, { pos: [7000.5, 1000.25] }),
+    ];
+    const rows = estimateRows({ walls: [], rooms: [], items });
+    expect(rows.products.map(r => [r.productId, r.name, r.qty])).toEqual([
+      ['sink-single', sink.name, 2],
+      ['sink-single', '세정대 1조 1500-750', 1],
+      ['sink-single', '세정대 1조 900-750', 1],
+    ].sort((a, b) => a[1].localeCompare(b[1], 'ko')));
+    for (const r of rows.products) expect(r.total).toBe(r.qty * sink.price);
+    expect(rows.total).toBe(4 * sink.price);                                 // 행이 갈라져도 합계는 같다
+  });
+
+  test('견적 표·CSV: 도면 기구 행은 구분이 "도면 기구"이고 제품 행 뒤에 이름별로 놓인다', () => {
+    expect(productById('equip-generic').category).toBe(DRAWING_CATEGORY);   // 카탈로그(catalogDrawing.js)와 같은 글자
+    const items = [gen('컵자동세척기', [900, 600, 850]), createItem(productById('sofa-3'), { pos: [5000, 5000] }), gen('운반카 튀김 620', [620, 720, 850])];
+    const rows = estimateRows({ walls: [], rooms: [], items });
+    expect(estimateLines(rows).map(l => [l.kind, l.name, l.qty, l.total])).toEqual([
+      ['제품', '3인 소파', 1, 890000],
+      [DRAWING_CATEGORY, '운반카 튀김 620', 1, 0],
+      [DRAWING_CATEGORY, '컵자동세척기', 1, 0],
+    ]);
+    const csv = estimateCsvText(rows);
+    expect(csv).toContain('\n도면 기구,운반카 튀김 620,DR-EQ,620×720×850,1,개,0,0\n');
+    expect(csv.slice(1).split('\n').every(l => (l.match(/,/g) ?? []).length === 7)).toBe(true);   // 8열 그대로
+  });
 });
 
 test('꼬리 한 줄에 프로젝트·작성일·단가 주석이 모두 든다', () => {

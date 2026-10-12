@@ -7,6 +7,7 @@ import { materialById } from '../materials/catalog.js';
 import { faceArea, explicitMat } from '../state/materialOps.js';
 import { wallLength } from '../geom/walls.js';
 import { segmentLength } from '../geom/ducts.js';
+import { DRAWING_CATEGORY } from './estimateTable.js';
 
 const round2 = n => Math.round(n * 100) / 100;
 
@@ -37,17 +38,33 @@ export function ductRows(floor) {
     .sort((a, b) => a.system.localeCompare(b.system, 'ko') || a.size.localeCompare(b.size));
 }
 
-export function estimateRows(floor) {
-  const prod = new Map();
-  for (const it of floor.items ?? []) {
-    if (it.kind === 'opening' || it.hidden) continue;     // 벽 구멍은 살 물건이 아니고, 숨긴 것은 세지 않는다
+// 견적 표·CSV의 "구분" 칸은 도면 기구 행을 '제품' 대신 이 이름으로 부른다(정의는 잎 모듈 estimateTable.js).
+export { DRAWING_CATEGORY };
+
+// 제품 행(견적서·시방서 공용). 묶음 키는 `productId|이름|규격`이고 행의 productId 필드는 제품 id 그대로다.
+// 왜(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-1): productId 하나로 묶고 첫 아이템의 이름·크기를 행에 썼더니,
+// 사동중 가져오기의 도면 기구(equip-generic ≈ 205개 — 이름 = 도면 블록 이름)가 "운반카 튀김 620 · 수량 205" 한 줄로,
+// 제품으로 맞춘 `세정대 1조 900-750`·`1500-750`이 첫 크기 한 줄로 뭉쳤다. 이름·크기가 같은 것만 수량으로 센다 —
+// 손으로 놓은 아이템은 이름 = 제품명이고 크기도 제품 크기라 지금과 같은 행이 된다(크기를 바꾼 것만 따로 선다).
+// 시방서(specSheet.js)가 같은 함수를 써서 두 문서의 행·수량이 한 키에서 나온다.
+// 순서: 일반 제품 → 도면 기구(가격 0인 도면 요소를 끝에 모은다) → 이름 → 규격.
+export function productRows(items) {
+  const m = new Map();
+  for (const it of items ?? []) {
+    if (!it || it.kind === 'opening' || it.hidden) continue;   // 벽 구멍은 살 물건이 아니고, 숨긴 것은 세지 않는다
     const p = productById(it.productId);
-    const key = it.productId || it.id;
-    const row = prod.get(key);
+    const name = it.name || p?.name || '제품', size = fmtSize(it.size ?? p?.size ?? [0, 0, 0]);
+    const key = it.productId ? `${it.productId}|${name}|${size}` : it.id;
+    const row = m.get(key);
     if (row) { row.qty += 1; row.total = row.qty * row.unitPrice; continue; }
     const unitPrice = p?.price ?? 0;
-    prod.set(key, { productId: key, name: it.name || p?.name || '제품', code: it.code || p?.code || '', size: fmtSize(it.size), qty: 1, unitPrice, total: unitPrice });
+    m.set(key, { key, productId: it.productId || it.id, name, code: it.code || p?.code || '', size, category: p?.category ?? '', qty: 1, unitPrice, total: unitPrice });
   }
+  const drawn = r => (r.category === DRAWING_CATEGORY ? 1 : 0);
+  return [...m.values()].sort((a, b) => drawn(a) - drawn(b) || a.name.localeCompare(b.name, 'ko') || a.size.localeCompare(b.size, 'ko', { numeric: true }));
+}
+
+export function estimateRows(floor) {
 
   const area = new Map();
   const add = (a, m2) => { if (a?.id && m2 > 0) area.set(a.id, (area.get(a.id) ?? 0) + m2); };
@@ -84,7 +101,7 @@ export function estimateRows(floor) {
     const areaM2 = round2(m2), unitPrice = m?.pricePerM2 ?? 0;
     return { id, name: m?.name ?? id, areaM2, unitPrice, total: Math.round(areaM2 * unitPrice) };
   }).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-  const products = [...prod.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const products = productRows(floor.items);
   // ducts는 빈 배열이어도 늘 함께 돌려준다 — estimateCsv·estimateDialog가 rows.ducts를 읽는 자리를 한 곳으로 둔다.
   const ducts = ductRows(floor);
   const total = products.reduce((s, r) => s + r.total, 0) + materials.reduce((s, r) => s + r.total, 0) + ducts.reduce((s, r) => s + r.total, 0);

@@ -17,12 +17,19 @@ export const EST_TABLE_COLUMNS = ['구분', '이름', '코드', '규격', '길�
 export const PRICE_NOTE = '단가는 예시 값(2026-09 기준)';
 export const EST_EMPTY = '배치된 제품·마감재·덕트가 없습니다.';
 const KIND_LABEL = { supply: '급기', exhaust: '배기' };
+// DXF 가져오기의 일반 상자(equip-generic)가 든 카테고리 — catalogDrawing.js와 같은 글자다(estimate.test.js가 못 박는다).
+// 정의를 이 잎 모듈에 두는 까닭: estimate.js가 이 파일을 다시 내보내므로, 거꾸로 import하면 순환이 된다.
+export const DRAWING_CATEGORY = '도면 기구';
 
-// estimateRows(io/estimate.js)의 결과를 한 벌의 행으로 편다. 순서는 제품 → 마감재 → 덕트다.
+// estimateRows(io/estimate.js)의 결과를 한 벌의 행으로 편다. 순서는 제품 → 도면 기구 → 마감재 → 덕트다.
+// 도면 기구(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-1): DXF 가져오기의 일반 상자는 "구분"이 '도면 기구'다 — 0원 행이
+// 사는 물건(제품)과 섞여 보이지 않게. 열은 그대로 여덟 개다(§16.2): 구분 칸의 글자만 다르다. 행은 productRows가 이미
+// 제품 뒤로 모아 둔다(이름별 — 한 줄로 뭉치지 않는다).
 export function estimateLines(rows) {
   const out = [];
   for (const r of rows?.products ?? []) {
-    out.push({ kind: '제품', name: r.name, code: r.code, spec: r.size, lengthText: '', qty: r.qty, unit: '개', unitPrice: r.unitPrice, total: r.total });
+    const kind = r.category === DRAWING_CATEGORY ? DRAWING_CATEGORY : '제품';
+    out.push({ kind, name: r.name, code: r.code, spec: r.size, lengthText: '', qty: r.qty, unit: '개', unitPrice: r.unitPrice, total: r.total });
   }
   for (const r of rows?.materials ?? []) {
     // 마감재의 "코드"는 카탈로그 id다(화면에도 그렇게 보여 왔다). 규격은 없다.

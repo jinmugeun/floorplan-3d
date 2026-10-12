@@ -74,6 +74,23 @@ describe('시방서 HTML', () => {
     expect([qty(), estQty()]).toEqual(['2', 2]);   // 다시 보이게 하면 둘 다 돌아온다
   });
 
+  // 계획 13 Task 5 · 사전 검토 I-1(2026-10-12): 시방서도 견적서와 같은 키(productId · 이름 · 크기)로 묶는다 —
+  // productId로만 묶으면 가져온 도면 기구 수백 개가 첫 이름 한 줄로 뭉쳤다. 행마다 두 문서의 수량이 같다.
+  test('도면 기구는 이름·크기별 행이고 견적서와 행마다 수량이 같다', () => {
+    const store = createStore(createEmptyProject('사동중'));
+    addWalls(store, rectWalls([0, 0], [8000.5, 6000.25], 200));
+    const gen = productById('equip-generic');
+    addItem(store, createItem(gen, { pos: [1000.5, 1000.25], name: '운반카 튀김 620', size: [620, 720, 850] }));
+    addItem(store, createItem(gen, { pos: [3000.5, 1000.25], name: '운반카 튀김 620', size: [620, 720, 850] }));
+    addItem(store, createItem(gen, { pos: [5000.5, 1000.25], name: '컵자동세척기', size: [900, 600, 850] }));
+    const html = specHtml({ project: store.get() });
+    const row = name => new RegExp(`<td>${name}</td><td>DR-EQ</td><td>([^<]*)</td><td>(\\d+)</td>`).exec(html)?.slice(1);
+    expect(row('운반카 튀김 620')).toEqual(['620×720×850', '2']);
+    expect(row('컵자동세척기')).toEqual(['900×600×850', '1']);
+    const est = estimateRows(activeFloor(store.get())).products;
+    expect(est.map(r => [r.name, String(r.qty)])).toEqual([['운반카 튀김 620', '2'], ['컵자동세척기', '1']]);
+  });
+
   test('프로젝트 이름과 층 이름을 머리글에 쓰고 HTML을 이스케이프한다', () => {
     const p = project();
     p.name = '<img src=x onerror="alert(1)">';

@@ -3,8 +3,8 @@
 // **숨긴 것은 세지 않는다** — 풍량 집계(vent/airflow.js)·견적서(io/estimate.js)와 같은 규칙이다(§12.5에서 통일했다).
 // 제품 목록과 풍량 표가 같은 규칙을 써야 한다: 한쪽만 숨김을 빼면 같은 도면에서 뽑은 두 산출물이
 // 서로 다른 수량을 말한다(견적서 수량은 줄었는데 시방서 제품 목록만 그대로 남는 식이다).
-import { productById, fmtSize } from '../products/catalog.js';
 import { materialById } from '../materials/catalog.js';
+import { productRows } from './estimate.js';   // 제품 행 묶음은 견적서와 한 함수(계획 13 Task 5)
 import { wallLength } from '../geom/walls.js';
 import { elevationFrame, planExtent } from '../geom/elevation.js';   // 입면 프레임의 정본(리뷰 M-7)
 import { fmtLen, fmtArea } from '../util/units.js';
@@ -50,16 +50,10 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   const len = v => esc(fmtLen(v, units));
   const pyeong = !!project.settings?.pyeong;
 
-  // 같은 제품은 한 줄로 합치고 수량만 센다(개구부는 제품이 아니다. 숨긴 것도 빼면 아래 풍량 표와 수량이 맞는다).
-  const productRows = [...(f.items ?? []).reduce((m, it) => {
-    if (it.kind === 'opening' || it.hidden) return m;
-    const p = productById(it.productId);
-    const key = it.productId || it.id;
-    const row = m.get(key) ?? { name: it.name || p?.name || '제품', code: it.code || p?.code || '', size: fmtSize(it.size ?? p?.size ?? [0, 0, 0]), qty: 0 };
-    row.qty += 1;
-    return m.set(key, row);
-  }, new Map()).values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-    .map(r => [esc(r.name), esc(r.code), esc(r.size), r.qty]);
+  // 같은 제품·이름·규격은 한 줄로 합치고 수량만 센다(개구부는 제품이 아니다. 숨긴 것도 빼면 아래 풍량 표와 수량이 맞는다).
+  // 묶음은 견적서와 **같은 함수**(estimate.productRows — 2026-10-12 · 계획 13 Task 5 · 사전 검토 I-1): productId로만
+  // 묶던 때는 가져온 도면 기구 수백 개가 첫 이름 한 줄로 뭉쳤다. 두 문서의 행·수량이 한 키에서 나온다.
+  const productTable = productRows(f.items).map(r => [esc(r.name), esc(r.code), esc(r.size), r.qty]);
 
   const roomRows = (f.rooms ?? []).map(r => [
     esc(r.name || '이름 없는 공간'), esc(typeLabel(r.type)), esc(fmtArea(roomArea(r, project.areaMode), { pyeong })), len(r.height),
@@ -104,7 +98,7 @@ export function specHtml({ project, floorIndex = 0, images = {}, options = {} })
   const parts = {
     plan: on('plan') && images.plan ? `<h2>평면도</h2><div class="figs">${img(images.plan, '평면도')}</div>` : '',
     elevations: on('elevations') && elevFigs ? `<h2>입면도</h2><div class="figs elev">${elevFigs}</div>` : '',
-    products: on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H, mm)', '수량'], productRows)}` : '',
+    products: on('products') ? `<h2>제품 목록</h2>${table(['품명', '코드', '규격(W×D×H, mm)', '수량'], productTable)}` : '',
     rooms: on('rooms') ? `<h2>공간 목록</h2>${table(['공간', '타입', '면적', `높이(${uLabel})`, '바닥 마감', '천장 마감'], roomRows)}` : '',
     walls: on('walls') ? `<h2>벽 목록</h2>${table(['기호', `길이(${uLabel})`, `두께(${uLabel})`, `높이(${uLabel})`, '내벽 마감', '외벽 마감'], wallRows)}` : '',
     airflow: on('airflow') ? `<h2>풍량 집계</h2>
