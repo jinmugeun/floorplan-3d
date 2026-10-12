@@ -157,6 +157,27 @@ test('난간으로 닫은 발코니(구획선)는 정규화 DXF 왕복 뒤에도
   expect(r.project.floors[0].walls.filter(w => !w.virtual)).toHaveLength(built.project.floors[0].walls.filter(w => !w.virtual).length);
 });
 
+// 2026-10-12 · 최종 재리뷰 R-1: DIVIDER가 난간 경로로 돌아온 뒤로, 벽을 일직선으로 이어 낸 면적 표기 구획선이 기준선(axisShift)을 잃었다 —
+// 사동중 왕복에서 실명 방 넓이 14/14 → 12/14(구획선 둘 axisShift −16 → 0 · 식당 386.12 → 385.86). 사동중 꼴: 3 m 벽(250 · 기준선 50)을 이어 17 m
+// 구획선이 16 × 20 m 방을 가른다. 다시 들여온 구획선은 이어진 벽의 기준선을 부호까지 맞게 받고, 두 방의 도면 기준 넓이(161.00 · 159.00)가 그대로다.
+test('벽을 일직선으로 이어 낸 구획선(기준선 있음)은 왕복 뒤에도 그 벽의 기준선을 받는다 — 방 넓이가 그대로다', () => {
+  const stub = { ...makeWall({ a: [8000, 0], b: [8000, 3000], thickness: 250, height: 3000 }), axisShift: 50 };
+  const div = { ...makeWall({ a: [8000, 3000], b: [8000, 20000], thickness: 20, height: 3000 }), virtual: true, axisShift: 50 };
+  const walls = normalizeWalls([...rectWalls([0, 0], [16000, 20000], 200, 3000), stub, div]);
+  const rooms = detectRooms(walls);
+  rooms.forEach(r => { r.name = pointInPolygon([4000, 10000], r.points) ? '서실' : '동실'; });
+  const P0 = normalizeProject({ ...createEmptyProject('기준선'), areaMode: 'center', floors: [{ ...createFloor('1F'), height: 3000, walls, rooms, items: [] }] });
+  const A = digest({ project: P0 });
+  expect([...A.areas.values()].map(v => Math.round(v * 100) / 100).sort()).toEqual([159, 161]);
+  const r = importText(exportDxf(P0)), B = digest(r, r.back), f = r.project.floors[0];
+  const onX = w => Math.abs(r.back(w.a)[0] - 8000) < 2 && Math.abs(r.back(w.b)[0] - 8000) < 2;
+  const [v] = f.walls.filter(w => w.virtual && onX(w)), [s] = f.walls.filter(w => !w.virtual && onX(w));
+  const dir = w => Math.sign(w.b[1] - w.a[1]);
+  expect(Math.abs(s.axisShift)).toBe(50);                                                 // 이어진 벽은 치수(DIM)로 기준선을 되찾는다
+  expect(v.axisShift).toBe(dir(v) === dir(s) ? s.axisShift : -s.axisShift);              // 같은 방향이면 그대로 · 거꾸로면 부호를 뒤집는다
+  for (const [n, a] of A.areas) expect([n, Math.abs(B.areas.get(n) - a) <= 0.05]).toEqual([n, true]);
+});
+
 // 2026-10-12 · 최종 리뷰 X-2(N3-1 · M3-5 · M10-6): 배포 안내(public/dxf-guide.html)가 내보내기와 어긋났다 — 모든 벽에 중심선이 있다고 했고,
 // WALL-2·TITLE이 표에 없었고, DIVIDER는 "쓰지 않음"이라 했고, 교정 기록 파일에 대해 아무 말이 없었다. 안내의 핵심 문장을 코드 값으로 고정한다
 // (내보내기·가져오기가 바뀌어 안내와 다시 어긋나면 여기서 실패한다).

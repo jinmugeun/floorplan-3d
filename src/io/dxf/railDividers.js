@@ -91,6 +91,26 @@ function uncovered(rail, solid, P) {
   return keep.filter(([s, e]) => e - s >= P.railMin).map(([s, e]) => ({ ...rail, t0: s, t1: e, a: at(rail, s), b: at(rail, e), len: e - s }));
 }
 
+// ⑥ 벽 끝에서 같은 직선으로 이어지는 구획선의 기준선(2026-10-12 · 계획 12 최종 재리뷰 R-1): 정규화 DXF의 DIVIDER(면적 표기 구획선)가 이 길로
+// 돌아온 뒤로, 벽을 이어 낸 구획선이 그 벽의 axisShift를 잃어 방의 도면 기준 넓이가 바뀌었다(사동중 왕복 14/14 → 12/14 · 구획선 둘 −16 → 0 ·
+// 식당 386.12 → 385.86 · 조리실 102.30 → 102.52). 예전 길(reconcile.divider · "이어 낸 벽과 같은 기준선")과 같은 규칙: 줄 끝 하나가 기준선 있는
+// 벽의 끝점(1 mm 안)이고, 그 벽과 나란하며(angTol 안) 벽이 그 끝 **뒤쪽**에 있으면(겹치지 않고 이어진다) 그 벽의 axisShift — 방향이 같으면 그대로,
+// 거꾸로면 부호를 뒤집는다(axisShift는 벽의 왼쪽 법선 쪽 거리라 같은 절대 기준선). 없으면 0(예전 그대로). solid = [{ w, v(단위 방향) }].
+function continuedShift(a, b, solid, sinTol) {
+  const d = [b[0] - a[0], b[1] - a[1]], L = Math.hypot(d[0], d[1]);
+  if (!L) return 0;
+  const u = [d[0] / L, d[1] / L];
+  const at = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= 1;
+  for (const [p, out] of [[a, -1], [b, 1]]) {
+    for (const { w, v } of solid) {
+      if (!w.axisShift || Math.abs(cross(u, v)) > sinTol) continue;
+      const far = at(w.a, p) ? w.b : at(w.b, p) ? w.a : null;
+      if (far && dot([far[0] - p[0], far[1] - p[1]], u) * out > 0) return dot(u, v) > 0 ? w.axisShift : -w.axisShift;
+    }
+  }
+  return 0;
+}
+
 // ④ 끝 e에서 바깥 방향 d로(음수면 되돌려) 자기 축을 따라가 선분 A + r·v(r ∈ [0, len]) 몸통에 닿는 점. s = 축 위 이동 거리.
 function meet(e, d, A, v, len, reach) {
   const den = cross(d, v);
@@ -108,6 +128,7 @@ export function railDividers(walls, rails, { height = DXF_PARAMS.height, params:
     const L = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
     return { w, L, v: L ? [(w.b[0] - w.a[0]) / L, (w.b[1] - w.a[1]) / L] : [1, 0] };
   }).filter(x => x.L > 0);
+  const sinTol = Math.sin(P.angTol * Math.PI / 180);
   const pieces = railsOf(segs, P).flatMap(r => uncovered(r, solid, P));
   const ends = pieces.flatMap((pc, i) => [[pc.t0, -1], [pc.t1, 1]].map(([t, k]) => ({ i, e: at(pc, t), d: [pc.u[0] * k, pc.u[1] * k], to: null })));
   // 모서리: 가까운 짝부터 한 번씩.
@@ -160,6 +181,8 @@ export function railDividers(walls, rails, { height = DXF_PARAMS.height, params:
       const v = makeWall({ a, b, thickness: 20, height });
       v.virtual = true;
       v.rail = true;
+      const shift = continuedShift(a, b, solid, sinTol);          // ⑥ 이어 낸 벽과 같은 기준선(최종 재리뷰 R-1)
+      if (shift) v.axisShift = shift;
       out.push(v);
     }
   }

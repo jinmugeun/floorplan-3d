@@ -92,6 +92,32 @@ test('양옆 벽이 난간보다 짧으면(벽 끝이 난간 축 옆) 축은 그
   expect(areas(out)).toEqual([9.6]);
 });
 
+// 2026-10-12 · 계획 12 최종 재리뷰 R-1: 정규화 DXF의 DIVIDER가 난간 경로로 돌아온 뒤로, 벽을 일직선으로 이어 낸 면적 표기 구획선이 그 벽의
+// 기준선(axisShift)을 잃어 방의 도면 기준 넓이가 바뀌었다(사동중 식당 386.12 → 385.86 · 조리실 102.30 → 102.52). 예전 길(reconcile.divider)처럼
+// 벽 끝에서 같은 직선으로 이어지는 구획선은 그 벽의 axisShift를 받는다 — 같은 방향이면 그대로, 거꾸로면 부호를 뒤집는다(같은 절대 기준선).
+test('벽 끝에서 같은 직선으로 이어지는 난간 구획선은 그 벽의 기준선(axisShift)을 받는다 — 방향이 거꾸로면 부호를 뒤집는다', () => {
+  const room = () => [wall(0, 0, 12000, 0), wall(12000, 0, 12000, 8000), wall(12000, 8000, 0, 8000), wall(0, 8000, 0, 0)];
+  const run = (stub, at = 6000) => {
+    const { walls: out, added } = railDividers(normalizeWalls([...room(), stub]), [line(at, 2100, at, 7900)]);
+    expect(added).toBe(1);
+    return { v: out.filter(w => w.virtual), out };
+  };
+  // 벽 a→b가 구획선 쪽(+y)으로 · 같은 기준선을 거꾸로 적은 벽(b→a · −40): 구획선(+y)은 둘 다 +40, 넓이도 같다.
+  const fwd = run({ ...wall(6000, 0, 6000, 2000), axisShift: 40 });
+  const rev = run({ ...wall(6000, 2000, 6000, 0), axisShift: -40 });
+  for (const { v } of [fwd, rev]) {
+    expect(v.map(ends)).toEqual([[[6000, 2000], [6000, 8000]]]);
+    const d = v[0].b[1] - v[0].a[1];
+    expect(Math.sign(d) * v[0].axisShift).toBe(40);                                        // +y로 읽으면 +40(같은 절대 기준선)
+  }
+  expect(areas(rev.out)).toEqual(areas(fwd.out));
+  expect(areas(fwd.out)).not.toEqual(areas(run(wall(6000, 0, 6000, 2000)).out));              // 기준선이 넓이를 옮긴다(기준선 없는 벽과 다르다)
+  expect(run(wall(6000, 0, 6000, 2000)).v[0].axisShift).toBeUndefined();                    // 기준선 없는 벽 → 구획선도 없음(예전과 같다)
+  // 벽 끝에 닿아도 같은 직선이 아니면(직각으로 붙는 난간) 기준선을 받지 않는다.
+  const side = bay().map(w => (w.a[0] === w.b[0] ? { ...w, axisShift: 30 } : w));
+  expect(railDividers(side, [line(100, 1600, 5900, 1600)]).walls.filter(w => w.virtual).map(w => w.axisShift)).toEqual([undefined]);
+});
+
 test('buildProject: 워커가 넘긴 난간 선(DXF 좌표)으로 발코니가 닫히고, stats.railDividers로 따로 센다 — 저장 형식은 그냥 구획선', () => {
   // DXF 좌표(y 위): 건물 벽 y = 1600, 양옆 벽이 아래(y = 0)로 1.6 m, 앞 난간 y = 0.
   const raw = [
