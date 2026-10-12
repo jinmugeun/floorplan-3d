@@ -20,7 +20,9 @@ const cand = (kind, key, sp, text = '가나다', size = 12) => ({ kind, key, tex
 describe('라벨 배치(placeLabels)', () => {
   test('상수와 화면 AABB', () => {
     // measure는 사람이 직접 그은 치수라 높고, productCode는 가장 길어 가장 먼저 생략된다(m-3).
-    expect(LABEL_PRIORITY).toEqual(['roomName', 'roomArea', 'measure', 'wallDim', 'ductSize', 'damper', 'equip', 'productCode']);
+    // itemName(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-2)은 맨 끝이다: 도면 기구 이름은 수백 개라
+    // 설비 번호·치수·덕트 단면에 늘 자리를 내준다(productCode를 켜면 이름이 코드 라벨에 들어 있어 후보가 아니다).
+    expect(LABEL_PRIORITY).toEqual(['roomName', 'roomArea', 'measure', 'wallDim', 'ductSize', 'damper', 'equip', 'productCode', 'itemName']);
     expect([LOD_SCALE, ROOM_NAME_DY, ROOM_AREA_DY, WALL_DIM_MIN_PX]).toEqual([0.02, 16, 4, 40]);
     // 폭은 글자별로 잰다(높이 = size + 6): 한글·전각·원문자는 size당 1.0, ASCII·숫자는 0.62.
     // 실측(Chromium, IBM Plex Sans KR)은 한글 0.892·① 1.0·ASCII 0.50~0.60이며, 한글을 넉넉히
@@ -156,6 +158,48 @@ describe('라벨 후보 수집(collectLabels)', () => {
     const same = [{ kind: 'measure', key: 'measure:m1', text: '3000', size: 12, sp: [200, 200], at: [0, 0] },
       { kind: 'productCode', key: 'item:i1:code', text: '후드 HD-1', size: 11, sp: [204, 202], at: [0, 0] }];
     expect(placeLabels(same).map(c => c.kind)).toEqual(['measure']);
+  });
+
+  // 계획 13 Task 5 · 사전 검토 I-2(2026-10-12): DXF로 가져온 기구는 이름이 도면 블록 이름(`운반카 튀김 620`)인데
+  // 2D에서 그 이름은 "제품 코드" 보기(기본 꺼짐)일 때만 보였다. 이름이 제품명과 다르면 이름 라벨 후보를 낸다.
+  test('이름이 제품명과 다른 아이템은 이름 라벨 후보를 얻고, 제품명 그대로면 얻지 않는다', () => {
+    const { store, floor, hood } = setup();
+    const named = addItem(store, createItem(productById('equip-generic'), { pos: [1000.5, 2200.25], name: '운반카 튀김 620' }));
+    const plain = addItem(store, createItem(productById('dining-4'), { pos: [3000.5, 2200.25] }));         // 이름 = 제품명
+    const sink = addItem(store, createItem(productById('sink-double'), { pos: [3000.5, 800.25], name: '세정대 2조 1500-750' }));
+    store.dispatch(d => { const h = activeFloor(d).items.find(i => i.id === hood); h.name = '후드1500-1300'; });   // 설비는 번호 라벨 그대로
+    const v = fakeView(0.05);
+    const names = collectLabels(v, floor(), { flags: {} }).filter(c => c.kind === 'itemName');
+    expect(names.map(c => [c.key, c.text])).toEqual([[`item:${named}:name`, '운반카 튀김 620'], [`item:${sink}:name`, '세정대 2조 1500-750']]);
+    const n0 = names[0];
+    expect(n0.at).toEqual([1000.5, 2200.25]);                // 아이템 중심(상자 심벌에는 글자 부품이 없다)
+    expect(n0.sp).toEqual([1000.5 * 0.05, 2200.25 * 0.05]);
+    expect(n0.bg).toBe(LABEL_BG);
+    expect(names.some(c => c.key.includes(plain))).toBe(false);
+    // 설비(kind 'equipment')는 이름이 달라도 번호 라벨만 — 이름 후보가 없다.
+    const all = collectLabels(v, floor(), { flags: {} });
+    expect(all.filter(c => c.key.includes(hood)).map(c => c.kind)).toEqual(['equip']);
+    // 보기 플래그: 설비 라벨을 끄면 이름도 끈다(DEFAULT_VIEW에 키를 늘리지 않는다 — 사전 검토 반영 6).
+    expect(collectLabels(v, floor(), { flags: { equipLabels: false } }).some(c => c.kind === 'itemName')).toBe(false);
+    expect(collectLabels(v, floor(), { flags: { floorItems: false } }).some(c => c.kind === 'itemName')).toBe(false);
+    // "제품 코드"를 켜면 이름은 코드 라벨(`이름 코드`)에 들어 있다 — 같은 글자를 두 번 쓰지 않는다. 다른 아이템의 코드 라벨은 그대로다.
+    const coded = collectLabels(v, floor(), { flags: { productCode: true } });
+    expect(coded.some(c => c.kind === 'itemName')).toBe(false);
+    expect(coded.find(c => c.key === `item:${named}:code`).text).toBe('운반카 튀김 620 DR-EQ');
+    expect(coded.find(c => c.key === `item:${plain}:code`).text).toBe('4인 식탁 TB-D04');
+    // 숨긴 아이템은 후보가 아니다.
+    store.dispatch(d => { activeFloor(d).items.find(i => i.id === named).hidden = true; });
+    expect(collectLabels(v, floor(), { flags: {} }).filter(c => c.kind === 'itemName').map(c => c.text)).toEqual(['세정대 2조 1500-750']);
+  });
+
+  test('이름 라벨도 LOD를 지난다 — 축소하면 빠지고, 설비 번호와 겹치면 이름이 진다', () => {
+    const nameAt = (sp, key = 'item:g1:name') => ({ kind: 'itemName', key, text: '운반카 튀김 620', size: 11, sp, at: [0, 0] });
+    expect(placeLabels([nameAt([300.5, 300.25])], { scale: 0.05 }).map(c => c.kind)).toEqual(['itemName']);
+    expect(placeLabels([nameAt([300.5, 300.25])], { scale: 0.019 })).toEqual([]);            // LOD_SCALE 아래는 공간 이름만
+    const eq = cand('equip', 'equip:h1:0', [302, 301], '①', 12);
+    expect(placeLabels([nameAt([300.5, 300.25]), eq], { scale: 0.05 }).map(c => c.key)).toEqual(['equip:h1:0']);
+    // 이름끼리 겹치면 먼저 온 것(도면 배열 순서)이 남는다.
+    expect(placeLabels([nameAt([300.5, 300.25], 'a'), nameAt([310.5, 302.25], 'b'), nameAt([900, 900], 'c')]).map(c => c.key)).toEqual(['a', 'c']);
   });
 
   // m-2: 겹침 판정을 y 밴드로 잘라도 결과는 전수 비교와 같아야 한다(밴드 높이보다 큰 상자·음수 y 포함).

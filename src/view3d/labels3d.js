@@ -6,11 +6,11 @@
 import * as THREE from 'three';
 import { toThree } from './build.js';
 import { equipLabel, isEquip, FLOW_COLORS } from '../vent/equipment.js';
-import { itemVisible } from '../view2d/items2d.js';
+import { itemVisible, ITEM_COLORS } from '../view2d/items2d.js';
 import { ductVisible, sizeLabel } from '../view2d/ducts2d.js';
 import { perfSettings } from './perfMode.js';
 import { textWidth } from '../geom/textWidth.js';
-import { placeLabels } from '../view2d/labels2d.js';
+import { placeLabels, itemNameLabel } from '../view2d/labels2d.js';
 import { labelDensity } from '../ui/prefs.js';
 import { cachedTexture, setLabelCanvasFactory, clearLabelCache } from './labelTexture.js';
 import { syncLabelDots, LABEL_DOT_TEXT, LABEL_DOT_H, LABEL_DOTS_NAME } from './labelDots.js';
@@ -23,7 +23,9 @@ export const LABEL_H_PX = 44;
 export const LABEL_PAD_PX = 14;   // 좌우 여백 합
 export const LABEL_FONT_PX = 26;  // LABEL_H_PX 안에서 위아래 여백이 남는 글자 크기
 export const LABEL_DEBOUNCE_MS = 120;   // 카메라가 멈춘 뒤 이만큼 있다가 겹침을 다시 잰다
-export const LABEL3D_PRIORITY = ['equip', 'ductSize'];   // 설비 번호가 덕트 단면보다 높다
+// 설비 번호가 덕트 단면보다 높다. 아이템 이름(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-2)은 맨 끝 — 도면 기구 이름
+// 수백 개가 번호·단면 자리를 빼앗지 않고, '자동' 밀도에서 겹치면 점(●)으로 접힌다(labelDots).
+export const LABEL3D_PRIORITY = ['equip', 'ductSize', 'itemName'];
 export const LABEL_BOX_PX = 12;      // 카메라를 모를 때(투영 주입 등) 쓰는 상자 글자 크기
 export const LABEL_BOX_MIN_PX = 6;   // 아주 멀어도 상자가 0으로 사라지지 않게(겹침을 놓치지 않게)
 const LABEL_LIFT = 150;          // 설비 윗면·덕트 윗면에서 라벨까지(mm) — bodyDrag.js의 SLIDE_LIFT와 같은 값(M-14)
@@ -84,12 +86,14 @@ export function buildLabels(floor, view = {}, { density = labelDensity() } = {})
   if (!perfSettings(view.perfMode).labels) return g;   // 성능 우선: 빈 'labels' 그룹만 준다(§13.4)
   if (v3.equipLabels !== false) {
     for (const it of floor.items ?? []) {
-      if (!isEquip(it) || !itemVisible(it, v3)) continue;
-      const s = labelSprite(equipLabel(it));
+      if (!itemVisible(it, v3)) continue;
+      // 설비는 번호, 그 밖은 제품명과 다른 이름(2026-10-12 · 사전 검토 I-2 — 가져온 도면 기구의 블록 이름; 규칙은 2D와 한 함수).
+      const eq = isEquip(it);
+      const s = eq ? labelSprite(equipLabel(it)) : labelSprite(itemNameLabel(it), { color: ITEM_COLORS.label });
       if (!s) continue;
       s.position.copy(toThree([it.pos[0], it.pos[1], (Number(it.z) || 0) + (Number(it.size?.[2]) || 0) + LABEL_LIFT]));
       s.userData.itemId = it.id;
-      s.userData.kind = 'equip';     // 겹칠 때 덕트 단면보다 높은 우선순위(§15.12)
+      s.userData.kind = eq ? 'equip' : 'itemName';     // 설비 번호는 덕트 단면보다 높고, 이름은 맨 끝(§15.12)
       g.add(s);
     }
   }

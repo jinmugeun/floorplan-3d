@@ -63,6 +63,40 @@ describe('3D 라벨', () => {
     expect(buildLabels({ items: [range], ducts: [] }, {}).children).toHaveLength(0);
   });
 
+  // 계획 13 Task 5 · 사전 검토 I-2(2026-10-12): 3D 라벨은 설비(kind 'equipment')만 있어, DXF로 가져온 기구 상자
+  // 수백 개가 이름 없이 회색 상자로만 섰다. 이름이 제품명과 다르면 그 이름을 라벨로 세운다.
+  test('이름이 제품명과 다른 아이템은 이름 라벨을 얻는다(설비는 번호 그대로)', () => {
+    const named = createItem(productById('equip-generic'), { pos: [1000.5, 2000.25], size: [620, 720, 900.5], name: '운반카 튀김 620' });
+    const plain = createItem(productById('dining-4'), { pos: [5000, 5000] });
+    const namedHood = { ...hood, name: '후드1500-1300' };
+    const g = buildLabels({ items: [named, plain, namedHood], ducts: [] }, {});
+    expect(g.children.map(c => [c.userData.itemId, c.userData.kind, c.userData.text])).toEqual([
+      [named.id, 'itemName', '운반카 튀김 620'],
+      [hood.id, 'equip', '③'],
+    ]);
+    const s = g.children[0];
+    expect(s.position.x).toBeCloseTo(1.0005, 9);
+    expect(s.position.z).toBeCloseTo(2.00025, 9);
+    expect(s.position.y).toBeCloseTo((900.5 + 150) / 1000, 9);   // 윗면 위 150 mm(설비 라벨과 같은 규칙)
+    // 플래그·숨김: 설비 라벨 플래그를 함께 쓴다(DEFAULT_VIEW에 키를 늘리지 않는다).
+    expect(buildLabels({ items: [named], ducts: [] }, { v3: { equipLabels: false } }).children).toHaveLength(0);
+    expect(buildLabels({ items: [named], ducts: [] }, { v3: { floorItems: false } }).children).toHaveLength(0);
+    expect(buildLabels({ items: [{ ...named, hidden: true }], ducts: [] }, {}).children).toHaveLength(0);
+    expect(buildLabels({ items: [named], ducts: [] }, {}, { density: 'off' }).children).toHaveLength(0);
+  });
+
+  test('이름 라벨은 밀도 규칙을 따른다 — 설비 번호와 겹치면 점(●)으로 접힌다', () => {
+    const named = createItem(productById('equip-generic'), { pos: [14350, 12700], name: '운반카 튀김 620' });
+    const g = buildLabels({ items: [named, hood], ducts: [] }, {});
+    const nm = g.children.find(c => c.userData.kind === 'itemName'), eq = g.children.find(c => c.userData.kind === 'equip');
+    cullLabels(g, null, { width: 800, height: 600, project: () => [400, 300], density: 'auto' });
+    expect(eq.userData.collapsed).toBe(false);
+    expect(nm.userData.collapsed).toBe(true);                 // 낮은 우선순위가 점이 된다
+    expect(g.children.find(c => c.name === LABEL_DOTS_NAME).geometry.drawRange.count).toBe(1);
+    cullLabels(g, null, { width: 800, height: 600, project: () => [400, 300], density: 'all' });
+    expect(nm.visible && !nm.userData.collapsed).toBe(true);  // '모두'는 접지 않는다
+  });
+
   test('텍스처와 스프라이트 폭이 글자 폭을 따른다(감사 §11)', () => {
     const short = labelSprite('③'), long = labelSprite('750×400');
     expect(labelTextureSize('750×400').w).toBeGreaterThan(labelTextureSize('③').w);
@@ -75,7 +109,8 @@ describe('3D 라벨', () => {
   });
 
   test('cullSprites는 겹치면 낮은 우선순위를 숨긴다(설비 번호 > 덕트 단면)', () => {
-    expect(LABEL3D_PRIORITY).toEqual(['equip', 'ductSize']);
+    // itemName(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-2)은 맨 끝: 도면 기구 이름 수백 개가 설비 번호·덕트 단면 자리를 빼앗지 않게.
+    expect(LABEL3D_PRIORITY).toEqual(['equip', 'ductSize', 'itemName']);
     const keep = cullSprites([
       { key: 'duct1', kind: 'ductSize', text: '750×400', sp: [100.5, 100.25], size: 12 },
       { key: 'eq1', kind: 'equip', text: '③', sp: [104, 102], size: 12 },

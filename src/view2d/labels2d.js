@@ -15,13 +15,27 @@ import { fmtLen, fmtArea } from '../util/units.js';
 import { sizeLabel, ductVisible, DUCT_COLORS, LABEL_BG } from './ducts2d.js';
 import { itemVisible, itemTextLabels, drawnByWall, ITEM_COLORS } from './items2d.js';
 import { isEquip } from '../vent/equipment.js';
+import { productById } from '../products/catalog.js';
 // §14.5가 요구하는 반투명 상자 색. 의존 방향(labels2d → ducts2d)을 지키려고 정의는 ducts2d에 두고
 // 라벨 모듈에서 다시 내보낸다 — 라벨 패스와 ducts2d 폴백이 같은 값을 쓰게 한다.
 export { LABEL_BG };
 
 // 우선순위(§14.5). measure는 사람이 직접 그은 치수라 방 이름 다음으로 높고, productCode는 가장
 // 길고 가장 많이 겹치므로 맨 뒤다("제품 코드" 보기를 켜면 감사 #22가 재현됐다 — m-3).
-export const LABEL_PRIORITY = ['roomName', 'roomArea', 'measure', 'wallDim', 'ductSize', 'damper', 'equip', 'productCode'];
+// itemName(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-2)은 그보다도 뒤다: DXF로 가져온 기구 이름은 한 도면에 수백 개라
+// 설비 번호·치수·덕트 단면에 늘 자리를 내준다.
+export const LABEL_PRIORITY = ['roomName', 'roomArea', 'measure', 'wallDim', 'ductSize', 'damper', 'equip', 'productCode', 'itemName'];
+
+// 아이템 이름 라벨의 글자(2D·3D 공용 — labels3d가 import한다). 이름이 제품명과 **다를 때만** 낸다(null = 라벨 없음).
+// 왜(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-2): DXF 가져오기는 기구마다 도면 블록 이름(`세정대 2조 1500-750` ·
+// `운반카 튀김 620`)을 item.name에 남기는데, 그 이름은 2D "제품 코드" 보기(기본 꺼짐)에서만 보였고 3D에는 없었다 —
+// 회색 상자 수백 개가 무엇인지 도면과 대조할 길이 없었다. 손으로 놓은 아이템은 이름 = 제품명이라 지금과 같다(라벨 없음).
+// 설비(kind 'equipment')는 번호 라벨(①·Ø150 …)이 이미 정체를 말하므로 이름을 덧붙이지 않는다.
+export function itemNameLabel(item) {
+  if (!item || isEquip(item)) return null;
+  const name = String(item.name ?? '').trim();
+  return name && name !== productById(item.productId)?.name ? name : null;
+}
 export const LOD_SCALE = 0.02;      // px/mm. 이보다 작으면 공간 이름만 남긴다
 export const ROOM_NAME_DY = 16;     // 방 중심에서 위로(화면 px)
 export const ROOM_AREA_DY = 4;      // 방 중심에서 아래로(화면 px)
@@ -129,6 +143,11 @@ export function collectLabels(v, floor, { flags = {}, units = 'mm', showUnit = f
     if (!itemVisible(it, flags)) continue;
     // 제품 코드 라벨도 이 패스를 지난다(m-3): 예전에는 items2d가 곧바로 그려 겹침 판정 밖이었다.
     if (flags.productCode) out.push(cand(`item:${it.id}:code`, 'productCode', `${it.name ?? ''} ${it.code ?? ''}`.trim(), [it.pos[0], itemAABB(it).max[1] + mm(12)], { size: 11, color: ITEM_COLORS.label, bg: LABEL_BG }));
+    // 이름 라벨(2026-10-12 · 사전 검토 I-2): 아이템 중심에 — 상자 심벌(equip-generic)에는 글자 부품이 없어 비어 있다.
+    // "제품 코드"를 켜면 이름이 이미 코드 라벨(`이름 코드`)에 들어 있으므로 두 번 쓰지 않는다. 플래그는 설비 라벨의
+    // equipLabels를 함께 쓴다(DEFAULT_VIEW에 키를 늘리지 않는다 — 계획 13 사전 검토 반영 6). 겹침·LOD는 placeLabels가 본다.
+    const name = flags.productCode || flags.equipLabels === false || drawnByWall(it, floor.walls) ? null : itemNameLabel(it);
+    if (name) out.push(cand(`item:${it.id}:name`, 'itemName', name, [it.pos[0], it.pos[1]], { size: 11, color: ITEM_COLORS.label, bg: LABEL_BG }));
     // 글자 부품이 있을 수 있는 것만 본다: 설비가 아닌 가구·문·창까지 symbolParts를 다시 만들 필요가 없고,
     // 벽이 대신 그리는 창·개구부(embedded)는 심벌이 없으니 라벨도 없다(drawItem과 같은 판정이다).
     if (flags.equipLabels === false || !isEquip(it) || drawnByWall(it, floor.walls)) continue;
