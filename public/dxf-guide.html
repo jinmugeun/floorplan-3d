@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>입력 도면 안내 — DXF 가져오기</title>
+<!-- 2026-10-12 · 계획 12 Task 3: 설계 사무소에 보내는 "입력 도면 간편화 안내" + 정규화 DXF 고리 설명. 배포본에 그대로 실린다(외부 CSS·JS 없음). -->
+<style>
+  :root { --bg: #ffffff; --fg: #1f2328; --muted: #5b636d; --line: #d8dde3; --card: #f6f8fa; --accent: #1f6feb; --keep: #1a7f37; --drop: #cf222e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171a; --fg: #e6e8eb; --muted: #9aa4ae; --line: #2f363d; --card: #1c2126; --accent: #58a6ff; --keep: #3fb950; --drop: #f85149; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  main { max-width: 780px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 36px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+  p.lead { color: var(--muted); margin: 0 0 20px; }
+  ul, ol { padding-left: 1.3em; }
+  li { margin: 4px 0; }
+  code { font: 0.92em ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+  .card h3 { margin: 0 0 6px; font-size: 1rem; }
+  .keep h3 { color: var(--keep); }
+  .drop h3 { color: var(--drop); }
+  .loop { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  .loop span { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
+  .loop b { color: var(--muted); font-weight: normal; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  .note { color: var(--muted); font-size: 0.92rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>입력 도면 안내</h1>
+  <p class="lead">평면도 DXF를 가져와 벽·문·창·방을 자동으로 세웁니다. 선이 적고 레이어가 분명할수록 빠르고 정확합니다.
+    설계 사무소에 도면을 요청할 때 이 페이지를 함께 보내 주세요.</p>
+
+  <h2>1. 남길 것과 뺄 것</h2>
+  <div class="cols">
+    <div class="card keep">
+      <h3>남겨 주세요</h3>
+      <ul>
+        <li><b>벽·기둥 레이어</b> — 구조체와 마감선(벽 두께가 보이는 평행선), 기둥 윤곽.</li>
+        <li><b>창호 블록</b> — 문·창을 <b>블록 그대로</b>. 블록 이름에 종류와 폭이 들어 있으면 가장 좋습니다(<code>DR-900</code>, <code>WIN-1200</code>, <code>SD900</code>, <code>문_슬라이딩 포켓 900</code>).</li>
+        <li><b>실명과 면적 문자</b> — 방 안에 실명, 그 바로 아래에 면적(<code>조리실</code> / <code>(102.30㎡)</code>).</li>
+        <li><b>치수</b> — 벽·기둥 중심선을 재는 치수. 실 면적(벽 중심선 기준)을 맞추는 근거입니다.</li>
+      </ul>
+    </div>
+    <div class="card drop">
+      <h3>빼 주세요(레이어 끄기·지우기)</h3>
+      <ul>
+        <li><b>기구·가구</b> — 급식기구, 집기, 위생기구.</li>
+        <li><b>설비</b> — 전기, 급배수, 덕트, 트렌치.</li>
+        <li><b>해치</b> — 벽 채움, 바닥 패턴.</li>
+        <li><b>입면·단면·상세</b>, 다른 층, 다른 안(한 파일에 평면 한 장).</li>
+        <li><b>범례·표·도면틀</b>(표제란).</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note">끈 레이어는 벽 판정에 쓰지 않습니다. 실명 문자는 꺼진 레이어에 있어도 읽습니다.</p>
+
+  <h2>2. DWG → DXF 저장 설정</h2>
+  <table>
+    <tr><th>항목</th><th>설정</th><th>이유</th></tr>
+    <tr><td>파일 형식</td><td><b>AutoCAD 2007 이상 DXF</b>(ASCII)</td><td>2007 이상은 문자가 UTF-8이라 한글 실명이 깨지지 않습니다. 바이너리 DXF·DWG는 열 수 없습니다.</td></tr>
+    <tr><td>블록</td><td><b>블록 유지</b>(분해 EXPLODE 하지 않기)</td><td>창호 블록의 이름이 문·창의 종류와 폭입니다. 분해하면 짐작으로 앉힙니다.</td></tr>
+    <tr><td>단위</td><td><b>mm</b>(INSUNITS = 밀리미터)</td><td>단위가 없으면 도면 크기로 추정합니다.</td></tr>
+    <tr><td>공간</td><td><b>모델 공간만</b></td><td>배치(페이퍼) 공간의 뷰포트·도면틀은 읽지 않습니다.</td></tr>
+    <tr><td>정리</td><td><b>PURGE</b>(안 쓰는 블록·레이어 지우기)</td><td>파일이 작아지고 읽는 시간이 줄어듭니다.</td></tr>
+  </table>
+
+  <h2>3. 고쳐서 다시 가져오는 고리</h2>
+  <div class="loop"><span>가져오기</span><b>→</b><span>정규화 DXF 내보내기</span><b>→</b><span>CAD에서 고치기</span><b>→</b><span>다시 가져오기</span></div>
+  <p>자동으로 뽑은 벽이 틀렸으면 앱에서 하나씩 고쳐도 되고, <b>더보기 → 정규화 DXF 내보내기</b>로 결과를 깨끗한 DXF로 받아
+    CAD에서 고친 뒤 다시 가져와도 됩니다. 정규화 DXF는 레이어가 몇 개뿐이라 다시 가져올 때 레이어 판정이 틀릴 일이 없습니다.</p>
+  <table>
+    <tr><th>레이어</th><th>담긴 것</th><th>다시 가져올 때</th></tr>
+    <tr><td><code>WALL</code></td><td>벽 면선(두 줄)과 중심선(일점쇄선)</td><td>벽</td></tr>
+    <tr><td><code>COLUMN</code></td><td>기둥 사각형</td><td>기둥</td></tr>
+    <tr><td><code>OPENING</code></td><td>문·창 블록 <code>DR-폭-두께</code> · <code>WIN-</code> · <code>POCKET-</code> · <code>SLIDING-</code></td><td>문·창(블록 이름으로)</td></tr>
+    <tr><td><code>개구부</code></td><td>통로(문 없는 개구부) 자리의 X 표시</td><td>통로의 근거</td></tr>
+    <tr><td><code>ROOM-TEXT</code></td><td>실명과 그 아래 면적(<code>24.00㎡</code>)</td><td>방 이름·면적 맞추기</td></tr>
+    <tr><td><code>DIM</code></td><td>벽 기준선 치수</td><td>실 면적의 기준선</td></tr>
+    <tr><td><code>ROOM</code> · <code>DIVIDER</code></td><td>방 윤곽 · 구획선(참고)</td><td>쓰지 않음(구획선은 면적 표기로 다시 긋습니다)</td></tr>
+  </table>
+  <h3>CAD에서 고칠 때</h3>
+  <ul>
+    <li>벽은 <b>면선 두 줄 + 중심선</b>으로 그려 주세요. 두께는 두 면선 사이 거리입니다.</li>
+    <li>문·창은 <code>OPENING</code>의 블록을 복사·이동해 쓰세요(블록 이름의 첫 숫자가 폭). 통로는 벽 선을 그 폭만큼 끊습니다.</li>
+    <li>방 이름은 <code>ROOM-TEXT</code>의 글자를 고치고, 면적 글자는 이름 바로 아래에 두세요.</li>
+    <li>저장은 <b>AutoCAD 2007 이상 DXF</b>로.</li>
+  </ul>
+
+  <h2>4. 지금 알려진 한계</h2>
+  <ul class="note">
+    <li>폭이 0.6 m보다 좁거나 3 m보다 넓은 통로, 벽 끝과의 토막이 150 mm보다 짧은 통로는 벽을 끊지 않고 X로만 표시합니다(다시 가져오면 벽입니다).</li>
+    <li>외미닫이(미닫이)문은 포켓 미닫이문으로 돌아옵니다(종류·폭은 같습니다). 원형 기둥은 기둥으로 읽히지 않습니다.</li>
+    <li>두께가 바뀌며 중심이 20 mm 안으로 비낀 벽은 한 중심선으로 맞춰집니다. 앱에서 그린 구획선은 다시 가져오지 않습니다.</li>
+  </ul>
+</main>
+</body>
+</html>

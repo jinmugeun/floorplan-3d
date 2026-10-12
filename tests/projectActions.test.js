@@ -9,6 +9,7 @@ import { addWalls } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { createProjectActions } from '../src/app/projectActions.js';
 import { createDirtyTracker, createSaveIndicator } from '../src/app/dirty.js';
+import { DXF_EXPORTED } from '../src/ui/messages.js';
 
 function setup({ dirty = true, restored = null } = {}) {
   const store = createStore(createEmptyProject());
@@ -74,6 +75,21 @@ test('JSON 내보내기는 토스트를 띄운다', () => {
   const a = setup();
   a.actions.exportJson();
   expect(a.toasts).toEqual(['JSON을 내보냈습니다']);
+});
+
+// 2026-10-12 · 계획 12 Task 3: 정규화 DXF는 .dxf(application/dxf)로 내려받고 알린다(내보내기 코드는 누를 때 불러온다).
+test('정규화 DXF 내보내기는 .dxf 파일을 내려받고 알린다', async () => {
+  const a = setup();
+  addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
+  const blobs = [], names = [];
+  global.URL.createObjectURL = b => { blobs.push(b); return 'blob:x'; };
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () { names.push(this.download); });
+  await a.actions.exportDxf();
+  click.mockRestore();
+  expect(names).toHaveLength(1);
+  expect(names[0]).toMatch(/\.dxf$/);
+  expect(blobs[0].type).toBe('application/dxf');
+  expect(a.toasts).toEqual([DXF_EXPORTED]);
 });
 
 // 리뷰 M1: 새로 만든 직후 상단 바가 "HH:MM 자동 저장됨"이라고 적혀 있었다(저장은 일어나지 않았다).

@@ -7,7 +7,7 @@ import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_S
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
-import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED } from '../src/ui/messages.js';
+import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK } from '../src/ui/messages.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -523,6 +523,26 @@ test('옵션·체크를 바꾸면 최신 결과가 올 때까지 [가져오기]�
   w.emit(EXTRACTED);                                        // #3(최신)의 응답
   await flush();
   expect(q('import').disabled).toBe(false);
+});
+
+// 2026-10-12 · 계획 12 Task 3: 선이 많은 도면이면 사람이 도면부터 간편화할 수 있게 — 선 수 · 체크한 벽 레이어 수와 입력 도면 안내(새 탭).
+test('검토 창은 "선 n개 중 벽 레이어 m개"와 입력 도면 안내 링크를 보이고, 체크를 바꾸면 m이 따라간다', async () => {
+  const { w, q, root } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  expect(q('guide').hidden).toBe(false);
+  expect(q('guide').textContent).toContain(DXF_GUIDE_LINE(70230, 7));
+  expect(DXF_GUIDE_LINE(70230, 7)).toBe('선 70,230개 중 벽 레이어 7개');
+  const a = q('guide').querySelector('a');
+  expect(a.getAttribute('href')).toBe('dxf-guide.html');
+  expect(a.getAttribute('target')).toBe('_blank');
+  expect(a.getAttribute('rel')).toBe('noopener');
+  expect(a.textContent).toBe(DXF_GUIDE_LINK);
+  const box = [...root.querySelectorAll('input[name="layer"]')].find(b => b.value === 'WAL');
+  box.checked = false;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(q('guide').textContent).toContain(DXF_GUIDE_LINE(70230, 6));
 });
 
 // 2026-10-02: 가져오기가 방 구조를 도면의 면적 표기에 맞췄으면(구획선·딸린 방) 무엇을 했는지 알린다.

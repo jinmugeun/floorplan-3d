@@ -11,7 +11,7 @@ import { openBackgroundDialog } from '../ui/backgroundDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
 import { promptDialog } from '../ui/promptDialog.js';
 import { projectIsEmpty, confirmLeave } from './topbar.js';
-import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN } from '../ui/messages.js';
+import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN, DXF_EXPORTED, DXF_EXPORTED_SKIPPED } from '../ui/messages.js';
 
 // onProjectSwap: 프로젝트를 갈아 끼운 직후(view.fit()과 같은 자리) 부른다 — 첫 방 자동 fit 래치를
 // 새 프로젝트 기준으로 다시 잡는다(app/firstRoomFit.js). 넘기지 않는 호출자(테스트)에는 아무 일도 없다.
@@ -64,6 +64,14 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
     },
     saveAsTemplate,
     exportJson: () => { downloadText(filenameFor(store.get()), serializeProject(store.get())); toast(JSON_EXPORTED); },
+    // 정규화 DXF(2026-10-12 · 계획 12 Task 3): 지금 층을 레이어 몇 개뿐인 DXF로 — CAD에서 틀린 벽만 고쳐 다시 가져온다. 내보내기 코드(벽 윤곽·
+    // 이음·띠 스윕 판정)는 누를 때만 불러온다(첫 화면 번들에 넣지 않는다).
+    exportDxf: async () => {
+      const { buildDxf } = await import('../io/dxfExport.js');
+      const { text, skippedPasses } = buildDxf(store.get());
+      downloadText(filenameFor(store.get()).replace(/\.json$/, '.dxf'), text, 'application/dxf');
+      toast(skippedPasses ? DXF_EXPORTED_SKIPPED(skippedPasses) : DXF_EXPORTED);
+    },
     // 시작 화면은 샘플·템플릿으로 프로젝트를 갈아 끼운다: 작업 중이면 먼저 묻는다(새로만들기와 같은 규칙).
     exit: async () => { if (await confirmLeave(store.get(), { saveNow, dirty: isDirty() })) showStart({ restore: null }); },
   };

@@ -5,8 +5,9 @@ import { PAPER } from './specSheet.js';   // 용지 치수의 정본은 한 곳�
 
 export const serializeProject = state => JSON.stringify(state);
 export function parseProject(text) { let obj; try { obj = JSON.parse(text); } catch { throw new Error('JSON 파일이 아닙니다'); } return migrate(obj); }
-export function downloadText(filename, text) {
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+// type: MIME(기본 JSON). 정규화 DXF 내보내기가 'application/dxf'로 부른다(2026-10-12).
+export function downloadText(filename, text, type = 'application/json') {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 export const readTextFile = file => file.text();
 export function filenameFor(state) {

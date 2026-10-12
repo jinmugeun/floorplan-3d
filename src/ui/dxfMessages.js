@@ -52,6 +52,16 @@ export const DXF_BADGE_COLOR = '색으로 판정';
 export const DXF_CARD_TITLE = 'DXF 도면 가져오기';
 export const DXF_CARD_DESC = '캐드 도면(.dxf)에서 벽을 자동으로 뽑아 평면도를 만듭니다.';
 
+// 정규화 DXF 내보내기(2026-10-12 · 계획 12 Task 3 — io/dxfExport.js): 더보기 메뉴 · 내보낸 뒤 알림. 통로 중 다시 들여올 때 그 자리·폭으로
+// 읽히지 않는 것(벽 끝과의 토막이 150 mm 미만 · 폭 3 m 초과 등)은 벽을 끊지 않고 X로만 표시하므로 그 수를 함께 말한다.
+export const DXF_EXPORT_MENU = '정규화 DXF 내보내기';
+export const DXF_EXPORTED = '정규화 DXF를 내보냈습니다 — CAD에서 고친 뒤 다시 가져오세요';
+export const DXF_EXPORTED_SKIPPED = n => `${DXF_EXPORTED} (통로 ${n}곳은 다시 가져올 때 읽히지 않아 벽을 잇고 X로만 표시했습니다)`;
+// 검토 창의 입력 도면 안내 줄(사전 검토 3): 선 수 · 체크한 벽 레이어 수 + 안내 페이지(public/dxf-guide.html · 새 탭).
+export const DXF_GUIDE_LINE = (segs, layers) => `선 ${Number(segs || 0).toLocaleString('en-US')}개 중 벽 레이어 ${layers}개`;
+export const DXF_GUIDE_LINK = '입력 도면 안내 ↗';
+export const DXF_GUIDE_HREF = 'dxf-guide.html';
+
 // 가져오기 자체가 실패했을 때의 한 줄(리뷰 F-3). DXF_ERRORS 다섯은 §18.6의 표가 동결한 파싱·추출
 // 오류라 여기에 섞지 않는다 — 이 문장은 호출자(store.swap·자동 저장)가 거절했을 때만 나오고,
 // 가장 흔한 원인인 트레이스 배경(최대 1.2 MB)을 사용자가 이 대화상자에서 바로 끌 수 있게 말한다.

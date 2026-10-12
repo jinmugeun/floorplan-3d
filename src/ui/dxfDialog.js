@@ -9,7 +9,8 @@ import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED, DXF_MANY_PLANS, DXF_REGION, DXF_REGION_LABEL, DXF_RECONCILED,
-  DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP } from './messages.js';
+  DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
+  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF } from './messages.js';
 
 const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
@@ -31,6 +32,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     <p class="dxf-head" name="head"></p>
     <p class="error" name="error" hidden></p>
     <p class="hint" name="notice" hidden></p>
+    <p class="hint" name="guide" hidden></p>
     <div class="dxf-body">
       <div class="dxf-col">
         <div class="toolbar"><input type="file" name="file" accept=".dxf" aria-label="DXF 파일"></div>
@@ -90,6 +92,14 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   const syncPreset = () => {
     const def = wallOnly(summary?.layers ?? []);
     q('preset').checked = checked.size === def.size && [...def].every(n => checked.has(n));
+    guide();
+  };
+  // 입력 도면 안내 줄(2026-10-12 · 계획 12 Task 3): 선 수 · 체크한(벽) 레이어 수 · 안내 페이지 — 선이 너무 많으면 도면부터 간편화하게.
+  // 체크가 바뀌는 자리(syncPreset)마다 다시 쓴다.
+  const guide = () => {
+    const g = q('guide');
+    g.hidden = !summary;
+    g.innerHTML = summary ? `${esc(DXF_GUIDE_LINE(summary.segs, checked.size))} · <a href="${DXF_GUIDE_HREF}" target="_blank" rel="noopener">${esc(DXF_GUIDE_LINK)}</a>` : '';
   };
   const renderLayers = () => { q('layers').innerHTML = summary ? layerListHtml(summary.layers, checked) : ''; syncPreset(); };
   // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정.

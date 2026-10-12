@@ -1,0 +1,226 @@
+// 정규화 DXF 내보내기(2026-10-12 · 계획 12 Task 3). 계약은 "우리 가져오기가 같은 것을 다시 읽는다"다 — 내보낸 텍스트를 **앱과 같은 길**
+// (io/dxf/worker.js: 디코드 → 파싱 → 전개 → 레이어 역할 → 벽 띠 → 방 → 개구부)로 다시 들여와 벽·두께·방 이름·문창 폭·기둥을 맞댄다.
+// 워커는 node에 self가 없으므로 가짜 self를 심고 import한다(tests/dxfUnits.test.js · tools/dxf-corpus/lib.mjs의 관례).
+import { test, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { exportDxf, buildDxf } from '../src/io/dxfExport.js';
+import { EXPORT_LAYERS, PASS_LAYER } from '../src/io/dxfExportTemplate.js';
+import { decodeDxf } from '../src/io/dxf/decode.js';
+import { classifyLayer } from '../src/io/dxf/classify.js';
+import { blockKind, nominalWidth } from '../src/io/dxf/blockOpenings.js';
+import { makeItem } from '../src/io/dxf/openingSeat.js';
+import { createEmptyProject, createFloor, normalizeProject, createItem } from '../src/state/schema.js';
+import { makeWall, rectWalls } from '../src/geom/walls.js';
+import { normalizeWalls } from '../src/geom/normalize.js';
+import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
+import { productById } from '../src/products/catalog.js';
+
+let handle;
+beforeAll(async () => {
+  const posts = [];
+  globalThis.self = { postMessage: m => posts.push(m), onmessage: null };
+  await import('../src/io/dxf/worker.js');
+  const on = globalThis.self.onmessage;
+  handle = data => { posts.length = 0; on({ data }); return posts.filter(m => m.type !== 'progress').at(-1); };
+});
+
+const importBuf = (buf, fileName) => {
+  const parsed = handle({ type: 'parse', buf, fileName });
+  expect(parsed.type).toBe('parsed');
+  const ex = handle({ type: 'extract', opts: { layers: parsed.summary.checked, trace: false } });
+  expect(ex.type).toBe('extracted');
+  // 다시 들여온 앱 좌표 → 내보낸(원래) 앱 좌표: 가져오기는 벽 상자 가운데를 0으로 잡는다(stats.origin · y 뒤집기).
+  const o = ex.stats.origin, back = p => [p[0] + o[0], p[1] - o[1]];
+  return { summary: parsed.summary, project: ex.project, stats: ex.stats, back };
+};
+const importText = txt => importBuf(new TextEncoder().encode(txt).buffer, '정규화.dxf');
+const fixture = () => {
+  const raw = readFileSync(fileURLToPath(new URL('./fixtures/plan-1f-corner.dxf', import.meta.url)));
+  return importBuf(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), 'plan-1f-corner.dxf');
+};
+
+const cat = id => (/^door-/.test(id) ? 'door' : /^window-/.test(id) ? 'window' : id === 'opening-pass' ? 'pass' : null);
+const near = (p, q, tol) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= tol;
+// 한 결과의 요약(좌표는 back으로 원래 앱 좌표에 맞춘다).
+function digest(r, back = p => p) {
+  const f = r.project.floors[0];
+  return {
+    walls: f.walls.filter(w => !w.virtual).map(w => ({ a: back(w.a), b: back(w.b), t: w.thickness })),
+    rooms: f.rooms.map(x => x.name ?? '').sort(),
+    areas: new Map(f.rooms.filter(x => x.name).map(x => [x.name, x.areaCenter])),
+    opens: f.items.filter(i => cat(i.productId)).map(i => ({ kind: cat(i.productId), id: i.productId, w: i.size[0], p: back(i.pos) })),
+    columns: f.items.filter(i => i.kind === 'column').map(i => ({ p: back(i.pos), s: i.size.slice(0, 2) })),
+  };
+}
+// 벽: 수·두께 분포가 같고, 원래 벽마다 끝점이 tol 안에서 같은 벽이 있다.
+function sameWalls(A, B, tol = 2) {
+  expect(B.walls.length).toBe(A.walls.length);
+  expect(B.walls.map(w => w.t).sort((x, y) => x - y)).toEqual(A.walls.map(w => w.t).sort((x, y) => x - y));
+  const miss = A.walls.filter(w => !B.walls.some(v => (near(v.a, w.a, tol) && near(v.b, w.b, tol)) || (near(v.a, w.b, tol) && near(v.b, w.a, tol))));
+  expect(miss).toEqual([]);
+}
+// 개구부: 같은 종류가 300 mm 안에 있고 폭이 ±50.
+const matchOpen = (o, list) => list.find(x => x.kind === o.kind && near(x.p, o.p, 300) && Math.abs(x.w - o.w) <= 50);
+
+// 합성 평면(손으로 만든 프로젝트): 8 × 6 m, 위쪽 벽 600(bandGap 520보다 두껍다), 가운데 칸막이 120, 문·창·포켓·미닫이·통로·기둥, 실명 둘.
+function synthetic() {
+  const walls = normalizeWalls([
+    ...rectWalls([-4000, -3000], [4000, 3000], 200, 3500).map((w, i) => (i === 2 ? { ...w, thickness: 600 } : w)),
+    makeWall({ a: [0, -3000], b: [0, 3000], thickness: 120, height: 3500 }),
+  ]);
+  const on = (x, y) => walls.find(w => Math.min(w.a[0], w.b[0]) - 1 <= x && x <= Math.max(w.a[0], w.b[0]) + 1 && Math.min(w.a[1], w.b[1]) - 1 <= y && y <= Math.max(w.a[1], w.b[1]) + 1);
+  const put = (id, width, x, y) => {
+    const w = on(x, y), d = [w.b[0] - w.a[0], w.b[1] - w.a[1]];
+    return makeItem(id, width, w, ((x - w.a[0]) * d[0] + (y - w.a[1]) * d[1]) / (d[0] ** 2 + d[1] ** 2));
+  };
+  const items = [
+    put('door-swing-900', 900, 0, -1500), put('window-slide-1200', 1200, 4000, 1000), put('door-pocket-900', 900, -2000, -3000),
+    put('opening-pass', 1000, -4000, 1000), put('window-slide-1800', 1800, 2000, 3000), put('door-slide-900', 900, 2000, -3000),
+    createItem(productById('column-square'), { pos: [4000, -1500], rot: 0, size: [400, 400, 3500] }),
+  ];
+  const rooms = detectRooms(walls);
+  for (const r of rooms) r.name = pointInPolygon([-2000, 0], r.points) ? '사무실' : '창고';
+  return normalizeProject({ ...createEmptyProject('합성 평면'), areaMode: 'center', floors: [{ ...createFloor('1F'), height: 3500, walls, rooms, items }] });
+}
+
+// DXF 텍스트 → (코드, 값) 쌍(코드 줄은 짝수 번째).
+const pairs = txt => { const L = txt.split('\n'), out = []; for (let i = 0; i + 1 < L.length; i += 2) out.push([L[i].trim(), L[i + 1]]); return out; };
+// 종류 type인 엔티티마다 { 코드: 첫 값 }.
+const ents = (ps, type) => ps.flatMap(([c, v], i) => {
+  if (c !== '0' || v !== type) return [];
+  const r = {};
+  for (let j = i + 1; j < ps.length && ps[j][0] !== '0'; j++) r[ps[j][0]] ??= ps[j][1];
+  return [r];
+});
+
+test('머리는 AC1021(UTF-8) · 단위 mm · 섹션 차례 · EOF — 우리 디코더가 UTF-8로 읽는다', () => {
+  const txt = exportDxf(synthetic());
+  expect(txt.startsWith('0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n')).toBe(true);
+  expect(txt).toContain('9\n$INSUNITS\n70\n4\n');
+  expect(txt.trimEnd().endsWith('0\nEOF')).toBe(true);
+  const secs = pairs(txt).map((p, i, a) => (p[0] === '0' && p[1] === 'SECTION' ? a[i + 1][1] : null)).filter(Boolean);
+  expect(secs).toEqual(['HEADER', 'CLASSES', 'TABLES', 'BLOCKS', 'ENTITIES', 'OBJECTS']);
+  const dec = decodeDxf(new TextEncoder().encode(txt));
+  expect([dec.ver, dec.encoding]).toEqual(['AC1021', 'utf-8']);
+  expect(dec.txt).toContain('사무실');
+});
+
+test('핸들은 모두 고유하고 $HANDSEED보다 작으며, 주인(330)은 있는 핸들이다', () => {
+  const ps = pairs(exportDxf(synthetic()));
+  const handles = ps.filter(([c]) => c === '5' || c === '105').map(([, v]) => v);
+  const seedAt = ps.findIndex(([c, v]) => c === '9' && v === '$HANDSEED');
+  const seed = parseInt(ps[seedAt + 1][1], 16);
+  const own = handles.filter((_, i) => i > 0);       // 첫 '5'는 $HANDSEED 값이다
+  expect(new Set(own).size).toBe(own.length);
+  expect(Math.max(...own.map(h => parseInt(h, 16)))).toBeLessThan(seed);
+  const known = new Set(own);
+  expect(ps.filter(([c]) => c === '330').map(([, v]) => v).filter(v => v !== '0' && !known.has(v))).toEqual([]);
+});
+
+test('엔티티가 쓰는 레이어는 모두 LAYER 표에 있고, 레이어 이름이 가져오기의 역할을 정한다', () => {
+  const ps = pairs(exportDxf(synthetic()));
+  const table = new Set(), used = new Set();
+  let inLayer = false, section = null;
+  ps.forEach(([c, v], i) => {
+    if (c === '0' && v === 'SECTION') section = ps[i + 1][1];
+    if (c === '0' && v === 'TABLE') inLayer = ps[i + 1][1] === 'LAYER';
+    if (c === '0' && v === 'ENDTAB') inLayer = false;
+    if (c === '2' && inLayer && ps[i - 1]?.[1] !== 'TABLE') table.add(v);
+    if (c === '8' && (section === 'ENTITIES' || section === 'BLOCKS')) used.add(v);
+  });
+  expect([...used].filter(l => !table.has(l))).toEqual([]);
+  expect(EXPORT_LAYERS.map(l => l.name).every(n => table.has(n))).toBe(true);
+  // 역할(io/dxf/classify.js): 벽·기둥은 벽, 문자는 문자, 통로 표시는 개구부, 치수는 치수, 나머지는 기타(기본 체크 밖).
+  expect(['WALL', 'WALL-2', 'COLUMN', 'ROOM-TEXT', 'TITLE', PASS_LAYER, 'DIM', 'OPENING', 'ROOM', 'DIVIDER'].map(classifyLayer))
+    .toEqual(['wall', 'wall', 'wall', 'text', 'text', 'opening', 'dim', 'other', 'other', 'other']);
+});
+
+// 가져오기는 레이어가 겹치지 않는 두 면선 사이 틈(≥ cavityMin 150)에서만 붙은 두 벽을 가른다 — 한 레이어면 두 벽이 550 띠 하나가 된다(내곡중).
+// (두 방은 옆으로 1 m 비껴 놓는다 — 옆벽이 한 직선이면 가져오기가 150 틈 너머 같은 띠를 문 자리처럼 다리로 잇는다(bands.chainRuns ·
+// bridge 3000). 가져오기 쪽 일이라 이 테스트는 그 꼴을 피한다.)
+test('나란히 붙은 두 벽(틈 150)은 다른 벽 레이어에 그려 다시 들여와도 두 벽·두 방이다', () => {
+  const walls = [...rectWalls([0, 0], [4000, 3000], 200, 3000), ...rectWalls([1000, 3350], [5000, 6350], 200, 3000)];
+  const rooms = detectRooms(walls);
+  rooms.forEach((r, i) => { r.name = i ? '북실' : '남실'; });
+  const p = normalizeProject({ ...createEmptyProject('겹벽'), areaMode: 'center', floors: [{ ...createFloor('1F'), height: 3000, walls, rooms, items: [] }] });
+  const txt = exportDxf(p);
+  const layersAt = y => ents(pairs(txt), 'LINE').filter(r => /^WALL/.test(r[8]) && +r[20] === y && +r[21] === y).map(r => r[8]);
+  expect(new Set([...layersAt(-3000), ...layersAt(-3100)]).size).toBe(1);
+  expect(layersAt(-3100)[0]).not.toBe(layersAt(-3250)[0]);        // 남실 윗벽 면 | 틈 150 | 북실 아랫벽 면
+  const r = importText(txt), B = digest(r, r.back);
+  sameWalls(digest({ project: p }), B, 1);
+  expect(B.rooms).toEqual(['남실', '북실']);
+});
+
+test('y는 뒤집히고 원점은 그대로다 · 구획선(virtual)은 DIVIDER 레이어의 선 하나다', () => {
+  const p = synthetic();
+  const f = p.floors[0];
+  f.walls.push({ ...makeWall({ a: [-4000, 0], b: [0, 0], thickness: 20, height: 3500 }), virtual: true });
+  const lines = ents(pairs(exportDxf(p)), 'LINE').map(r => ({ layer: r[8], ltype: r[6], a: [+r[10], +r[20]], b: [+r[11], +r[21]] }));
+  // 앱 y = 3000인 600 벽의 중심선은 DXF y = −3000에 있고, 그 벽의 면선은 −3300·−2700이다(+3300은 없다).
+  expect(lines.some(l => l.layer === 'WALL' && l.ltype === 'CENTER' && l.a[1] === -3000 && l.b[1] === -3000)).toBe(true);
+  expect(lines.some(l => l.layer === 'WALL' && l.a[1] === -3300 && l.b[1] === -3300)).toBe(true);
+  expect(lines.some(l => l.layer === 'WALL' && l.a[1] === 3300)).toBe(false);
+  expect(lines.filter(l => l.layer === 'DIVIDER').map(l => [l.a, l.b])).toEqual([[[-4000, 0], [0, 0]]]);
+});
+
+test('문·창은 가져오기가 읽는 이름의 블록 INSERT다(DR · WIN · POCKET · SLIDING — 폭-두께)', () => {
+  const names = ents(pairs(exportDxf(synthetic())), 'INSERT').map(r => r[2]);
+  expect(names.sort()).toEqual(['DR-900-120', 'POCKET-900-200', 'SLIDING-900-200', 'WIN-1200-200', 'WIN-1800-600']);
+  expect(names.map(blockKind).sort()).toEqual(['door', 'pocket', 'pocket', 'window', 'window']);
+  expect(names.map(nominalWidth).sort((a, b) => a - b)).toEqual([900, 900, 900, 1200, 1800]);
+});
+
+test('합성 평면 왕복: 벽·두께·방 이름·도면 기준 넓이·문창 종류와 폭·기둥이 그대로다(두 번째 왕복도 같다)', () => {
+  const P0 = synthetic(), A = digest({ project: P0 });
+  const r1 = importText(exportDxf(P0)), B = digest(r1, r1.back);
+  sameWalls(A, B, 1);
+  expect(B.rooms).toEqual(['사무실', '창고']);
+  for (const [n, v] of A.areas) expect(Math.abs(B.areas.get(n) - v)).toBeLessThanOrEqual(0.05);
+  expect(A.opens.filter(o => !matchOpen(o, B.opens))).toEqual([]);
+  expect(B.opens).toHaveLength(A.opens.length);
+  // 미닫이문(door-slide)은 가져오기의 블록 종류에 없다 — 포켓 미닫이문으로 돌아온다(보고서 · 같은 미닫이·같은 폭).
+  expect(B.opens.map(o => o.id).sort()).toEqual(['door-pocket-900', 'door-pocket-900', 'door-swing-900', 'opening-pass', 'window-slide-1200', 'window-slide-1800']);
+  expect(B.columns.map(c => [c.p.map(Math.round), c.s.map(Math.round)])).toEqual([[[4000, -1500], [400, 400]]]);
+  expect(r1.project.name).toBe('합성 평면');
+  const r2 = importText(exportDxf(r1.project)), C = digest(r2, p => r1.back(r2.back(p)));
+  sameWalls(B, C, 1);
+  expect(C.opens.map(o => [o.id, o.w]).sort()).toEqual(B.opens.map(o => [o.id, o.w]).sort());
+});
+
+test('픽스처 왕복: 벽 11개가 끝점까지 같고 방·기둥·창이 같다 — 통로는 가져오기가 그 자리·폭으로 읽지 못하는 셋만 벽으로 잇는다', () => {
+  const r0 = fixture(), A = digest(r0);
+  const built = buildDxf(r0.project);
+  const r1 = importText(built.text), B = digest(r1, r1.back);
+  sameWalls(A, B, 2);
+  expect(B.rooms).toEqual(A.rooms);
+  expect(B.columns.length).toBe(A.columns.length);
+  for (const c of A.columns) expect(B.columns.some(d => near(d.p, c.p, 5) && Math.abs(d.s[0] - c.s[0]) <= 5 && Math.abs(d.s[1] - c.s[1]) <= 5)).toBe(true);
+  const nonPass = o => o.kind !== 'pass';
+  expect(A.opens.filter(nonPass).filter(o => !matchOpen(o, B.opens))).toEqual([]);
+  expect(B.opens.filter(nonPass)).toHaveLength(A.opens.filter(nonPass).length);
+  // 통로 넷 중 셋은 벽 끝과의 토막이 minSeg(150)보다 짧아(동쪽 벽 끝 50·80 mm · 꺾임 앞 50 mm) 가져오기가 그 틈을 그 자리·폭으로 읽지
+  // 못한다 — 벽을 끊지 않는다(끊으면 동쪽 벽 끝 1.7 m가 사라지고, 꺾임 앞 통로는 왕복마다 50 mm씩 밀린다).
+  const passes = A.opens.filter(o => o.kind === 'pass');
+  expect([passes.length, built.skippedPasses]).toEqual([4, 3]);
+  expect(B.opens.filter(o => o.kind === 'pass')).toHaveLength(passes.length - built.skippedPasses);
+  expect(B.opens.filter(o => o.kind === 'pass').filter(o => !matchOpen(o, passes))).toEqual([]);
+});
+
+test('픽스처 두 번째 왕복은 바뀌는 것이 없다(정규화 DXF는 고정점이다)', () => {
+  const r1 = importText(exportDxf(fixture().project)), B = digest(r1);
+  const r2 = importText(exportDxf(r1.project)), C = digest(r2, r2.back);
+  sameWalls(B, C, 1);
+  expect(C.rooms).toEqual(B.rooms);
+  expect(C.opens.map(o => [o.id, o.w]).sort()).toEqual(B.opens.map(o => [o.id, o.w]).sort());
+  expect(C.columns).toHaveLength(B.columns.length);
+});
+
+test('실명·면적은 따로 적는다(문자 레이어 · 높이 200~600 · "24.00㎡") — 다시 들여오면 방 이름이 같다', () => {
+  const texts = ents(pairs(exportDxf(synthetic())), 'MTEXT').map(r => [r[8], r[1], +r[40]]);
+  const room = texts.filter(t => t[0] === 'ROOM-TEXT');
+  expect(room.map(t => t[1]).sort()).toEqual(['24.00㎡', '24.00㎡', '사무실', '창고']);
+  expect(room.every(t => t[2] >= 200 && t[2] <= 600)).toBe(true);
+  expect(texts.find(t => t[0] === 'TITLE')).toEqual(['TITLE', '합성 평면', 1000]);
+});

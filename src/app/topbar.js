@@ -4,7 +4,7 @@ import { openGalleryDialog } from '../ui/galleryDialog.js';
 import { openEstimateDialog } from '../ui/estimateDialog.js';
 import { openSpecDialog } from '../ui/specDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
-import { savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, SHOT_SAVED } from '../ui/messages.js';
+import { savedAuto, savedManual, SAVED_DIRTY, SAVED_NONE, SHOT_SAVED, DXF_EXPORT_MENU } from '../ui/messages.js';
 
 // 저장 표시 한 곳(§14.10 → §15.7). 수동 저장도 시각을 갖는다("파일로 저장했습니다"만 적혀 시각이
 // 사라진 것이 감사 §18이다). 문구는 messages.js에서 온다.
@@ -38,6 +38,8 @@ export function createTopbar({ store, ui, shell, menu, view3d, actions = {} }) {
   const moreItems = () => [
     { label: '템플릿으로 저장', onSelect: () => actions.saveAsTemplate?.() },
     { label: 'JSON 내보내기', onSelect: () => actions.exportJson?.() },
+    // 2026-10-12 · 계획 12 Task 3: 가져온(고친) 평면을 정규화 DXF로 — CAD에서 틀린 벽만 고쳐 다시 들여오는 고리.
+    { label: DXF_EXPORT_MENU, onSelect: () => actions.exportDxf?.() },
     { label: '나가기', onSelect: () => actions.exit?.() },
   ];
 
