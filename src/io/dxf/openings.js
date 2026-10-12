@@ -14,7 +14,7 @@
 import { DXF_PARAMS } from './params.js';
 import { DOOR_BLOCK, OPEN_BLOCK, isDoorBlock, blockOpenings } from './blockOpenings.js';
 import { DOOR_PRODUCTS, WINDOW_PRODUCTS, SLIDE_PRODUCTS, clamp01, nearestWall, fitOpening, fitT, dedupeGaps, blockProduct, nearestProduct, makeItem, spanPieces } from './openingSeat.js';
-import { slideDoors } from './slideDoors.js';
+import { slideDoors, leafZones } from './slideDoors.js';
 import { uid } from '../../state/schema.js';
 
 export { DOOR_BLOCK, OPEN_BLOCK, slideDoors };
@@ -189,6 +189,9 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
   // 문짝 선 자체도 창 재료에서 뺀다 — 문의 증거이고, 문 옆에 맞닿아(겹치지 않아) 충돌로는 못 막는 창·통로 조각이 됐다(합성 900·1300 문짝).
   const slides = slideDoors(ex, walls, openingLayers, toApp, P, wallLayers);
   for (const d of slides) seat(SLIDE_PRODUCTS, d.width, d.wall, clamp01(d.t), true);
+  // 문짝이 놓인 자리(주차 자리 포함)는 차지된 자리다 — 이웃 벽까지(2026-10-12 · 계획 13 Task 6(c) · 신상중 B spot 2: 이웃 벽 위 주차 자리가
+  // 벽 틈 통로 800이 됐다 — 충돌은 같은 벽만 본다). 뒤의 창 면선·벽 틈이 비켜 간다.
+  for (const d of slides) for (const z of leafZones(d.leaf, walls, toApp, P)) mark(z.wall, z.t, z.width);
   const leafSegs = new Set(slides.map(d => d.leaf));
   // 차례가 규칙이다(Task 6 재리뷰): 스윙 호 → **창(면선)** → 벽 틈. 개구부 레이어의 면선은 그 자리가
   // 창이라는 직접 증거라 같은 자리의 일반 틈을 이긴다. 틈은 마지막 폴백이고, 이미 앉은 개구부와

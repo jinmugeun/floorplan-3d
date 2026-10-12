@@ -321,3 +321,47 @@ test('주차 쪽 벽이 문짝 끝보다 앞에서 끝나면 개구부는 그 �
   expect(cand[0].width).toBe(900);
   expect(cand[0].t * 6000).toBeCloseTo(2350, 6);              // (1900 + 2800) / 2
 });
+
+// 2026-10-12 · 계획 13 Task 6(c) — 신상중 B spot 6: 문짝 1000을 **닫힌 자리**(개구부 위 · 벽 면선이 없는 구간)에 그리고 주차 자리에 800 선을
+// 이어 그렸다. 화살표는 닫힌 문짝 옆(겹침)에 서므로 예전에는 닫힌 문짝을 읽지 않고 주차 쪽 800이 개구부를 800으로 쟀다(손 정답 1000).
+// 닫힌 문짝: 화살표가 벽 방향으로 겹쳐 서 있고, 문짝 구간이 벽 면선 없이 비어 있으면(빈 구간 ≥ 문짝의 80 %) 그 문짝이 곧 개구부다.
+test('닫힌 자리에 그린 문짝(화살표가 옆에 겹쳐 서고 문짝 아래가 빈 개구부)은 그 문짝 폭으로 먼저 앉는다 — 주차 쪽 선보다 앞', () => {
+  const closed = seg(2000, 130, 3000, 130, 'A-DOOR'), parked = seg(3000, 130, 3800, 130, 'A-DOOR');
+  const arrow = [seg(2250, 230, 2750, 230, 'A-DOOR'), seg(2750, 230, 2690, 190, 'A-DOOR'), seg(2750, 230, 2690, 270, 'A-DOOR')];   // 주차 쪽(+x)을 가리킨다
+  const cand = slideDoors(exOf({ segs: [...faces(), closed, parked, ...arrow] }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL);
+  expect(cand.map(c => [c.width, Math.round(c.t * 6000)])).toEqual([[1000, 2500], [800, 2600]]);
+  const items = buildOpenings({ ex: exOf({ segs: [...faces(), closed, parked, ...arrow] }), walls: [WALL_A], openingLayers: SLIDE_OPEN, wallLayers: SLIDE_WALL });
+  expect(items.map(i => [i.productId, i.size[0], Math.round(i.t * 6000)])).toEqual([['door-slide-900', 1000, 2500]]);
+  // 문짝 아래가 벽 면선으로 덮였으면(닫힌 자리가 아니다) 예전처럼 읽지 않는다.
+  expect(slideDoors(exOf({ segs: [...faces(), seg(1000, 130, 2000, 130, 'A-DOOR'), seg(1250, 300, 1750, 300, 'A-DOOR'), seg(1750, 300, 1690, 260, 'A-DOOR'), seg(1750, 300, 1690, 340, 'A-DOOR')] }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL)).toEqual([]);
+});
+
+// 2026-10-12 · 계획 13 Task 6(c) — 신상중 B spot 7: 미닫이 화살표만 개구부 레이어(A-DOOR)에 있고 문짝은 다른 레이어(6·8)에 그렸다. 문짝이 없으면
+// 기호를 읽지 못해 문틀 선 1950(레이어 4)이 창 1800이 됐다(손 정답 문 1000). 어느 문짝도 쓰지 않은 화살표는 **그 앞의 빈 구간**(벽 면선이 없는
+// 구간 — 화살표 축선 가운데를 품는다)이 개구부다. 폭이 문짝 범위(doorLeaf 700~1300)일 때만.
+test('문짝 없이 화살표만 있으면 화살표 앞의 빈 구간(문짝 폭 범위)이 미닫이문이다 — 그 자리의 문틀 선은 창이 되지 않는다', () => {
+  const arrow = (x0, x1, y = 230) => [seg(x0, y, x1, y, 'A-DOOR'), seg(x1, y, x1 - 60, y - 40, 'A-DOOR'), seg(x1, y, x1 - 60, y + 40, 'A-DOOR')];
+  const build = segs => buildOpenings({ ex: exOf({ segs }), walls: [WALL_A], openingLayers: SLIDE_OPEN, wallLayers: SLIDE_WALL });
+  const items = build([...faces(), ...arrow(2250, 2750), seg(2000, 0, 3950, 0, 'WIN')]);
+  expect(items.map(i => [i.productId, i.size[0], Math.round(i.t * 6000)])).toEqual([['door-slide-900', 1000, 2500]]);
+  // 화살표 앞이 벽 면선으로 덮였거나(1000~1500), 빈 구간이 문짝 범위 밖(2000)이면 읽지 않는다.
+  expect(slideDoors(exOf({ segs: [...faces(), ...arrow(1000, 1500)] }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL)).toEqual([]);
+  const wide = [seg(0, 100, 2000, 100, 'WAL'), seg(0, -100, 2000, -100, 'WAL'), seg(4000, 100, 6000, 100, 'WAL'), seg(4000, -100, 6000, -100, 'WAL')];
+  expect(slideDoors(exOf({ segs: [...wide, ...arrow(2750, 3250)] }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL)).toEqual([]);
+  // 문짝이 쓴 화살표는 화살표만의 자리를 따로 내지 않는다(문짝 경로 그대로 — 후보 하나).
+  expect(slideDoors(exOf({ segs: [...faces(), leafA(), ...arrowA()] }), [WALL_A], SLIDE_OPEN, p => p, P, SLIDE_WALL)).toHaveLength(1);
+});
+
+// 2026-10-12 · 계획 13 Task 6(c) — 신상중 B spot 2: 주차 자리 문짝이 두 벽 중심선의 이음매에 걸치고, 이웃 벽 쪽 주차 자리(벽 면선이 한쪽뿐)가
+// 벽 틈 통로(opening-pass 800)가 됐다. 충돌은 같은 벽만 비교했다 — 문짝이 놓인 주차 자리는 **벽**이다(문이 그 앞으로 미끄러진다):
+// 외미닫이 문짝 선이 나란히 걸친 벽마다 그 구간을 차지된 자리로 두어 뒤 경로(창 면선 · 벽 틈)가 비켜 가게 한다.
+test('외미닫이 문짝이 놓인 주차 자리는 이웃 벽까지 차지된 자리다 — 그 자리의 벽 틈 통로를 놓지 않는다', () => {
+  const A1 = makeWall({ a: [0, 0], b: [3000, 0], thickness: 200, height: 3500 }), A2 = makeWall({ a: [3000, 0], b: [6000, 0], thickness: 200, height: 3500 });
+  const wal = [seg(0, 100, 1500, 100, 'WAL'), seg(0, -100, 1500, -100, 'WAL'), seg(2500, 100, 6000, 100, 'WAL'), seg(2500, -100, 6000, -100, 'WAL')];
+  const leaf = seg(2500, 130, 3400, 130, 'A-DOOR');
+  const arrow = [seg(1750, 230, 2250, 230, 'A-DOOR'), seg(2250, 230, 2190, 190, 'A-DOOR'), seg(2250, 230, 2190, 270, 'A-DOOR')];
+  const run = gaps => buildOpenings({ ex: exOf({ segs: [...wal, leaf, ...arrow] }), walls: [A1, A2], openingLayers: SLIDE_OPEN, wallLayers: SLIDE_WALL, gaps });
+  expect(run([{ p: [3200, 0], width: 800 }]).map(i => [i.productId, i.size[0], i.wallId])).toEqual([['door-slide-900', 900, A1.id]]);
+  // 주차 자리에서 떨어진 틈(4600)은 그대로 통로다.
+  expect(run([{ p: [4600, 0], width: 800 }]).map(i => [i.productId, i.wallId])).toEqual([['door-slide-900', A1.id], ['opening-pass', A2.id]]);
+});
