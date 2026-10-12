@@ -130,6 +130,34 @@ export function manualTruth(id) {
   });
 }
 
+// 기구 손 정답(2026-10-12 · 계획 13 Task 4): 기구 열(equip·equipProd·equipClash)은 정답 없는 회귀 지표라 "자리·크기가 도면대로인가"는 못 본다.
+// truth/<코퍼스 id>-equip.json의 items[]({ name: 블록 이름, c: 몸체 중심의 원 DXF 좌표, size: [긴 변, 짧은 변] mm })를 코퍼스 주인이 도면에서 단다
+// (지금은 사동중 급식 구역 20개 — 고른 규칙과 몸체를 잰 방법은 그 파일의 note). manualTruth처럼 **파이프라인 결과에 맞추려고 고치지 않는다**.
+export function equipTruth(id) {
+  const path = resolve(HERE, 'truth', `${id}-equip.json`);
+  if (!existsSync(path)) return [];
+  return JSON.parse(readFileSync(path, 'utf8')).items ?? [];
+}
+
+// equipHit 채점(2026-10-12 · 계획 13 Task 4): 정답 몸체 중심(toApp로 옮김)에서 **가장 가까운** 기구 아이템(dxfBlock이 있는 것 — 기구 배치만 원 블록
+// 이름을 단다 · 문·창·기둥은 없다)의 중심이 EQUIP_TOL 안이고 그 긴 변이 정답 긴 변의 ±EQUIP_SIZE 안이면 적중. 200 mm = 개구부(OPN_TOL)와 같은 자리
+// 여유, 20 % = 기구 배치가 이름 치수를 믿는 폭(계획 13 사전 검토 반영 2 — 이름과 그린 상자가 ±20 % 안이면 이름). 방향은 보지 않는다(긴 변끼리 —
+// 축 정렬이 아닌 것도 같은 규칙). "아무 것이나 200 mm 안"이 아니라 가장 가까운 것만 보는 까닭: 후드가 국솥·그리들 바로 위(중심 120~160 mm)에
+// 걸리고 크기도 비슷해(1800 vs 1520 = +18 %) 국솥이 틀린 크기로 서도 후드가 대신 맞힐 수 있다. rows = 정답마다 가장 가까운 아이템(점수판 --equip).
+export const EQUIP_TOL = 200, EQUIP_SIZE = 0.2;
+export function equipScore(truth, items, toApp) {
+  const eq = items.filter(i => i.dxfBlock != null);
+  const rows = truth.map(t => {
+    const c = toApp(t.c), want = Math.max(...t.size);
+    let it = null, d = Infinity;
+    for (const i of eq) { const e = Math.hypot(i.pos[0] - c[0], i.pos[1] - c[1]); if (e < d) { d = e; it = i; } }
+    const long = it ? Math.max(it.size[0], it.size[1]) : null;
+    const ok = !!it && d <= EQUIP_TOL && Math.abs(long - want) <= EQUIP_SIZE * want + 1e-9;
+    return { name: t.name, ok, d: it ? Math.round(d) : null, got: it?.dxfBlock ?? null, long, want };
+  });
+  return { hit: rows.filter(r => r.ok).length, rows };
+}
+
 // 개구부 적합 허용 거리(mm, 2026-10-06): 우리 개구부 중심에서 정답 블록 **상자**까지(상자 안이면 0). 처음엔 상자 **중심**까지를
 // max(300, 폭/2 + 50) 안에서 봤는데, 포켓(절반이 벽 속 주머니)과 여닫이(열린 문짝까지 그림)는 상자 중심이 개구부 중심에서 ≈ 폭/2
 // 비껴 있어 여유가 없었고(사동중 포켓 453~460·502 mm / 허용 500, 내곡중 SD850 446 / 475), 긴 창은 거꾸로 너무 느슨했다(4800 창은
@@ -147,7 +175,7 @@ export const kindOk = (kind, id) => ((kind === 'door' || kind === 'pocket' || ki
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }. roles = 역할표 원 JSON(loadRoles · 없으면 규칙만).
 // dividers = 실명만으로 구획선 옵션(dividersOption · 기본 꺼짐). equipment = 기구 배치(2026-10-12 · 계획 13 Task 3 — 검토 창 체크박스와 같은 기본 켬:
 // e2e가 검토 창 숫자를 이 값과 맞댄다). 기구는 아이템이 늘 뿐이라 아래 지표(개구부는 door-·window-·opening-pass 제품 · 기둥은 kind column)에 들지 않는다 —
-// 수는 stats.equipment로 돌려준다(점수판 열은 Task 4).
+// 수는 stats.equipment로 돌려준다 — 점수판 열 equip·equipProd·equipClash와 손 정답 equipHit/equipAll(Task 4 · 아래 metrics).
 export async function runDrawing(entry, { roles = null, dividers = false, equipment = true } = {}) {
   const path = fileOf(entry);
   if (!path) return null;
@@ -220,6 +248,10 @@ export async function runDrawing(entry, { roles = null, dividers = false, equipm
     if (kindOk(t.kind, it.productId)) opnKind++;
   }
   const count = re => fl.items.filter(i => re.test(i.productId)).length;
+  // 기구 열(2026-10-12 · 계획 13 Task 4): 배치 수·제품 매칭 수·벽/기둥 겹침 수는 stats.equipment 그대로(검토 창 알림과 같은 값 — e2e가 맞댄다).
+  // 정답이 없는 회귀 지표다. 손 정답이 있는 도면만 equipHit/equipAll(없으면 0/0 — opnHit/opnAll과 같은 꼴).
+  const eqs = stats.equipment ?? {};
+  const eqScore = equipScore(equipTruth(entry.id), fl.items, toApp);
   const metrics = {
     regions: summary.regions.length,
     walls: stats.walls, rooms: stats.rooms, areaM2: stats.areaM2,
@@ -229,10 +261,14 @@ export async function runDrawing(entry, { roles = null, dividers = false, equipm
     areaOk, areaAll: labels.length,
     opnAll: truth.length, opnHit, opnWidth, opnKind,
     doors: count(/^door-/), windows: count(/^window-/), passes: count(/^opening-pass/), columns: cols.length,
+    equip: eqs.placed ?? 0, equipProd: eqs.product ?? 0, equipClash: eqs.clash ?? 0, equipHit: eqScore.hit, equipAll: eqScore.rows.length,
     guessed: !!stats.guessed, ms,
   };
-  return { path, summary, project, stats, metrics, areaRows };
+  return { path, summary, project, stats, metrics, areaRows, equipRows: eqScore.rows };
 }
 
 // 방향이 있는 지표: 값이 이쪽으로 가면 나빠진 것이다(벽·방 수 같은 나머지는 바뀌면 알리기만 한다).
-export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1, areaOk: -1, opnHit: -1, opnWidth: -1, opnKind: -1 };
+// 기구 열(2026-10-12 · 계획 13 Task 4): equip·equipProd는 줄면, equipClash는 늘면 나빠짐 — 정답이 없어 "나빠졌을 수 있다"는 경고다(어휘·제외 규칙을
+// 고쳐 일부러 줄였으면 --update). equipHit는 손 정답이라 opnHit과 같은 뜻이다.
+export const WORSE = { named: -1, unmatched: +1, openEnds: +1, tiny: +1, dimFit: -1, areaOk: -1, opnHit: -1, opnWidth: -1, opnKind: -1,
+  equip: -1, equipProd: -1, equipClash: +1, equipHit: -1 };

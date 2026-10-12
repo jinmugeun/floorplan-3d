@@ -20,8 +20,13 @@
   "windows": 30,
   "passes": 5,
   "columns": 34,
+  "equip": 226,
+  "equipProd": 143,
+  "equipClash": 0,
+  "equipHit": 18,
+  "equipAll": 20,
   "guessed": false,
-  "ms": 1582
+  "ms": 1480
  },
  "sinsang-B": {
   "regions": 2,
@@ -44,8 +49,13 @@
   "windows": 13,
   "passes": 16,
   "columns": 14,
+  "equip": 1,
+  "equipProd": 0,
+  "equipClash": 0,
+  "equipHit": 0,
+  "equipAll": 0,
   "guessed": false,
-  "ms": 1117
+  "ms": 1183
  },
  "sinsang-A": {
   "regions": 2,
@@ -68,8 +78,13 @@
   "windows": 16,
   "passes": 9,
   "columns": 14,
+  "equip": 166,
+  "equipProd": 116,
+  "equipClash": 0,
+  "equipHit": 0,
+  "equipAll": 0,
   "guessed": false,
-  "ms": 1073
+  "ms": 973
  },
  "naegok": {
   "regions": 1,
@@ -92,7 +107,12 @@
   "windows": 18,
   "passes": 3,
   "columns": 24,
+  "equip": 11,
+  "equipProd": 4,
+  "equipClash": 0,
+  "equipHit": 0,
+  "equipAll": 0,
   "guessed": false,
-  "ms": 1045
+  "ms": 962
  }
 }

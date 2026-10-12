@@ -49,6 +49,12 @@ for (const entry of corpus()) {
     const nums = await page.evaluate(() => document.querySelector('#dxfDialog [name="nums"]')?.textContent ?? '');
     const m = nums.match(/벽 (\d+) · 방 (\d+) · 면적 ([\d.]+)/) ?? [];
     check('검토 창 숫자 = 점수판', +m[1] === want.walls && +m[2] === want.rooms && +m[3] === want.areaM2, `화면 "${nums}" · 점수판 벽 ${want.walls} 방 ${want.rooms} 면적 ${want.areaM2}`);
+    // 기구 알림(2026-10-12 · 계획 13 Task 4): 검토 창 알림의 "기구 n개 배치 — 제품 p · 일반 g"가 점수판(열 equip·equipProd · stats.equipment.generic)과
+    // 같아야 한다 — 체크박스 기본 켬 = 점수판의 runDrawing 기본(equipment: true). 배치가 0이면 알림에 기구 문구가 없어야 한다(dxfDialog notes).
+    const note = await page.evaluate(() => { const e = document.querySelector('#dxfDialog [name="notice"]'); return e && !e.hidden ? e.textContent : ''; });
+    const em = note.match(/기구 (\d+)개 배치 — 제품 (\d+) · 일반 (\d+)/), generic = scored.stats.equipment?.generic ?? 0;
+    check('검토 창 기구 알림 = 점수판', want.equip > 0 ? !!em && +em[1] === want.equip && +em[2] === want.equipProd && +em[3] === generic : !em,
+      `화면 "${em?.[0] ?? '기구 문구 없음'}" · 점수판 배치 ${want.equip} 제품 ${want.equipProd} 일반 ${generic}`);
     // 화면의 체크 그대로 다시 추출해도 같은 값이어야 한다(표시 = 계산): 관계없는 옵션을 껐다 켠다.
     for (let k = 0; k < 2; k++) { await page.click('#dxfDialog [name="trace"]'); await page.waitForTimeout(700); await ready(); }
     const again = await page.evaluate(() => document.querySelector('#dxfDialog [name="nums"]')?.textContent ?? '');
