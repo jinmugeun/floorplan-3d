@@ -21,7 +21,10 @@ export const LAYER_RULES = [
   // 키 근거(놓친 발코니·정원 정답의 빈 변을 그 레이어 선이 60 % 이상 덮는 수): `栏杆` 78 · `0-栏杆` 36 · `阳台栏杆SHUTTER` 15 · `RAIL` 1 →
   // `栏杆`·`rail`(`난간`·`handrail`은 사전 검토가 정한 한국어·영어 이름), `阳台` 계열 `屋顶轮廓阳台` 28 · `阳台露台` 9 · `阳台` 8 → `阳台`,
   // 철자가 틀린 `4-BACLONY` 36(2suite (9)·3suite (3)·(4)·(10) — 그림으로 확인한 발코니 앞 두 줄 난간) → `baclony`.
-  { role: 'rail',    keys: ['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony'] },
+  // `divider`(2026-10-12 · 최종 리뷰 X-1): 정규화 DXF 내보내기는 구획선(virtual)을 `DIVIDER` 레이어에 쓴다. '기타'로 버리면 난간으로 닫은 발코니가
+  // 왕복 한 번에 다시 열렸다(방 2 → 1 · 끊긴 끝 0 → 2). 난간 역할이면 railDividers가 벽 두 곳 이상에 닿는 railMin 이상 선을 구획선으로 다시 긋는다
+  // (더 짧은 것은 잃는다). 두 코퍼스에 `divider`가 든 레이어 이름은 없다(점수 불변).
+  { role: 'rail',    keys: ['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony', 'divider'] },
 ];
 export const ROLE_LABEL = { wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', rail: '난간', other: '기타' };
 

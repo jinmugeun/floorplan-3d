@@ -28,7 +28,8 @@ test('LAYER_RULES와 ROLE_LABEL은 §18.2가 적은 표 그대로다(앞의 규�
   expect(LAYER_RULES[0].keys).toEqual(['dim', '치수', 'az-leal', 'az-leat', 'az-cutl', 'tol']);
   expect(LAYER_RULES[7].keys).toContain('기존');
   expect(LAYER_RULES[7].keys).toContain('st-pl');
-  expect(LAYER_RULES[8].keys).toEqual(['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony']);   // 2026-10-12 계획 12 Task 5(classify.js 주석)
+  // 2026-10-12 계획 12 Task 5(classify.js 주석) · 'divider'는 최종 리뷰 X-1(정규화 DXF의 DIVIDER 구획선을 다시 긋는다)
+  expect(LAYER_RULES[8].keys).toEqual(['栏杆', '난간', 'rail', 'handrail', '阳台', 'baclony', 'divider']);
   expect(ROLE_LABEL).toEqual({ wall: '벽', opening: '개구부', equip: '기구', mep: '설비', dim: '치수', text: '문자', grid: '축선', hatch: '해치', rail: '난간', other: '기타' });
 });
 

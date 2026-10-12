@@ -15,6 +15,9 @@ import { createEmptyProject, createFloor, normalizeProject, createItem } from '.
 import { makeWall, rectWalls } from '../src/geom/walls.js';
 import { normalizeWalls } from '../src/geom/normalize.js';
 import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
+import { buildProject } from '../src/io/dxf/toProject.js';
+import { DXF_PARAMS } from '../src/io/dxf/params.js';
+import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE } from '../src/ui/dxfMessages.js';
 import { productById } from '../src/products/catalog.js';
 
 let handle;
@@ -132,9 +135,51 @@ test('엔티티가 쓰는 레이어는 모두 LAYER 표에 있고, 레이어 이
   });
   expect([...used].filter(l => !table.has(l))).toEqual([]);
   expect(EXPORT_LAYERS.map(l => l.name).every(n => table.has(n))).toBe(true);
-  // 역할(io/dxf/classify.js): 벽·기둥은 벽, 문자는 문자, 통로 표시는 개구부, 치수는 치수, 나머지는 기타(기본 체크 밖).
+  // 역할(io/dxf/classify.js): 벽·기둥은 벽, 문자는 문자, 통로 표시는 개구부, 치수는 치수, 구획선은 난간(구획선으로만 다시 긋는다),
+  // 나머지는 기타(기본 체크 밖). DIVIDER → rail은 2026-10-12 최종 리뷰 X-1(왕복에서 난간 구획선이 사라져 발코니가 다시 열렸다).
   expect(['WALL', 'WALL-2', 'COLUMN', 'ROOM-TEXT', 'TITLE', PASS_LAYER, 'DIM', 'OPENING', 'ROOM', 'DIVIDER'].map(classifyLayer))
-    .toEqual(['wall', 'wall', 'wall', 'text', 'text', 'opening', 'dim', 'other', 'other', 'other']);
+    .toEqual(['wall', 'wall', 'wall', 'text', 'text', 'opening', 'dim', 'other', 'other', 'rail']);
+});
+
+// 2026-10-12 · 최종 리뷰 X-1: 내보내기는 구획선(virtual)을 DIVIDER에 쓰는데 가져오기가 그 레이어를 '기타'로 버려, 난간으로 닫은 발코니가
+// 왕복 한 번에 다시 열렸다(방 2 → 1 · 끊긴 끝 0 → 2). DIVIDER는 난간 역할이라 railDividers가 같은 구획선을 다시 긋는다.
+test('난간으로 닫은 발코니(구획선)는 정규화 DXF 왕복 뒤에도 닫혀 있다 — 방 수·끊긴 끝이 그대로다', () => {
+  const W = (a, b) => ({ a, b, thickness: 200 }), L = (a, b) => ({ a, b });
+  const raw = [W([-2000, 1600], [8000, 1600]), W([-2000, 1600], [-2000, 6000]), W([8000, 1600], [8000, 6000]), W([-2000, 6000], [8000, 6000]),
+    W([0, 1600], [0, 0]), W([6000, 1600], [6000, 0])];
+  const built = buildProject(raw, { rails: [L([100, 50], [5900, 50]), L([100, -50], [5900, -50])] });
+  expect([built.stats.rooms, built.stats.railDividers, built.stats.openEnds.length]).toEqual([2, 1, 0]);
+  const txt = exportDxf(built.project);
+  const r = importText(txt);
+  expect(r.summary.layers.find(l => l.name === 'DIVIDER').role).toBe('rail');
+  expect(r.summary.checked).not.toContain('DIVIDER');                       // 벽으로 체크하지 않는다(구획선으로만)
+  expect([r.stats.rooms, r.stats.railDividers, r.stats.openEnds.length]).toEqual([2, 1, 0]);
+  expect(r.project.floors[0].walls.filter(w => !w.virtual)).toHaveLength(built.project.floors[0].walls.filter(w => !w.virtual).length);
+});
+
+// 2026-10-12 · 최종 리뷰 X-2(N3-1 · M3-5 · M10-6): 배포 안내(public/dxf-guide.html)가 내보내기와 어긋났다 — 모든 벽에 중심선이 있다고 했고,
+// WALL-2·TITLE이 표에 없었고, DIVIDER는 "쓰지 않음"이라 했고, 교정 기록 파일에 대해 아무 말이 없었다. 안내의 핵심 문장을 코드 값으로 고정한다
+// (내보내기·가져오기가 바뀌어 안내와 다시 어긋나면 여기서 실패한다).
+test('입력 도면 안내는 내보내기와 맞는다 — 중심선 조건 · 내보내는 레이어 모두 · DIVIDER는 구획선으로 다시 긋는다 · 교정 기록', () => {
+  const html = readFileSync(fileURLToPath(new URL('../public/dxf-guide.html', import.meta.url)), 'utf8');
+  const row = name => html.match(new RegExp(`<tr><td><code>${name}</code></td>(.*?)</tr>`, 's'))?.[1] ?? '';
+  // 중심선은 bandGap보다 두꺼운 벽만(dxfExportGeom) — "면선 두 줄 + 중심선" 같은 모든 벽 문장은 없다.
+  expect(row('WALL')).toContain(`두께 ${DXF_PARAMS.bandGap} mm보다 두꺼운 벽만 중심선`);
+  expect(html).not.toMatch(/면선 두 줄 \+ 중심선|면선\(두 줄\)과 중심선/);
+  // 내보내는 레이어는 모두 표의 한 줄이다(WALL-2의 교대 규칙 · TITLE 포함).
+  expect(EXPORT_LAYERS.filter(l => !row(l.name))).toEqual([]);
+  expect(row('WALL-2')).toContain('번갈아');
+  // DIVIDER는 난간 역할 — 구획선으로 다시 긋는다(railMin 이상 · 벽 두 곳).
+  expect(classifyLayer('DIVIDER')).toBe('rail');
+  expect(row('DIVIDER')).not.toContain('쓰지 않음');
+  expect(row('DIVIDER')).toContain(`${DXF_PARAMS.railMin / 1000} m 이상`);
+  // 교정 기록: 메뉴 이름 · 담기는 것 · 자동 전송 없음 · CAD 고리 전에 먼저 · 이메일 주소는 적지 않는다.
+  expect(html).toContain(DXF_FEEDBACK_MENU);
+  expect(html).toContain(DXF_FEEDBACK_NONE);
+  expect(html).toContain('-dxf-feedback.json');
+  expect(html).toContain('자동으로 보내지 않습니다');
+  expect(html).toContain('CAD에서 고치기 전에 교정 기록을 먼저 내보내 주세요');
+  expect(html).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
 });
 
 // 가져오기는 레이어가 겹치지 않는 두 면선 사이 틈(≥ cavityMin 150)에서만 붙은 두 벽을 가른다 — 한 레이어면 두 벽이 550 띠 하나가 된다(내곡중).

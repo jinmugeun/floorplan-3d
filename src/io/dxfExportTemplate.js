@@ -12,7 +12,8 @@ export const num = v => { const r = Math.round((Number(v) || 0) * 1000) / 1000; 
 
 // 레이어(이름 · ACI 색). 이름이 곧 다시 들여올 때의 역할이다(io/dxf/classify.js LAYER_RULES — 2026-10-12 실측):
 //  WALL → 벽('wal') · COLUMN → 벽('col' — 기둥 사각형은 벽 레이어에서 찾는다) · ROOM-TEXT·TITLE → 문자('text'·'title') ·
-//  OPENING·ROOM·DIVIDER → 기타(아무 키도 맞지 않는다 — 기본 체크 밖이라 벽 판정에 끼지 않는다) · 개구부 → 개구부('개구' —
+//  OPENING·ROOM → 기타(아무 키도 맞지 않는다 — 기본 체크 밖이라 벽 판정에 끼지 않는다) · DIVIDER → 난간('divider' — 2026-10-12
+//  최종 리뷰 X-1: 구획선을 railDividers가 다시 긋는다 · 벽 체크 밖) · 개구부 → 개구부('개구' —
 //  통로 표시 X만 싣는다: 문·창 근거) · DIM → 치수('dim'). 문·창 블록은 일부러 '기타' 레이어(OPENING)에 둔다 — 개구부 역할이면
 //  틀 사각형의 긴 변이 창 구간(windowSpans)·창틀 띠(op)로도 읽힌다. 기타 레이어에는 청록(ACI 4)을 쓰지 않는다: 이름이 기타인
 //  청록 레이어는 내용으로 창호가 된다(layerGuess.refineByContent ①).
