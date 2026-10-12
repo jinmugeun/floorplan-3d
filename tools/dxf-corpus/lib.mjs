@@ -130,6 +130,12 @@ export function manualTruth(id) {
 // 포켓 하나에 62 mm, 내곡중 FSD800에 100 mm 여유를 두고도 가장 가까운 진짜 빗나감(473 mm)보다 273 mm 아래다.
 export const OPN_TOL = 200;
 
+// opnKind의 종류 맞음(정답 종류 kind ↔ 우리 아이템 제품 id): 문·포켓·미닫이 정답에 door-*, 창 정답에 window-*, 통로 정답에 opening-pass.
+// slide·pass(2026-10-12 · 계획 12 최종 리뷰 X-3): aa2b710이 블록 종류에 더한 뒤로도 여기는 door·pocket·window만 알아, 그 정답은 opnKind를 얻을 수
+// 없었다. 코퍼스에는 slide·pass 정답이 0개라(신상중 손 정답 일곱은 door) 점수는 그대로다 — 정규화 DXF를 코퍼스로 쓸 때를 위한 것이다.
+export const kindOk = (kind, id) => ((kind === 'door' || kind === 'pocket' || kind === 'slide') && id.startsWith('door-'))
+  || (kind === 'window' && id.startsWith('window-')) || (kind === 'pass' && id === 'opening-pass');
+
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }. roles = 역할표 원 JSON(loadRoles · 없으면 규칙만).
 // dividers = 실명만으로 구획선 옵션(dividersOption · 기본 꺼짐).
 export async function runDrawing(entry, { roles = null, dividers = false } = {}) {
@@ -182,10 +188,9 @@ export async function runDrawing(entry, { roles = null, dividers = false } = {})
   // (이름에 폭이 없는 블록은 폭 검사를 늘 통과한다). 정답 = 블록 정답 + 손 정답(truth/<id>.json · 2026-10-12).
   const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
   const truth = [...(await blockTruth(exRaw)), ...manualTruth(entry.id)].filter(t => near(toApp(t.c)));
-  // opnKind(2026-10-12): 맞힌 정답 중 가장 가까운 아이템의 **종류**도 맞는 수 — 문·포켓 정답에 door-*, 창 정답에 window-*.
-  // opening-pass는 어느 쪽도 아니다. 자리 적중(opnHit)은 창이 문 자리를 차지해도 세므로 종류는 따로 센다
+  // opnKind(2026-10-12): 맞힌 정답 중 가장 가까운 아이템의 **종류**도 맞는 수(kindOk — 아래 모듈 수준).
+  // 자리 적중(opnHit)은 창이 문 자리를 차지해도 세므로 종류는 따로 센다
   // (신상중 외미닫이 일곱 자리는 규칙 전에도 opnHit 7/7이었다 — 전부 창·통로였다).
-  const kindOk = (kind, id) => ((kind === 'door' || kind === 'pocket') && id.startsWith('door-')) || (kind === 'window' && id.startsWith('window-'));
   let opnHit = 0, opnWidth = 0, opnKind = 0;
   for (const t of truth) {
     // 상자 네 귀를 앱 좌표로 옮긴 뒤 min·max를 다시 잡는다 — toApp는 y를 뒤집는다.

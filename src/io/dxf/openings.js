@@ -134,10 +134,11 @@ export function buildOpenings({ ex, walls = [], toApp = p => p, scale = 1, openi
     // 그 전에는 접점에 벽 두께만 한 기둥이 섰고 칸막이 끝이 유리를 가로질렀다.
     // 제품은 조각이 아니라 창 전체 폭으로, 충돌 검사 **전에** 고른다(1200 창의 600 조각이 고정창이 되지 않게 — 조각들의 높이·sill이 같아야
     // 한다; 한 조각이 충돌로 빠져도 남은 조각은 도면이 이름 붙인 창 전체의 제품이다 · 리뷰 m-5).
-    // 잇는 것은 창·포켓 미닫이뿐이다(2026-10-12 리뷰 m-3): 여닫이 문 한가운데에 벽이 T자로 붙으면 칸막이가 문길을 막는다 — 문짝 하나가
-    // 접점을 넘을 수 없다. 포켓·미닫이 문짝은 벽을 따라 미끄러지므로 넘을 수 있다. 문은 지금처럼 호스트 안으로 자른다.
+    // 잇는 것은 **창뿐**이다(2026-10-12 · 계획 12 최종 리뷰 X-3 · M7-2로 고친 주석 — 리뷰 m-3의 "창·포켓"을 좁혔다): 문은 문짝 하나가 한 아이템이다.
+    // 여닫이 문 한가운데에 벽이 T자로 붙으면 칸막이가 문길을 막고, 포켓은 blockOpenings가 이미 문짝 반쪽으로 줄여 놓은 개구부라 접점에서 나누면
+    // door-pocket이 둘(2D/3D 문짝 둘 · 견적 두 줄)이 된다. 미닫이(slide)도 같다. 문은 모두 지금처럼 호스트 안으로 잘라 하나로 앉힌다.
     const L = wallLen(o.wall), c = o.t * L, half = o.width / 2;
-    const pieces = spanPieces(o.kind === 'window' || o.kind === 'pocket' ? walls : [], o.wall, c - half, c + half, P.bandTol);
+    const pieces = spanPieces(o.kind === 'window' ? walls : [], o.wall, c - half, c + half, P.bandTol);
     const id = blockProduct(o.kind, pieces.reduce((a, p) => a + p.width, 0));
     const group = [];
     for (const { wall, width, t } of pieces) {

@@ -12,7 +12,7 @@ import { layerStats, defaultChecked, ROLE_LABEL } from '../src/io/dxf/classify.j
 import { setBlockTable, blockKind, blockKindByName, blockWidth, isOpenBlock, isDoorBlock, blockBoxes, blockOpenings, OPEN_BLOCK, DOOR_BLOCK } from '../src/io/dxf/blockOpenings.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
 import { makeWall } from '../src/geom/walls.js';
-import { rolesOption } from '../tools/dxf-corpus/lib.mjs';
+import { rolesOption, kindOk } from '../tools/dxf-corpus/lib.mjs';
 import { parseArgs, tableFromResponse, buildRequest, RESPONSE_SCHEMA } from '../tools/dxf-corpus/llm-roles.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
@@ -241,6 +241,34 @@ test('llm-roles: --model이 없으면 2, 키가 없으면 2 "키 필요", --vali
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// 2026-10-12 · 계획 12 최종 리뷰 X-3(N3-6): 블록 종류 어휘는 한 벌이다 — aa2b710이 slide·pass를 더한 뒤 점수판 kindOk(door·pocket·window만)·
+// llm-roles 프롬프트(pass 정의 없음)·README 형식 줄(pass 없음)이 뒤처졌다. 셋 다 BLOCK_KINDS를 따라야 한다.
+test('블록 종류 어휘는 한 벌이다 — 점수판 kindOk · llm-roles 프롬프트 · README가 BLOCK_KINDS를 모두 안다', () => {
+  const product = { door: 'door-swing-900', pocket: 'door-pocket-900', slide: 'door-slide-900', window: 'window-slide-1200', pass: 'opening-pass' };
+  for (const k of Object.keys(product)) expect([k, kindOk(k, product[k])]).toEqual([k, true]);
+  expect([kindOk('pass', 'door-swing-900'), kindOk('slide', 'window-slide-1200'), kindOk('window', 'opening-pass'), kindOk('door', 'opening-pass')]).toEqual([false, false, false, false]);
+  const system = buildRequest({ layers: [], blocks: [], texts: [] }, 'm').system;
+  const kindsLine = system.split('\n').find(l => l.startsWith('Block kinds:'));
+  for (const k of BLOCK_KINDS) expect([k, new RegExp(`\\b${k}\\b`).test(kindsLine)]).toEqual([k, true]);
+  expect(system).toMatch(/width: the nominal opening width in mm for door\/window\/pocket\/slide\/pass/);
+  const readme = readFileSync(join(APP, 'tools/dxf-corpus/README.md'), 'utf8');
+  expect(readme).toContain(`"kind": "${BLOCK_KINDS.join('|')}"`);
+  expect(readme).toContain('`door`·`window`·`pocket`·`slide`·`pass`만 창·문');
+});
+
+// 2026-10-12 · 계획 12 최종 리뷰 M9-7: few-shot 예시가 사동중·내곡중·신상중의 정답을 담는다 — ⓓ 비교 규칙(공개 5장으로만 · 실파일은 참고(누수))이
+// 도구 머리 주석과 README에 남아 있어야 한다. 예시를 바꾸면 이 문서도 함께 고친다.
+test('llm-roles few-shot 누수: 머리 주석과 README가 ⓓ 비교를 공개 5장으로 한정하고 실파일 수치를 "참고(누수)"로 적는다', () => {
+  const src = readFileSync(join(APP, 'tools/dxf-corpus/llm-roles.mjs'), 'utf8'), readme = readFileSync(join(APP, 'tools/dxf-corpus/README.md'), 'utf8');
+  for (const doc of [src, readme]) {
+    expect(doc).toContain('공개 5장');
+    expect(doc).toContain('참고(누수)');
+    for (const n of ['2suite (1)', '4suite (9)', '4suite (10)', '6suite (6)', '6suite (8)']) expect(doc).toContain(n);
+  }
+  const system = buildRequest({ layers: [], blocks: [], texts: [] }, 'm').system;
+  for (const n of ['사동중', '내곡중', '신상중', 'DOTE']) expect(system).toContain(n);         // 그래서 누수다
 });
 
 test('llm-roles: 응답(배열 꼴) → 역할표(사전 꼴), 요청은 명시한 모델·JSON 스키마 출력이다', () => {

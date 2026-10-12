@@ -30,8 +30,8 @@
 그 개구부에 `openingGroup` 표지가 있으면(2026-10-12 · T자로 갈린 같은 선 위 벽 조각들에 나뉘어 앉은 블록 개구부 하나) 같은 표지 조각들의 폭 합으로 잰다.
 `opnHit`(아래 공개 코퍼스의 `doorHit`도)는 정답 상자 곁에 개구부가 **있는지**만 보는 검사다 — 정답과 개구부를 하나씩 짝짓지
 않으므로 한 개구부가 이웃한 정답 둘을 다 맞힐 수 있고, 곁에 있는 다른 종류(창·통로 개구부)도 센다(2026-10-06 최종 리뷰).
-`opnKind`(↑ · 2026-10-12) 맞힌 정답 중 가장 가까운 개구부의 종류도 맞는 수(문·포켓 정답 ↔ `door-*`, 창 정답 ↔ `window-*` · `opening-pass`는
-늘 틀림) — 자리 적중 ≠ 종류 적중: 창이 문 자리를 차지해도 `opnHit`은 세지만 `opnKind`는 안 센다.
+`opnKind`(↑ · 2026-10-12) 맞힌 정답 중 가장 가까운 개구부의 종류도 맞는 수(문·포켓·미닫이 정답 ↔ `door-*`, 창 정답 ↔ `window-*`, 통로 정답 ↔
+`opening-pass` — 통로 정답이 아니면 `opening-pass`는 늘 틀림 · `lib.kindOk`) — 자리 적중 ≠ 종류 적중: 창이 문 자리를 차지해도 `opnHit`은 세지만 `opnKind`는 안 센다.
 bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 측정): 여닫이·포켓 문은 bbox 중심이 개구부 중심에서 ≈ 폭/2
 비껴 있다 — 여닫이는 열린 문짝까지, 포켓은 벽 속 주머니까지 그려져서다(사동중 포켓 900 453~502 mm, DR-900 390·442 mm,
 내곡중 SD850 394·446 mm). 상자까지 재면 포켓의 개구부 중심은 상자 안, 여닫이는 문틀 쪽 상자 변 위라 이 비낌이 사라지고,
@@ -91,7 +91,7 @@ bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 �
 ```json
 {
   "layers": { "<레이어>": "wall|opening|text|dim|equip|mep|grid|hatch|rail|other" },
-  "blocks": { "<블록>": { "kind": "door|window|pocket|slide|equip|symbol|column|other", "width": 900 } },
+  "blocks": { "<블록>": { "kind": "door|window|pocket|slide|pass|equip|symbol|column|other", "width": 900 } },
   "texts":  { "<글자 그대로>": "room|area|title|label|axis|other" }
 }
 ```
@@ -102,7 +102,7 @@ bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 �
   그 행의 `guessed`·`byColor`는 지운다). 그래서 표에 없는 레이어의 행은 표가 없을 때와 같다(추정 벽 포함 · 2026-10-12 리뷰 M-1). 표가 벽을 하나도
   남기지 않으면(유일한 벽 레이어를 `other`로 바꾼 표) 표에 없는 레이어끼리 벽 추정을 한 번 더 한다. 그 역할로 정해지는 기본 체크(벽)·개구부 재료·
   난간·실명/제목 후보 레이어도 따른다. 블록 종류와 폭
-  (`door`·`window`·`pocket`·`slide`만 창·문 · `equip`·`symbol`·`column`·`other`는 이름이 `DR-900`이어도 창·문이 아니다 — 블록 개구부·벽 구간의
+  (`door`·`window`·`pocket`·`slide`·`pass`만 창·문 — `pass`는 문 없는 통로(정규화 DXF의 `PASS-폭-두께`) · `equip`·`symbol`·`column`·`other`는 이름이 `DR-900`이어도 창·문이 아니다 — 블록 개구부·벽 구간의
   창 자리·긴 연장의 근거·문 호·외미닫이 기호의 제외가 모두 따른다), 문자 역할(`room` = 규칙이 버릴 글자도 실명 후보 · `area` = 면적 표기 ·
   나머지 = 이름 아님).
 - **표가 바꾸지 못하는 것**: 꺼짐·동결(꺼진 레이어를 켜지 않는다), 선·호·문자의 기하와 모든 문턱(params.js), 도면 후보·단위, 검토 창에서
@@ -120,3 +120,8 @@ bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 �
   없으면 "키 필요"로 종료 코드 2. 응답은 덤프에 없는 이름을 버리고 형식 검사를 지난 칸만 쓴다(`meta`에 모델·사용량·버린 수).
 - 측정: `npm run dxf:score -- --roles ../dxf-roles` · `npm run dxf:public -- --roles ../dxf-roles`(파일 이름은 실파일 id · 공개 도면 이름,
   예 `../dxf-roles/naegok.json` · `../dxf-roles/2suite (1).json`).
+- **few-shot 누수(2026-10-12 · 계획 12 최종 리뷰 M9-7)**: `llm-roles.mjs`의 프롬프트 예시에 사동중·내곡중·신상중의 정답(벽 레이어 · 블록 종류 · 실명)이
+  들어 있다. 모델 역할표(ⓓ)를 드라이런 표·규칙과 견줄 때는 **공개 5장**(2suite (1) · 4suite (9) · 4suite (10) · 6suite (6) · 6suite (8) — 도면별 정답이
+  프롬프트에 없는 도면)으로만 판단하고, 실파일 넷의 수치는 **"참고(누수)"** 로 따로 적는다. 공개 5장도 완전한 홀드아웃은 아니다 — `DOTE = grid` 예시는
+  2suite (1)·6suite (6)의 레이어이고 "Chinese apartments" 줄은 공개 코퍼스 전체의 레이어 관례라, 그 칸은 맞혀도 세지 않는다.
+- 점수판의 `opnKind`(`lib.kindOk`)는 블록 종류 어휘를 따른다: `door`·`pocket`·`slide` 정답 ↔ `door-*`, `window` ↔ `window-*`, `pass` ↔ `opening-pass`.

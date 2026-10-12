@@ -111,16 +111,29 @@ test('끝이 문·창 자리 안인 가로지르기는 버리고 다음 자리�
   expect(addDividersByNames(walls, labels, { openings: [{ ...door, width: 7000 }] })).toEqual({ walls, added: 0 });
 });
 
-test('방 안에 떠 있는 벽(섬)을 지나거나 그 위를 따라가는 가로지르기는 버린다', () => {
+test('방 안에 떠 있는 벽(섬)을 가로질러 지나는 가로지르기는 버린다', () => {
   const walls = loop([[0, 0], [12000, 0], [12000, 4000], [0, 4000]]);
   const labels = [label('客厅', 2000, 2000), label('餐厅', 10000, 2000)];
-  for (const island of [wall(5800, 2000, 6200, 2000), wall(6000, 1000, 6000, 3000)]) {        // x = 6000 가로지르기를 가로지르는 섬 · 같은 직선 위의 섬
-    const { walls: out, added } = addDividersByNames([...walls, island], labels);
-    expect(added).toBe(1);
-    const v = out.filter(w => w.virtual);
-    expect(v).toHaveLength(1);
-    expect([5200, 6800]).toContain(v[0].a[0]);
-  }
+  const island = wall(5800, 2000, 6200, 2000);                                          // x = 6000 가로지르기를 가로지르는 섬
+  const { walls: out, added } = addDividersByNames([...walls, island], labels);
+  expect(added).toBe(1);
+  const v = out.filter(w => w.virtual);
+  expect(v).toHaveLength(1);
+  expect([5200, 6800]).toContain(v[0].a[0]);
+});
+
+// 2026-10-12 · 계획 12 최종 리뷰 N6-1(Task 6 재리뷰 n-1): 같은 직선 위의 섬은 "지나는" 것이 아니다 — 0905219가 그것을 막아 x 6800으로 비껴
+// 잘랐다([20.8, 27.2] · 섬이 한 방 안에 떠 있다). 5748b30의 결과가 옳다: x 6000 한 줄을 긋고, 정규화가 앞에 있던 섬에게 겹친 구간을 맡겨
+// 구획선은 섬 위아래 두 조각이 되고 섬은 그대로 벽이다(구획선 조각이 되지 않는다) — 섬이 경계의 일부가 되어 [24, 24].
+test('같은 직선 위의 섬(나란히 떠 있는 벽)은 막지 않는다 — 섬을 경계로 삼아 한가운데를 자르고, 섬은 벽 그대로다', () => {
+  const walls = loop([[0, 0], [12000, 0], [12000, 4000], [0, 4000]]);
+  const labels = [label('客厅', 2000, 2000), label('餐厅', 10000, 2000)];
+  const island = wall(6000, 1000, 6000, 3000);
+  const { walls: out, added } = addDividersByNames([...walls, island], labels);
+  expect(added).toBe(1);
+  expect(out.filter(w => w.virtual).map(ends).sort()).toEqual([['6000,0', '6000,1000'], ['6000,3000', '6000,4000']]);
+  expect(out.filter(w => !w.virtual && w.a[0] === 6000 && w.b[0] === 6000).map(ends)).toEqual([['6000,1000', '6000,3000']]);
+  expect(areas(out)).toEqual([24, 24]);
 });
 
 test('buildProject: 이름 구획선을 켜도 구획선 없이 앉던 문은 그대로 앉는다(⑤ — 문 한가운데에서 벽을 나누지 않는다)', () => {

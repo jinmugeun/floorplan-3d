@@ -269,10 +269,29 @@ const frame = (x0, w, ins, t = 200) => [seg(x0, -t / 2, x0 + w, -t / 2, ins, 'OP
   seg(x0 + w, t / 2, x0, t / 2, ins, 'OPENING'), seg(x0, t / 2, x0, -t / 2, ins, 'OPENING')];
 const one = name => [plan, { name, pos: FAR, rot: 0, scale: [1, 1], mirrored: false, parent: 0 }];
 
+// 2026-10-12 · 계획 12 최종 리뷰 X-3(M7-2): 접점 이어 앉히기(spanPieces)는 **창만**이다. 포켓은 blockOpenings가 문짝 반쪽으로 줄여 놓은
+// 개구부라 접점에서 나누면 door-pocket이 둘(2D/3D 문짝 둘 · 견적 두 줄)이 됐다. 미닫이(slide)·여닫이도 문짝 하나라 잇지 않는다.
+test('T자로 갈린 벽: 포켓·미닫이 블록은 접점을 넘어도 하나로 잘라 앉힌다(나누지 않음 · 표지 없음) — 창만 잇는다', () => {
+  const W1 = makeWall({ a: [0, 0], b: [2400, 0], thickness: 200 }), W2 = makeWall({ a: [2400, 0], b: [8000, 0], thickness: 200 });
+  const part = makeWall({ a: [2400, 0], b: [2400, 3000], thickness: 100 });
+  for (const [name, id] of [['POCKET-900-200', 'door-pocket-900'], ['SLIDING-900-200', 'door-slide-900']]) {
+    const items = buildOpenings({ ex: exOf(one(name), frame(2000, 900, 1)), walls: [W1, W2, part], openingLayers: new Set() });
+    expect(items.map(i => [i.productId, i.size[0], i.wallId, i.openingGroup])).toEqual([[id, 350, W1.id, undefined]]);   // 2000 ~ 2350(접점 여유 50)
+  }
+  // 같은 자리의 창 블록은 잇는다(400 + 500 · 한 무리).
+  const win = buildOpenings({ ex: exOf(one('WIN-900-200'), frame(2000, 900, 1)), walls: [W1, W2, part], openingLayers: new Set() });
+  expect(win.map(i => [i.size[0], i.wallId])).toEqual([[400, W1.id], [500, W2.id]]);
+  expect(win[1].openingGroup).toBe(win[0].openingGroup);
+});
+
 test('SLIDING- 블록은 미닫이문(slide), POCKET-은 그대로 포켓, PASS-는 통로 종류다', () => {
   expect(['SLIDING-900-200', 'sliding 1500', 'POCKET-900-200', '문_슬라이딩 포켓 900', 'PASS-1200-200', 'pass_900', 'PASSAGE', 'PASS'].map(blockKind))
     .toEqual(['slide', 'slide', 'pocket', 'pocket', 'pass', 'pass', null, null]);
   for (const n of ['SLIDING-900-200', 'PASS-1200-200']) expect(OPEN_BLOCK.test(n)).toBe(true);
+  // SLIDE_BLOCK은 내보내기 형식(`SLIDING-<폭>-<두께>` · 숫자가 바로 붙는 꼴)만이다(2026-10-12 · 최종 리뷰 X-3 · N3-5) — 예전 `^sliding`은
+  // "SLIDING WINDOW 1800" 같은 미서기창 블록까지 미닫이**문**으로 읽었다.
+  expect(['SLIDING WINDOW 1800', 'Sliding Window', 'SLIDINGDOOR', 'sliding_1200'].map(blockKind)).toEqual([null, null, null, 'slide']);
+  expect(OPEN_BLOCK.test('SLIDING WINDOW 1800')).toBe(false);
   const W = makeWall({ a: [0, 0], b: [8000, 0], thickness: 200 });
   const slide = buildOpenings({ ex: exOf(one('SLIDING-900-200'), frame(2000, 900, 1)), walls: [W], openingLayers: new Set() });
   expect(slide.map(i => [i.productId, i.size[0], Math.round(i.t * 8000)])).toEqual([['door-slide-900', 900, 2450]]);

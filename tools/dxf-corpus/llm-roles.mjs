@@ -8,6 +8,11 @@
 // 모델은 **명시 인자로만** 받고 폴백이 없다(사용자 지시 2026-09-22: 과부하여도 다른 모델로 자동 대체하지 않는다) — `--model`이 없으면 종료 코드 2,
 // `ANTHROPIC_API_KEY`가 없으면 "키 필요"로 종료 코드 2, API가 그 모델을 거절하면(404 등) 그 응답을 그대로 적고 종료 코드 1.
 // 의존성 없이 node 22의 fetch로 부른다(계획 12: 새 npm 의존성 없음).
+// ⓓ 비교 규칙(2026-10-12 · 계획 12 최종 리뷰 M9-7 — few-shot 누수): 프롬프트의 예시(SYSTEM)에 사동중·내곡중·신상중 A/B의 정답이 들어 있다.
+// 그래서 모델 역할표와 드라이런 표·규칙의 비교는 **공개 5장**(2suite (1) · 4suite (9) · 4suite (10) · 6suite (6) · 6suite (8) — 도면별 정답이
+// 프롬프트에 없는 도면)으로만 판단하고, 실파일 넷의 수치는 "참고(누수)"로 따로 적는다. 공개 5장도 완전한 홀드아웃은 아니다: `DOTE = grid` 예시는
+// 2suite (1)·6suite (6)의 레이어이고 "Chinese apartments" 줄은 공개 코퍼스 전체의 레이어 관례다 — 그 칸(DOTE · WALL/WINDOW/PUB_*·栏杆 등)은
+// 비교에서 맞혀도 세지 않는다. 일반화를 재려면 예시에서 뺀 도면을 쓰거나 예시를 다른 도면으로 바꾼다(코드 변경은 다음 계획 — 키가 없어 지금은 돌리지 않는다).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +37,11 @@ export const RESPONSE_SCHEMA = {
 };
 
 // 역할 정의 + 한국 도면·공개 도면의 예시(few-shot). 예시는 코퍼스에서 확인한 사실만 적는다(classify.js·blockOpenings.js 주석의 근거).
-const SYSTEM = `You classify the layers, blocks and texts of one architectural floor-plan DXF so that a deterministic program can rebuild walls, rooms, doors and windows from it.
+// pass 정의와 SLIDING-·PASS- 예시(2026-10-12 · 계획 12 최종 리뷰 X-3 · N3-6): 응답 스키마 enum(BLOCK_KINDS)에는 pass가 있는데 프롬프트가 정의하지
+// 않았다 — 정규화 DXF(io/dxfExport.js)가 쓰는 두 이름이다.
+// **누수 주의(M9-7)**: 아래 예시에 사동중·내곡중·신상중의 정답(벽 레이어 · 블록 종류 · 실명)이 그대로 들어 있다 — 이 세 도면(실파일 넷)의 ⓓ 수치는
+// 일반화가 아니라 프롬프트 회상이다. 위 머리 주석과 README "역할표"의 비교 규칙을 따른다.
+const SYSTEM =`You classify the layers, blocks and texts of one architectural floor-plan DXF so that a deterministic program can rebuild walls, rooms, doors and windows from it.
 You receive a JSON dump: layer statistics, block statistics and a sample of distinct texts. Lengths are millimetres. Names may be Korean, Chinese or English; the same name can mean different things in different offices, so read the statistics, not only the name.
 
 Layer roles (choose one per layer):
@@ -43,8 +52,8 @@ Layer roles (choose one per layer):
 - grid: axis / centre lines (often off, very long lines). hatch: hatch or poche patterns (thousands of tiny segments).
 - rail: balcony railings / guard lines - not walls, but they close the balcony room boundary.
 - other: anything else (symbols, stairs, landscape, title block, frames).
-Block kinds: door (swing door), window, pocket (pocket sliding door, half of it inside the wall), slide (sliding door, not pocket), equip (furniture/equipment - a refrigerator "with two doors" is equip, not a door), symbol (annotation symbols, north arrow, section marks), column, other (whole-plan blocks, title blocks, details).
-width: the nominal opening width in mm for door/window/pocket/slide (usually the 3-4 digit number in the name, else bboxW); null for everything else or when unknown.
+Block kinds: door (swing door), window, pocket (pocket sliding door, half of it inside the wall), slide (sliding door, not pocket, e.g. SLIDING-900-200), pass (doorless opening / passage with no leaf, e.g. PASS-1000-200), equip (furniture/equipment - a refrigerator "with two doors" is equip, not a door), symbol (annotation symbols, north arrow, section marks), column, other (whole-plan blocks, title blocks, details).
+width: the nominal opening width in mm for door/window/pocket/slide/pass (usually the 3-4 digit number in the name, else bboxW); null for everything else or when unknown.
 Text roles: room (a room / space name), area (an area label such as "(15.39m²)"), title (drawing or sheet title), label (equipment and annotation labels, notes), axis (grid bubble labels such as X12, Y3, A, 1), other.
 
 Examples from drawings we have verified:

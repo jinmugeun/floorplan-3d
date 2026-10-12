@@ -103,18 +103,16 @@ function split(poly, a, b) {
   return null;
 }
 
-// 가로지르기가 방 안에 떠 있는 벽(섬 — 방 경계가 아니다)을 끝 1 mm 밖에서 지나거나, 같은 직선 위에서 그 벽과 1 mm 넘게 겹치는가
-// (겹치면 정규화가 그 섬을 구획선 조각으로 나눈다 — 2026-10-12 리뷰 M-2 후속 테스트에서 드러났다).
+// 가로지르기가 방 안에 떠 있는 벽(섬 — 방 경계가 아니다)을 끝 1 mm 밖에서 지나는가. 나란한 벽(같은 직선 위의 섬 포함)은 지나는 것이 아니다.
+// 2026-10-12 · 계획 12 최종 리뷰 N6-1(Task 6 재리뷰 n-1): 0905219가 더한 "같은 직선 위에서 겹치면 지난다" 분기를 되돌렸다 — 그 분기는 섬을 따라
+// 자르는 더 나은 자리(x 6000 → [24, 24])를 막아 x 6800([20.8, 27.2] · 섬이 방 안에 떠 있다)으로 비끼게 했다. 그 근거("정규화가 섬을 구획선
+// 조각으로 나눈다")도 틀렸다: 구획선이 나중에 들어가므로 normalizeWalls는 겹친 구간을 앞의 섬에게 맡기고, 섬은 벽 그대로다.
 function crosses(ch, walls) {
   const d = [ch.b[0] - ch.a[0], ch.b[1] - ch.a[1]], L = Math.hypot(d[0], d[1]);
   return walls.some(w => {
     const e = [w.b[0] - w.a[0], w.b[1] - w.a[1]], den = d[0] * e[1] - d[1] * e[0], Lw = Math.hypot(e[0], e[1]);
+    if (Math.abs(den) < 1e-9 * L * Lw) return false;
     const q = [w.a[0] - ch.a[0], w.a[1] - ch.a[1]];
-    if (Math.abs(den) < 1e-9 * L * Lw) {
-      if (!L || Math.abs(q[0] * d[1] - q[1] * d[0]) / L > 1) return false;
-      const t0 = dot(q, d) / L, t1 = t0 + dot(e, d) / L;
-      return Math.min(Math.max(t0, t1), L) - Math.max(Math.min(t0, t1), 0) > 1;
-    }
     const t = (q[0] * e[1] - q[1] * e[0]) / den, u = (q[0] * d[1] - q[1] * d[0]) / den;
     return t * L > 1 && (1 - t) * L > 1 && u * Lw >= -1 && (1 - u) * Lw >= -1;
   });

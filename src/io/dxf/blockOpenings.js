@@ -20,7 +20,9 @@ export const POCKET_BLOCK = /^문[-_ ]?(슬라이딩|포켓|미닫이)|^pocket/i
 // 반쪽 주머니 규칙 없이 앉는다 · blockProduct('slide')), `PASS-<폭>-<두께>`는 문 없는 통로(opening-pass). 예전에는 `^sliding`이 포켓이었고
 // 통로는 블록 종류가 없어 벽 틈으로만 읽혔다(틈을 그 폭으로 못 읽으면 통로가 사라졌다). 코퍼스(..\dxf · ..\dxf-public)에 slide·sliding·pocket·pass로
 // 시작하는 블록 이름은 0개라 점수판은 움직이지 않는다(리뷰 확인). 우리말 `문_슬라이딩 포켓`은 그대로 포켓이다.
-export const SLIDE_BLOCK = /^sliding/i;
+// 숫자가 바로 붙는 꼴만(2026-10-12 · 계획 12 최종 리뷰 X-3 · N3-5): `^sliding`은 "SLIDING WINDOW 1800" 같은 미서기창 블록까지 미닫이**문**으로
+// 읽었다 — 내보내기 형식(`SLIDING-900-200`)과 `sliding 1500`만 남긴다. 코퍼스의 `sliding` 블록은 여전히 0개다(점수 불변).
+export const SLIDE_BLOCK = /^sliding[-_ ]?\d{3,4}/i;
 export const PASS_BLOCK = /^pass[-_ ]?\d{3,4}/i;
 // 창·문 블록 이름 전체(evidence.js가 긴 연장·다리의 "문·창 자리" 근거로 쓴다).
 export const OPEN_BLOCK = new RegExp([DOOR_BLOCK, WINDOW_BLOCK, POCKET_BLOCK, SLIDE_BLOCK, PASS_BLOCK].map(r => r.source).join('|'), 'i');
