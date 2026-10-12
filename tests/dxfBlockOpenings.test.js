@@ -5,6 +5,7 @@ import { test, expect } from 'vitest';
 import { blockOpenings, blockBoxes, blockKind, blockKindByName, nominalWidth, isDoorBlock, OPEN_BLOCK } from '../src/io/dxf/blockOpenings.js';
 import { buildOpenings } from '../src/io/dxf/openings.js';
 import { makeWall } from '../src/geom/walls.js';
+import { blockTruth } from '../tools/dxf-corpus/lib.mjs';
 
 const A = makeWall({ a: [0, 0], b: [6000, 0], thickness: 200, height: 3500 });
 const B = makeWall({ a: [0, 1000], b: [6000, 1000], thickness: 200, height: 3500 });   // 문짝이 닿는 평행 벽
@@ -324,4 +325,34 @@ test('PASS- 블록은 블록 폭의 통로 하나이고, 같은 자리의 벽 �
   expect(both.map(i => [i.productId, i.size[0]])).toEqual([['opening-pass', 1200]]);
   // 블록 없이 틈만 있으면 예전처럼 틈 통로다.
   expect(buildOpenings({ ex: exOf([plan], []), walls: [W], openingLayers: new Set(), gaps: [{ p: [3600, 0], width: 1200 }] }).map(i => i.productId)).toEqual(['opening-pass']);
+});
+
+// 2026-10-12 · 계획 13 Task 6(b) — 내곡중 SD1100_폭150(소모품창고): 문틀이 곧 벽 조각이다(벽 1130 · 문 1100 · 양쪽 15 mm). 블록이 벽 **안**에
+// 있는데도 벽 끝 여유(OPENING_EDGE 50)로 1030까지 깎고 50 단위로 내려 1000이 됐다. 여유는 블록이 벽 끝을 **넘는** 쪽에만 둔다.
+test('벽 안에 든 블록 개구부는 벽 끝 여유로 깎지 않는다 — 벽 끝을 넘는 쪽만 여유를 두고 자른다', () => {
+  const W = makeWall({ a: [0, 0], b: [1130, 0], thickness: 200 });
+  const inside = buildOpenings({ ex: exOf(one('SD1100'), frame(15, 1100, 1)), walls: [W], openingLayers: new Set() });
+  expect(inside.map(i => [i.productId, i.size[0], Math.round(i.t * 1130)])).toEqual([['door-swing-1000', 1100, 565]]);
+  // 끝을 넘으면(−40 ~ 1060) 넘는 쪽만 여유 50으로 자르고(50 ~ 1060 → 1010 → 50 단위 1000) 반대쪽 문설주(1060)는 제자리다.
+  const over = buildOpenings({ ex: exOf(one('SD1100'), frame(-40, 1100, 1)), walls: [W], openingLayers: new Set() });
+  expect(over.map(i => [i.size[0], Math.round(i.t * 1130)])).toEqual([[1000, 560]]);
+});
+
+// 2026-10-12 · 계획 13 Task 6(b) — 내곡중 `미서기단창_5200`(도형 3900)·`미서기단창_7800`(도형 5200): 블록 정의가 이름보다 좁게 그려졌고(INSERT 배율 1)
+// 벽 면선도 정확히 도형 폭에서 끊긴다(문설주 선 37832·41732 / 39878·45078). 이름이 블록 도형 **전체**(상자의 긴 변)보다 NAME_FIT 위끝(1.1배) 넘게
+// 넓으면 정답 폭은 도형 폭이다 — 파이프라인(blockOpenings의 plausible)이 이미 그렇게 앉힌다. 그 밖은 이름 그대로(ASD1000 상자 2200 · 방음문 2460 · SD850).
+test('코퍼스 정답 폭: 이름이 블록 도형 전체보다 넓으면 도형 폭, 아니면 이름(단위 배율 반영)', async () => {
+  const one2 = (name, x0, w, h, k = 1) => exOf(one(name), [seg(x0, 0, x0 + w, 0, 1), seg(x0 + w, 0, x0 + w, h, 1), seg(x0, h, x0 + w, h, 1), seg(x0, 0, x0, h, 1)].map(s => ({ ...s, a: s.a.map(v => v / k), b: s.b.map(v => v / k) })));
+  const widths = async (ex, k) => (await blockTruth(ex, k)).map(t => [t.name, t.width]);
+  expect(await widths(one2('미서기단창_5200', 0, 3900, 325))).toEqual([['미서기단창_5200', 3900]]);
+  expect(await widths(one2('미서기단창_7800', 0, 325, 5200))).toEqual([['미서기단창_7800', 5200]]);
+  expect(await widths(one2('미서기단창_1300', 0, 1300, 325))).toEqual([['미서기단창_1300', 1300]]);
+  expect(await widths(one2('ASD1000', 0, 250, 2200))).toEqual([['ASD1000', 1000]]);
+  expect(await widths(one2('SD850', 0, 880, 937))).toEqual([['SD850', 850]]);
+  expect(await widths(one2('POCKET-900-200', 0, 1800, 200))).toEqual([['POCKET-900-200', 900]]);
+  expect(await widths(one2('POCKET-900-200', 0, 1500, 200))).toEqual([['POCKET-900-200', 900]]);     // 1.1배 안
+  expect(await widths(one2('pocket 2000', 0, 1600, 200))).toEqual([['pocket 2000', 800]]);           // 포켓은 도형의 절반(파이프라인과 같다)
+  // 미터 도면(배율 1000): 상자 0.9 × 1000 = 900 → 이름 그대로
+  expect(await widths(one2('win-900-3', 0, 900, 100, 1000), 1000)).toEqual([['win-900-3', 900]]);
+  expect(await widths(one2('win-900-3', 0, 600, 100, 1000), 1000)).toEqual([['win-900-3', 600]]);
 });

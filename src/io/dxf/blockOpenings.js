@@ -72,6 +72,9 @@ export function nominalWidth(name = '') {
 }
 // 파이프라인의 폭: 역할표의 폭(양수)이 있으면 그것, 없으면 이름의 숫자(2026-10-12 · Task 9).
 export const blockWidth = (name = '') => tableEntry(name)?.width || nominalWidth(name);
+// 이름의 폭을 믿는 범위(도형 구간 폭의 배수): 밖이면 도형 폭이다(blockOpenings의 plausible). 코퍼스 정답(lib.mjs blockTruth)도 위끝을 같이 쓴다
+// (2026-10-12 · 계획 13 Task 6(b) — 내곡중 미서기단창_5200·_7800은 블록이 이름보다 좁게 그려졌고 벽 면선도 도형 폭에서 끊긴다).
+export const NAME_FIT = Object.freeze([0.4, 1.1]);
 
 // INSERT 번호 → 그 도형을 거느리는 창·문 INSERT 번호(자기 이름이 창·문이면 자기, 아니면 부모의 주인 · 없으면 −1).
 // 전개 순서상 부모가 자식보다 앞이라 한 번 훑으면 된다. blockOpenings와 blockBoxes가 같은 규칙을 쓴다(2026-10-06).
@@ -136,7 +139,7 @@ export function blockOpenings(ex, walls, toApp = p => p) {
     // 칸막이에 폭 135로 앉고 외벽의 창이 빠질 수 있었다(합성 테스트로 확인 — 코퍼스 넷의 창·포켓 중 이 길을 타는 것은 없다).
     // 호스트가 없으면 예전처럼 넘어가고, 문은 그대로다(내곡중 SD850·방음문으로 확인한 동작).
     const nominal = blockWidth(it.name);
-    const plausible = span => nominal >= 0.4 * span && nominal <= 1.1 * span;
+    const plausible = span => nominal >= NAME_FIT[0] * span && nominal <= NAME_FIT[1] * span;
     const seat = dir => {
       const ts = g.pts.map(p => p[0] * dir[0] + p[1] * dir[1]), lo = Math.min(...ts), hi = Math.max(...ts);
       return { u: dir, x0: lo, x1: hi, host: hi > lo ? hostWall(walls, g.pts, dir, lo, hi) : null };

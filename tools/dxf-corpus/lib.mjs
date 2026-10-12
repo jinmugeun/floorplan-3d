@@ -102,9 +102,17 @@ export async function areaLabels(ex) {
 // 창·문 블록 정답(2026-10-06): 종류·호칭 폭·전개 도형 bbox와 그 중심(DXF 좌표). 3차 수정의 scratch 채점기(사동중 44개)가 저장소 도구로 왔다.
 // 중심(c)은 도면 상자 안인지 가리는 데만, 적합 판정은 상자(box)로 한다.
 // byName(2026-10-12 · Task 9): 정답은 이름 정규식만 쓴다 — 워커가 세운 역할표 블록 종류(모듈 수준 표)가 정답을 움직이지 않게.
-export async function blockTruth(ex) {
-  const { blockBoxes } = await import('../../src/io/dxf/blockOpenings.js');
-  return blockBoxes(ex, { byName: true }).map(b => ({ name: b.name, kind: b.kind, width: b.width, box: b.box, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] }));
+// 폭(2026-10-12 · 계획 13 Task 6(b)): 이름의 숫자가 블록 도형 **전체**(상자의 긴 변 · k = 단위 배율로 mm)보다 NAME_FIT 위끝(1.1배) 넘게 넓으면
+// 도형 폭이다(포켓은 그 절반 — 파이프라인 blockOpenings와 같은 규칙). 내곡중 `미서기단창_5200`은 3900, `_7800`은 5200으로 그려졌고(INSERT 배율 1)
+// 벽 면선이 정확히 그 폭에서 끊긴다(문설주 선 37832·41732 / 39878·45078 — scratch p13t6-faces.mjs) — 이름이 틀렸다. 어느 축이 벽 방향인지
+// 정답은 모르므로(문은 로컬 y로 그린 것도 있다 — 방음문 로컬 x 1317) 아래끝(0.4배)은 쓰지 않는다: 긴 변보다 넓은 이름만 고친다.
+export async function blockTruth(ex, k = 1) {
+  const { blockBoxes, NAME_FIT } = await import('../../src/io/dxf/blockOpenings.js');
+  return blockBoxes(ex, { byName: true }).map(b => {
+    const D = k * Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]);
+    const width = D > 0 && b.width > NAME_FIT[1] * D ? Math.round(b.kind === 'pocket' ? D / 2 : D) : b.width;
+    return { name: b.name, kind: b.kind, width, box: b.box, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] };
+  });
 }
 
 // 손으로 단 개구부 정답(2026-10-12 · 계획 12 Task 2): 창·문 블록이 없는 도면(신상중 — 문·창이 풀어진 선)은 blockTruth가 0개라
@@ -187,7 +195,7 @@ export async function runDrawing(entry, { roles = null, dividers = false } = {})
   // 개구부 적합: 정답 블록 상자에서 OPN_TOL 안에 우리 개구부(문·창·개구부 아이템) 중심이 있는가, 있으면 폭이 50 mm 안인가
   // (이름에 폭이 없는 블록은 폭 검사를 늘 통과한다). 정답 = 블록 정답 + 손 정답(truth/<id>.json · 2026-10-12).
   const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
-  const truth = [...(await blockTruth(exRaw)), ...manualTruth(entry.id)].filter(t => near(toApp(t.c)));
+  const truth = [...(await blockTruth(exRaw, k)), ...manualTruth(entry.id)].filter(t => near(toApp(t.c)));
   // opnKind(2026-10-12): 맞힌 정답 중 가장 가까운 아이템의 **종류**도 맞는 수(kindOk — 아래 모듈 수준).
   // 자리 적중(opnHit)은 창이 문 자리를 차지해도 세므로 종류는 따로 센다
   // (신상중 외미닫이 일곱 자리는 규칙 전에도 opnHit 7/7이었다 — 전부 창·통로였다).

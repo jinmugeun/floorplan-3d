@@ -157,8 +157,12 @@ export function spanPieces(walls, host, c0, c1, tol) {
     const mid = whole ? (r0 + r1) / 2 : r0 < c.S + m0 ? u1 - width / 2 : u0 + width / 2;
     return { wall: c.wall, width, t: (mid - c.sa) * c.sign / c.L };
   };
+  // 바깥 끝 여유(OPENING_EDGE)는 블록이 그 벽 끝에 **닿거나 넘을**(1 mm 안까지 오면) 때만 둔다(2026-10-12 · 계획 13 Task 6(b) — 내곡중 SD1100_폭150:
+  // 문틀이 곧 벽 조각이라 벽 1130 안에 문 1100이 양쪽 15 mm로 들어 있는데 여유로 1030까지 깎여 1000으로 앉았다). 벽 안에 든 끝은 도면의 문설주
+  // 자리 그대로다. 끝에 닿은 블록(사동중 win-4800-3 둘째 — 꺾임에서 −0.13)은 예전처럼 여유 50을 지킨다.
+  const edge = (r, end, out) => ((r - end) * out > -JOINT_EPS ? OPENING_EDGE : 0);
   for (let lo = 0, hi = chain.length - 1; ;) {
-    const out = chain.slice(lo, hi + 1).map((c, i, a) => fit(c, i ? c.S : c0, i < a.length - 1 ? c.E : c1, i ? 0 : OPENING_EDGE, i < a.length - 1 ? 0 : OPENING_EDGE, a.length));
+    const out = chain.slice(lo, hi + 1).map((c, i, a) => fit(c, i ? c.S : c0, i < a.length - 1 ? c.E : c1, i ? 0 : edge(c0, c.S, -1), i < a.length - 1 ? 0 : edge(c1, c.E, 1), a.length));
     if (lo < hi && !out[0]) lo++;
     else if (lo < hi && !out.at(-1)) hi--;
     else return out.filter(Boolean);       // 가운데 조각은 벽 전체다(그 벽이 OPENING_MIN보다 짧을 때만 빠진다)
