@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { APP, OPN_TOL, explodeRaw, rolesOption, loadRoles, dividersOption } from './lib.mjs';
+import { roomScores } from './roomScore.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIR = process.env.DXF_PUBLIC_DIR ?? resolve(APP, '../dxf-public');
@@ -79,7 +80,6 @@ async function groundTruth(path) {
   return { rooms: polys.filter(p => p.layer !== 'GT_门'), doors: polys.filter(p => p.layer === 'GT_门') };
 }
 const bbox = pts => pts.reduce((b, p) => [Math.min(b[0], p[0]), Math.min(b[1], p[1]), Math.max(b[2], p[0]), Math.max(b[3], p[1])], [Infinity, Infinity, -Infinity, -Infinity]);
-const FALSE_IOU = 0.2;   // falseRooms: 이 IoU에 못 미치면 그 정답 방과 겹친다고 보지 않는다(2026-10-12 · Task 5 리뷰 M5-1)
 // IoU 근사: 두 상자의 합집합을 200 mm 격자로 표본해 안팎을 센다.
 function iou(a, b, pip, step = 200) {
   const A = bbox(a), B = bbox(b);
@@ -111,11 +111,10 @@ async function score(name) {
   const { pointInPolygon } = await import('../../src/geom/rooms.js');
   const gt = await groundTruth(gtPath);
   const gtRooms = gt.rooms.map(r => r.pts.map(toApp)), gtDoors = gt.doors.map(d => d.pts.map(toApp));
-  const roomHit = gtRooms.filter(g => fl.rooms.some(r => iou(g, r.points, pointInPolygon) >= 0.5)).length;
-  // falseRooms(2026-10-12 · 계획 12 Task 5 리뷰 M5-1): 우리 방 중 어느 정답 방과도 IoU < FALSE_IOU인 것 — 정답에 없는 방(헛방).
-  // roomHit만 보면 구획선이 방을 잘게 쪼개 정답 하나를 맞히고 헛방 여럿을 남겨도 좋아진 것으로 보인다(Task 6 이름 구획선 측정의 짝 지표).
-  // 정답이 0개인 도면(6suite (5))은 모든 방이 헛방이 되므로 재지 않는다(null · 합계에서 뺀다).
-  const falseRooms = gtRooms.length ? fl.rooms.filter(r => !gtRooms.some(g => iou(g, r.points, pointInPolygon) >= FALSE_IOU)).length : null;
+  // IoU 표(정답 방 × 우리 방)를 한 번만 재고 roomHit·falseRooms·splitRooms(roomScore.mjs — 뜻과 문턱은 거기)가 같은 표를 읽는다(2026-10-12 ·
+  // 계획 13 Task 7: splitRooms가 행 전체를 봐야 해서 예전의 열마다 따로 잰 some() 단락을 한 표로 모았다 · 같은 iou라 앞의 두 열 값은 그대로다).
+  const M = gtRooms.map(g => fl.rooms.map(r => iou(g, r.points, pointInPolygon)));
+  const { roomHit, falseRooms, splitRooms } = roomScores(M, fl.rooms.length);
   const opens = fl.items.filter(i => /^(door-|window-|opening-pass)/.test(i.productId));
   // 문 적합은 로컬 점수판의 opnHit와 같은 규칙이다: 우리 개구부 중심에서 정답 문 **상자**까지(상자 안이면 0) OPN_TOL 안.
   // 상자 **중심**까지 재면 안 된다 — GT_门 상자는 대개 여닫이 궤적까지 그린 정사각형(900×900 · 800×800)이라 중심이 개구부
@@ -128,7 +127,7 @@ async function score(name) {
     return opens.some(i => dBox(i) <= OPN_TOL);
   }).length;
   if (ends) await endsReport(raw, stats, fl, k, parsed.summary.layers);
-  return { name, walls: stats.walls, rooms: stats.rooms, openEnds: stats.openEnds.length, gtRooms: gtRooms.length, roomHit, falseRooms, gtDoors: gtDoors.length, doorHit, guessed: !!stats.guessed, ms };
+  return { name, walls: stats.walls, rooms: stats.rooms, openEnds: stats.openEnds.length, gtRooms: gtRooms.length, roomHit, falseRooms, splitRooms, gtDoors: gtDoors.length, doorHit, guessed: !!stats.guessed, ms };
 }
 
 // --ends(2026-10-12 · 계획 12 Task 4 진단): 끊긴 끝점(stats.openEnds · 앱 좌표)을 toApp의 역으로 원 DXF 좌표에 되돌리고, 그 점에서
@@ -176,11 +175,12 @@ const names = (await list()).filter(n => !hasOnly || n.replace(/\.dxf$/i, '') ==
 if (hasOnly && !names.length) { console.log(`해당 도면 없음: ${only}`); process.exit(2); }
 // 한 쌍이 실패해도(404 · 네트워크) 나머지는 받는다 — 실패는 표의 "파일 없음"으로 드러난다.
 if (flag('--fetch')) for (const n of names) { try { await fetchPair(n); } catch (e) { console.log(`받기 실패 ${n}: ${e.message}`); } }
-const COLS = ['walls', 'rooms', 'openEnds', 'gtRooms', 'roomHit', 'falseRooms', 'gtDoors', 'doorHit', 'ms'];
-const WORSE = { roomHit: -1, falseRooms: +1, doorHit: -1 };
-const SUMS = ['gtRooms', 'roomHit', 'falseRooms', 'gtDoors', 'doorHit'];   // 합계 줄 Σ의 칸(falseRooms가 null인 도면은 0으로 더한다)
+const COLS = ['walls', 'rooms', 'openEnds', 'gtRooms', 'roomHit', 'falseRooms', 'splitRooms', 'gtDoors', 'doorHit', 'ms'];
+const WORSE = { roomHit: -1, falseRooms: +1, splitRooms: +1, doorHit: -1 };
+const SUMS = ['gtRooms', 'roomHit', 'falseRooms', 'splitRooms', 'gtDoors', 'doorHit'];   // 합계 줄 Σ의 칸(falseRooms가 null인 도면은 0으로 더한다)
+const zeroSum = () => Object.fromEntries([...SUMS, 'errors'].map(c => [c, 0]));      // 합계 칸은 SUMS 한 곳에서 — 기준 Σ와 표 Σ가 어긋나지 않게
 const base = existsSync(BASE) ? JSON.parse(readFileSync(BASE, 'utf8')) : {};
-const now = {}, sum = { gtRooms: 0, roomHit: 0, falseRooms: 0, gtDoors: 0, doorHit: 0, errors: 0 };
+const now = {}, sum = zeroSum();
 let worse = 0;
 const cw = c => Math.max(9, c.length + 1);   // 열 폭(이름이 9자를 넘는 falseRooms도 한 칸 띄운다)
 console.log(['도면'.padEnd(22), ...COLS.map(c => c.padStart(cw(c)))].join(''));
@@ -205,12 +205,12 @@ for (const n of names) {
 // 전체 실행에서 기준에 있는 도면이 이번에 없으면(목록·캐시에서 빠졌다) 나빠진 것이다 — 조용히 덜 채점하지 않게(2026-10-06 최종 리뷰).
 if (!hasOnly) for (const id of Object.keys(base)) if (id !== 'Σ' && !(id in now)) { worse++; console.log(`${id}  기준에 있는데 이번 실행에 없음 ✗`); }
 const pct = (a, b) => (b ? Math.round(100 * a / b) : 0);
-console.log(`\nΣ 방 ${sum.roomHit}/${sum.gtRooms} (${pct(sum.roomHit, sum.gtRooms)} %) · 정답 없는 방 ${sum.falseRooms} · 문 ${sum.doorHit}/${sum.gtDoors} (${pct(sum.doorHit, sum.gtDoors)} %) · 오류 ${sum.errors}/${names.length}`);
+console.log(`\nΣ 방 ${sum.roomHit}/${sum.gtRooms} (${pct(sum.roomHit, sum.gtRooms)} %) · 정답 없는 방 ${sum.falseRooms} · 과분할 정답 방 ${sum.splitRooms} · 문 ${sum.doorHit}/${sum.gtDoors} (${pct(sum.doorHit, sum.gtDoors)} %) · 오류 ${sum.errors}/${names.length}`);
 if (flag('--update')) {
   // 기준 줄은 지우지 않는다: 옛 기준에 이번 줄을 덮어 병합하고 Σ는 병합한 줄들로 다시 센다(2026-10-06 최종 리뷰 — 예전에는 이번에
   // 돈 도면만 남아, 일부만 돈 실행이 나머지 기준을 지웠다).
   const { 'Σ': _oldSum, ...rows } = base;
-  const merged = { ...rows, ...now }, total = { gtRooms: 0, roomHit: 0, falseRooms: 0, gtDoors: 0, doorHit: 0, errors: 0 };
+  const merged = { ...rows, ...now }, total = zeroSum();
   for (const r of Object.values(merged)) {
     if (r.error) { total.errors++; continue; }
     for (const c of SUMS) total[c] += r[c] ?? 0;
