@@ -11,7 +11,7 @@ import { buildImportMeta } from '../io/dxfFeedback.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED, DXF_MANY_PLANS, DXF_REGION, DXF_REGION_LABEL, DXF_RECONCILED,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
-  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED } from './messages.js';
+  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from './messages.js';
 
 const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
@@ -51,6 +51,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
         <label><input type="checkbox" name="autoNames" checked> 방 이름 자동</label>
         <label><input type="checkbox" name="nameDividers"> ${esc(DXF_NAME_DIVIDERS)}</label>
         <label><input type="checkbox" name="openings" checked> 문·창 배치</label>
+        <label><input type="checkbox" name="equipment" checked> ${esc(DXF_EQUIPMENT_OPT)}</label>
         <label><input type="checkbox" name="trace"${dxfTrace() ? ' checked' : ''}> 원 도면을 배경으로 남기기</label>
         <p class="dxf-nums" name="nums"></p>
         <p class="warn" name="warn" hidden></p>
@@ -111,7 +112,8 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     const st = last?.stats ?? {}, fixed = (st.dividers || st.annexes) && DXF_RECONCILED(st.dividers ?? 0, st.annexes ?? 0);
     const byNames = st.nameDividers > 0 && DXF_NAME_DIVIDED(st.nameDividers);
     const byRails = st.railDividers > 0 && DXF_RAIL_DIVIDED(st.railDividers);       // 2026-10-12 최종 리뷰 X-4: 늘 켜진 난간 구획선도 알린다
-    notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byRails, byNames].filter(Boolean).join(' / ') || null);
+    const eq = st.equipment, equip = eq?.placed > 0 && DXF_EQUIPMENT(eq.placed, eq.product, eq.generic, eq.clash, eq.overlap);   // 2026-10-12 계획 13 Task 3
+    notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byRails, byNames, equip].filter(Boolean).join(' / ') || null);
   };
   const regionIdx = () => Number(q('region').value) || 0;
   const km = mm => (mm / 1000).toFixed(1);
@@ -136,7 +138,8 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     q('hist').textContent = (stats.thickness ?? []).slice(0, 4).map(([mm, c]) => `${mm} mm×${c}`).join(' · ');
     q('ms').textContent = [summary?.ms, stats.ms].filter(Boolean).flatMap(o => Object.entries(o)).map(([k, v]) => `${k} ${v}ms`).join(' · ');
     notes();
-    drawDxfPreview(q('preview'), { trace, walls: floor.walls, rooms: floor.rooms, openEnds: stats.openEnds ?? [] });
+    // 기구(2026-10-12 · 계획 13 Task 3)도 넘긴다 — 미리보기가 문·창·기둥을 빼고 옅은 사각형으로 벽 아래에 그린다.
+    drawDxfPreview(q('preview'), { trace, walls: floor.walls, rooms: floor.rooms, items: floor.items ?? [], openEnds: stats.openEnds ?? [] });
   };
 
   // 추출 옵션 한 곳(2026-10-12 · 계획 12 Task 10): 재추출과 교정 기록(가져온 순간의 선택)이 같은 값을 본다.
@@ -150,6 +153,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     autoNames: q('autoNames').checked,
     dividerByNames: q('nameDividers').checked,     // 기본 꺼짐(사용자 결정 2026-10-02 · 계획 12 Task 6)
     openings: q('openings').checked,
+    equipment: q('equipment').checked,             // 기본 켬(2026-10-12 · 계획 13 Task 3) — 끄면 계획 12까지와 같은 결과
     trace: q('trace').checked,
   });
   const runExtract = () => {
@@ -255,7 +259,7 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     checked = q('preset').checked ? wallOnly(summary?.layers ?? []) : allOn(summary?.layers ?? []);
     renderLayers(); schedule();
   });
-  for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'trace']) q(n).addEventListener('change', schedule);
+  for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'equipment', 'trace']) q(n).addEventListener('change', schedule);
   q('region').addEventListener('change', () => { setHead(); schedule(); });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel(); } });
 

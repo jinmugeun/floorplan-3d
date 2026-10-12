@@ -7,7 +7,8 @@ import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_S
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
-import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED } from '../src/ui/messages.js';
+import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED,
+  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from '../src/ui/messages.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -656,4 +657,100 @@ test('[가져오기]는 가져오기 선택과 결과 스냅숏을 project.meta.
   });
   expect(project.floors).toBe(ext.project.floors);                           // 층은 워커가 낸 그대로다
   expect(ext.project.meta).toBeUndefined();                                  // 워커 결과 객체에는 붙이지 않는다(취소 뒤 다시 눌러도 새 기록)
+});
+
+// 2026-10-12 · 계획 13 Task 3: 기구 배치는 **옵션, 기본 켬**(끄면 계획 12까지와 같은 결과 — 아이템이 늘 뿐이다). 켜고 끄면 추출 옵션 equipment로
+// 다시 추출하고(dividerByNames와 같은 길), 세운 수를 알림 줄에 적는다 — 0이면 적지 않는다. 기구끼리 겹침(사전 검토 반영 5)은 0이 아닐 때만 덧붙인다.
+const EQ_STATS = { placed: 226, product: 143, generic: 83, anonymous: 42, clash: 0, overlap: 0, skipped: {} };
+test('"도면의 기구를 제품으로 배치" 칸은 기본 켬이고, 끄면 equipment: false로 다시 추출한다 · 세운 수를 알린다', async () => {
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const lastOpts = () => w.posted.filter(m => m.type === 'extract').at(-1).opts;
+  expect(q('equipment').checked).toBe(true);
+  expect(q('equipment').closest('label').textContent.trim()).toBe(DXF_EQUIPMENT_OPT);
+  expect(DXF_EQUIPMENT_OPT).toBe('도면의 기구를 제품으로 배치');
+  expect(lastOpts().equipment).toBe(true);
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, equipment: EQ_STATS } });
+  await flush();
+  expect(q('notice').textContent).toBe(DXF_EQUIPMENT(226, 143, 83, 0, 0));
+  expect(DXF_EQUIPMENT(226, 143, 83, 0, 0)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 벽과 겹침 0');
+  expect(DXF_EQUIPMENT(226, 143, 83, 2, 14)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 벽과 겹침 2 · 기구끼리 겹침 14');
+  q('equipment').click();
+  expect(q('import').disabled).toBe(true);                  // 최신 결과가 올 때까지 잠긴다
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(lastOpts().equipment).toBe(false);
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, equipment: { ...EQ_STATS, placed: 0, product: 0, generic: 0, anonymous: 0 } } });
+  await flush();
+  expect(q('notice').hidden).toBe(true);                    // 0개면 알리지 않는다
+  expect(q('import').disabled).toBe(false);
+});
+
+test('알림 줄: 기구 수는 다른 알림 뒤에 " / "로 이어 붙는다', async () => {
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, railDividers: 2, equipment: { ...EQ_STATS, clash: 3, overlap: 14 } } });
+  await flush();
+  expect(q('notice').textContent).toBe(`${DXF_RAIL_DIVIDED(2)} / ${DXF_EQUIPMENT(226, 143, 83, 3, 14)}`);
+});
+
+// 기록하는 2D 컨텍스트(위 미리보기 테스트와 같은 관례): 호출마다 그때의 fillStyle·strokeStyle이 남는다.
+const recCtx2d = () => {
+  const calls = [];
+  const ctx = { calls, strokeStyle: '', fillStyle: '', lineWidth: 0, globalAlpha: 1 };
+  for (const op of ['clearRect', 'beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'stroke']) {
+    ctx[op] = (...args) => calls.push({ op, args, strokeStyle: ctx.strokeStyle, fillStyle: ctx.fillStyle, lineWidth: ctx.lineWidth });
+  }
+  ctx.setLineDash = () => {};
+  return ctx;
+};
+const EQUIP_ITEMS = [
+  { id: 'e1', kind: 'product', productId: 'sink-double', pos: [0, 0], size: [1000, 500, 850], rot: 90, attach: 'floor' },
+  { id: 'e2', kind: 'equipment', productId: 'hood-box', pos: [2000, 0], size: [1500, 1300, 600], rot: 0, attach: 'ceiling' },
+  { id: 'd1', kind: 'door', productId: 'door-swing-900', pos: [-3000, -2000], size: [900, 40, 2100], rot: 0, attach: 'wall', wallId: 'w1' },
+  { id: 'c1', kind: 'column', productId: 'column-square', pos: [0, 1500], size: [400, 400, 3500], rot: 0, attach: 'floor' },
+];
+
+test('미리보기는 기구 아이템(문·창·기둥은 빼고)을 rot대로 돈 옅은 사각형으로 방 위 · 벽 아래에 그린다', () => {
+  const ctx = recCtx2d(), { calls } = ctx;
+  const out = drawDxfPreview({ width: 560, height: 420, getContext: () => ctx }, {
+    walls: [{ a: [-3000, -2000], b: [3000, -2000], thickness: 200 }],
+    rooms: [{ points: [[-3000, -2000], [3000, -2000], [3000, 2000]] }],
+    items: EQUIP_ITEMS, box: [-3000, -2000, 3000, 2000],
+  });
+  expect(PREVIEW_COLORS.item).toBe('#cbd5e1');
+  const fills = calls.filter(c => c.op === 'fill' && c.fillStyle === PREVIEW_COLORS.item);
+  expect(fills).toHaveLength(1);                                                         // 기구 전부를 한 경로로 한 번
+  const pts = calls.filter(c => (c.op === 'moveTo' || c.op === 'lineTo') && c.fillStyle === PREVIEW_COLORS.item).map(c => c.args);
+  expect(pts).toHaveLength(8);                                                           // 사각형 둘(문·기둥 없음)
+  // 세정대 1000×500 · rot 90 → 앱 좌표 귀 (250, −500)·(250, 500)·(−250, 500)·(−250, −500)(geom/items.itemCorners)
+  [[250, -500], [250, 500], [-250, 500], [-250, -500]].forEach((p, i) => { const q = out.at(p); expect(pts[i][0]).toBeCloseTo(q[0], 6); expect(pts[i][1]).toBeCloseTo(q[1], 6); });
+  const at = c => calls.indexOf(c);
+  const roomFill = calls.find(c => c.op === 'fill' && c.fillStyle === PREVIEW_COLORS.room[0]);
+  const wallFill = calls.find(c => c.op === 'fill' && c.fillStyle === PREVIEW_COLORS.wall);
+  expect(at(roomFill)).toBeLessThan(at(fills[0]));
+  expect(at(fills[0])).toBeLessThan(at(wallFill));
+  // 기구가 없으면 기구 색의 칠·획은 하나도 없다(위 미리보기 테스트의 획 2개가 그대로다).
+  const bare = recCtx2d();
+  drawDxfPreview({ width: 560, height: 420, getContext: () => bare }, { walls: [], items: EQUIP_ITEMS.slice(2), box: [-3000, -2000, 3000, 2000] });
+  expect(bare.calls.filter(c => c.fillStyle === PREVIEW_COLORS.item || c.strokeStyle === PREVIEW_COLORS.itemEdge)).toEqual([]);
+});
+
+test('검토 창의 미리보기에 가져올 기구가 함께 그려진다', async () => {
+  const { w, q } = open({ file: fileOf() });
+  const ctx = recCtx2d();
+  q('preview').getContext = () => ctx;
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const floor = { ...EXTRACTED.project.floors[0], items: EQUIP_ITEMS };
+  w.emit({ ...EXTRACTED, project: { ...EXTRACTED.project, floors: [floor] } });
+  await flush();
+  const fills = ctx.calls.filter(c => c.op === 'fill').map(c => c.fillStyle);
+  expect(fills).toContain(PREVIEW_COLORS.item);
+  expect(fills.indexOf(PREVIEW_COLORS.item)).toBeLessThan(fills.indexOf(PREVIEW_COLORS.wall));
 });

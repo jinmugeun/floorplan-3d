@@ -145,8 +145,10 @@ export const kindOk = (kind, id) => ((kind === 'door' || kind === 'pocket' || ki
   || (kind === 'window' && id.startsWith('window-')) || (kind === 'pass' && id === 'opening-pass');
 
 // 한 도면을 앱과 같은 순서로 돌린다 → { summary, project, stats, metrics }. roles = 역할표 원 JSON(loadRoles · 없으면 규칙만).
-// dividers = 실명만으로 구획선 옵션(dividersOption · 기본 꺼짐).
-export async function runDrawing(entry, { roles = null, dividers = false } = {}) {
+// dividers = 실명만으로 구획선 옵션(dividersOption · 기본 꺼짐). equipment = 기구 배치(2026-10-12 · 계획 13 Task 3 — 검토 창 체크박스와 같은 기본 켬:
+// e2e가 검토 창 숫자를 이 값과 맞댄다). 기구는 아이템이 늘 뿐이라 아래 지표(개구부는 door-·window-·opening-pass 제품 · 기둥은 kind column)에 들지 않는다 —
+// 수는 stats.equipment로 돌려준다(점수판 열은 Task 4).
+export async function runDrawing(entry, { roles = null, dividers = false, equipment = true } = {}) {
   const path = fileOf(entry);
   if (!path) return null;
   const handle = await worker();
@@ -155,7 +157,7 @@ export async function runDrawing(entry, { roles = null, dividers = false } = {})
   const parsed = handle({ type: 'parse', buf: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), fileName: path.split(/[\\/]/).pop(), ...(roles ? { roles } : {}) });
   if (parsed.type !== 'parsed') return { error: parsed.code ?? 'parse', path };
   const { summary } = parsed;
-  const ex = handle({ type: 'extract', opts: { layers: summary.checked, region: entry.region ?? 0, trace: false, ...(dividers ? { dividerByNames: true } : {}) } });
+  const ex = handle({ type: 'extract', opts: { layers: summary.checked, region: entry.region ?? 0, trace: false, equipment, ...(dividers ? { dividerByNames: true } : {}) } });
   if (ex.type !== 'extracted') return { error: ex.code ?? 'extract', path, summary };
   const ms = Math.round(performance.now() - t0);
   const { project, stats } = ex, fl = project.floors[0];

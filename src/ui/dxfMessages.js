@@ -35,6 +35,12 @@ export const DXF_NAME_DIVIDED = n => `실명만으로 구획선 ${n}개를 제�
 // 난간 구획선(2026-10-12 · 계획 12 최종 리뷰 X-4 · M5-4 · io/dxf/railDividers.js): 옵션 없이 늘 긋는데 검토 창이 말하지 않아 점선이 설명 없이
 // 나타났다. 그은 수(stats.railDividers — 구획선 조각 수)를 따로 알린다 — 면적 표기 문구(DXF_RECONCILED · stats.dividers)와 섞지 않는다.
 export const DXF_RAIL_DIVIDED = n => `난간으로 닫은 구획선 ${n}개를 그었습니다 — 미리보기의 점선을 확인해 주세요`;
+// 기구 배치(2026-10-12 · 계획 13 Task 3 · io/dxf/equipment.js): 검토 창 체크박스(기본 켬 — 급식기구 배치도의 절반이 기구다)와 세운 수.
+// 제품 = 카탈로그 제품으로 맞춘 것 · 일반 = '도면 기구' 상자(이름·크기는 도면 그대로) · 벽과 겹침 = 벽·기둥과 절반 넘게 겹친 바닥 기구(옮기지 않고
+// 사람이 본다). 기구끼리 겹침(사전 검토 반영 5 — 자리는 도면 그대로라 3D에서 빨갛게 보인다)은 0이 아닐 때만 덧붙인다.
+export const DXF_EQUIPMENT_OPT = '도면의 기구를 제품으로 배치';
+export const DXF_EQUIPMENT = (placed, product, generic, clash, overlap = 0) =>
+  `기구 ${placed}개 배치 — 제품 ${product} · 일반 ${generic} · 벽과 겹침 ${clash}${overlap ? ` · 기구끼리 겹침 ${overlap}` : ''}`;
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
 export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
 export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;

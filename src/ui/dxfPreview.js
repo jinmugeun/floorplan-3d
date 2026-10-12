@@ -1,9 +1,15 @@
-// 검토 대화상자의 미리보기 캔버스(§18.6): 원 도면 옅은 회색 · 검출 방 파스텔 ·
-// 추출 벽 두께 폴리곤 · 구획선 점선 · **끊긴 끝점 빨간 ✚**. 색은 §18.6이 글자로 정한 값이다.
+// 검토 대화상자의 미리보기 캔버스(§18.6): 원 도면 옅은 회색 · 검출 방 파스텔 · 기구 옅은 사각형 ·
+// 추출 벽 두께 폴리곤 · 구획선 점선 · **끊긴 끝점 빨간 ✚**. 색은 §18.6이 글자로 정한 값이다(기구 두 색만 계획 13이 더했다).
+import { itemCorners, isEmbed } from '../geom/items.js';
+
 export const PREVIEW_COLORS = {
   trace: '#dcdcdc', wall: '#475569', openEnd: '#dc2626',
   room: ['#fde68a', '#bfdbfe', '#bbf7d0', '#fbcfe8', '#ddd6fe', '#fecaca', '#a5f3fc', '#fed7aa', '#d9f99d', '#e9d5ff'],
+  // 기구(2026-10-12 · 계획 13 Task 3): 벽(#475569)보다 훨씬 옅은 슬레이트 — 벽과 함께 보이되 벽으로 읽히지 않게. 테두리는 붙어 선 작업대가 한 덩이로 뭉치지 않게.
+  item: '#cbd5e1', itemEdge: '#94a3b8',
 };
+// 미리보기에 그리는 아이템 = 가져온 기구(바닥·벽걸이·천장 후드). 문·창·개구부는 벽 속이고 기둥은 §18.6 그대로 그리지 않는다.
+const isPreviewItem = it => Array.isArray(it?.pos) && Array.isArray(it?.size) && !isEmbed(it) && it.kind !== 'column';
 export const OPEN_END_R = 6;
 
 export function previewTransform(box, w, h, pad = 10) {
@@ -27,7 +33,7 @@ export function boundsOf({ walls = [], trace = null } = {}) {
   return Number.isFinite(x0) ? [x0, y0, x1, y1] : null;
 }
 
-export function drawDxfPreview(canvas, { trace = null, walls = [], rooms = [], openEnds = [], box = null } = {}) {
+export function drawDxfPreview(canvas, { trace = null, walls = [], rooms = [], items = [], openEnds = [], box = null } = {}) {
   const ctx = canvas?.getContext?.('2d');
   if (!ctx) return null;
   const b = box ?? boundsOf({ walls, trace });
@@ -54,6 +60,19 @@ export function drawDxfPreview(canvas, { trace = null, walls = [], rooms = [], o
     ctx.closePath(); ctx.fill();
     ctx.globalAlpha = 1;
   });
+  // 기구(2026-10-12 · 계획 13 Task 3): 방 위 · 벽 아래에 rot대로 돈 사각형(geom/items.itemCorners — 3D와 같은 귀). 사동중 226개라 한 경로로 칠하고 긋는다.
+  const equip = items.filter(isPreviewItem);
+  if (equip.length) {
+    ctx.fillStyle = PREVIEW_COLORS.item;
+    ctx.strokeStyle = PREVIEW_COLORS.itemEdge;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    for (const it of equip) {
+      itemCorners(it).forEach((p, k) => { const q = t.at(p); if (k) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
+      ctx.closePath();
+    }
+    ctx.fill(); ctx.stroke();
+  }
   ctx.fillStyle = PREVIEW_COLORS.wall;
   for (const w of walls) {
     if (w.virtual) continue;
