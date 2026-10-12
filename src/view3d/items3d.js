@@ -3,7 +3,7 @@ import { toThree } from './build.js';
 import { productById } from '../products/catalog.js';
 import { itemVisible } from '../view2d/items2d.js';
 import { RAD } from '../geom/items.js';
-import { collidingIds } from '../geom/collide.js';
+import { memoCollisions } from '../geom/collide.js';
 import { shapeFor, itemMaterial, ITEM_EDGE_COLOR } from './itemShapes.js';
 import { perfSettings } from './perfMode.js';
 
@@ -70,7 +70,10 @@ export function buildItems(floor, view = {}) {
   g.name = 'items';
   const v3 = view.v3 ?? {};
   const edges = v3.itemEdges !== false && perfSettings(view.perfMode).edges;   // 성능 우선은 플래그를 그대로 두고 렌더에서만 생략(§13.4)
-  const bad = v3.collision === false ? null : collidingIds(floor.items ?? []);
+  // 충돌은 2D·배너·속성 패널과 같은 캐시에서 읽는다(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-5): 예전에는 재빌드마다
+  // collidingIds를 다시 돌려, 가져온 기구 330개에서 재빌드 한 번에 50~65 ms가 더해졌다. 스토어가 불변 스냅숏이라
+  // 같은 배열 = 같은 결과다. 돌려받는 Set은 캐시 내부 객체라 읽기만 한다(has).
+  const bad = v3.collision === false ? null : memoCollisions(floor.items ?? []);
   for (const item of floor.items ?? []) {
     if (!itemVisible3(item, v3)) continue;
     const obj = itemMesh(item, { edges });

@@ -4,7 +4,7 @@ import { buildItems, itemMesh, itemVisible3, paintItem, COLLIDE_COLOR } from '..
 import { createItem } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { RAD } from '../src/geom/items.js';
-import { collidingIds } from '../src/geom/collide.js';
+import { collidingIds, memoCollisions } from '../src/geom/collide.js';
 
 const mk = (id, patch) => createItem(productById(id), patch);
 const floor = items => ({ walls: [], rooms: [], items, height: 2300 });
@@ -73,6 +73,21 @@ describe('3D 아이템', () => {
     expect(on.children.filter(red)).toHaveLength(2);
     const off = buildItems(floor(items), { v3: { collision: false } });
     expect(off.children.some(red)).toBe(false);
+  });
+
+  // 계획 13 Task 5 · 사전 검토 I-5(2026-10-12): 3D buildItems는 재빌드마다 collidingIds를 캐시 없이 다시 돌렸다
+  // (2D·배너·속성 패널은 memoCollisions — 같은 아이템 배열이면 한 번). 가져온 기구 330개에서 재빌드마다 50~65 ms였다.
+  // 캐시를 쓰는지 보는 방법: 같은 배열로 캐시 칸을 먼저 채우고 그 Set에 겹치지 않는 아이템을 심는다 — 3D가 캐시를
+  // 읽으면 그것도 빨갛고, 다시 계산하면 빨갛지 않다. (캐시를 더럽히는 것은 이 테스트가 만든 배열이라 다른 곳에 새지 않는다.)
+  test('buildItems는 충돌을 memoCollisions 캐시에서 읽는다(같은 아이템 배열이면 다시 세지 않는다)', () => {
+    const items = [mk('dining-4', { pos: [0.5, 0.25] }), mk('dining-4', { pos: [500.5, 0.25] }), mk('dining-4', { pos: [5000, 0] })];
+    const cached = memoCollisions(items);
+    expect([...cached].sort()).toEqual([items[0].id, items[1].id].sort());
+    cached.add(items[2].id);                                     // 실제로는 겹치지 않는 셋째를 캐시에만 심는다
+    const red = obj => { let hit = false; obj.traverse(o => { if (o.material?.color?.getHexString() === 'e5484d') hit = true; }); return hit; };
+    expect(buildItems(floor(items), { v3: {} }).children.filter(red)).toHaveLength(3);
+    // 새 배열(편집 뒤 스냅숏)은 새로 센다 — 심은 값이 따라오지 않는다.
+    expect(buildItems(floor([...items]), { v3: {} }).children.filter(red)).toHaveLength(2);
   });
 
   test('조합 형상은 그룹이고 위치·회전·itemId는 모든 자손에 붙는다', () => {

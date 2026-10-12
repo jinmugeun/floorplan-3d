@@ -75,6 +75,79 @@ describe('충돌 계산 캐시(memoCollisions)', () => {
   });
 });
 
+// 계획 13 Task 5 · 사전 검토 I-5(2026-10-12): collidingIds에 넓은 단계(AABB · x 정렬 훑기)를 넣었다 — 쌍마다
+// itemCorners·SAT를 돌던 N²가 아이템 330개(가져온 기구)에서 50~65 ms였다. 좁은 단계(obbOverlap)는 그대로이고,
+// 결과는 옛 전수 비교와 **같은 Set**이어야 한다. 기준은 옛 구현을 그대로 옮긴 것이다(규칙: 바닥 부착 · 숨김 제외 · 높이 구간).
+describe('collidingIds 넓은 단계(AABB 선거름)', () => {
+  const FLOOR = new Set(['floor', 'floorLay']);
+  function bruteIds(items, tol = 1) {   // 2026-10-12 이전 collidingIds 그대로
+    const list = items.filter(i => !!i && !i.hidden && FLOOR.has(i.attach));
+    const out = new Set();
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      if (a.z >= b.z + b.size[2] - tol || b.z >= a.z + a.size[2] - tol) continue;
+      if (obbOverlap(a, b, tol)) { out.add(a.id); out.add(b.id); }
+    }
+    return out;
+  }
+  // 고정 씨앗 난수(mulberry32) — 실행마다 같은 배치.
+  const rng = seed => () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const randomItems = (seed, n, span) => {
+    const r = rng(seed), pick = a => a[Math.floor(r() * a.length)];
+    return Array.from({ length: n }, (_, i) => {
+      // 격자에 맞춘 자리·크기를 섞는다: 맞닿음(겹침 0)·tol 경계(겹침 1 mm)가 실제로 나오게.
+      const snap = r() < 0.4, size = [snap ? 100 * (3 + Math.floor(r() * 15)) : 300 + r() * 1700.5, snap ? 100 * (3 + Math.floor(r() * 10)) : 300 + r() * 1200.25, 300 + r() * 1500];
+      const pos = snap ? [100 * Math.floor(r() * span / 100) + (r() < 0.2 ? 1 : 0), 100 * Math.floor(r() * span * 0.6 / 100)] : [r() * span, r() * span * 0.6];
+      return mk('dining-4', {
+        id: `r${seed}_${i}`, pos, size, z: r() < 0.15 ? 750 + r() * 300 : 0,
+        rot: pick([0, 0, 0, 90, 180, 270, 37.5, 45, 77.1, -87.4, r() * 360]),
+        attach: pick(['floor', 'floor', 'floor', 'floor', 'floorLay', 'wall', 'ceiling']), hidden: r() < 0.05,
+      });
+    });
+  };
+  const sorted = s => [...s].sort();
+
+  test('무작위 200개(고정 씨앗 · 촘촘·성김 · 회전 섞임)에서 옛 전수 비교와 같은 Set이다', () => {
+    let hits = 0;
+    for (const [seed, span] of [[1, 8000], [7, 15000], [42, 30000], [2026, 6000], [1012, 45000]]) {
+      const items = randomItems(seed, 200, span);
+      for (const tol of [1, 5, 0]) {
+        const want = bruteIds(items, tol);
+        expect(sorted(collidingIds(items, { tol }))).toEqual(sorted(want));
+        hits += want.size;
+      }
+    }
+    expect(hits).toBeGreaterThan(500);                           // 표본이 실제로 충돌을 많이 담는다(빈 비교가 아니다)
+  });
+
+  test('맞닿음·tol 경계·같은 자리·크기 0에 가까운 것도 같다', () => {
+    const items = [
+      mk('dining-4', { id: 'a', pos: [0, 0] }), mk('dining-4', { id: 'b', pos: [1200, 0] }),          // 맞닿음(x)
+      mk('dining-4', { id: 'c', pos: [0, 800] }), mk('dining-4', { id: 'd', pos: [1199, 800] }),      // 겹침 1 mm = tol(충돌 아님)
+      mk('dining-4', { id: 'e', pos: [0, 1600] }), mk('dining-4', { id: 'f', pos: [1198.5, 1600] }),  // 겹침 1.5 mm
+      mk('dining-4', { id: 'g', pos: [5000, 5000] }), mk('dining-4', { id: 'h', pos: [5000, 5000] }), // 같은 자리
+      // 45° 둘: 상자(AABB)는 크게 겹치지만 깊이 축 겹침 800 − 1131/√2 = 0.26 mm ≤ tol → 충돌 아님(좁은 단계가 정한다).
+      mk('dining-4', { id: 'i', pos: [9000, 0], rot: 45 }), mk('dining-4', { id: 'j', pos: [9000 + 1131, 0], rot: 45 }),
+      mk('dining-4', { id: 'k', pos: [14000, 0], rot: 45 }), mk('dining-4', { id: 'l', pos: [14000 + 1100, 0], rot: 45 }),   // 22 mm 겹침
+    ];
+    expect(sorted(collidingIds(items))).toEqual(sorted(bruteIds(items)));
+    expect(sorted(collidingIds(items))).toEqual(['e', 'f', 'g', 'h', 'k', 'l']);
+  });
+
+  test('축 정렬 330개(사동중 가져오기 크기)는 50 ms 안에 끝난다', () => {
+    const p = productById('dining-6');
+    const spread = Array.from({ length: 330 }, (_, i) => mk('dining-6', { pos: [(i * 7919) % 45000, (i * 104729) % 30000], size: [900, 600, 850] }));
+    const grid = Array.from({ length: 330 }, (_, i) => createItem(p, { pos: [(i % 30) * 1500, Math.floor(i / 30) * 1400], size: [1800, 1326, 750], rot: 90 }));
+    for (const items of [spread, grid]) {
+      collidingIds(items);                                       // 데우기(JIT)
+      let best = Infinity;
+      for (let k = 0; k < 3; k++) { const t = performance.now(); collidingIds(items); best = Math.min(best, performance.now() - t); }
+      expect(best).toBeLessThan(50);                             // 옛 전수 비교: 50~65 ms(사전 검토 실측) — 지금은 수 ms
+    }
+    expect(collidingIds(grid).size).toBe(330);                   // 격자는 이웃과 다 겹친다(결과도 그대로)
+  });
+});
+
 // §15.2: 드래그 중에는 전체 N² SAT를 돌지 않는다 — 끌고 있는 것만 나머지와 비교한다.
 describe('collidingFor(드래그 대상 기준)', () => {
   test('끌고 있는 것과 겹치는 쌍만 모은다(소수 좌표)', () => {

@@ -1,4 +1,4 @@
-import { itemCorners } from './items.js';
+import { itemCorners, itemAABB } from './items.js';
 import { sub, dot, norm, perp } from './vec.js';
 
 const axesOf = pts => [norm(sub(pts[1], pts[0])), norm(sub(pts[3], pts[0]))].map(perp);
@@ -21,12 +21,24 @@ const collidable = i => !!i && !i.hidden && FLOOR_ATTACH.has(i.attach);
 const zOverlap = (a, b, tol) => !(a.z >= b.z + b.size[2] - tol || b.z >= a.z + a.size[2] - tol);
 
 // 같은 층의 바닥 아이템끼리 겹치는 것들의 id. 벽·천장 부착과 숨긴 아이템은 보지 않는다.
+// 넓은 단계(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-5): 쌍마다 itemCorners·SAT를 돌던 N²가 DXF로 가져온 기구
+// 330개에서 50~65 ms였다(겹침이 없는 흩어진 배치도 같다). 아이템마다 AABB를 한 번 재고 minX로 정렬해 훑는다 —
+// x 구간이 떨어지면 뒤의 것도 모두 떨어졌으니 끊고, y 구간이 떨어지면 건너뛴다. 남은 쌍만 지금의 좁은 단계(높이 · SAT)를 지난다.
+// 결과가 옛 전수 비교와 같은 까닭: OBB ⊂ AABB라 AABB가 떨어진 두 사각형은 내부가 겹치지 않고, 그러면 SAT의 변 법선 중
+// 하나에서 겹침 ≤ 0 ≤ tol이다(좁은 단계도 false). 맞닿은 상자(간격 0)는 부동소수 흔들림이 판정을 뒤집을 수 있어
+// 거르지 않고 좁은 단계에 맡긴다(AABB_EPS). tol < 0("떨어져도 충돌")은 이 논증이 서지 않아 거르지 않는다(쓰는 곳 없음).
+const AABB_EPS = 1e-6;   // mm. 이만큼은 떨어져야 넓은 단계가 쌍을 버린다
 export function collidingIds(items, { tol = 1 } = {}) {
-  const list = (Array.isArray(items) ? items : []).filter(collidable);
+  const list = (Array.isArray(items) ? items : []).filter(collidable)
+    .map(it => ({ it, box: itemAABB(it) })).sort((p, q) => p.box.min[0] - q.box.min[0]);
+  const pad = tol >= 0 ? AABB_EPS : Infinity;
   const out = new Set();
   for (let i = 0; i < list.length; i++) {
+    const { it: a, box: A } = list[i];
     for (let j = i + 1; j < list.length; j++) {
-      const a = list[i], b = list[j];
+      const { it: b, box: B } = list[j];
+      if (B.min[0] > A.max[0] + pad) break;                                       // x로 떨어졌다(정렬했으니 뒤도 모두)
+      if (B.min[1] > A.max[1] + pad || A.min[1] > B.max[1] + pad) continue;       // y로 떨어졌다
       if (!zOverlap(a, b, tol)) continue;      // 높이 구간이 안 겹치면 충돌 아님
       if (obbOverlap(a, b, tol)) { out.add(a.id); out.add(b.id); }
     }
