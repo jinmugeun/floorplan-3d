@@ -32,6 +32,9 @@ export const DXF_RECONCILED = (dividers, annexes) => '도면의 면적 표기에
 // 자동으로 긋지 않는다)와 켰을 때 그은 수. 제안이므로 미리보기의 점선을 사람이 확인하게 말한다.
 export const DXF_NAME_DIVIDERS = '실명만으로 구획선 제안(면적 표기 없을 때)';
 export const DXF_NAME_DIVIDED = n => `실명만으로 구획선 ${n}개를 제안했습니다 — 미리보기의 점선을 확인해 주세요`;
+// 난간 구획선(2026-10-12 · 계획 12 최종 리뷰 X-4 · M5-4 · io/dxf/railDividers.js): 옵션 없이 늘 긋는데 검토 창이 말하지 않아 점선이 설명 없이
+// 나타났다. 그은 수(stats.railDividers — 구획선 조각 수)를 따로 알린다 — 면적 표기 문구(DXF_RECONCILED · stats.dividers)와 섞지 않는다.
+export const DXF_RAIL_DIVIDED = n => `난간으로 닫은 구획선 ${n}개를 그었습니다 — 미리보기의 점선을 확인해 주세요`;
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
 export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
 export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;

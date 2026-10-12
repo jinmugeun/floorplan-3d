@@ -11,7 +11,7 @@ import { buildImportMeta } from '../io/dxfFeedback.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED, DXF_MANY_PLANS, DXF_REGION, DXF_REGION_LABEL, DXF_RECONCILED,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
-  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED } from './messages.js';
+  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED } from './messages.js';
 
 const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
@@ -110,7 +110,8 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     const guessed = summary?.layers?.some(r => r.guessed) || last?.stats?.guessed;
     const st = last?.stats ?? {}, fixed = (st.dividers || st.annexes) && DXF_RECONCILED(st.dividers ?? 0, st.annexes ?? 0);
     const byNames = st.nameDividers > 0 && DXF_NAME_DIVIDED(st.nameDividers);
-    notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byNames].filter(Boolean).join(' / ') || null);
+    const byRails = st.railDividers > 0 && DXF_RAIL_DIVIDED(st.railDividers);       // 2026-10-12 최종 리뷰 X-4: 늘 켜진 난간 구획선도 알린다
+    notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byRails, byNames].filter(Boolean).join(' / ') || null);
   };
   const regionIdx = () => Number(q('region').value) || 0;
   const km = mm => (mm / 1000).toFixed(1);

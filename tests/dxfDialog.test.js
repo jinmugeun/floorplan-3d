@@ -7,7 +7,7 @@ import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_S
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
-import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED } from '../src/ui/messages.js';
+import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED } from '../src/ui/messages.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -558,6 +558,25 @@ test('구획선을 긋거나 딸린 방을 합쳤으면 알림 줄에 적는다'
   expect(DXF_RECONCILED(2, 0)).toBe('도면의 면적 표기에 맞춰 구획선 2개를 그었습니다');
   expect(DXF_RECONCILED(0, 3)).toBe('도면의 면적 표기에 맞춰 딸린 방 3곳을 합쳤습니다');
   expect(q('notice').hidden).toBe(false);
+});
+
+// 2026-10-12 · 계획 12 최종 리뷰 X-4(M5-4): 난간 구획선은 늘 켜져 있는데(railDividers) 검토 창이 아무 말도 하지 않아, 면적 표기 없는 도면에서
+// 미리보기의 점선이 설명 없이 나타났다. 그은 수를 따로 알린다 — 면적 표기 문구(stats.dividers)와 섞지 않는다.
+test('난간으로 닫은 구획선을 그었으면 그 수를 알림 줄에 따로 적는다(면적 표기 구획선과 섞지 않는다)', async () => {
+  const noticeOf = async stats => {
+    document.body.innerHTML = '';
+    const { w, q } = open({ file: fileOf() });
+    await flush();
+    w.emit({ type: 'parsed', summary: SUMMARY });
+    await flush();
+    w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, ...stats } });
+    await flush();
+    return q('notice').textContent;
+  };
+  expect(await noticeOf({ railDividers: 2 })).toBe(DXF_RAIL_DIVIDED(2));
+  expect(DXF_RAIL_DIVIDED(2)).toBe('난간으로 닫은 구획선 2개를 그었습니다 — 미리보기의 점선을 확인해 주세요');
+  expect(await noticeOf({ dividers: 1, railDividers: 3 })).toBe(`${DXF_RECONCILED(1, 0)} / ${DXF_RAIL_DIVIDED(3)}`);
+  expect(await noticeOf({ railDividers: 0 })).not.toContain('난간');
 });
 
 // 2026-10-12 · 계획 12 Task 6: 실명만으로 구획선은 **옵션, 기본 꺼짐**(사용자 결정 2026-10-02). 켜면 추출 옵션 dividerByNames로 다시 추출하고,
