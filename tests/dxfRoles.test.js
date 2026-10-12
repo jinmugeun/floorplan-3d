@@ -64,21 +64,43 @@ test('표의 레이어 역할이 키워드 역할을 덮는다 — byTable, 표�
   expect(layerStats(doc, ex, { roles: rolesOf({}) })).toEqual(layerStats(doc, ex));
 });
 
-test('표가 도형 추정(벽 추정 guessed · 청록 창호 byColor)을 덮는다 — guessed를 달지 않는다', () => {
-  // 내곡중 꼴: 벽 키워드 레이어가 없어 평행 짝이 긴 `건축`·`A2`가 벽으로 추정된다.
-  const doc = docOf(layerRec('건축', 8), layerRec('A2', 8), layerRec('WID', 4));
-  const segs = [...room('건축', 0.5, 0.25, 30000, 20000), ...room('A2', 40000.5, 0.25, 20000, 15000), ...room('WID', 70000.5, 0.25, 9000, 6000, 100)];
-  const plain = Object.fromEntries(layerStats(doc, exOf({ segs })).map(r => [r.name, r]));
-  expect([plain.건축.guessed, plain.A2.guessed, plain.WID.byColor]).toEqual([true, true, true]);
-  const by = Object.fromEntries(layerStats(doc, exOf({ segs }), { roles: rolesOf({ layers: { 건축: 'wall', WID: 'equip' } }) }).map(r => [r.name, r]));
+test('표가 도형 추정(벽 추정 guessed · 청록 창호 byColor)을 덮는다 — 그 행에서 guessed·byColor를 지운다', () => {
+  // 내곡중 꼴: 벽 키워드 레이어가 없어 평행 짝이 긴 `건축`·`A2`·`A3`이 벽으로 추정된다. FUR은 이름이 기구다.
+  const doc = docOf(layerRec('건축', 8), layerRec('A2', 8), layerRec('A3', 8), layerRec('WID', 4), layerRec('FUR', 2));
+  const segs = [...room('건축', 0.5, 0.25, 30000, 20000), ...room('A2', 40000.5, 0.25, 20000, 15000), ...room('A3', 70000.5, 20000.25, 20000, 15000),
+    ...room('WID', 70000.5, 0.25, 9000, 6000, 100), ...rectSegs('FUR', 100000.5, 0.25, 1200, 800)];
+  const rowsWith = layers => Object.fromEntries(layerStats(doc, exOf({ segs }), { roles: layers && rolesOf({ layers }) }).map(r => [r.name, r]));
+  const plain = rowsWith(null);
+  expect([plain.건축.guessed, plain.A2.guessed, plain.A3.guessed, plain.WID.byColor, plain.FUR.role]).toEqual([true, true, true, true, 'equip']);
+  const by = rowsWith({ 건축: 'wall', WID: 'equip' });
   expect([by.건축.role, by.건축.byTable, by.건축.guessed]).toEqual(['wall', true, undefined]);
-  // 표가 벽을 정했으니 이름 없는 A2를 함께 벽으로 올리지 않는다(추정은 "벽이 하나도 없을 때"만이다).
-  expect([by.A2.role, by.A2.guessed]).toEqual(['other', undefined]);
   // 청록 창틀이어도 표가 기구라면 기구다.
   expect([by.WID.role, by.WID.byTable, by.WID.byColor]).toEqual(['equip', true, undefined]);
-  // 표가 추정 레이어를 벽이 아니라고 하면 남은 이름 없는 레이어끼리 추정한다.
-  const only = Object.fromEntries(layerStats(doc, exOf({ segs }), { roles: rolesOf({ layers: { 건축: 'other' } }) }).map(r => [r.name, r]));
-  expect([only.건축.role, only.건축.guessed, only.A2.role, only.A2.guessed]).toEqual(['other', undefined, 'wall', true]);
+  // 리뷰 M-1: 표에 없는 레이어는 규칙 그대로 — 표가 벽을 하나 정했다고 A2·A3의 추정 벽이 사라지지 않는다(행이 표 없을 때와 같다).
+  expect([by.A2, by.A3, by.FUR]).toEqual([plain.A2, plain.A3, plain.FUR]);
+  // 무관한 레이어 하나만 벽이라고 한 표도 추정 벽 셋을 지우지 않는다.
+  const fur = rowsWith({ FUR: 'wall' });
+  expect([fur.FUR.role, fur.FUR.byTable]).toEqual(['wall', true]);
+  expect([fur.건축, fur.A2, fur.A3, fur.WID]).toEqual([plain.건축, plain.A2, plain.A3, plain.WID]);
+  // 표가 추정 레이어 하나를 벽이 아니라고 하면 그 행만 바뀐다(남은 추정 벽은 그대로).
+  const only = rowsWith({ 건축: 'other' });
+  expect([only.건축.role, only.건축.guessed, only.A2, only.A3]).toEqual(['other', undefined, plain.A2, plain.A3]);
+});
+
+test('표가 벽을 하나도 남기지 않으면(유일한 벽 레이어를 other로) 표에 없는 레이어끼리 벽 추정을 한 번 더 한다', () => {
+  const doc = docOf(layerRec('WAL'), layerRec('A1', 8), layerRec('A2', 8), layerRec('A3', 8));
+  const segs = [...room('WAL'), ...room('A1', 20000.5, 0.25, 30000, 20000), ...room('A2', 60000.5, 0.25, 20000, 15000), ...room('A3', 90000.5, 0.25, 20000, 15000)];
+  const rowsWith = layers => Object.fromEntries(layerStats(doc, exOf({ segs }), { roles: layers && rolesOf({ layers }) }).map(r => [r.name, r]));
+  // 규칙만: 이름이 벽인 WAL이 있으니 추정하지 않는다.
+  const plain = rowsWith(null);
+  expect(['WAL', 'A1', 'A2', 'A3'].map(n => [plain[n].role, plain[n].guessed])).toEqual([['wall', undefined], ['other', undefined], ['other', undefined], ['other', undefined]]);
+  // 표가 WAL을 other로 → 벽이 없다 → 표에 없는 A1~A3끼리 추정한다(표가 정한 WAL은 추정 대상이 아니다).
+  const none = rowsWith({ WAL: 'other' });
+  expect(['WAL', 'A1', 'A2', 'A3'].map(n => [none[n].role, none[n].guessed])).toEqual([['other', undefined], ['wall', true], ['wall', true], ['wall', true]]);
+  expect([...defaultChecked(Object.values(none))].sort()).toEqual(['A1', 'A2', 'A3']);
+  // 두 번째 추정도 표가 다른 역할을 준 레이어는 건너뛴다.
+  const skip = rowsWith({ WAL: 'other', A2: 'equip' });
+  expect(['A1', 'A2', 'A3'].map(n => [skip[n].role, skip[n].guessed])).toEqual([['wall', true], ['equip', undefined], ['wall', true]]);
 });
 
 // ── 블록 ─────────────────────────────────────────────────────────────────

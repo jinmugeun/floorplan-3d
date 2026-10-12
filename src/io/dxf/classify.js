@@ -50,9 +50,11 @@ function shapeRole(r) {
 
 // 이 배열이 §18.6 체크리스트의 유일한 원천이다. 레이어 테이블에 없는데 도형만 있는 이름도
 // 행을 얻는다(블록 안에서만 쓰인 레이어).
-// roles(2026-10-12 · 계획 12 Task 9): roles.checkRoles가 낸 역할표. 표에 있는 레이어는 그 역할이 키워드·도형 신호를 **덮고**
-// byTable을 단다(guessed·byColor는 배지·알림에 묶인 "추정" 표지라 달지 않는다) — 내용으로 고치기(refineByContent)도 그 행은 건너뛰고,
-// 표가 정한 벽이 있으면 벽 추정을 하지 않는다. 표에 없는 레이어는 규칙 그대로다. 꺼짐·동결·선 수는 표가 바꾸지 못한다.
+// roles(2026-10-12 · 계획 12 Task 9): roles.checkRoles가 낸 역할표. **규칙을 표 없이 그대로 다 돌린 뒤**(키워드 · 도형 신호 · 청록 창호 ·
+// 벽 추정) 표에 있는 레이어만 그 역할로 덮고 byTable을 단다(guessed·byColor는 배지·알림에 묶인 "추정" 표지라 지운다). 그래서 표에 없는
+// 레이어의 행은 표가 없을 때와 같다 — 추정 벽도 그대로다(리뷰 M-1: 표를 먼저 적용하면 표의 벽 한 줄이 벽 추정의 조기 반환을 만족시켜,
+// 무관한 레이어 하나 `{FUR: wall}`만으로 모든 추정 벽이 사라졌다). 표가 벽을 하나도 남기지 않으면(유일한 벽 레이어를 other로 바꾼 표)
+// 표에 없는 레이어끼리 벽 추정을 한 번 더 한다(refineByContent는 byTable 행을 건너뛴다). 꺼짐·동결·선 수는 표가 바꾸지 못한다.
 export function layerStats(doc, ex, { roles = null } = {}) {
   const rows = new Map();
   const get = name => {
@@ -88,8 +90,7 @@ export function layerStats(doc, ex, { roles = null } = {}) {
     r.medianSeg = r.lens.length ? r.lens[Math.floor(r.lens.length / 2)] : 0;
     delete r.lens;
     r.keyRole = classifyLayer(r.name);
-    const byTable = roles?.layers?.get(r.name);
-    if (byTable) { r.role = byTable; r.byTable = true; } else r.role = shapeRole(r);
+    r.role = shapeRole(r);
     out.push(r);
   }
   // 내용으로 고치기(청록 창호 · 이름으로 벽을 못 찾았을 때의 벽 추정) — 레이어별 선분은 필요할 때만 모은다.
@@ -99,6 +100,14 @@ export function layerStats(doc, ex, { roles = null } = {}) {
     return byLayer.get(name) ?? [];
   };
   refineByContent(out, segsOf);
+  // 역할표는 규칙 **뒤에** 덮는다(위 roles 주석 · 리뷰 M-1).
+  let touched = false;
+  for (const r of out) {
+    const t = roles?.layers?.get(r.name);
+    if (!t) continue;
+    r.role = t; r.byTable = true; delete r.guessed; delete r.byColor; touched = true;
+  }
+  if (touched && !out.some(r => r.role === 'wall' && !r.off && r.segs > 0)) refineByContent(out, segsOf);
   // 도형이 하나도 없는 정의는 행이 아니다(사전 검토 I-4): 실파일의 레이어 정의 101개 중
   // 도형이 실린 것은 45개뿐이고, 빈 정의 56줄을 체크리스트에 늘어놓으면 §18.6의 수치가 무의미해진다.
   return out.filter(r => r.segs || r.arcs || r.circles || r.texts || r.dims || r.inserts)

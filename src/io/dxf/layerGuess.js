@@ -44,7 +44,8 @@ export const CYAN_SHARE = 0.8;
 export function refineByContent(rows, segsOf, P = DXF_PARAMS) {
   const memo = new Map();
   const pairM = r => { if (!memo.has(r.name)) memo.set(r.name, pairedLength(segsOf(r.name), P) / 1000); return memo.get(r.name); };
-  // byTable(역할표가 정한 행 · 2026-10-12 계획 12 Task 9)은 내용으로 고치지 않는다 — 표가 기구라고 한 청록 레이어가 창호로, 표가 기타라고 한 레이어가 벽으로 올라가지 않게.
+  // byTable(역할표가 정한 행 · 2026-10-12 계획 12 Task 9)은 내용으로 고치지 않는다. 첫 호출에는 그런 행이 없고(layerStats가 규칙을 다 돌린 뒤 표를 덮는다),
+  // 표가 벽을 하나도 남기지 않았을 때의 두 번째 호출에서 표가 기타·기구라고 한 레이어가 다시 벽·창호로 올라가지 않게 한다(리뷰 M-1).
   const usable = r => !r.off && r.segs > 0 && r.keyRole === 'other' && !r.byTable;
   for (const r of rows) {
     if (!usable(r) || (r.cyan ?? 0) / r.segs < CYAN_SHARE) continue;
