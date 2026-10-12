@@ -14,7 +14,9 @@ export const SLIDE_PRODUCTS = [['door-slide-900', 900], ['door-slide-1500', 1500
 export const WINDOW_PRODUCTS = [['window-fix-600', 600], ['window-slide-1200', 1200], ['window-slide-1800', 1800]];
 export const OPENING_FALLBACK = 'opening-pass';
 export const OPENING_MATCH_DIST = 900;     // 개구부 중심 → 벽 중심선 최대 거리(mm)
-export const OPENING_EDGE = 50;            // 개구부가 벽 끝에서 떨어져 있어야 할 최소 여유(mm · 리뷰 F1)
+// 개구부가 벽 끝에서 둘 여유(mm · 리뷰 F1). 틈·호 개구부(fitOpening)는 늘, 블록 개구부(spanPieces)는 블록이 벽 끝에 닿거나 넘을 때만 둔다 —
+// 벽 안에 든 블록 끝은 도면의 문설주 자리 그대로다(2026-10-12 · 계획 13 Task 6(b) · 최종 리뷰 M6-3).
+export const OPENING_EDGE = 50;
 export const OPENING_MIN = 300;            // 이보다 좁으면 개구부가 아니라 벽 토막이다(mm)
 const GAP_SAME = 300;                      // 같은 개구부로 볼 벽 틈 중심 거리(mm)
 const CATALOG_WIDTHS = [...new Set([...DOOR_PRODUCTS, ...WINDOW_PRODUCTS].map(e => e[1]))].sort((a, b) => a - b);
@@ -112,8 +114,10 @@ export function nearestProduct(list, width) {
 // 같은 끝점을 나눠 갖는 두 조각(a→p · p→b)으로 갈랐고, 창이 호스트 조각(2834) 안으로 잘려 2700만 앉았다. 구간이 벽 끝을 넘고 그 끝점을
 // **같은 방향(호스트 축에서 2° 안)·호스트와 같은 두께(±tol)**의 벽이 공유하면 그 조각으로 잇는다(T자로 붙는 칸막이는 방향이 달라 잇지 않는다).
 // 두께는 바로 앞 조각이 아니라 **호스트**와 잰다(2026-10-12 리뷰 m-2: 앞 조각과 재면 200 → 250 → 300이 사슬로 이어졌다).
-//  - 공유 접점에서는 OPENING_EDGE를 면제한다 — 지키면 4000 창이 1950 + 1950이 된다. 바깥 끝은 지금처럼 여유를 지키고, 넘치면 잘리지 않은 쪽(접점) 문설주를 제자리에 둔다.
-//  - 그리기: 이 조각들은 접점에 딱 붙는 유일한 개구부다(다른 경로는 벽 끝에서 OPENING_EDGE 떨어진다). 두 렌더러(2D walls2d.wallRange · 3D build.js)는
+//  - 공유 접점에서는 OPENING_EDGE를 면제한다 — 지키면 4000 창이 1950 + 1950이 된다. 바깥 끝은 블록이 벽 끝에 닿거나 넘을 때만 여유를 지키고(아래 edge ·
+//    2026-10-12 최종 리뷰 M6-3), 넘치면 잘리지 않은 쪽(접점) 문설주를 제자리에 둔다.
+//  - 그리기: 이 조각들은 접점에 딱 붙는 유일한 개구부다(다른 경로는 벽 끝에서 떨어진다 — 틈·호는 OPENING_EDGE, 블록은 벽 끝에 닿거나 넘을 때만 OPENING_EDGE이고
+//    벽 안에 든 블록은 도면 자리). 두 렌더러(2D walls2d.wallRange · 3D build.js)는
 //    같은 선으로 이어지는 벽의 접점에 딱 붙은 개구부가 있으면 그 접점을 공유하는 벽을 모두 늘리지 않는다(geom/walls.wallExtent · 2026-10-12 리뷰 M-1 후속)
 //    — 두 조각의 구멍이 접점에서 맞닿아 이어지고(사동중 그 창: 보이는 유리 4390 → 4750) T자 칸막이는 외벽 중심선(유리 자리 · y −12204)에서 멈춘다.
 //    그 전에는 접점마다 늘린 t/2 상자가 제 벽 개구부로만 잘려 벽 두께만 한 통높이 기둥(360 mm)이 섰고, 칸막이 끝이 외벽 겉면 2.5 mm 안까지 와 유리를 가로질렀다.

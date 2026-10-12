@@ -102,15 +102,18 @@ export async function areaLabels(ex) {
 // 창·문 블록 정답(2026-10-06): 종류·호칭 폭·전개 도형 bbox와 그 중심(DXF 좌표). 3차 수정의 scratch 채점기(사동중 44개)가 저장소 도구로 왔다.
 // 중심(c)은 도면 상자 안인지 가리는 데만, 적합 판정은 상자(box)로 한다.
 // byName(2026-10-12 · Task 9): 정답은 이름 정규식만 쓴다 — 워커가 세운 역할표 블록 종류(모듈 수준 표)가 정답을 움직이지 않게.
-// 폭(2026-10-12 · 계획 13 Task 6(b)): 이름의 숫자가 블록 도형 **전체**(상자의 긴 변 · k = 단위 배율로 mm)보다 NAME_FIT 위끝(1.1배) 넘게 넓으면
+// 폭(2026-10-12 · 계획 13 Task 6(b)): 이름의 숫자가 블록 도형 **전체**(상자의 긴 변 · k = 단위 배율로 mm)보다 TRUTH_NAME_FIT(1.1배) 넘게 넓으면
 // 도형 폭이다(포켓은 그 절반 — 파이프라인 blockOpenings와 같은 규칙). 내곡중 `미서기단창_5200`은 3900, `_7800`은 5200으로 그려졌고(INSERT 배율 1)
 // 벽 면선이 정확히 그 폭에서 끊긴다(문설주 선 37832·41732 / 39878·45078 — scratch p13t6-faces.mjs) — 이름이 틀렸다. 어느 축이 벽 방향인지
 // 정답은 모르므로(문은 로컬 y로 그린 것도 있다 — 방음문 로컬 x 1317) 아래끝(0.4배)은 쓰지 않는다: 긴 변보다 넓은 이름만 고친다.
+// 문턱은 정답 **자기 상수**다(2026-10-12 · 계획 13 최종 리뷰 F-12 · Task 6 리뷰 m-1): 파이프라인의 NAME_FIT을 import하면 그 상수를 고칠 때 정답과
+// 파이프라인이 함께 움직여 점수판이 변화를 보지 못한다(정답이 파이프라인을 따라가면 안 된다). 지금 값이 같다는 것은 tests/dxfBlockOpenings.test.js가 고정한다.
+export const TRUTH_NAME_FIT = 1.1;
 export async function blockTruth(ex, k = 1) {
-  const { blockBoxes, NAME_FIT } = await import('../../src/io/dxf/blockOpenings.js');
+  const { blockBoxes } = await import('../../src/io/dxf/blockOpenings.js');
   return blockBoxes(ex, { byName: true }).map(b => {
     const D = k * Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]);
-    const width = D > 0 && b.width > NAME_FIT[1] * D ? Math.round(b.kind === 'pocket' ? D / 2 : D) : b.width;
+    const width = D > 0 && b.width > TRUTH_NAME_FIT * D ? Math.round(b.kind === 'pocket' ? D / 2 : D) : b.width;
     return { name: b.name, kind: b.kind, width, box: b.box, c: [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2] };
   });
 }

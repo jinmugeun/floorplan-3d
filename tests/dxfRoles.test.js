@@ -237,6 +237,15 @@ test('저장소 역할표 9장: 모두 checkRoles를 오류 없이 지나고 버
   }
 });
 
+// 2026-10-12 · 계획 13 최종 리뷰 F-8(Task 4 리뷰 m-1): 내곡 표가 `A$C754401BD`(260×2300 · 셋 다 벽 위 · 안쪽 글자 "ASD 1,500")와 `adafdsaf`(r 1091 문 스윙)를
+// equip으로 적어, 역할표 equip이 개구부·스윙 제외를 이겨 --roles에서 상자 넷이 벽·문 자리에 섰다(naegok equip 11 → 15 · equipClash 0 → 3 · 종료 1).
+// 표를 고쳤다: 벽 위 블록은 other, 문 스윙 블록은 symbol — 둘 다 기구 후보에서 빠지고(equipment.js NOT_EQUIP) 개구부 판정에는 쓰이지 않는다.
+test('내곡 역할표: 벽 위 자동문 블록은 other · 문 스윙 블록은 symbol(기구로 서지 않는다)', () => {
+  const raw = JSON.parse(readFileSync(join(APP, 'tools/dxf-corpus/roles/naegok.json'), 'utf8'));
+  expect(raw.blocks['A$C754401BD'].kind).toBe('other');
+  expect(raw.blocks.adafdsaf.kind).toBe('symbol');
+});
+
 // ── llm-roles.mjs (API는 부르지 않는다 — 인자·검사 경로만) ────────────────────────
 test('llm-roles: --model이 없으면 2, 키가 없으면 2 "키 필요", --validate는 표 형식만 검사한다', () => {
   expect(parseArgs(['--in', 'a.json', '--out', 'b.json']).error).toMatch(/--model/);

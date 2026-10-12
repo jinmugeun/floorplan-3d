@@ -5,7 +5,10 @@ import { test, expect } from 'vitest';
 import { blockOpenings, blockBoxes, blockKind, blockKindByName, nominalWidth, isDoorBlock, OPEN_BLOCK } from '../src/io/dxf/blockOpenings.js';
 import { buildOpenings } from '../src/io/dxf/openings.js';
 import { makeWall } from '../src/geom/walls.js';
-import { blockTruth } from '../tools/dxf-corpus/lib.mjs';
+import { blockTruth, TRUTH_NAME_FIT } from '../tools/dxf-corpus/lib.mjs';
+import { NAME_FIT } from '../src/io/dxf/blockOpenings.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const A = makeWall({ a: [0, 0], b: [6000, 0], thickness: 200, height: 3500 });
 const B = makeWall({ a: [0, 1000], b: [6000, 1000], thickness: 200, height: 3500 });   // 문짝이 닿는 평행 벽
@@ -355,4 +358,13 @@ test('코퍼스 정답 폭: 이름이 블록 도형 전체보다 넓으면 도�
   // 미터 도면(배율 1000): 상자 0.9 × 1000 = 900 → 이름 그대로
   expect(await widths(one2('win-900-3', 0, 900, 100, 1000), 1000)).toEqual([['win-900-3', 900]]);
   expect(await widths(one2('win-900-3', 0, 600, 100, 1000), 1000)).toEqual([['win-900-3', 600]]);
+});
+
+// 2026-10-12 · 계획 13 최종 리뷰 F-12(Task 6 리뷰 m-1): 정답이 파이프라인 상수 NAME_FIT을 import하면 상수를 고칠 때 정답과 파이프라인이 함께 움직여
+// 점수판이 그 변화를 볼 수 없다. 정답은 자기 리터럴(TRUTH_NAME_FIT)을 쓰고, 지금 두 값이 같다는 것만 여기서 못 박는다(다르게 바꾸려면 이 테스트를 함께 고친다).
+test('코퍼스 정답의 이름 문턱은 자기 상수 TRUTH_NAME_FIT(1.1) — 파이프라인 NAME_FIT[1]과 지금 같고, lib.mjs는 NAME_FIT을 가져오지 않는다', () => {
+  expect(TRUTH_NAME_FIT).toBe(1.1);
+  expect(TRUTH_NAME_FIT).toBe(NAME_FIT[1]);
+  const lib = readFileSync(fileURLToPath(new URL('../tools/dxf-corpus/lib.mjs', import.meta.url)), 'utf8');
+  expect(lib).not.toMatch(/[{,]\s*NAME_FIT\s*[,}]/);                       // 구조 분해 import가 없다
 });
