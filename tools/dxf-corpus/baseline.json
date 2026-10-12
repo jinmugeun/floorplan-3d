@@ -21,7 +21,7 @@
   "passes": 5,
   "columns": 34,
   "guessed": false,
-  "ms": 1459
+  "ms": 1421
  },
  "sinsang-B": {
   "regions": 2,
@@ -45,7 +45,7 @@
   "passes": 17,
   "columns": 14,
   "guessed": false,
-  "ms": 1115
+  "ms": 1025
  },
  "sinsang-A": {
   "regions": 2,
@@ -60,16 +60,16 @@
   "dimEnds": 68,
   "areaOk": 0,
   "areaAll": 0,
-  "opnAll": 2,
-  "opnHit": 2,
-  "opnWidth": 2,
-  "opnKind": 2,
-  "doors": 6,
-  "windows": 17,
-  "passes": 19,
+  "opnAll": 13,
+  "opnHit": 13,
+  "opnWidth": 13,
+  "opnKind": 12,
+  "doors": 16,
+  "windows": 16,
+  "passes": 9,
   "columns": 14,
   "guessed": false,
-  "ms": 982
+  "ms": 926
  },
  "naegok": {
   "regions": 1,
@@ -93,6 +93,6 @@
   "passes": 3,
   "columns": 24,
   "guessed": false,
-  "ms": 1088
+  "ms": 942
  }
 }

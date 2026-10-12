@@ -13,9 +13,13 @@
 // 2026-10-02 내곡중: 창호 일람표의 기호(SD·FSD·SSD·ASD·AD·WD·PD + 폭 / AW·PW·SW·WW + 폭)와 우리말 이름
 // (미서기단창_1300 · 방음문(시창형)_2400 · 화장실칸막이문600)도 읽는다. 우리말은 **문·창 종류를 가리키는 겹낱말**만
 // 본다 — "문"·"창" 한 글자로 잡으면 기구의 문 수(양문·단문)와 창고가 걸린다.
-export const DOOR_BLOCK = /^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]|^((f|s|a)?s?d|wd|pd)[-_ ]?\d{3,4}|(방화|방음|자동|현관|출입|칸막이|여닫이|미닫이|미서기|강화|유리|방풍)문/i;
+// 2026-10-12 · 계획 13 Task 6(a): `포켓도어800`·`포켓도어900`(신상중 A 최상위 11개)은 어느 규칙에도 없어 문이 6개뿐이었다(손 역할표는 16 —
+// 차이는 전부 이 두 블록, p13-preflight §2). "포켓 + 도어 + 폭"만 본다(폭 숫자 필수) — 기구의 "냉장고 4도어"는 숫자가 도어 **앞**이라 걸리지 않는다.
+// 문 블록(DOOR_BLOCK)에도 넣는다: 역할표의 pocket이 isDoorBlock(문 호를 문으로)인 것과 같은 답을 이름 규칙이 내게(표가 없으면 isDoorBlock = DOOR_BLOCK).
+const POCKET_DOOR = '포켓\\s*도어\\s*\\d{3,4}';
+export const DOOR_BLOCK = new RegExp(/^(dr|door|d)[-_ ]?\d{3,4}|^door|^문[-_ ]|^((f|s|a)?s?d|wd|pd)[-_ ]?\d{3,4}|(방화|방음|자동|현관|출입|칸막이|여닫이|미닫이|미서기|강화|유리|방풍)문/.source + '|' + POCKET_DOOR, 'i');
 export const WINDOW_BLOCK = /^(win|window|w)[-_ ]?\d{3,4}|^window|^창[-_ ]|^(aw|pw|sw|ww)[-_ ]?\d{3,4}|(미서기|미닫이|여닫이|고정|프로젝트|픽스|붙박이|오르내리)[^\s_]{0,3}창/i;
-export const POCKET_BLOCK = /^문[-_ ]?(슬라이딩|포켓|미닫이)|^pocket/i;
+export const POCKET_BLOCK = new RegExp(/^문[-_ ]?(슬라이딩|포켓|미닫이)|^pocket/.source + '|' + POCKET_DOOR, 'i');
 // 2026-10-12 · 계획 12 Task 3 리뷰(concern 1·2): 정규화 DXF(io/dxfExport.js)가 쓰는 두 이름. `SLIDING-<폭>-<두께>`는 외미닫이(미닫이문 — 포켓의
 // 반쪽 주머니 규칙 없이 앉는다 · blockProduct('slide')), `PASS-<폭>-<두께>`는 문 없는 통로(opening-pass). 예전에는 `^sliding`이 포켓이었고
 // 통로는 블록 종류가 없어 벽 틈으로만 읽혔다(틈을 그 폭으로 못 읽으면 통로가 사라졌다). 코퍼스(..\dxf · ..\dxf-public)에 slide·sliding·pocket·pass로

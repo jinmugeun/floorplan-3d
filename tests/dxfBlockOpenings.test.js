@@ -2,7 +2,7 @@
 // 전개 도형에 explode의 ins 꼬리표를 직접 단다. INSERT 점(pos)은 일부러 멀리 둔다 — 블록 로컬 좌표가 base에서
 // 수십만 mm 떨어진 실파일(DR-1800)처럼, 자리는 전개 도형에서만 읽어야 한다.
 import { test, expect } from 'vitest';
-import { blockOpenings, blockBoxes, blockKind, OPEN_BLOCK } from '../src/io/dxf/blockOpenings.js';
+import { blockOpenings, blockBoxes, blockKind, blockKindByName, nominalWidth, isDoorBlock, OPEN_BLOCK } from '../src/io/dxf/blockOpenings.js';
 import { buildOpenings } from '../src/io/dxf/openings.js';
 import { makeWall } from '../src/geom/walls.js';
 
@@ -24,6 +24,22 @@ test('블록 이름으로 종류를 가린다 — 포켓 미닫이·여닫이·�
     .toEqual(['pocket', 'door', 'door', 'door', 'window', 'window', 'window', null, null]);
   expect(OPEN_BLOCK.test('문_슬라이딩 포켓 800')).toBe(true);
   expect(OPEN_BLOCK.test('소독기 단문 1200-750')).toBe(false);
+});
+
+// 2026-10-12 · 계획 13 Task 6(a): 신상중 A의 `포켓도어800`(×8)·`포켓도어900`(×3)을 이름 규칙이 몰라 문 6개에 그쳤다(손 역할표로는 16 —
+// 차이 +10은 전부 이 두 블록, p13-preflight §2). "포켓 + 도어 + 폭"이면 포켓 미닫이이고 폭은 이름의 숫자다. 기구의 "4도어"(냉장고 문 수)는 아니다.
+test('포켓도어 + 폭 블록은 포켓 미닫이(폭은 이름) — 냉장고 4도어는 아니다', () => {
+  const names = ['포켓도어800', '포켓 도어 900', '냉장고 4도어', '냉장고 4도어 1100L 1260-850', '포켓도어'];
+  expect(names.map(blockKindByName)).toEqual(['pocket', 'pocket', null, null, null]);
+  expect(names.map(blockKind)).toEqual(['pocket', 'pocket', null, null, null]);
+  expect(['포켓도어800', '포켓 도어 900'].map(nominalWidth)).toEqual([800, 900]);
+  expect(OPEN_BLOCK.test('포켓도어900')).toBe(true);
+  expect(isDoorBlock('포켓도어800')).toBe(true);           // 역할표(pocket)의 isDoorBlock과 같은 답 — 문 호를 문으로 읽는다
+  expect(isDoorBlock('냉장고 4도어 1100L 1260-850')).toBe(false);
+  // 벽 위에 앉히면 포켓 미닫이 제품(door-pocket-900 — 크기는 이름 폭 800). 문짝 없는 틀이면 로컬 x0 쪽 절반이 주머니다.
+  const W = makeWall({ a: [0, 0], b: [8000, 0], thickness: 200 });
+  const items = buildOpenings({ ex: exOf(one('포켓도어800'), frame(2000, 1600, 1)), walls: [W], openingLayers: new Set() });
+  expect(items.map(i => [i.productId, i.size[0], Math.round(i.t * 8000)])).toEqual([['door-pocket-900', 800, 3200]]);
 });
 
 // 2026-10-02 내곡중: 창·문이 이름 있는 블록인데 한국 창호 표기라 하나도 읽지 못했다(개구부 0개).
