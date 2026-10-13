@@ -53,6 +53,9 @@
 //    평면 블록(1f plan-1)·도면틀(권-효성a3 61 m · S-S3 63 m)이고 그 아래 가장 큰 기구는 세척 라인 *U266 5,200(아이템 크기 상한 5,000으로 잘린다 —
 //    schema ITEM_RANGE). equipClash 0.5 = 바닥 기구 상자의 이 비율 이상이 벽 띠·기둥과 겹치면 겹침으로 센다(그래도 세운다 — 사람이 본다):
 //    Task 1 겹침 분포는 0 / ≤ 0.1 / ≤ 0.25 / ≤ 0.5 / > 0.5 = 사동 175·31·2·1·2 — 0.5를 넘는 셋은 모두 벽 위의 얇은 판넬이었다(짧은 변 ≤ 200이면 벽 부착).
+//  - 기둥 접촉 깎기(equipTrim.js · 2026-10-13 계획 14 Task A): equipTrim 50 = 바닥 기구가 기둥 상자에 든 깊이(x·y 중 작은 쪽)가 이 이하이면 그 축의
+//    기둥 쪽 변만 깎는다. 도면이 기둥 면에 딱 붙여 그린 기구가 기둥 띠 안으로 4~47 mm 들어온다 — 사동중 기둥–기구 8쌍 중 7쌍(4·7·7·15·18·18·47 ·
+//    계획 13 Task 3 리뷰 실측)과 내곡 To청소대A 20; 50 넘으면 진짜 겹침이라 두고 본다(남은 한 쌍 — 사동 기둥을 감싼 5,000×1,467 카운터 264 mm).
 export const DXF_PARAMS = Object.freeze({
   minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
   tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20, spanEdge: 10, spanOverlap: 0.25,
@@ -65,5 +68,5 @@ export const DXF_PARAMS = Object.freeze({
   doorLeaf: Object.freeze([700, 1300]), slideOffset: 200, slideArrowLen: Object.freeze([400, 600]),
   railMin: 600, railSnap: 150, railPair: 300,
   dividerMinArea: 2_000_000,
-  equipMin: 150, equipMax: 8000, equipClash: 0.5,
+  equipMin: 150, equipMax: 8000, equipClash: 0.5, equipTrim: 50,
 });

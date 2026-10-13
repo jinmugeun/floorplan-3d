@@ -46,12 +46,12 @@ const structural = it => ['door', 'window', 'opening', 'column'].includes(it.kin
 // id(uid = 시각 + 카운터)는 실행마다 다르다 → 처음 나온 차례(#0, #1 …)로 바꿔 놓고 글자 그대로 비교한다(같은 계산이면 같은 차례다).
 const canon = v => { const ids = new Map(); return JSON.stringify(v, (k, x) => (typeof x === 'string' && /^[a-z]+_[0-9a-z]+$/.test(x) ? (ids.has(x) || ids.set(x, `#${ids.size}`), ids.get(x)) : x)); };
 // stats.equipment의 꼴: 일곱 키(spec) + colliding(2026-10-12 · 최종 리뷰 F-3 — 앱 배너와 같은 collidingIds 수) · skipped는 equipItems의 이유별 표 그대로
-// (이유 이름은 equipment.js 몫이라 여기서 못 박지 않는다).
-const KEYS = ['placed', 'product', 'generic', 'anonymous', 'clash', 'overlap', 'colliding', 'skipped'];
+// (이유 이름은 equipment.js 몫이라 여기서 못 박지 않는다). trimmed(2026-10-13 · 계획 14 Task A) = 기둥에 ≤ equipTrim 들어가 그쪽 변을 깎은 기구 수.
+const KEYS = ['placed', 'product', 'generic', 'anonymous', 'clash', 'overlap', 'trimmed', 'colliding', 'skipped'];
 const expectZero = e => {
   expect(Object.keys(e)).toEqual(KEYS);
   expect(Object.keys(e.skipped).length).toBeGreaterThan(0);
-  expect([...KEYS.slice(0, 7).map(k => e[k]), ...Object.values(e.skipped)].every(v => v === 0)).toBe(true);
+  expect([...KEYS.slice(0, 8).map(k => e[k]), ...Object.values(e.skipped)].every(v => v === 0)).toBe(true);
 };
 
 test('기구는 개구부·기둥 뒤에 붙고, 켜든 끄든 벽·방·개구부·기둥·나머지 통계는 글자 그대로 같다', () => {
@@ -79,6 +79,17 @@ test('stats.equipment.colliding = 완성된 아이템의 collidingIds 수(앱 �
   expect(on.stats.equipment.colliding).toBe(2);                     // 기둥 하나 + 작업대 하나
   expect(on.stats.equipment.overlap).toBe(0);                       // 기구끼리만 세는 수로는 0이었다
   expect(off.stats.equipment.colliding).toBe(0);
+});
+
+// 2026-10-13 · 계획 14 Task A: 기둥 접촉 깎기(equipTrim.js)는 colliding을 세기 **전에** 돈다 — 검토 창 "충돌 n건"(= 가져온 직후 배너)이 깎은 뒤의 수다.
+test('기둥에 ≤ equipTrim 들어간 기구는 깎여 colliding에 들지 않고 trimmed로 센다 — 더 깊으면 그대로 충돌', () => {
+  const exAt = x0 => ({ ...EX, inserts: [ins('고정식작업대 700-600')], segs: box(0, x0, 2700, x0 + 700, 3300) });
+  const near = build({ ex: exAt(3420) });                           // 기둥 x [4100, 4900]에 20 mm
+  expect(near.stats.equipment).toMatchObject({ placed: 1, trimmed: 1, colliding: 0 });
+  expect(floorOf(near).items.find(i => i.dxfBlock).size).toEqual([680, 600, 850]);
+  const deep = build({ ex: exAt(3500) });                           // 100 mm — 진짜 겹침, 그린 대로
+  expect(deep.stats.equipment).toMatchObject({ placed: 1, trimmed: 0, colliding: 2 });
+  expect(floorOf(deep).items.find(i => i.dxfBlock).size).toEqual([700, 600, 850]);
 });
 
 // 2026-10-12 · 계획 13 최종 리뷰 F-1(컨트롤러 결정): 가져온 기구는 맞춘 제품 id를 dxfProduct에 남기고, 견적은 제품을 바꾸기 전까지 0원으로 센다 —

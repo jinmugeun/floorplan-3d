@@ -10,6 +10,8 @@ import { productById } from '../src/products/catalog.js';
 import { setBlockTable } from '../src/io/dxf/blockOpenings.js';
 import { explode, mat, apply } from '../src/io/dxf/explode.js';
 import { buildImportMeta, buildDxfFeedback } from '../src/io/dxfFeedback.js';
+import { trimToColumns } from '../src/io/dxf/equipTrim.js';
+import { collidingIds } from '../src/geom/collide.js';
 
 const FAR = [-741000.5, 338000.25];
 const toApp = p => [p[0], -p[1]];
@@ -350,6 +352,94 @@ test('위생 기구 묶음(긴 변 > 1,200)은 그 제품이 아니라 도면 �
 });
 
 test('빈 입력', () => {
-  expect(equipItems(null, { toApp })).toEqual({ items: [], stats: expect.objectContaining({ placed: 0 }) });
+  expect(equipItems(null, { toApp })).toEqual({ items: [], stats: expect.objectContaining({ placed: 0, trimmed: 0 }) });
   expect(run(exOf([], [])).items).toEqual([]);
+});
+
+// ── 기둥 접촉 깎기(src/io/dxf/equipTrim.js · 2026-10-13 계획 14 Task A) ─────────────────────────────
+// 사동중 기둥–기구 8쌍 중 7쌍이 기둥 면에 붙여 그린 작도 오차(4~47 mm)라 가져온 직후 배너 "충돌 28건"의 절반이 사람이 옮길 일이 아니었다.
+// 겹침 깊이가 작은 축에서 ≤ equipTrim이면 그 축의 기둥 쪽 변만 깎는다 — 먼 변은 도면 자리 그대로, 자리를 옮기지 않는다(크기만).
+// 기둥 x [700, 1300] · y [−300, 300](앱 좌표).
+const colAt = (x, y, o = {}) => createItem(productById('column-square'), { pos: [x, y], size: [600, 600, 3500], ...o });
+const gen = (pos, size, o = {}) => createItem(productById('equip-generic'), { pos, size: [...size, 850], dxfBlock: 'zw$TEST', dxfProduct: 'equip-generic', ...o });
+const far = it => it.pos[0] - it.size[0] / 2;
+
+test('기둥에 10 mm 들어간 바닥 기구 → 그쪽 변만 10 깎는다(폭 −10 · 중심 −5 · 먼 변 그대로) · 블록·제품 표지 유지 · 충돌이 사라진다', () => {
+  const col = colAt(1000, 0), it = gen([210, 0], [1000, 600]);           // x [−290, 710] — 기둥에 10 · y는 600 전부 겹친다
+  expect(collidingIds([col, it]).size).toBe(2);
+  const r = trimToColumns([it], [col]);
+  expect(r.trimmed).toBe(1);
+  expect(r.items[0]).toMatchObject({ id: it.id, pos: [205, 0], size: [990, 600, 850], dxfBlock: 'zw$TEST', dxfProduct: 'equip-generic', rot: 0, attach: 'floor' });
+  expect(far(r.items[0])).toBe(far(it));                                  // 먼 변(−290)은 도면 그대로
+  expect(collidingIds([col, ...r.items]).size).toBe(0);
+  // y 쪽 · 기둥이 아래(−y)에 있으면 아래 변: y [−200, 200]에 기둥 y [−780, −180] → 20 깎아 y [−180, 200]
+  const low = trimToColumns([gen([1000, 0], [600, 400])], [colAt(1000, -480)]).items[0];
+  expect(low).toMatchObject({ pos: [1000, 10], size: [600, 380, 850] });
+});
+
+test('90° 돈 기구는 월드 x가 깊이 칸이다 — 그 칸을 깎는다 · 소수 깊이는 올려 깎는다(크기는 mm 정수)', () => {
+  const r = trimToColumns([gen([210, 0], [600, 1000], { rot: 90 })], [colAt(1000, 0)]);
+  expect(r.items[0]).toMatchObject({ pos: [205, 0], size: [600, 990, 850], rot: 90 });
+  const frac = trimToColumns([gen([210, 0], [1000, 600])], [colAt(1000.4, 0)]).items[0];   // 기둥 x [700.4, 1300.4] — 깊이 9.6 → 10
+  expect(frac).toMatchObject({ pos: [205, 0], size: [990, 600, 850] });
+});
+
+test('80 mm 들어간 것은 진짜 겹침(그린 대로 두고 사람이 본다) · 1 mm는 맞닿음 — 둘 다 그대로', () => {
+  const it = gen([280, 0], [1000, 600]);                                  // x [−220, 780] — 깊이 80
+  const r = trimToColumns([it], [colAt(1000, 0)]);
+  expect(r.trimmed).toBe(0);
+  expect(r.items[0]).toEqual(it);
+  // 1 mm 겹침은 맞닿음(collide.js tol 1 — 빨갛지 않다)이라 깎을 까닭이 없다
+  const touch = gen([201, 0], [1000, 600]);                               // x [−299, 701]
+  expect(collidingIds([colAt(1000, 0), touch]).size).toBe(0);
+  expect(trimToColumns([touch], [colAt(1000, 0)]).items[0]).toEqual(touch);
+});
+
+test('두 기둥 사이에 낀 기구 → 양쪽 변을 다 깎는다', () => {
+  const it = gen([5, 0], [1430, 600]);                                    // x [−710, 720] — 왼쪽 기둥 [−1300, −700]에 10 · 오른쪽 [700, 1300]에 20
+  const r = trimToColumns([it], [colAt(-1000, 0), colAt(1000, 0)]);
+  expect(r.trimmed).toBe(1);
+  expect(r.items[0]).toMatchObject({ pos: [0, 0], size: [1400, 600, 850] });
+  expect(collidingIds([colAt(-1000, 0), colAt(1000, 0), ...r.items]).size).toBe(0);
+});
+
+test('45° 돈 기구 · 벽 부착 · 천장 기구 · 축이 아닌 기둥은 그대로', () => {
+  const col = colAt(1000, 0);
+  // 모두 rot 0 바닥이었다면 10 mm 깎였을 자리다(첫 테스트와 같은 상자).
+  const turned = gen([210, 0], [1000, 600], { rot: 45 });
+  const onWall = gen([210, 0], [1000, 600], { attach: 'wall', z: 900 });
+  const ceiling = gen([210, 0], [1000, 600], { attach: 'ceiling', z: 2900 });
+  expect(collidingIds([col, turned]).size).toBe(2);                        // 돈 기구는 진짜로 기둥에 닿아 있다(그래도 "그쪽 변"이 없다)
+  const r = trimToColumns([turned, onWall, ceiling], [col]);
+  expect(r.trimmed).toBe(0);
+  expect(r.items).toEqual([turned, onWall, ceiling]);
+  // 3° 돈 기구 · 3° 돈 기둥(AABB x [684.7, 1315.3] — AABB로 재면 25 mm라 깎였을 것)도 그대로
+  expect(trimToColumns([gen([210, 0], [1000, 600], { rot: 3 })], [col]).trimmed).toBe(0);
+  expect(trimToColumns([gen([210, 0], [1000, 600])], [colAt(1000, 0, { rot: 3 })]).trimmed).toBe(0);
+  // 축 정렬 판정은 90의 배수 둘레다 — 180° 기둥(사동 실도면)은 깎는다
+  expect(trimToColumns([gen([210, 0], [1000, 600])], [colAt(1000, 0, { rot: 180 })]).trimmed).toBe(1);
+});
+
+test('깎은 변이 equipMin 아래가 되면 깎지 않는다(경계 = equipMin은 깎는다)', () => {
+  expect(DXF_PARAMS.equipMin).toBe(150);
+  const thin = gen([648, 0], [194, 400]);                                 // x [551, 745] — 깊이 45 → 149
+  expect(trimToColumns([thin], [colAt(1000, 0)]).items[0]).toEqual(thin);
+  const edge = trimToColumns([gen([648, 0], [196, 400])], [colAt(1000, 0)]).items[0];   // x [550, 746] — 깊이 46 → 150
+  expect(edge).toMatchObject({ pos: [625, 0], size: [150, 400, 850] });
+});
+
+test('equipItems: 기둥에 닿은 바닥 기구를 깎고 stats.trimmed로 센다 — 이름 치수 상자도 · 크게 겹친 것은 그대로', () => {
+  const col = createItem(productById('column-square'), { pos: [9000, 0], size: [600, 600, 3500] });   // x [8700, 9300]
+  // 작업대: 앱 x [7710, 8710] — 기둥에 10 · 선반: x [9250, 10750] — 기둥에 50(= equipTrim, 깎는다) · 세정대: x [8800, 9700] · y [−950, −200] — 500 · 100(그대로)
+  const ex = exOf([ins('작업대 1000-600'), ins('다단식선반 1500-750'), ins('세정대 1조 900-750')],
+    [...box(0, 7710, -300, 8710, 300), ...box(1, 9250, -375, 10750, 375), ...box(2, 8800, 200, 9700, 950)]);
+  const r = run(ex, { columns: [col] });
+  expect(r.stats.trimmed).toBe(2);
+  expect(r.items.map(i => [i.dxfBlock, i.pos, i.size.slice(0, 2)])).toEqual([
+    ['작업대 1000-600', [8205, 0], [990, 600]],
+    ['다단식선반 1500-750', [10025, 0], [1450, 750]],
+    ['세정대 1조 900-750', [9250, -575], [900, 750]],
+  ]);
+  expect(r.items.every(i => i.dxfBlock && i.dxfProduct)).toBe(true);
+  expect(DXF_PARAMS.equipTrim).toBe(50);
 });

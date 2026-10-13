@@ -8,6 +8,7 @@
 //  - 이름: item.name = 도면 이름 정리본(제품명으로 덮지 않는다 — 사람이 도면과 대조한다 · 익명 블록은 제품 이름), item.code = 제품 코드,
 //    item.dxfBlock = 원 블록 이름(모든 기구 아이템).
 //  - 겹침: 벽 띠·기둥과 equipClash 이상 겹쳐도 **세우고** 센다(자동으로 옮기지 않는다 — 사람이 본다). 아이템끼리 겹침도 센다(사전 검토 I-4).
+//    기둥 면에 붙여 그려 ≤ equipTrim 들어간 바닥 기구만 그쪽 변을 깎는다(2026-10-13 · 계획 14 Task A · equipTrim.js — 자리는 그대로).
 // 이 파일도 워커의 import 사슬이다: DOM·ui를 건드리지 않는다. 앱 좌표의 벽(walls)·기둥 아이템(columns)과 DXF → 앱 변환(toApp)을 받는다.
 import { createItem } from '../../state/schema.js';
 import { productById } from '../../products/catalog.js';
@@ -17,6 +18,7 @@ import { classifyLayer } from './classify.js';
 import { DXF_PARAMS } from './params.js';
 import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous } from './equipVocab.js';
 import { topOwner, insertBoxes, insertParts, arcEnds } from './insertBoxes.js';
+import { trimToColumns } from './equipTrim.js';
 
 const GEN = 'equip-generic';
 const AXIS_TOL = 2;        // rot mod 90이 이 안(°)이면 축 정렬 — 월드 상자를 쓴다(Task 1: 축 아닌 14개 중 5개가 3° 안 · 사동 소쿠리 운반차 272.61°는 축 아님)
@@ -38,7 +40,7 @@ const HOOD = { productId: 'hood-box', height: 600, attach: 'ceiling', z: 0 };
 const look = (tbl, key) => (tbl instanceof Map ? tbl.get(key) : tbl && Object.prototype.hasOwnProperty.call(tbl, key) ? tbl[key] : undefined);
 const r0 = v => Math.round(v) || 0;     // -0을 접는다(toEqual이 -0과 +0을 가른다 — explode.js 머리 주석)
 const emptyStats = () => ({
-  placed: 0, product: 0, generic: 0, anonymous: 0, named: 0, namedProduct: 0, wallMounted: 0, ceiling: 0, offAxis: 0, clash: 0, overlap: 0, overlapPairs: 0,
+  placed: 0, product: 0, generic: 0, anonymous: 0, named: 0, namedProduct: 0, wallMounted: 0, ceiling: 0, offAxis: 0, clash: 0, overlap: 0, overlapPairs: 0, trimmed: 0,
   skipped: { opening: 0, fixture: 0, symbol: 0, frame: 0, composite: 0, layer: 0, wallPiece: 0, big: 0, small: 0, thin: 0, dup: 0 },
 });
 
@@ -230,7 +232,12 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     if (f) stats.offAxis++;
     if (item.attach === 'floor' && floorCover >= P.equipClash) stats.clash++;
   }
-  // ⑤ 바닥 아이템끼리 겹침(AABB · 1 mm 넘게) — 앱이 3D에서 빨갛게 칠할 후보(사전 검토 I-4). 자리는 도면 그대로 둔다.
+  // ⑤ 기둥에 ≤ equipTrim 들어간 바닥 기구는 그쪽 변을 깎는다(2026-10-13 · 계획 14 Task A · equipTrim.js) — 자리는 그대로, 크기만. 겹침 셈(⑥)과
+  //    toProject의 colliding(검토 창 "충돌 n건" = 가져온 직후 배너)이 깎은 뒤의 상자를 보게 여기서 돈다. clash(벽 띠·기둥 덮임 비율)는 그린 상자 그대로다.
+  const trim = trimToColumns(items, columns, P);
+  items.splice(0, items.length, ...trim.items);
+  stats.trimmed = trim.trimmed;
+  // ⑥ 바닥 아이템끼리 겹침(AABB · 1 mm 넘게) — 앱이 3D에서 빨갛게 칠할 후보(사전 검토 I-4). 자리는 도면 그대로 둔다.
   const floor = items.filter(i => i.attach === 'floor').map(i => itemAABB(i)), hitSet = new Set();
   for (let i = 0; i < floor.length; i++) for (let j = i + 1; j < floor.length; j++) {
     const a = floor[i], q = floor[j];
