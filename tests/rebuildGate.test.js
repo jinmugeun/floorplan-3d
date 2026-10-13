@@ -307,18 +307,19 @@ describe('예열 장면', () => {
   });
 
   // 계획 15 Task B · 사전 검토 I-6: 예열은 2D 시작 직후 유휴 시간에 돈다 — 예열 층의 제품(냉장고 등)에 asset이 붙으면 2D만 쓰는 세션이
-  // GLB·로더 청크를 받았다. 카탈로그는 이 테스트 동안만 고친다.
+  // GLB·로더 청크를 받았다. 카탈로그는 이 테스트 동안만 고친다 — 이전 값을 되돌린다(2026-10-13 · 리뷰 B-m2: delete는 Task C처럼
+  // 진짜 asset이 붙은 제품이면 그 필드를 남은 테스트에서 지운다).
   test('예열 장면(shaderWarm)은 에셋 없이 짓는다 — requestAsset 0회(대조: 같은 층을 실제 view로 지으면 요청한다)', async () => {
     __reset(); enableAssets();
     const loader = vi.fn(() => Promise.resolve(tinyModel())); __setLoader(loader);
-    const fridge = productById('fridge-2door');
+    const fridge = productById('fridge-2door'), prev = fridge.asset;
     fridge.asset = 'fridge-2door';
     try {
       warmGroup(DEFAULT_VIEW); await settle();
       expect(loader).not.toHaveBeenCalled();
       buildFloorGroup(warmFloor(), DEFAULT_VIEW); await settle();
       expect(loader).toHaveBeenCalledTimes(1);
-    } finally { delete fridge.asset; __reset(); }
+    } finally { if (prev === undefined) delete fridge.asset; else fridge.asset = prev; __reset(); }
   });
 });
 

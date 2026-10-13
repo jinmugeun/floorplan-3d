@@ -64,3 +64,24 @@ test('normalize는 루트의 원래 위치를 빼서 맞춘다(덮어쓰지 않�
   const { min, max } = templateOf('p').userData.bbox;
   expect((min[0] + max[0]) / 2).toBeCloseTo(0, 6); expect((min[2] + max[2]) / 2).toBeCloseTo(0, 6); expect(min[1]).toBeCloseTo(0, 6);
 });
+
+// 2026-10-13 · 리뷰 B-m1: 메시 없는 장면은 빈 Box3 → bbox가 NaN·±Inf인 채 정상 템플릿으로 캐시돼 아이템이 아무것도 그리지 않았다.
+// 실패와 같은 길이어야 한다: 템플릿 없음(상자 그대로) · 알림 묶음 한 번 · 다시 받지 않음 · 예외가 밖으로 새지 않음.
+test('메시 없는 장면은 실패로 친다 — 템플릿 null · 버전 한 번 · 예외가 새지 않는다', async () => {
+  __reset(); enableAssets();
+  const loader = vi.fn(() => Promise.resolve(new THREE.Group())); __setLoader(loader);
+  const unhandled = vi.fn(); process.on('unhandledRejection', unhandled);
+  try {
+    const seen = []; const off = onAssetsReady(v => seen.push(v));
+    const v0 = assetsVersion();
+    expect(() => requestAsset({ id: 'hollow', asset: 'hollow' })).not.toThrow();
+    await flush(); await flush(); await flush();
+    expect(templateOf('hollow')).toBeNull();
+    expect(seen.length).toBe(1);
+    expect(assetsVersion()).toBe(v0 + 1);
+    requestAsset({ id: 'hollow', asset: 'hollow' }); await flush();
+    expect(loader).toHaveBeenCalledTimes(1);                         // 실패와 같이 다시 시도하지 않는다
+    expect(unhandled).not.toHaveBeenCalled();
+    off();
+  } finally { process.off('unhandledRejection', unhandled); }
+});

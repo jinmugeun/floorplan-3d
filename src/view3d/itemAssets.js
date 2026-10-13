@@ -38,8 +38,12 @@ function settle() {
 
 // 바닥 중심으로 옮긴다: 원래 위치에 더한다 — 루트에 위치가 있어도 어긋나지 않는다(사전 검토 S-4: set(-c)는 덮어써 중심이 −5로 갔다).
 // 템플릿은 감싼 Group이다: fitClone이 배율·높이를 Group에 쓰므로 glTF 장면 루트의 변환은 그대로 남는다.
+// 왜 빈 상자에서 던지나(2026-10-13 · 리뷰 B-m1): 메시 없는 장면은 빈 Box3라 bbox가 NaN·±Inf인 템플릿으로 캐시돼 아이템이 사라졌다 —
+// 던지면 requestAsset의 .catch가 실패로 받아 상자로 남는다(다시 받지 않는 것도 실패와 같다).
 function normalize(obj) {
-  const bb = new THREE.Box3().setFromObject(obj), off = bb.getCenter(new THREE.Vector3()).negate().setY(-bb.min.y);
+  const bb = new THREE.Box3().setFromObject(obj);
+  if (bb.isEmpty()) throw new Error('empty asset');
+  const off = bb.getCenter(new THREE.Vector3()).negate().setY(-bb.min.y);
   obj.position.add(off); bb.translate(off);
   const g = new THREE.Group(); g.add(obj);
   g.userData.bbox = { min: bb.min.toArray(), max: bb.max.toArray() };
