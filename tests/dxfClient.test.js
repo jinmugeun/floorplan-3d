@@ -3,7 +3,7 @@
 import { test, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createDxfClient, importDxf } from '../src/io/dxf/client.js';
+import { createDxfClient, importDxf, traceInWorker } from '../src/io/dxf/client.js';
 
 class FakeWorker {
   constructor() { this.posted = []; this.terminated = 0; this.onmessage = null; this.onerror = null; }
@@ -174,16 +174,69 @@ test('postMessage가 던지면 그 요청만 거절되고 다음 요청은 그�
   await expect(p3).resolves.toBeTruthy();
 });
 
+// 계획 14 Task C(2026-10-13 · 사전 검토 I-5): [가져오기] 때 메인이 트레이스 선분을 **일회용 래스터 워커**로 보낸다(transfer · 복사 0).
+test('traceInWorker는 선분 버퍼를 transferable로 넘기고, 답 하나를 돌려준 뒤 그 워커를 끝낸다', async () => {
+  const w = new FakeWorker();
+  const segs = new Float32Array([0, 0, 100, 0]), box = [0, 0, 100, 0];
+  const p = traceInWorker(segs, box, { workerFactory: () => w });
+  expect(w.posted).toEqual([{ msg: { type: 'trace', segs, box }, transfer: [segs.buffer] }]);
+  expect(w.terminated).toBe(0);
+  const reply = { type: 'traced', bg: { src: 'data:image/png;base64,AA' }, fallback: false, segs };
+  w.emit(reply);
+  await expect(p).resolves.toBe(reply);
+  expect(w.terminated).toBe(1);                    // 일회용 — 워커가 스스로 닫히지만(close) 메인도 끝낸다
+});
+
+test('traceInWorker: 워커가 죽거나 postMessage가 던지면 code를 단 오류로 거절되고 워커를 끝낸다', async () => {
+  const w = new FakeWorker();
+  const p = traceInWorker(new Float32Array(4), [0, 0, 1, 1], { workerFactory: () => w });
+  w.onerror({ message: 'boom' });
+  await expect(p).rejects.toMatchObject({ code: 'oom' });
+  expect(w.terminated).toBe(1);
+  const v = new FakeWorker();
+  v.postMessage = () => { throw new Error('detached'); };
+  await expect(traceInWorker(new Float32Array(4), [0, 0, 1, 1], { workerFactory: () => v })).rejects.toMatchObject({ code: 'oom' });
+  expect(v.terminated).toBe(1);
+});
+
+// 워커 import 사슬을 따라가며 읽는다(정적 import만 — 워커에는 동적 import가 없다).
+function workerChain(entry) {
+  const seen = new Map();
+  const walk = url => {
+    if (seen.has(url.href)) return;
+    const src = readFileSync(fileURLToPath(url), 'utf8');
+    seen.set(url.href, src);
+    for (const m of src.matchAll(/(?:import|export)\s[^;]*?from\s+['"](\.[^'"]+)['"]/g)) walk(new URL(m[1], url));
+  };
+  walk(new URL(`../src/io/dxf/${entry}`, import.meta.url));
+  return seen;
+}
+
 // 전역 제약: 워커와 그 import 사슬은 DOM·ui를 건드리지 않는다.
-test('worker.js는 DOM·ui를 import하지 않고 Worker를 최상위에서 만들지 않는다', () => {
-  const src = readFileSync(fileURLToPath(new URL('../src/io/dxf/worker.js', import.meta.url)), 'utf8');
-  expect(src).not.toMatch(/from\s+['"][^'"]*\/ui\//);
-  expect(src).not.toMatch(/\bdocument\b/);
-  expect(src).not.toMatch(/\.\/trace\.js/);   // 트레이스 래스터는 메인 스레드가 한다
+// 2026-10-13 계획 14 Task C(사전 검토 I-5 · §18.6 개정): 허용 목록을 **일부러** 바꾼다 — 트레이스 래스터가 워커로 간다.
+// 래스터는 DXF 워커가 아니라 **일회용 워커 traceWorker.js**가 한다: 오래 사는 DXF 워커가 GPU 2D 컨텍스트를 가지면 대화상자를 닫을 때의
+// terminate가 GpuChannel::DestroyCommandBuffer를 기다리며 메인을 290~500 ms 막았다(첫 3D 프레임의 셰이더 링크 뒤에 줄을 선다 · 실측).
+// 그래서 `OffscreenCanvas`(워커 전역 · DOM이 아니다)는 traceWorker.js에만 허용하고, worker.js 사슬에는 여전히 없어야 한다.
+// 대신 검사를 worker.js 한 파일에서 **두 워커의 import 사슬 전체**로 넓혔다: 어느 파일도 `document`·`window.`를 쓰지 않는다
+// (trace.js의 DOM 기본 캔버스는 ui/dxfDialog.js로 옮겼다).
+test('두 워커(worker.js · traceWorker.js)와 그 import 사슬은 DOM·ui를 모르고 Worker를 최상위에서 만들지 않는다', () => {
+  const dxf = workerChain('worker.js'), raster = workerChain('traceWorker.js');
+  expect(dxf.size).toBeGreaterThan(30);                                                 // 사슬을 실제로 따라갔다
+  expect([...raster.keys()].some(k => k.endsWith('/src/io/dxf/trace.js'))).toBe(true);
+  for (const [href, text] of [...dxf, ...raster]) {
+    expect(text, href).not.toMatch(/\bdocument\b/);
+    expect(text, href).not.toMatch(/\bwindow\s*\./);
+    expect(text, href).not.toMatch(/from\s+['"][^'"]*\/(ui|view2d|view3d|app)\//);
+  }
+  for (const [href, text] of dxf) expect(text, href).not.toMatch(/OffscreenCanvas/);   // DXF 워커는 GPU 컨텍스트를 갖지 않는다
+  expect([...raster.values()][0]).toMatch(/OffscreenCanvas/);                           // 허용: 일회용 래스터 워커만
   const client = readFileSync(fileURLToPath(new URL('../src/io/dxf/client.js', import.meta.url)), 'utf8');
   expect(client).toMatch(/new Worker\(new URL\('\.\/worker\.js', import\.meta\.url\), \{ type: 'module' \}\)/);
-  // 모듈 최상위에서 만들면 node 테스트가 import만으로 죽는다 — 반드시 함수 안이다.
-  expect(client.split('\n').find(l => l.includes('new Worker('))).toMatch(/=>/);
+  expect(client).toMatch(/new Worker\(new URL\('\.\/traceWorker\.js', import\.meta\.url\), \{ type: 'module' \}\)/);
+  // 모듈 최상위에서 만들면 node 테스트가 import만으로 죽는다 — 반드시 함수 안이다(두 줄 모두).
+  const lines = client.split('\n').filter(l => l.includes('new Worker('));
+  expect(lines).toHaveLength(2);
+  for (const l of lines) expect(l).toMatch(/=>/);
 });
 
 

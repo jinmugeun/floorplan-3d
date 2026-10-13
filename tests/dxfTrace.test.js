@@ -1,7 +1,9 @@
 // §18.6의 트레이스 배경(안 A): 원 도면을 PNG로 구워 기존 project.background에 넣는다.
 // 저장 형식 무변경이고, 불투명도·표시·잠금 UI를 그대로 물려받는다.
 import { test, expect } from 'vitest';
-import { traceBackground, TRACE_MAX_BYTES, TRACE_COLOR } from '../src/io/dxf/trace.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { traceBackground, traceBackgroundAsync, TRACE_MAX_BYTES, TRACE_COLOR } from '../src/io/dxf/trace.js';
 
 // jsdom에도 캔버스가 없다(getContext → null · toDataURL → Not implemented). 그래서 주입한다.
 function canvasStub({ bytes = 1000, bytesPerPx = 0 } = {}) {
@@ -60,4 +62,51 @@ test('그릴 것이 없거나 크기가 0이면 null이다', () => {
   expect(traceBackground([], BOX, { makeCanvas: make })).toBe(null);
   expect(traceBackground([[0, 0, 100, 0]], [0, 0, 0, 0], { makeCanvas: make })).toBe(null);
   expect(traceBackground(null, BOX, { makeCanvas: make })).toBe(null);
+});
+
+// ── 계획 14 Task C(2026-10-13 · 사전 검토 I-5): 워커는 같은 그림을 OffscreenCanvas로 그리고 convertToBlob으로 굽는다 ──
+// 바이트 동일은 node·jsdom에서 잴 수 없다(캔버스가 없다). 그래서 두 경로의 **그리기 명령열**(스타일 대입 포함)과
+// 변환(폭·높이·scale·offset)이 같음을 못 박는다 — 같은 명령을 같은 브라우저 래스터라이저가 그리면 같은 픽셀이다(실측 픽셀 차 0).
+function recStub(dataUrl = `data:image/png;base64,${'A'.repeat(1000)}`) {
+  const log = [];
+  const make = (w, h) => {
+    log.push(['canvas', w, h]);
+    const ctx = new Proxy({}, {
+      get: (_t, k) => (...args) => { log.push([k, ...args]); },
+      set: (_t, k, v) => { log.push(['set', k, v]); return true; },
+    });
+    return { width: w, height: h, getContext: kind => (log.push(['getContext', kind]), ctx), toDataURL: () => dataUrl };
+  };
+  return { log, make };
+}
+const SEGS = () => new Float32Array([-3000, -2000, 3000, -2000, 0.5, -2000, 0.5, 2000, -3000, -2000, -2950, -2000]);
+
+test('비동기 굽기(워커 경로)는 동기 굽기(메인 폴백)와 같은 명령열 · 같은 변환 · 같은 저장 모양이다', async () => {
+  const a = recStub(), b = recStub();
+  const sync = traceBackground(SEGS(), BOX, { makeCanvas: a.make });
+  const late = await traceBackgroundAsync(SEGS(), BOX, { makeCanvas: b.make, encode: async cv => cv.toDataURL() });
+  expect(a.log.length).toBeGreaterThan(8);
+  expect(b.log).toEqual(a.log);
+  expect(a.log.slice(0, 6)).toEqual([['canvas', 2048, 1365], ['getContext', '2d'], ['set', 'fillStyle', '#ffffff'], ['fillRect', 0, 0, 2048, 1365], ['set', 'strokeStyle', TRACE_COLOR], ['set', 'lineWidth', 1]]);
+  expect(late).toEqual(sync);
+  // 저장 JSON(kvp.autosave · .json 파일)의 키 순서까지 같다 — 저장본이 바뀌지 않는다.
+  expect(Object.keys(late)).toEqual(['src', 'width', 'height', 'scale', 'offset', 'opacity', 'visible', 'locked']);
+});
+
+test('비동기 굽기도 한도를 넘으면 한 단계 줄이고 그래도 넘으면 null · 굽기가 던지면 그대로 던진다', async () => {
+  const enc = async cv => cv.toDataURL();
+  const one = [[-3000, -2000, 3000, -2000]];
+  const half = await traceBackgroundAsync(one, BOX, { makeCanvas: canvasStub({ bytes: 0, bytesPerPx: 700 }).make, encode: enc });
+  expect(half.width).toBe(1024);
+  expect(await traceBackgroundAsync(one, BOX, { makeCanvas: canvasStub({ bytes: 2_000_000 }).make, encode: enc })).toBe(null);
+  expect(await traceBackgroundAsync([], BOX, { makeCanvas: canvasStub().make, encode: enc })).toBe(null);
+  // 던짐은 삼키지 않는다: 워커가 받아 "메인에서 굽기"(지금 경로)로 돌린다 — 조용히 배경 없음이 되면 안 된다.
+  await expect(traceBackgroundAsync(one, BOX, { makeCanvas: canvasStub().make, encode: async () => { throw new Error('convertToBlob'); } })).rejects.toThrow('convertToBlob');
+});
+
+test('trace.js는 DOM을 모른다 — 워커가 import한다, 캔버스는 부르는 쪽이 준다', () => {
+  const src = readFileSync(fileURLToPath(new URL('../src/io/dxf/trace.js', import.meta.url)), 'utf8');
+  expect(src).not.toMatch(/\bdocument\b/);
+  expect(src).not.toMatch(/\bwindow\b/);
+  expect(traceBackground([[-3000, -2000, 3000, -2000]], BOX)).toBe(null);   // 기본 캔버스가 없다(메인의 DOM 캔버스는 dxfDialog가 준다)
 });

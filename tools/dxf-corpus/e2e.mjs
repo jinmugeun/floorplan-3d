@@ -77,6 +77,17 @@ for (const entry of corpus()) {
     if (b3) { await b3.click(); await page.waitForTimeout(3000); await page.screenshot({ path: resolve(out, '4-3d.png') }); }
     await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForTimeout(1500);
     check('새로고침 뒤 이어서 작업', /이어서 작업/.test(await page.evaluate(() => document.querySelector('#startScreen')?.innerText ?? '')));
+    // 원 도면 배경(2026-10-13 · 계획 14 Task C): 트레이스(기본 켬)가 project.background(PNG dataURL)로 들어가 자동 저장본에 남는다 —
+    // 워커 OffscreenCanvas 경로든 메인 폴백이든 같은 모양이다. 해시는 보고만 한다(같은 브라우저에서 두 경로가 같은 바이트 — 사전 검토 I-5).
+    const bg = await page.evaluate(() => {
+      try {
+        const j = JSON.parse(localStorage.getItem('kvp.autosave')), b = (j?.project ?? j)?.background;
+        if (!b?.src) return null;
+        let h = 0; for (let i = 0; i < b.src.length; i++) h = (Math.imul(h, 31) + b.src.charCodeAt(i)) >>> 0;
+        return { w: b.width, h: b.height, len: b.src.length, png: b.src.startsWith('data:image/png;base64,'), hash: h.toString(16) };
+      } catch { return null; }
+    });
+    check('원 도면 배경이 붙었다', !!bg?.png && bg.w > 0 && bg.h > 0, bg ? `${bg.w}×${bg.h} · ${bg.len} B · #${bg.hash}` : '배경 없음');
     // 화면이 보여 주는 넓이 = 도면의 면적 표기(±0.05 m²): 가져온 도면은 '도면 기준'으로 열리고, 저장된 방의 넓이가 표기와 같아야 한다.
     if (want.areaAll) {
       const saved = await page.evaluate(() => { try { const j = JSON.parse(localStorage.getItem('kvp.autosave')); return j?.project ?? j; } catch { return null; } });

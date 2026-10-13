@@ -6,6 +6,21 @@ import { DXF_PARAMS } from './params.js';
 // 모듈 최상위에서 워커를 만들면 node 테스트가 import만으로 죽는다 — 반드시 함수 안이다.
 // base가 './'라 이 상대 URL은 GitHub Pages 배포본에서도 그대로 맞는다.
 export const defaultWorkerFactory = () => new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+export const defaultTraceWorkerFactory = () => new Worker(new URL('./traceWorker.js', import.meta.url), { type: 'module' });
+
+// 트레이스 래스터(2026-10-13 · 계획 14 Task C · 사전 검토 I-5): extracted로 받은 선분을 **일회용** 래스터 워커로 보낸다(transfer · 복사 0).
+// 답 하나 { type: 'traced', bg, fallback, segs }(선분은 돌아온다)를 받으면 곧바로 끝낸다 — 워커도 답하고 스스로 닫는다(traceWorker.js 머리).
+// 큐(createDxfClient)를 거치지 않는다: 이 워커는 이 요청 하나만 받는다. 오류 code는 'oom'(§18.6이 동결한 DXF_ERRORS의 폴백 칸).
+export function traceInWorker(segs, box, { workerFactory = defaultTraceWorkerFactory } = {}) {
+  return new Promise((resolve, reject) => {
+    const w = workerFactory();
+    const end = (fn, v) => { try { w.terminate(); } catch { /* 이미 닫혔다 */ } fn(v); };
+    const fail = e => Object.assign(new Error(String(e?.message ?? e ?? 'trace')), { code: 'oom' });
+    w.onmessage = ev => end(resolve, ev.data);
+    w.onerror = e => end(reject, fail(e));
+    try { w.postMessage({ type: 'trace', segs, box }, [segs.buffer]); } catch (e) { end(reject, fail(e)); }
+  });
+}
 
 export function createDxfClient({ workerFactory = defaultWorkerFactory } = {}) {
   let worker = null, pending = null, queued = null, onProgress = () => {};

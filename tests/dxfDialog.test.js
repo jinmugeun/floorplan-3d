@@ -7,6 +7,10 @@ import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_S
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
+import { createDxfActions } from '../src/app/dxfActions.js';
+import { createStore } from '../src/state/store.js';
+import { createUiState } from '../src/state/uistate.js';
+import { createEmptyProject } from '../src/state/schema.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED,
   DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from '../src/ui/messages.js';
 
@@ -743,6 +747,137 @@ test('미리보기는 기구 아이템(문·창·기둥은 빼고)을 rot대로 
   const bare = recCtx2d();
   drawDxfPreview({ width: 560, height: 420, getContext: () => bare }, { walls: [], items: EQUIP_ITEMS.slice(2), box: [-3000, -2000, 3000, 2000] });
   expect(bare.calls.filter(c => c.fillStyle === PREVIEW_COLORS.item || c.strokeStyle === PREVIEW_COLORS.itemEdge)).toEqual([]);
+});
+
+// ── 계획 14 Task C(2026-10-13 · 사전 검토 I-5): 트레이스 래스터를 가져오기 클릭에서 뺀다 ─────────────────────────────
+// OffscreenCanvas가 있으면 [가져오기]는 선분을 **일회용 래스터 워커**로 보내고(transfer) 구운 배경을 기다렸다가 **swap 한 번**에 넣는다.
+// jsdom에는 OffscreenCanvas가 없다(위의 테스트들 = 메인 폴백 그대로) — 여기서는 전역에 꽂는다. 래스터 워커는 traceWorkerFactory로 주입한다.
+const TRACE_BG = { src: 'data:image/png;base64,V09SS0VS', width: 2048, height: 680, scale: 0.147, offset: [-100.5, -50.25], opacity: 0.35, visible: true, locked: true };
+// 테스트마다 새 선분(EXTRACTED는 모듈 공유 — 돌려받은 선분으로 바꿔 끼우는 동작이 다른 테스트로 새면 안 된다). 높이가 있는 상자(0이면 굽지 않는다).
+const extracted = () => ({ ...EXTRACTED, trace: { segs: new Float32Array([-100.5, -50.25, 200.5, -50.25]), box: [-100.5, -50.25, 200.5, 49.75] } });
+// 일회용 래스터 워커의 가짜: 만들 때마다 기록한다(가져오기 한 번 = 워커 하나).
+function rasterFakes() {
+  const made = [];
+  return { made, factory: () => { const w = new FakeWorker(); made.push(w); return w; }, last: () => made.at(-1) };
+}
+async function readyToImport(opts) {
+  const tw = rasterFakes();
+  const o = open({ file: fileOf(), traceWorkerFactory: tw.factory, ...opts });
+  await flush();
+  o.w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const ex = extracted();
+  o.w.emit(ex);
+  await flush();
+  return { ...o, ex, tw };
+}
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+test('워커가 구운 배경이 스토어에 들어간다 — 메인에서 굽지 않고, 굽는 동안 기다렸다 swap 한 번', async () => {
+  vi.stubGlobal('OffscreenCanvas', class {});
+  const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext');
+  const store = createStore(createEmptyProject()), toast = vi.fn(), tw = rasterFakes();
+  let w = null;
+  const dxf = createDxfActions({ store, ui: createUiState(), view: { fit: vi.fn() }, toast,
+    openDialog: o => openDxfDialog({ ...o, workerFactory: () => (w = new FakeWorker()), traceWorkerFactory: tw.factory }) });
+  dxf.open(fileOf());
+  const root = document.getElementById('dxfDialog');
+  stubCanvas(root);
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const ex = extracted();
+  w.emit(ex);
+  await flush();
+  const before = store.get();
+  expect(tw.made).toHaveLength(0);                                // 재추출마다 굽지 않는다 — [가져오기] 때 한 번(사전 검토 m-12)
+  root.querySelector('[name="import"]').click();
+  await flush();
+  expect(tw.made).toHaveLength(1);
+  const req = tw.last().posted.at(-1);
+  expect(req).toEqual({ type: 'trace', segs: ex.trace.segs, box: ex.trace.box });
+  expect(w.posted.at(-1).type).toBe('extract');                   // DXF 워커에는 보내지 않는다(GPU 컨텍스트를 갖지 않는다)
+  expect(store.get()).toBe(before);                               // 굽는 동안은 아무것도 바꾸지 않는다(배경을 늦게 넣는 두 번째 쓰기가 없다)
+  expect(root.querySelector('[name="import"]').disabled).toBe(true);
+  tw.last().emit({ type: 'traced', bg: TRACE_BG, fallback: false, segs: req.segs });
+  await flush();
+  expect(tw.last().terminated).toBe(1);                           // 일회용 — 답을 받자마자 끝낸다(swap 전)
+  expect(store.get().background).toEqual(TRACE_BG);
+  expect(store.canUndo()).toBe(false);                            // swap 한 번 — 되돌릴 단계 0개(§17.3)
+  expect(getContext).not.toHaveBeenCalled();                      // 메인 캔버스를 만들지 않았다
+  expect(toast).not.toHaveBeenCalledWith(DXF_TRACE_SKIPPED);
+  expect(document.getElementById('dxfDialog')).toBe(null);
+});
+
+test('워커가 폴백을 돌려주면 돌려받은 선분으로 메인에서 굽는다(지금 경로 그대로)', async () => {
+  vi.stubGlobal('OffscreenCanvas', class {});
+  const drawn = [];
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => new Proxy({}, { get: (_t, k) => (...a) => drawn.push([k, ...a]) }));
+  vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(() => 'data:image/png;base64,TUFJTg==');
+  const onImported = vi.fn(async () => true);
+  const { tw } = await readyToImport({ onImported });
+  document.querySelector('#dxfDialog [name="import"]').click();
+  await flush();
+  expect(tw.last().posted.at(-1).type).toBe('trace');                // 먼저 워커에 묻는다
+  expect(drawn).toEqual([]);
+  const back = new Float32Array([-100.5, -50.25, 200.5, -50.25]);   // 워커가 transfer로 돌려준 선분(새 버퍼)
+  tw.last().emit({ type: 'traced', bg: null, fallback: true, segs: back });
+  await flush();
+  expect(drawn.filter(c => c[0] === 'moveTo')).toEqual([['moveTo', 0, 0]]);
+  expect(onImported.mock.calls[0][0].project.background).toMatchObject({ src: 'data:image/png;base64,TUFJTg==', width: 2048, offset: [-100.5, -50.25], visible: true, locked: true });
+});
+
+test('굽는 동안 닫으면 가져오지 않는다 · 확인 창에서 취소하고 다시 누르면 돌려받은 선분을 다시 보낸다', async () => {
+  vi.stubGlobal('OffscreenCanvas', class {});
+  const firstImported = vi.fn(async () => true);
+  const first = await readyToImport({ onImported: firstImported });
+  first.q('import').click();
+  await flush();
+  first.q('cancel').click();                                      // 대화상자를 닫는다 — 늦게 온 래스터 답은 버린다
+  await flush();
+  expect(first.w.terminated).toBe(1);
+  first.tw.last().emit({ type: 'traced', bg: TRACE_BG, fallback: false, segs: new Float32Array(4) });
+  await flush();
+  expect(firstImported).not.toHaveBeenCalled();
+  expect(document.getElementById('dxfDialog')).toBe(null);
+  document.body.innerHTML = '';
+  const onImported = vi.fn(async () => false);                     // 작업 중 확인 창에서 [취소]
+  const { tw, q } = await readyToImport({ onImported });
+  q('import').click();
+  await flush();
+  const back = new Float32Array([-100.5, -50.25, 200.5, -50.25]);
+  tw.last().emit({ type: 'traced', bg: TRACE_BG, fallback: false, segs: back });
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(q('import').disabled).toBe(false);                       // 열린 채 다시 누를 수 있다
+  q('import').click();
+  await flush();
+  expect(tw.made).toHaveLength(2);                                // 다시 누르면 새 일회용 워커
+  expect(tw.last().posted.at(-1)).toEqual({ type: 'trace', segs: back, box: [-100.5, -50.25, 200.5, 49.75] });   // 비어 버린 옛 버퍼가 아니라 돌려받은 것
+  expect(tw.last().posted.at(-1).segs).toBe(back);
+});
+
+test('굽는 동안 칸을 바꿔도 누른 순간의 값으로 가져오고, 확인 창 취소 뒤에는 최신 결과가 올 때까지 잠근다', async () => {
+  vi.stubGlobal('OffscreenCanvas', class {});
+  const onImported = vi.fn(async () => false);
+  const { w, q, tw } = await readyToImport({ onImported });
+  const atClick = q('height').value;
+  q('import').click();
+  await flush();
+  const req = tw.last().posted.at(-1);
+  q('height').value = String(Number(atClick) + 300);               // 워커가 굽는 사이(≈ 150~190 ms)에 바꾼다
+  q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  tw.last().emit({ type: 'traced', bg: TRACE_BG, fallback: false, segs: req.segs });
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem(DXF_HEIGHT_KEY)).toBe(atClick);
+  expect(q('import').disabled).toBe(true);                          // 옛 결과로 다시 가져오지 못한다
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(w.posted.at(-1).type).toBe('extract');
+  w.emit(extracted());
+  await flush();
+  expect(q('import').disabled).toBe(false);
 });
 
 test('검토 창의 미리보기에 가져올 기구가 함께 그려진다', async () => {

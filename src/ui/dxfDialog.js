@@ -3,7 +3,7 @@
 // 사람이 심판한다. ui/는 view2d/·view3d/·app/을 모르므로 스토어 교체·뷰 맞추기는 콜백이 받는다.
 import { focusTrap } from './dialogBase.js';
 import { esc } from '../util/html.js';
-import { createDxfClient } from '../io/dxf/client.js';
+import { createDxfClient, traceInWorker } from '../io/dxf/client.js';
 import { traceBackground } from '../io/dxf/trace.js';
 import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
@@ -23,8 +23,10 @@ export const DXF_THICKNESS_RANGE = [50, 1000];
 // 3D 천장이 100 m로 선다. 음수 두께는 windowSpans의 밴드를 줄여 미리보기 폴리곤의 법선을 뒤집는다.
 // 그래서 워커·설정에 닿기 전에 여기서 자른다(setDxfHeight는 범위 밖 값을 조용히 버린다).
 const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
+// 메인 폴백의 캔버스(2026-10-13 · 계획 14 Task C): trace.js는 워커 사슬에 들어가 DOM을 모르므로 DOM 캔버스는 여기서 준다.
+const domCanvas = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
 
-export function openDxfDialog({ file = null, workerFactory, onImported = async () => true, onCancel = () => {}, toast = () => {} } = {}) {
+export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, onImported = async () => true, onCancel = () => {}, toast = () => {} } = {}) {
   const root = document.createElement('div');
   root.className = 'modal';
   root.id = 'dxfDialog';
@@ -206,9 +208,22 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
   const close = () => { if (closed) return; closed = true; clearTimeout(timer); client.cancel(); root.remove(); trap.destroy(); };
   const cancel = () => { if (closed) return; close(); onCancel(); };
 
+  // 트레이스 래스터(2026-10-13 · 계획 14 Task C · 사전 검토 I-5 · §18.6 개정): OffscreenCanvas가 있으면 일회용 래스터 워커가 굽는다 —
+  // 메인의 toDataURL 한 번(사동 143~308 ms)이 클릭을 막던 자리다(DXF 워커가 굽지 않는 이유는 io/dxf/traceWorker.js 머리). 선분은
+  // 워커로 갔다가 돌아온다(transfer). 워커가 fallback이라 하거나 이 창에 OffscreenCanvas가 없으면(jsdom · 옛 브라우저) 지금까지처럼
+  // 여기서 굽는다. 굽는 동안 닫혔으면 굽지 않는다(늦게 온 답은 버린다).
+  async function rasterTrace(trace) {
+    if (typeof OffscreenCanvas !== 'undefined') {
+      const m = await traceInWorker(trace.segs, trace.box, { workerFactory: traceWorkerFactory }).catch(e => { warnErr(e); return null; });
+      if (m?.segs) trace.segs = m.segs;            // 돌려받는다 — 확인 창에서 취소하고 다시 누르면 이것을 다시 보낸다
+      if (closed || (m && !m.fallback)) return m?.bg ?? null;
+    }
+    return traceBackground(trace.segs, trace.box, { makeCanvas: domCanvas });
+  }
+
   async function doImport() {
     // 두 번 눌러도 한 번이다(리뷰 F-1): 두 번째 클릭은 래치가 막고 버튼은 기다리는 동안 잠긴다.
-    // 막지 않으면 교체도 토스트도 두 번이고, 2048 px 래스터가 두 번 돌아 §18.9의 300 ms를 넘는다.
+    // 막지 않으면 교체도 토스트도 두 번이고, 2048 px 래스터가 두 번 돈다.
     if (!last || closed || importing || pending) return;
     importing = true;
     q('import').disabled = true;
@@ -217,15 +232,18 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
     // 자동 저장본에도 함께 간다). 워커 결과(last.project)는 고치지 않는다(얕은 복사): 확인 창에서 취소하고 다시 누르면 새 시각으로 다시 만든다.
     const project = { ...last.project };
     project.meta = { ...project.meta, dxfImport: buildImportMeta({ project, fileName, opts: extractOpts(), stats }) };
-    if (q('trace').checked && trace?.segs?.length) {
-      // 래스터는 **메인 스레드**에서 한 번만 한다(워커 OffscreenCanvas를 쓰지 않는 이유는 §18.6).
-      const bg = traceBackground(trace.segs, trace.box);
-      if (bg) project.background = bg;
-      else toast(DXF_TRACE_SKIPPED);
-    }
-    setDxfHeight(heightMm());
-    setDxfTrace(q('trace').checked);
+    // 워커가 굽는 동안(≈ 150~190 ms) 칸을 바꿔도 누른 순간의 값으로 간다. 배경은 swap 전에 넣는다 — 늦게 넣는 두 번째
+    // 스토어 쓰기는 하지 않는다(되돌리기 단계·자동 저장 혼선 · 사전 검토 I-5).
+    const traceOn = q('trace').checked, height = heightMm();
     try {
+      if (traceOn && trace?.segs?.length) {
+        const bg = await rasterTrace(trace);
+        if (closed) return;
+        if (bg) project.background = bg;
+        else toast(DXF_TRACE_SKIPPED);
+      }
+      setDxfHeight(height);
+      setDxfTrace(traceOn);
       const ok = await onImported({ project, stats });
       if (ok !== false) close();
     } catch (e) {
@@ -235,7 +253,8 @@ export function openDxfDialog({ file = null, workerFactory, onImported = async (
       setError(DXF_IMPORT_FAILED);
     } finally {
       importing = false;
-      if (!closed) q('import').disabled = false;
+      // 굽는 동안 옵션을 바꿨으면(pending) 최신 결과가 올 때까지 잠근 채 둔다 — runExtract가 푼다(2026-10-13 · Task C).
+      if (!closed) q('import').disabled = pending;
     }
   }
 
