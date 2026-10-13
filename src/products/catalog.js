@@ -2,6 +2,8 @@
 // size = [너비 w(좌우), 깊이 d(앞뒤), 높이 h] mm. zDefault = "바닥으로부터의 높이"(item.z) 기본값.
 // opening이 있는 제품(문·창·개구부)은 벽에 그 크기의 구멍을 뚫는다(opening.sill = zDefault).
 // 실판매 상품 DB는 범위 밖이라 price는 참고용 정적 값이고 없는 제품도 있다(명세 §17).
+// asset(2026-10-13 · 계획 15 Task C): 실사 3D 모델 public/models/<asset>.glb가 있는 제품(값 = 제품 id = manifest 키). 3D 뷰는 모델을 쓰고
+// 2D·크기·충돌은 그대로다. 출처는 tools/assets/sources.json(Poly Haven CC0 시드) → npm run assets:seed → NOTICE.md.
 import { EXTRA_PRODUCTS, EXTRA_PRICES } from './catalogExtra.js';
 import { DRAWING_PRODUCTS, DRAWING_PRICES } from './catalogDrawing.js';
 
@@ -124,18 +126,18 @@ const BASE_PRODUCTS = [
   P('storage-box', '수납 박스', 'ST-BX', '수납가구', '캐비닛', [600, 400, 400], 'floorLay', 'box', { tags: '박스 수납' }),
   // 소파
   P('sofa-2', '2인 소파', 'SF-2P', '소파', '소파', [1600, 900, 800], 'floor', 'sofa', { color: '#c9cdd6', tags: '소파 2인' }),
-  P('sofa-3', '3인 소파', 'SF-3P', '소파', '소파', [2100, 900, 800], 'floor', 'sofa', { color: '#c9cdd6', tags: '소파 3인' }),
+  P('sofa-3', '3인 소파', 'SF-3P', '소파', '소파', [2100, 900, 800], 'floor', 'sofa', { color: '#c9cdd6', tags: '소파 3인', asset: 'sofa-3' }),
   P('sofa-corner', '코너 소파', 'SF-CN', '소파', '소파', [2600, 1700, 800], 'floor', 'sofa', { color: '#c9cdd6', tags: '소파 코너 ㄱ자' }),
   P('sofa-recliner', '리클라이너', 'SF-RC', '소파', '리클라이너', [900, 950, 1050], 'floor', 'sofa', { color: '#a9a29b', tags: '리클라이너 1인 소파' }),
   // 책상/테이블
   P('desk-1400', '책상 1400', 'TB-D14', '책상/테이블', '책상', [1400, 700, 750], 'floor', 'table', { color: '#d8c9b4', tags: '책상 데스크' }),
   P('dining-4', '4인 식탁', 'TB-D04', '책상/테이블', '식탁', [1200, 800, 750], 'floor', 'table', { color: '#d8c9b4', tags: '식탁 테이블 4인' }),
-  P('dining-6', '6인 식탁', 'TB-D06', '책상/테이블', '식탁', [1800, 900, 750], 'floor', 'table', { color: '#d8c9b4', tags: '식탁 테이블 6인' }),
+  P('dining-6', '6인 식탁', 'TB-D06', '책상/테이블', '식탁', [1800, 900, 750], 'floor', 'table', { color: '#d8c9b4', tags: '식탁 테이블 6인', asset: 'dining-6' }),
   P('worktable-1800', '스테인리스 작업대', 'TB-W18', '책상/테이블', '작업대', [1800, 750, 850], 'floor', 'table', { color: '#c6ccd2', tags: '작업대 조리대 스테인리스' }),
-  P('side-table', '사이드 테이블', 'TB-ST', '책상/테이블', '책상', [450, 450, 550], 'floor', 'table', { tags: '사이드 테이블' }),
+  P('side-table', '사이드 테이블', 'TB-ST', '책상/테이블', '책상', [450, 450, 550], 'floor', 'table', { tags: '사이드 테이블', asset: 'side-table' }),
   // 의자/스툴
-  P('chair-dining', '식탁 의자', 'CH-DN', '의자/스툴', '의자', [450, 500, 900], 'floor', 'chair', { color: '#d8c9b4', tags: '의자 식탁' }),
-  P('chair-office', '사무용 의자', 'CH-OF', '의자/스툴', '의자', [600, 600, 1000], 'floor', 'chair', { color: '#6b7280', tags: '의자 사무 회전' }),
+  P('chair-dining', '식탁 의자', 'CH-DN', '의자/스툴', '의자', [450, 500, 900], 'floor', 'chair', { color: '#d8c9b4', tags: '의자 식탁', asset: 'chair-dining' }),
+  P('chair-office', '사무용 의자', 'CH-OF', '의자/스툴', '의자', [600, 600, 1000], 'floor', 'chair', { color: '#6b7280', tags: '의자 사무 회전', asset: 'chair-office' }),
   P('stool-round', '원형 스툴', 'CH-ST', '의자/스툴', '스툴', [350, 350, 450], 'floor', 'circle', { tags: '스툴 원형 의자' }),
   P('bench-1200', '벤치 1200', 'CH-BN', '의자/스툴', '스툴', [1200, 400, 450], 'floor', 'box', { color: '#d8c9b4', tags: '벤치 긴 의자' }),
   // 화장대/거울
@@ -151,7 +153,7 @@ const BASE_PRODUCTS = [
   P('shower-booth', '샤워부스', 'BT-SB', '주방싱크/욕실', '위생도구', [900, 900, 2000], 'floor', 'box', { color: '#dbe7ec', tags: '샤워 부스 욕실' }),
   // 조명
   P('light-ceiling', '원형 천장등', 'LT-CL', '조명', '천장등', [500, 500, 120], 'ceiling', 'lamp', { color: '#fff3c4', tags: '조명 천장등 등' }),
-  P('light-pendant', '펜던트 조명', 'LT-PD', '조명', '천장등', [300, 300, 600], 'ceiling', 'lamp', { color: '#fff3c4', tags: '조명 펜던트 식탁등' }),
+  P('light-pendant', '펜던트 조명', 'LT-PD', '조명', '천장등', [300, 300, 600], 'ceiling', 'lamp', { color: '#fff3c4', tags: '조명 펜던트 식탁등', asset: 'light-pendant' }),
   P('light-downlight', '매입 다운라이트', 'LT-DL', '조명', '천장등', [120, 120, 80], 'ceiling', 'lamp', { color: '#fff3c4', tags: '조명 다운라이트 매입' }),
   P('light-fluorescent', '형광등 2등', 'LT-FL', '조명', '천장등', [1250, 250, 100], 'ceiling', 'box', { color: '#fff3c4', tags: '조명 형광등' }),
   P('light-wall', '벽등', 'LT-WL', '조명', '벽등', [200, 150, 300], 'wall', 'lamp', { zDefault: 1800, color: '#fff3c4', tags: '조명 벽등 브라켓' }),

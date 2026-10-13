@@ -1,4 +1,320 @@
 {
   "version": 1,
-  "products": {}
+  "products": {
+    "chair-dining": {
+      "id": "chair-dining",
+      "bytes": 203480,
+      "tris": 724,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        450,
+        500,
+        900
+      ],
+      "fit": [
+        0.8887,
+        0.9844,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "polyhaven",
+        "url": "https://polyhaven.com/a/painted_wooden_chair_01",
+        "license": "CC0-1.0",
+        "author": "Kuutti Siitonen"
+      },
+      "sha256": "81949bdefa05eef51671e275832a2c4ef2cef4b07e67bafe1c4413c4ded75e5f",
+      "packedAt": "2026-10-13T09:22:37.917Z"
+    },
+    "chair-office": {
+      "id": "chair-office",
+      "bytes": 292864,
+      "tris": 4213,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        600,
+        600,
+        1000
+      ],
+      "fit": [
+        1,
+        0.9436,
+        0.9871
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "polyhaven",
+        "url": "https://polyhaven.com/a/GreenChair_01",
+        "license": "CC0-1.0",
+        "author": "Kirill Sannikov"
+      },
+      "sha256": "c9991afcf83c40b0081d46931795d425dab49e3b0b2a74f0c22379c2400b02fb",
+      "packedAt": "2026-10-13T09:22:38.995Z"
+    },
+    "desk-student": {
+      "id": "desk-student",
+      "bytes": 143448,
+      "tris": 4162,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        600,
+        450,
+        750
+      ],
+      "fit": [
+        0.9778,
+        0.97,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "polyhaven",
+        "url": "https://polyhaven.com/a/SchoolDesk_01",
+        "license": "CC0-1.0",
+        "author": "Ethan Place"
+      },
+      "sha256": "46e867b9db06d40feb135e31ddb3a771a1fa13d5366f1d4489d3c6227f3ef0f1",
+      "packedAt": "2026-10-13T09:22:42.407Z"
+    },
+    "dining-6": {
+      "id": "dining-6",
+      "bytes": 145500,
+      "tris": 600,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1800,
+        900,
+        750
+      ],
+      "fit": [
+        1,
+        0.9564,
+        0.9453
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "polyhaven",
+        "url": "https://polyhaven.com/a/painted_wooden_table",
+        "license": "CC0-1.0",
+        "author": "Kirill Sannikov"
+      },
+      "sha256": "a969066d5e3e2dac56fb36083ee8692566d8bfb0dacd6c961f7a56edb8813872",
+      "packedAt": "2026-10-13T09:22:40.695Z"
+    },
+    "light-pendant": {
+      "id": "light-pendant",
+      "bytes": 171724,
+      "tris": 5602,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        300,
+        300,
+        600
+      ],
+      "fit": [
+        0.9073,
+        1,
+        0.9073
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "polyhaven",
+        "url": "https://polyhaven.com/a/modern_ceiling_lamp_01",
+        "license": "CC0-1.0",
+        "author": "James Ray Cock"
+      },
+      "sha256": "dd4f4cc63ddbee61572213eed061b407cf6a5875870810889154224703023f40",
+      "packedAt": "2026-10-13T09:22:43.190Z"
+    },
+    "side-table": {
+      "id": "side-table",
+      "bytes": 275296,
+      "tris": 470,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        450,
+        450,
+        550
+      ],
+      "fit": [
+        0.9918,
+        0.99,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "polyhaven",
+        "url": "https://polyhaven.com/a/painted_wooden_nightstand",
+        "license": "CC0-1.0",
+        "author": "Kirill Sannikov"
+      },
+      "sha256": "181d2a6986f9325918a190bfeb60f6f50fe3d06bbb9fe524d430a0eadad3c06c",
+      "packedAt": "2026-10-13T09:22:41.671Z"
+    },
+    "sofa-3": {
+      "id": "sofa-3",
+      "bytes": 176336,
+      "tris": 2728,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        2100,
+        900,
+        800
+      ],
+      "fit": [
+        0.9471,
+        0.9761,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "polyhaven",
+        "url": "https://polyhaven.com/a/sofa_02",
+        "license": "CC0-1.0",
+        "author": "Kirill Sannikov"
+      },
+      "sha256": "f7b27cba9a7fe556b70d76cc9be00fccbfca3a39716b3f929797a545bcc39eb0",
+      "packedAt": "2026-10-13T09:22:39.744Z"
+    }
+  }
 }
