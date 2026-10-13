@@ -6,8 +6,8 @@ import { BUILTIN_TEMPLATES, saveTemplate, listTemplates, deleteTemplate, renameT
 beforeEach(() => localStorage.clear());
 
 describe('프로젝트 템플릿', () => {
-  test('내장 템플릿 3개가 모두 열리는 프로젝트를 만든다', () => {
-    expect(BUILTIN_TEMPLATES.map(t => t.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-studio']);
+  test('내장 템플릿 4개가 모두 열리는 프로젝트를 만든다', () => {
+    expect(BUILTIN_TEMPLATES.map(t => t.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-sinsang', 'builtin-studio']);
     for (const t of BUILTIN_TEMPLATES) {
       const p = t.build();
       expect(p.version, t.id).toBe(1);
@@ -23,6 +23,26 @@ describe('프로젝트 템플릿', () => {
     expect(f.items.some(i => i.productId === 'bed-queen')).toBe(true);
     expect(activeFloor(templateProject('builtin-gangdang')).rooms.length).toBeGreaterThan(5);
     expect(templateProject('없음')).toBeNull();
+  });
+
+  // 2026-10-13 · 사용자 요청: 경산 신상중 급식기구 배치도(DXF · sinsang-A)를 가져온 결과를 내장 템플릿으로 공개. 수치는 samples/sinsang.js 머리 주석(점수판 sinsang-A와 같다).
+  test('경산 신상중 급식실 템플릿은 가져온 결과 그대로(벽 62 · 방 13 · 실명 11 · 문 16 · 창 16 · 기구 167)이고 배경·가져오기 기록은 없으며 매번 새 객체다', () => {
+    const a = templateProject('builtin-sinsang'), b = templateProject('builtin-sinsang');
+    expect(a).not.toBe(b);
+    expect(a.name).toBe('경산 신상중 급식실');
+    expect(a.background).toBeNull();
+    expect(a.meta?.dxfImport).toBeUndefined();
+    const f = activeFloor(a);
+    expect(f.walls).toHaveLength(62);
+    expect(f.rooms).toHaveLength(13);
+    expect(f.rooms.filter(r => r.name).map(r => r.name)).toContain('조리실');
+    expect(f.rooms.filter(r => r.name)).toHaveLength(11);
+    const kinds = f.items.reduce((m, i) => ({ ...m, [i.kind]: (m[i.kind] ?? 0) + 1 }), {});
+    expect(kinds).toMatchObject({ door: 16, window: 16, opening: 9, column: 14 });
+    expect(kinds.product + kinds.equipment).toBe(167);
+    expect(f.items.every(i => i.id && Array.isArray(i.pos) && Array.isArray(i.size))).toBe(true);
+    a.floors[0].walls.length = 0;                                                         // 한 사본을 고쳐도
+    expect(activeFloor(templateProject('builtin-sinsang')).walls).toHaveLength(62);       // 다음 사본은 멀쩡하다
   });
 
   test('사용자 템플릿을 저장·목록·삭제하고 배경 이미지는 빼 둔다', () => {
@@ -61,7 +81,7 @@ describe('프로젝트 템플릿', () => {
   test('allTemplateCards는 내장 다음에 사용자 템플릿을 붙인다', () => {
     saveTemplate('내 것', createEmptyProject('x'));
     const cards = allTemplateCards();
-    expect(cards.slice(0, 3).map(c => c.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-studio']);
+    expect(cards.slice(0, 4).map(c => c.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-sinsang', 'builtin-studio']);
     expect(cards.at(-1)).toMatchObject({ name: '내 것', user: true });
     expect(cards.at(-1).desc).toContain('저장한 템플릿');
   });

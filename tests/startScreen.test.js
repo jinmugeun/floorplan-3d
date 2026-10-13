@@ -50,12 +50,12 @@ test('템플릿 카드 목록을 보여주고 고르면 onTemplate이 불린다'
   openStartScreen({ store: createStore(createEmptyProject()), onTemplate: id => picked.push(id) });
   const root = document.getElementById('startScreen');
   const cards = [...root.querySelectorAll('[data-template]')];
-  expect(cards.map(c => c.dataset.template)).toEqual(['builtin-studio']); // 빈 프로젝트·샘플은 위 카드가 담당한다
+  expect(cards.map(c => c.dataset.template)).toEqual(['builtin-sinsang', 'builtin-studio']); // 빈 프로젝트·강당중 샘플은 위 카드가 담당한다 · 신상중(2026-10-13)은 템플릿 카드
   expect(cards[0].classList.contains('tpl')).toBe(true);         // 위 카드 3개와 구분되는 클래스
   expect(root.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(4);
   expect(root.textContent).toContain('템플릿');
   cards[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  expect(picked).toEqual(['builtin-studio']);
+  expect(picked).toEqual(['builtin-sinsang']);
   expect(document.getElementById('startScreen')).toBeNull();     // 고르면 닫힌다
 });
 
