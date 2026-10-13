@@ -195,11 +195,13 @@ function passReadable(s, [c0, c1], lines, P = DXF_PARAMS) {
 }
 
 // walls: DXF 좌표의 몸통 있는 벽({ id, a, b, t }). passes: [{ wall, c, width }](통로 — 벽 선을 끊는다). columns: 가져오기 꼴 기둥(마감선 오라클).
+// jointGaps: ④ 이음 규칙(JOINT_GAP 틈 · 가운데 run · 꺾임 벽 중심선)을 쓰는가 — 우리 가져오기의 구간 규칙용 표시라 정규화 DXF만 켠다. 끄면 이음도
+// ①②의 합집합 윤곽 그대로 면선이 맞닿는다(2026-10-13 · 계획 16 최종 리뷰 I-1 · F-1: 아키스케치용 파일이 이음마다 30 mm 열려 HATCH 점검을 깼다).
 // → { faces, centers, jambs: [[a, b, layer]] · skipped: 벽을 끊지 않은 통로들 }.
-export function wallOutline(walls, passes = [], { columns = [] } = {}) {
+export function wallOutline(walls, passes = [], { columns = [], jointGaps = true } = {}) {
   const all = walls.map(infoOf);
   const lining = columns.length ? liningOracle(columns) : () => false;
-  const js = joints(all, DXF_PARAMS, lining);
+  const js = jointGaps ? joints(all, DXF_PARAMS, lining) : [];
   const info = all.filter(s => !s.jog);
   colourWalls(info, WALL_LAYERS, DXF_PARAMS);
   quads(info);

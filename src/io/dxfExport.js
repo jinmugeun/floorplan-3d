@@ -23,6 +23,7 @@
 //  - 기구(EQUIP · dxfExportEquip.js · 2026-10-13 계획 14 Task E): 기구 하나 = `EQ-이름-WxDxH@제품` 블록 INSERT — 다시 들여오면 그대로 선다.
 //    opts.equipment === false면 예전처럼 빼고 쓴다.
 // 프로필(2026-10-13 · 계획 16 Task B): opts.profile 'archisketch'는 레이어 이름과 쓰는 요소만 바꾼다(dxfExportProfile.js) — 아키스케치 입력용이지 우리 왕복 형식이 아니다.
+// 예외 하나(최종 리뷰 F-1): 이음 틈(jointGaps — 우리 가져오기의 구간 표시)도 끈다. 그래야 이음에서 면선이 맞닿는다.
 // 이 파일은 DOM을 모른다.
 import { dxfDocument, CENTER_LTYPE, PASS_LAYER, num } from './dxfExportTemplate.js';
 import { roomArea } from '../geom/rooms.js';
@@ -201,7 +202,7 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0, eq
   const square = (floor.items ?? []).filter(it => it.kind === 'column' && it.productId !== 'column-round');
   // 기둥을 가져오기 꼴({ c, u, w, h } · DXF)로 — 벽 선 중 기둥 마감선으로 먹힐 중심선·가운데 run 선을 고르는 오라클이 쓴다(리뷰 M-1).
   const asImported = square.map(it => { const r = -(it.rot ?? 0) * Math.PI / 180; return { c: D(it.pos), u: [Math.cos(r), Math.sin(r)], w: it.size?.[0] ?? 400, h: it.size?.[1] ?? 400 }; });
-  const { faces, centers, jambs, skipped } = wallOutline(solid, passes, { columns: asImported });
+  const { faces, centers, jambs, skipped } = wallOutline(solid, passes, { columns: asImported, jointGaps: prof.jointGaps });
   const cols = square.map(it => columnRects(it));
   // 끊는 것은 벽 선 상자 밖으로 삐져나온 기둥(바깥벽 기둥)뿐이다 — 상자 안의 기둥은 이미 도면 상자(ROI) 안이다.
   const wb = [Infinity, Infinity, -Infinity, -Infinity];

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { exportDxf, buildDxf } from '../src/io/dxfExport.js';
 import { EXPORT_LAYERS, PASS_LAYER } from '../src/io/dxfExportTemplate.js';
 import { liningOracle } from '../src/io/dxfExportGeom.js';
+import { JOINT_GAP } from '../src/io/dxfExportJoints.js';
 import { decodeDxf } from '../src/io/dxf/decode.js';
 import { classifyLayer } from '../src/io/dxf/classify.js';
 import { blockKind, nominalWidth } from '../src/io/dxf/blockOpenings.js';
@@ -681,6 +682,28 @@ test('아키스케치 프로필: 레이어는 0·wall_층고·door·window·colu
   expect(['wall_2800', ARCHI_LAYERS.door, ARCHI_LAYERS.window, ARCHI_LAYERS.column].map(classifyLayer)).toEqual(['wall', 'opening', 'opening', 'wall']);
 });
 
+// 2026-10-13 · 계획 16 최종 리뷰 I-1(F-1): 정규화 DXF는 두께가 바뀌는 이음에서 얇은 벽 면선을 이음 앞 JOINT_GAP(30 mm)에서 끊고 그 틈을 비워 둔다 —
+// 우리 가져오기가 두께 구간을 가르는 표시다(dxfExportJoints.js). 아키스케치용 파일은 그 틈을 두지 않는다: 아키스케치는 맞닿은 면선을 벽으로 읽고, 안내 §2의
+// HATCH 점검도 닫힌 윤곽을 요구한다(틈이 있으면 방 안·벽 몸통·바깥이 30 mm로 이어진다 — 실측 열린 끝점 사동중 53 · 내곡중 50).
+// 픽스처: 윗벽 200 | 400 일직선 이음 + 아랫벽 405 → 230 꺾임(Z자 · 두 띠가 호환이 아니어서 정규화 DXF에는 가운데 run이 선다).
+test('아키스케치 프로필: 두께가 바뀌는 이음에서도 벽 면선이 닫혀 있다(열린 끝점 0) — 정규화 DXF는 이음의 30 mm 틈을 그대로 둔다', () => {
+  const W = (a, b, t) => makeWall({ a, b, thickness: t, height: 3000 });
+  const walls = normalizeWalls([W([0, 0], [5000, 0], 405), W([5000, 0], [5000, 217], 230), W([5000, 217], [10000, 217], 230),
+    W([10000, 217], [10000, 6000], 200), W([10000, 6000], [5000, 6000], 200), W([5000, 6000], [0, 6000], 400), W([0, 6000], [0, 0], 200)]);
+  const p = normalizeProject({ ...createEmptyProject('이음'), areaMode: 'center', floors: [{ ...createFloor('1F'), height: 3000, walls, rooms: detectRooms(walls), items: [] }] });
+  const wallLines = (txt, re) => modelEnts(pairs(txt), 'LINE').filter(l => re.test(l[8]) && l[6] !== 'CENTER').map(l => [[+l[10], +l[20]], [+l[11], +l[21]]]);
+  const onLine = (q, [a, b]) => { const d = [b[0] - a[0], b[1] - a[1]], t = ((q[0] - a[0]) * d[0] + (q[1] - a[1]) * d[1]) / (d[0] ** 2 + d[1] ** 2); return t >= 0 && t <= 1 && near(q, [a[0] + t * d[0], a[1] + t * d[1]], 1); };
+  // 열린 끝점: 다른 벽 선의 끝점(1 mm 안)에도, 다른 벽 선 위에도 닿지 않는 끝점.
+  const openEnds = lines => lines.flatMap((s, i) => s.filter(q => !lines.some((o, j) => j !== i && (near(q, o[0], 1) || near(q, o[1], 1) || onLine(q, o)))));
+  const archi = wallLines(buildDxf(p, { profile: 'archisketch' }).text, /^wall_/);
+  expect(archi.length).toBeGreaterThan(0);
+  expect(openEnds(archi)).toEqual([]);
+  // 대조: 정규화 DXF는 이음마다 얇은 벽 면선 끝이 JOINT_GAP만큼 떠 있다 — 200 | 400 이음(DXF y −6000 · X = 5000)의 얇은 벽 면선은 x 5030에서 끝난다.
+  const oursLines = wallLines(exportDxf(p), /^WALL/), ours = openEnds(oursLines), ends = oursLines.flat();
+  expect(ours).toEqual(expect.arrayContaining([[5000 + JOINT_GAP, -6100], [5000 + JOINT_GAP, -5900]]));
+  expect(ours.every(q => ends.some(e => Math.abs(Math.hypot(q[0] - e[0], q[1] - e[1]) - JOINT_GAP) <= 1.5))).toBe(true);   // 열린 끝은 모두 이음 틈이다
+});
+
 test('기본(정규화) 프로필은 바이트 단위로 그대로다 — 프로필 분기가 기본 출력을 건드리면 이 해시가 바뀐다', () => {
   // 2026-10-13 사전 검토 8: equipFixture() 내보내기의 sha256. 기본 출력을 **일부러** 바꾸는 계획은 이 값을 사유와 함께 갱신한다.
   expect(createHash('sha256').update(exportDxf(equipFixture())).digest('hex')).toBe('88c26aa83b9675941de864d937e872d8e594fd91f2f9dd02476e4c26ac206b96');
@@ -689,7 +712,7 @@ test('기본(정규화) 프로필은 바이트 단위로 그대로다 — 프로
   expect(profileOf('없는-프로필')).toBe(PROFILES.ours);                                    // 모르는 이름은 정규화 DXF로 쓴다
 });
 
-test('아키스케치용 DXF를 우리 앱에 다시 가져오면 불러와지고 층고 힌트가 wall_층고의 값이다 — 벽이 모두 520 이하·구획선 없는 도면이면 벽·방도 정규화 왕복과 같다', () => {
+test('아키스케치용 DXF를 우리 앱에 다시 가져오면 불러와지고 층고 힌트가 wall_층고의 값이다 — 벽이 모두 520 이하·두께가 바뀌는 이음·구획선 없는 도면이면 벽·방도 정규화 왕복과 같다', () => {
   const p = synthetic(); p.floors[0].height = 2800;
   for (const w of p.floors[0].walls) w.thickness = Math.min(w.thickness, 500);            // 사전 검토 1: 윗벽 600은 중심선 없이 두 띠로 갈라진다(7→5) · 500이면 7=7·2=2
   const ours = importText(exportDxf(p)), archi = importText(buildDxf(p, { profile: 'archisketch' }).text);
