@@ -486,6 +486,21 @@ test('복합 블록(실제 전개): 어휘 자식 3 → 세 아이템이 제 전
   expect(r.stats.skipped.composite).toBe(0);
 });
 
+// 2026-10-13 · 최종 리뷰 X-4(M-F1): 내곡 afadfasdfasfd ×2의 깊이 1 자식은 영유아거치대 · 세면대 평면 · 장애인화장실 대변기_평면(변기 한 벌 1089×857)이다.
+// 마지막이 제외 목록(composite)에 있어 변기가 서지 않았다 — 이제 어휘 자식으로 세어 변기로 선다(내곡 equip 15 → 17 · 제품 6 → 8).
+test('복합 블록(실제 전개): 내곡 묶음의 장애인화장실 대변기_평면은 어휘 자식이라 변기로 선다', () => {
+  const kids = [sub('영유아거치대', 200, 200), sub('세면대 평면', 1200, 200), sub('장애인화장실 대변기_평면', 2500, 500)];
+  const doc = {
+    entities: [{ type: 'INSERT', name: 'afadfasdfasfd', layer: '급식기구', x: 10000, y: 0, xscale: 1, yscale: 1, a0: 0 }],
+    blocks: new Map([['afadfasdfasfd', rectBlock(4000, 2000, kids)], ['영유아거치대', rectBlock(500, 400)], ['세면대 평면', rectBlock(600, 450)], ['장애인화장실 대변기_평면', rectBlock(1089, 857)]]),
+  };
+  const r = run(explode(doc));
+  expect(r.items.map(i => [i.dxfBlock, i.productId, i.size.slice(0, 2)])).toEqual([
+    ['영유아거치대', 'equip-generic', [500, 400]], ['세면대 평면', 'washbasin', [600, 450]], ['장애인화장실 대변기_평면', 'toilet', [1089, 857]]]);
+  expect(r.stats).toMatchObject({ placed: 3, expanded: 1 });
+  expect(r.stats.skipped.composite).toBe(0);
+});
+
 test('복합 블록: 어휘 자식이 하나뿐이면 지금처럼 그룹 하나(전개 상자) · 부모가 어휘(식탁6인 + 의자 2)면 전개하지 않는다', () => {
   const r = run(explode(groupDoc([KIDS[0], KIDS[3]], [[10000, 1, 0]])));
   expect(r.items.map(i => [i.dxfBlock, i.productId, i.pos, i.size.slice(0, 2)])).toEqual([['화장실묶음', 'equip-generic', [12000, -1000], [4000, 2000]]]);

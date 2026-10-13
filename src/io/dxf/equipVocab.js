@@ -72,18 +72,19 @@ export const EQUIP_VOCAB = [
 
 // 세우면 안 되는 것(이유별 — equipment.js의 stats.skipped 칸). 영역 안 실측(Task 1 §7): 육가 11 · 그레이팅 7 · 매립 발판소독 16 · 배수구 3 · Z_DOT 30 ·
 // 신발250 19 · sss…dfdfsa 16(현관 구멍판 발판) · *B1203~1207(사동 AZ-LEAL 지시선·38 mm 막대) · 도면틀(권-효성a3 61 m · S-S3 63 m) · 포켓도어 11(문 —
-// Task 6(a)가 이름 규칙에 넣었다; 역할표·옛 규칙 경로를 위해 여기도 둔다) · 1f plan-1(위생 기구 8개를 품은 평면 블록) · 내곡 묶음(장애인화장실 대변기_평면 ·
-// afadfasdfasfd) · 내곡 벽 조각 1층_방풍실_식당(1140×6900 ×2).
+// Task 6(a)가 이름 규칙에 넣었다; 역할표·옛 규칙 경로를 위해 여기도 둔다) · 1f plan-1(위생 기구 8개를 품은 평면 블록) · 내곡 묶음 afadfasdfasfd ·
+// 내곡 벽 조각 1층_방풍실_식당(1140×6900 ×2).
 // composite 묶음 자체는 세우지 않는다. 그 안의 어휘 자식이 둘 이상이면 자식이 대신 선다(2026-10-13 · 계획 14 Task F · insertBoxes.groupOwner — 사동 `1f plan-1` 8 ·
-// 내곡 `afadfasdfasfd` ×2의 영유아거치대 · 세면대 평면). `장애인화장실 대변기_평면`은 afadfasdfasfd의 깊이 1 자식이고 이 목록이 빼므로 여전히 서지 않는다
-// (사전 검토 p14-preflight.md I-7 — 그 안에 내장 INSERT는 없다: 1089×857 선 501개의 대변기 한 벌).
+// 내곡 `afadfasdfasfd` ×2의 영유아거치대 · 세면대 평면 · 장애인화장실 대변기_평면). `장애인화장실 대변기_평면`은 묶음이 아니라 afadfasdfasfd의 깊이 1 자식인
+// 변기 한 벌이다(사전 검토 p14-preflight.md I-7 — 내장 INSERT 없음 · 1089×857 선 501개 · 역할표도 equip). 예전에는 이 목록에 있어 변기가 서지 않았다 —
+// 2026-10-13 · 최종 리뷰 X-4(M-F1)에서 뺐다: 내곡 equip 15 → 17 · 제품 6 → 8 · 위생 10 → 12(toilet 1089×857 둘 · 충돌 0 · 다른 도면 불변).
 // "도어"는 숫자 바로 뒤가 아닐 때만 개구부다 — 냉장고 4도어·6도어는 문짝 수다(사전 검토 반영 3).
 export const EQUIP_SKIP = [
   { keys: [/(?<!\d\s*)도어/], reason: 'opening' },
   { keys: ['육가', '그레이팅', '트렌치', '배수구', '드레인', '그리스트랩', '매립형', '점자블럭', '중심선', '조경', '노즐', '각재'], reason: 'fixture' },
   { keys: ['z_dot', '넘버-', 'key-', '탑차', /^신발\s*\d/, /^s{6,}[a-z]*$/i, /^\*b\d+$/i], reason: 'symbol' },
   { keys: ['권-효성', 's-s3', '도곽', '도면틀', 'titleblock'], reason: 'frame' },
-  { keys: [/^\d+f\s*plan/i, '장애인화장실 대변기_평면', /^afadfasdfasfd$/i], reason: 'composite' },
+  { keys: [/^\d+f\s*plan/i, /^afadfasdfasfd$/i], reason: 'composite' },
   { keys: ['1층_방풍실_식당'], reason: 'wallPiece' },
 ];
 

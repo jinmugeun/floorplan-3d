@@ -53,11 +53,19 @@ test('제외 어휘: 바닥 붙박이·기호·도면틀·개구부·복합 블�
     'Z_DOT': 'symbol', '신발250': 'symbol', '넘버-1': 'symbol', 'key-6': 'symbol', '탑차': 'symbol', 'sssssssssssdfdfsa': 'symbol', '*B1206': 'symbol',
     '권-효성a3': 'frame', 'S-S3': 'frame',
     '포켓도어800': 'opening', '포켓도어900': 'opening',
-    '1f plan-1': 'composite', '장애인화장실 대변기_평면': 'composite', 'afadfasdfasfd': 'composite',
+    '1f plan-1': 'composite', 'afadfasdfasfd': 'composite',
     '1층_방풍실_식당': 'wallPiece',
   };
   expect(Object.fromEntries(Object.keys(want).map(n => [n, skipReason(n)]))).toEqual(want);
   for (const n of Object.keys(want)) expect(isSkipped(n), n).toBe(true);
+});
+
+// 2026-10-13 · 계획 14 최종 리뷰 X-4(M-F1): 내곡 `장애인화장실 대변기_평면`은 묶음이 아니라 변기 한 벌(1089×857 · 선 501개 · 내장 INSERT 없음 · 역할표도 equip)이다.
+// 제외(composite)에서 빼면 afadfasdfasfd 묶음의 어휘 자식으로 세어져 변기로 선다(내곡 equip 15 → 17 · 제품 6 → 8 · 위생 10 → 12).
+test('장애인화장실 대변기_평면은 제외가 아니고 변기다', () => {
+  expect(skipReason('장애인화장실 대변기_평면')).toBeNull();
+  expect(isSkipped('장애인화장실 대변기_평면')).toBe(false);
+  expect(matchEquip('장애인화장실 대변기_평면')).toMatchObject({ productId: 'toilet', attach: 'floor', maxLong: 1200 });
 });
 
 // 사전 검토 3: "도어" 제외는 숫자 바로 뒤의 도어(문짝 수)를 보지 않는다 — 냉장고 4도어·6도어는 기구다.
