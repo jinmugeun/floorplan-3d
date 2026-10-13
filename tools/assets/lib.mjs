@@ -45,3 +45,21 @@ export function checkManifestEntry(e, budget = ASSET_BUDGET) {
   for (const x of e.extensions ?? []) if (!ALLOWED_EXTENSIONS.includes(x)) problems.push(`extension:${x}`);
   return { ok: problems.length === 0, problems };
 }
+
+// 출처 종류별 라이선스 근거 URL. Poly Haven은 /info에 license 필드가 없고 사이트 전체가 CC0-1.0이라(사전 검토 I-5) 사이트 라이선스 쪽을 적는다.
+export const LICENSE_URLS = Object.freeze({ polyhaven: 'https://polyhaven.com/license' });
+
+// NOTICE.md 본문(2026-10-13 · 계획 15 Task C): manifest의 출처를 제품 id 순 표로. pack.mjs가 저장소 manifest를 쓸 때마다 다시 만들고,
+// tests/assetsCatalog.test.js가 파일 = 이 출력인지 본다 — 손으로 고치거나 포장 뒤 빠뜨리면 테스트가 잡는다. nameOf(제품 id → 이름)는
+// 부르는 쪽이 준다(이 파일은 카탈로그를 읽지 않는 순수 모듈). 표 칸의 `|`는 이스케이프한다(작가 이름에 섞여도 표가 안 깨지게).
+export function noticeMarkdown(man, nameOf = () => null) {
+  const cell = v => String(v ?? '—').replace(/\|/g, '\\|');
+  const rows = Object.entries(man.products ?? {}).map(([id, e]) => {
+    const s = e.source ?? {}, licUrl = LICENSE_URLS[s.kind];
+    return `| ${cell(id)} | ${cell(nameOf(id))} | ${cell(s.url)} | ${cell(s.author)} | ${cell(s.license && licUrl ? `${s.license} (${licUrl})` : s.license)} |`;
+  });
+  return ['# NOTICE — 제품 3D 모델 출처', '',
+    '`public/models/`에 든 제품 3D 모델(GLB)의 출처·작가·라이선스다. `public/models/manifest.json`에서 `tools/assets/pack.mjs`가 만든다 — 손으로 고치지 않는다(`npm run assets:seed`·`assets:pack`이 다시 쓴다).',
+    'Poly Haven 에셋은 사이트 전체가 CC0-1.0(퍼블릭 도메인 헌정)이다 — https://polyhaven.com/license . 표기 의무는 없지만 출처와 작가를 남긴다. 포장 때 크기·축·원점을 앱 규약에 맞추고, 삼각형이 많으면 줄이고, 텍스처를 WebP로 바꿨다.',
+    '', '| 제품 | 이름 | 출처 | 작가 | 라이선스 |', '|---|---|---|---|---|', ...rows, ''].join('\n');
+}

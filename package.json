@@ -12,7 +12,8 @@
     "dxf:e2e": "node tools/dxf-corpus/e2e.mjs",
     "dxf:public": "node tools/dxf-corpus/public.mjs",
     "assets:pack": "node tools/assets/pack.mjs",
-    "assets:check": "node tools/assets/check.mjs"
+    "assets:check": "node tools/assets/check.mjs",
+    "assets:seed": "node tools/assets/seed.mjs"
   },
   "dependencies": {
     "three": "0.169.0"

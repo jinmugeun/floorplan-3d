@@ -2,6 +2,7 @@
 // 정규화하고 감량 → 텍스처 WebP → meshopt 압축해 `<out>/<productId>.glb`로 쓰고 manifest 항목을 갱신한다. stdout은 항목 JSON 한 줄(seed.mjs·comfy-batch.mjs가 읽는다).
 //   node tools/assets/pack.mjs <in.glb|.gltf> --product <id> [--front +z] [--up y] [--tris 8000] [--tex 1024]
 //        [--source-url U --license L --author A] [--out public/models] [--manifest <out>/manifest.json]
+// 저장소 manifest(public/models/manifest.json)를 쓸 때는 저장소 루트 NOTICE.md도 manifest에서 다시 만든다(계획 15 Task C · lib.noticeMarkdown).
 // --front는 **up 변환 뒤**의 정면 축(+z · -z · +x · -x): Blender식 Z-up · 정면 −Y 모델은 X −90° 뒤 정면이 +Z라 `--up z --front +z`(사전 검토 C-1).
 // 사전 검토 scratch/p15/pkg/pack-proto.mjs(gltf-transform 4.5.1 실측 — painted_wooden_chair_01 492 KB → 203 KB · dining_chair_02 22,013 → 9,499 삼각형)를 정식으로 옮겼다.
 import { Logger, NodeIO } from '@gltf-transform/core';
@@ -11,10 +12,10 @@ import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join as pjoin, resolve } from 'node:path';
+import { join as pjoin, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { productById } from '../../src/products/catalog.js';
-import { ASSET_BUDGET, FRONT_YAW, checkManifestEntry, manifestEntry, normalizeTransform } from './lib.mjs';
+import { ASSET_BUDGET, FRONT_YAW, checkManifestEntry, manifestEntry, noticeMarkdown, normalizeTransform } from './lib.mjs';
 
 const fail = msg => { console.error(`pack: ${msg}`); process.exit(1); };
 const argv = process.argv.slice(2);
@@ -85,6 +86,10 @@ const entry = manifestEntry({ id, bytes: glb.byteLength, tris: triCount(), textu
 // 제품 id 순으로 적는다 — 포장 순서가 달라도 manifest diff가 흔들리지 않게.
 man.products = Object.fromEntries(Object.entries({ ...man.products, [id]: entry }).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 writeFileSync(manifestPath, JSON.stringify(man, null, 2) + '\n');
+// NOTICE.md는 저장소 manifest와 짝이다(계획 15 Task C): 그것을 쓸 때만 다시 만든다 — 임시 manifest(테스트의 --manifest)가 저장소 NOTICE를 덮지 않게.
+// relative() === ''로 같은 파일인지 본다(Windows 드라이브 글자 대소문자 차이를 견딘다).
+if (relative(manifestPath, fileURLToPath(new URL('../../public/models/manifest.json', import.meta.url))) === '')
+  writeFileSync(fileURLToPath(new URL('../../NOTICE.md', import.meta.url)), noticeMarkdown(man, pid => productById(pid)?.name));
 const { problems } = checkManifestEntry(entry);
 if (problems.length) console.error(`pack: 경고 — ${id} 예산 밖(${problems.join(', ')}) · npm run assets:check가 막는다`);
 console.log(JSON.stringify(entry));
