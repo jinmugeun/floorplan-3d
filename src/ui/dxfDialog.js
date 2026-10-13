@@ -181,7 +181,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
   };
   const schedule = () => { want++; pending = true; q('import').disabled = true; clearTimeout(timer); timer = setTimeout(runExtract, DEBOUNCE); };
 
-  // 가져오는 중(래스터 대기 · 보통 150~230 ms, 멈춘 워커면 ≤ 10 s)의 드롭·파일 선택은 무시한다(2026-10-13 · 최종 리뷰 X-2): 예전에는 새 파싱이 돌고
+  // 가져오는 중(래스터 대기 · 보통 139~227 ms, 멈춘 워커면 ≤ 10 s)의 드롭·파일 선택은 무시한다(2026-10-13 · 최종 리뷰 X-2): 예전에는 새 파싱이 돌고
   // last가 지워졌지만 진행 중인 가져오기가 누른 순간의 옛 도면을 swap하고 창을 닫아(close → client.cancel) 새 파일이 조용히 버려졌다.
   async function load(f) {
     if (!f || closed || importing) return;
@@ -233,7 +233,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     // 자동 저장본에도 함께 간다). 워커 결과(last.project)는 고치지 않는다(얕은 복사): 확인 창에서 취소하고 다시 누르면 새 시각으로 다시 만든다.
     const project = { ...last.project };
     project.meta = { ...project.meta, dxfImport: buildImportMeta({ project, fileName, opts: extractOpts(), stats }) };
-    // 워커가 굽는 동안(≈ 150~190 ms) 칸을 바꿔도 누른 순간의 값으로 간다. 배경은 swap 전에 넣는다 — 늦게 넣는 두 번째
+    // 워커가 굽는 동안(139~227 ms — 사동 워커 래스터 실측 · 최종 리뷰 X-11) 칸을 바꿔도 누른 순간의 값으로 간다. 배경은 swap 전에 넣는다 — 늦게 넣는 두 번째
     // 스토어 쓰기는 하지 않는다(되돌리기 단계·자동 저장 혼선 · 사전 검토 I-5).
     const traceOn = q('trace').checked, height = heightMm();
     try {

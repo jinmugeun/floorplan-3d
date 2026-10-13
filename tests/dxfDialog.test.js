@@ -946,7 +946,7 @@ test('굽는 동안 칸을 바꿔도 누른 순간의 값으로 가져오고, �
   q('import').click();
   await flush();
   expect(tw.last().posted.at(-1).type).toBe('trace');
-  q('height').value = String(Number(atClick) + 300);               // 워커가 굽는 사이(≈ 150~230 ms)에 바꾼다
+  q('height').value = String(Number(atClick) + 300);               // 워커가 굽는 사이(139~227 ms)에 바꾼다
   q('height').dispatchEvent(new Event('change', { bubbles: true }));
   tw.last().emit({ type: 'traced', bg: TRACE_BG, fallback: false });
   await flush();
@@ -961,7 +961,7 @@ test('굽는 동안 칸을 바꿔도 누른 순간의 값으로 가져오고, �
   expect(q('import').disabled).toBe(false);
 });
 
-// 2026-10-13 · 최종 리뷰 X-2(M-C2): 래스터를 기다리는 동안(보통 150~230 ms · 멈춘 워커면 ≤ 10 s) 새 파일을 떨어뜨리면 예전에는 새 파싱이 시작되고
+// 2026-10-13 · 최종 리뷰 X-2(M-C2): 래스터를 기다리는 동안(보통 139~227 ms · 멈춘 워커면 ≤ 10 s) 새 파일을 떨어뜨리면 예전에는 새 파싱이 시작되고
 // 지난 결과(last)가 지워졌지만, 진행 중인 가져오기는 누른 순간의 옛 도면을 swap하고 창을 닫았다 — 닫기의 client.cancel()이 새 파싱을 버려
 // 새 파일은 사라지고 옛 도면이 들어갔다. 가져오는 중의 드롭·파일 선택은 무시한다(누른 도면을 끝까지 가져온다).
 test('래스터를 기다리는 동안 떨어뜨린 파일은 무시한다 — 새 파싱 0회 · 누른 순간의 도면이 들어간다', async () => {

@@ -32,6 +32,7 @@ import { sameItemIds } from '../src/state/itemOps.js';
 import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { itemMenuItems } from '../src/ui/itemMenu.js';
+import { SELECT_SAME_NAME } from '../src/ui/messages.js';
 
 let handle;
 beforeAll(async () => {
@@ -282,8 +283,15 @@ test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 �
   expect(DXF_EQUIPMENT(1, 0, 1, 0, 0, 1)).toMatch(/ · 기둥 면에 맞춰 줄임 1$/);
   expect(html).toContain('“기둥 면에 맞춰 줄임 n”');
   expect(html).not.toMatch(/크기는 도면대로[,)]/);
+  // §3 · §4 · §5(2026-10-13 · 최종 리뷰 X-11): 왕복에서 바닥으로 오는 익명 벽 상자 · 벽걸이 재착석, 왕복 뒤 교정 기록의 블록 이름은 EQ- 이름,
+  // 같은 이름 한꺼번에 바꾸기(계획 14 목표 3 — 메뉴 문구 그대로).
+  const flat = html.replace(/\s+/g, ' ');
+  expect(flat).toContain('이름 없는 벽 판넬·익명 벽걸이 상자는 벽 부착을 잃고 바닥으로 돌아오고(사동중 기구 234개 중 3개)');
+  expect(flat).toContain('벽걸이 기구는 300 mm 안의 같은 방향 벽 면에 다시 앉아 자리가 조금 바뀔 수 있습니다');
+  expect(html).toContain('정규화 DXF를 다시 가져온 뒤에는 <code>EQ-…</code> 블록 이름');
+  expect(html).toContain(`“${SELECT_SAME_NAME(2).replace('2', 'n')}” → 제품 교체`);
   // §4: 교정 기록에는 기구와 원 블록 이름(dxfBlock)이 든다.
-  expect(html).toContain('기구(제품·자리·크기와 원 블록 이름)');
+  expect(html).toContain('기구(제품·자리·크기와 원 블록 이름 — ');
   expect(importSnapshot(p.floors[0]).items[0]).toMatchObject({ dxfBlock: EXAMPLE, kind: 'product' });
   // §5: 한계 — 견적 0원 문구 그대로 · 이름 없는 블록은 '도면 기구' 상자 · 기구끼리 겹침은 도면 그대로 · 크기 상한.
   expect(html).toContain(DRAWING_PRICE_NOTE);

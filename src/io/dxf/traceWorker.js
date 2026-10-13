@@ -1,9 +1,10 @@
 // 트레이스 래스터 전용 **일회용** 워커(2026-10-13 · 계획 14 Task C · 사전 검토 I-5 · §18.6 개정). [가져오기] 때 메인이 extracted로 받은
-// 선분을 보내면(transfer) OffscreenCanvas로 그리고 convertToBlob + FileReaderSync로 dataURL을 만든다 — 메인 캔버스의 toDataURL 한 번
+// 선분을 **복사로** 보내면(리뷰 I-2 — transfer면 워커가 받은 뒤 죽을 때 메인 폴백이 그릴 선분이 없다 · 최종 리뷰 X-11에서 문구 정정)
+// OffscreenCanvas로 그리고 convertToBlob + FileReaderSync로 dataURL을 만든다 — 메인 캔버스의 toDataURL 한 번
 // (사동 13,244선 · 2048×1294: 143~308 ms — 경로 그리기는 3~7 ms뿐)이 클릭을 막던 자리다. 같은 바이트다(340,742 B · 픽셀 차 0).
 // DXF 워커(worker.js)가 굽지 않는 이유(실측): 오래 사는 DXF 워커가 GPU 2D 컨텍스트를 가지면, 대화상자를 닫을 때의 terminate가
 // GpuChannel::DestroyCommandBuffer를 기다리고 메인의 DidTerminateWorkerThread가 그 끝을 기다린다 — 가져온 직후 첫 3D 프레임의
-// 셰이더 링크 뒤에 줄을 서서 메인을 290~500 ms 막았다(래스터를 뺀 만큼 도로 막는다). 이 워커는 답하자마자 스스로 닫혀서
+// 셰이더 링크 뒤에 줄을 서서 메인을 287~499 ms 막았다(구현 실측 328·390·499 · 리뷰 재현 287~329 — 래스터를 뺀 만큼 도로 막는다). 이 워커는 답하자마자 스스로 닫혀서
 // GPU가 한가한 동안(swap 전) 컨텍스트를 푼다. 재추출마다 굽지 않는다(재추출 예산 1.0 s · 사전 검토 m-12) — [가져오기] 때 한 번.
 // 이 파일과 그 import 사슬은 DOM을 모른다(OffscreenCanvas·FileReaderSync는 워커 전역이다 · tests/dxfClient.test.js의 사슬 검사).
 import { traceBackgroundAsync } from './trace.js';

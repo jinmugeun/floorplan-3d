@@ -8,7 +8,7 @@
 | `npm run dxf:score` | 도면마다 지표(벽·방·이름 붙은 방·끊긴 끝점·치수 적합 등)를 내고 `baseline.json`과 견준다. 나빠진 지표가 있으면 실패한다. |
 | `npm run dxf:score -- --update` | 지금 값을 새 기준으로 쓴다(의도한 변화일 때). |
 | `npm run dxf:score -- --equip` | 기구 손 정답(아래 "기구 열")마다 가장 가까운 기구 아이템의 블록 이름 · 거리 · 긴 변을 찍는다(빗나간 까닭 보기). |
-| `npm run dxf:e2e [-- URL] [-- --only id]` | 실제 브라우저에서 올리기 → 검토 창 → 도면 고르기 → 가져오기 → 2D·3D를 돌린다. 검토 창 숫자가 점수판과 같은지, 다시 추출해도 같은지(표시 = 계산)를 본다. 캡처는 `out/<id>/`. |
+| `npm run dxf:e2e [-- URL] [-- --only id]` | 실제 브라우저에서 올리기 → 검토 창 → 도면 고르기 → 가져오기 → 2D·3D를 돌린다. 검토 창 숫자·기구 알림(배치·제품·일반·충돌·기둥 면에 맞춰 줄임)이 점수판과 같은지, 다시 추출해도 같은지(표시 = 계산), 가져온 직후 2D에서 찍은 1280×720 렌더샷이 비어 있지 않은지(계획 14 최종 리뷰 X-10), 새로고침 뒤 원 도면 배경이 자동 저장본에 붙었는지를 본다. 캡처는 `out/<id>/`. |
 | `npm run dxf:public [-- --fetch] [-- --update]` | 공개 정답 코퍼스(아래 절)를 채점하고 `public-baseline.json`과 견준다. `--update`는 지금 값을 기준에 병합해 쓴다. |
 | `npm run dxf:public -- --only "<이름>"` | 한 도면만 채점한다(기준은 쓰지 않는다 — `--update`와 함께 쓰면 종료 코드 2). |
 | `npm run dxf:score -- --roles <폴더>` · `npm run dxf:public -- --roles <폴더>` | 도면마다 역할표 `<폴더>/<id>.json`(아래 "역할표")을 파싱 옵션으로 넘겨 기준(규칙만)과 견준다. 표가 없는 도면은 규칙만으로 돈다. `--update`와 함께 쓰면 종료 코드 2. |
@@ -52,7 +52,8 @@ bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 �
 `equipClash` 바닥 기구 상자의 절반(`params.equipClash` 0.5) 이상이 벽 띠·기둥과 겹친 수(↓ · 겹쳐도 세운다). 이 셋은 **정답이 없는 회귀 지표**다 —
 늘고 줆이 맞고 틀림을 말하지 않는다(어휘가 표지 블록을 기구로 잘못 세워도 `equip`은 는다). 줄면(`equipClash`는 늘면) 실패하니, 제외·어휘 규칙을 고쳐
 일부러 바꿨으면 까닭을 커밋 본문에 적고 `--update`한다. 검토 창 알림 "기구 n개 배치 — 제품 p · 일반 g"는 이 값(`equip`·`equipProd`·`stats.equipment.generic`)과
-같아야 한다(`dxf:e2e`의 "검토 창 기구 알림 = 점수판").
+같아야 한다(`dxf:e2e`의 "검토 창 기구 알림 = 점수판"). 알림의 "충돌 c건"(`stats.equipment.colliding`)과 맨 끝 "기둥 면에 맞춰 줄임 t"(`stats.equipment.trimmed` —
+2026-10-13 계획 14 최종 리뷰 X-3)는 0이면 칸이 없고, e2e는 없는 칸을 0으로 읽어 같은 검사에서 견준다.
 자리·크기는 **기구 손 정답**(`truth/<코퍼스 id>-equip.json`)으로 잰다: `items[]`의 `{ name: 블록 이름, c: 몸체 중심의 원 DXF 좌표, size: [긴 변, 짧은 변] mm }`
 (나머지 `room`·`cat`·`drawn`·`note`는 기록용). `equipAll` 정답 수 · `equipHit` 정답 중심에서 **가장 가까운** 기구 아이템(원 블록 이름 `dxfBlock`이 있는 것)이
 200 mm 안이고 그 긴 변이 정답 긴 변 ±20 % 안인 수(↑ · `lib.equipScore`) — 방향은 보지 않는다. 가장 가까운 것만 보는 까닭: 후드가 국솥·그리들 바로 위에 걸려
@@ -144,9 +145,10 @@ bbox **중심**이 아니라 bbox까지의 거리를 재는 까닭(2026-10-06 �
   (도면 파일 이름·경로·좌표 없음 · 제목 칸의 학교 이름은 `corpus.json`에 이미 있다). 앱 폴더에서 재현한다:
   `npm run dxf:score -- --roles tools/dxf-corpus/roles` · `node tools/dxf-corpus/public.mjs --roles tools/dxf-corpus/roles`.
   잰 값(기준 → 표 · 2026-10-12 계획 13 최종 수정 뒤): 실파일 sadong 문 17 → 18 · 통로 5 → 4(벽 96 → 94), sinsang-A unmatched 5 → 0(문 16 · 창 16 ·
-  통로 9는 이제 규칙만으로도 같다 — 포켓도어 이름 규칙 6fdc6f4), sinsang-B unmatched 3 → 0, naegok unmatched 3 → 2(기구 11 · equipClash 0 그대로) —
-  나빠진 지표 없음(종료 0). 내곡 표의 `A$C754401BD`(260×2300 벽 위 자동문 블록)는 `other`, `adafdsaf`(문 스윙 블록)는 `symbol`이다 — `equip`이면 역할표
-  equip이 개구부·스윙 제외를 이겨 상자 넷이 벽·문 자리에 섰다(equip 11 → 15 · equipClash 0 → 3 · 종료 1 — 최종 리뷰 F-8). 공개 Σ 방 1212 → 1216/1916 · 정답 없는 방 227 → 231 ·
+  통로 9는 이제 규칙만으로도 같다 — 포켓도어 이름 규칙 6fdc6f4), sinsang-B unmatched 3 → 0, naegok unmatched 3 → 2(기구 17 · 제품 8 · equipClash 0 —
+  규칙만과 같다; 2026-10-13 계획 14 최종 수정 뒤 실측) — 나빠진 지표 없음(종료 0). 내곡 표의 `A$C754401BD`(260×2300 벽 위 자동문 블록)는 `other`,
+  `adafdsaf`(문 스윙 블록)는 `symbol`이다 — `equip`이면 역할표 equip이 개구부·스윙 제외를 이겨 상자 넷이 벽·문 자리에 섰다(계획 13 기준 — 그때 규칙만의
+  내곡 기구는 11개 — equip 11 → 15 · equipClash 0 → 3 · 종료 1 — 계획 13 최종 리뷰 F-8). 공개 Σ 방 1212 → 1216/1916 · 정답 없는 방 227 → 231 ·
   과분할 정답 방 49 → 52 · 문 1334 → 1336/1505 — 2suite (1)의 falseRooms 3 → 6 · splitRooms 1 → 4와 4suite (9)의 falseRooms 2 → 3이 ✗라
   종료 1이다(측정이다 — 표의 값은 기준에 넣지 않는다). 표를 고치면 이 수치를 다시 재고, `tests/dxfRoles.test.js`가 아홉 장 모두 칸 하나
   버리지 않고 `checkRoles`를 지나는지 본다(버린 칸은 조용히 규칙으로 가서 수치가 바뀐다).

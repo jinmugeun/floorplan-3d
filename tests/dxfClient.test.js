@@ -249,7 +249,7 @@ function workerChain(entry) {
 // 전역 제약: 워커와 그 import 사슬은 DOM·ui를 건드리지 않는다.
 // 2026-10-13 계획 14 Task C(사전 검토 I-5 · §18.6 개정): 허용 목록을 **일부러** 바꾼다 — 트레이스 래스터가 워커로 간다.
 // 래스터는 DXF 워커가 아니라 **일회용 워커 traceWorker.js**가 한다: 오래 사는 DXF 워커가 GPU 2D 컨텍스트를 가지면 대화상자를 닫을 때의
-// terminate가 GpuChannel::DestroyCommandBuffer를 기다리며 메인을 290~500 ms 막았다(첫 3D 프레임의 셰이더 링크 뒤에 줄을 선다 · 실측).
+// terminate가 GpuChannel::DestroyCommandBuffer를 기다리며 메인을 287~499 ms 막았다(첫 3D 프레임의 셰이더 링크 뒤에 줄을 선다 · 구현 실측 328·390·499 · 리뷰 재현 287~329).
 // 그래서 `OffscreenCanvas`(워커 전역 · DOM이 아니다)는 traceWorker.js에만 허용하고, worker.js 사슬에는 여전히 없어야 한다.
 // 대신 검사를 worker.js 한 파일에서 **두 워커의 import 사슬 전체**로 넓혔다: 어느 파일도 `document`·`window.`를 쓰지 않는다
 // (trace.js의 DOM 기본 캔버스는 ui/dxfDialog.js로 옮겼다).

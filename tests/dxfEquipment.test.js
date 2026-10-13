@@ -462,7 +462,7 @@ test('equipItems: 기둥에 닿은 바닥 기구를 깎고 stats.trimmed로 센�
 
 // ── 복합 블록 전개(insertBoxes.groupOwner · 2026-10-13 계획 14 Task F) ─────────────────────────────
 // 사동 `1f plan-1`(건물 블록 — 어휘 자식 8: 샤워기 4 · 세면대 2 · 변기 2) · 내곡 `afadfasdfasfd` ×2(영유아거치대 · 세면대 평면) · 신상 A `zw$CEA1`(곡물받침대 ×2)은
-// 그룹이라 세우지 않거나(제외 composite) 하나의 엉뚱한 상자(안쪽 글자 → 12칸 사물함 1400×900)로 섰다. 깊이 1 자식 중 어휘 자식이 ≥ 2이고 부모가 어휘가 아니면
+// 그룹이라 세우지 않거나(제외 composite) 하나의 엉뚱한 상자(안쪽 글자 '폐식용유보관함'이 12칸 사물함으로 맞아 1400×900)로 섰다. 깊이 1 자식 중 어휘 자식이 ≥ 2이고 부모가 어휘가 아니면
 // 그 어휘 자식만 제 전개 도형으로 세우고 부모는 세우지 않는다. 자리·회전은 실제 전개(explode — 내장 INSERT의 pos·rot은 이미 월드)로 확인한다.
 const rectBlock = (w, d, more = []) => ({ base: [0, 0], entities: [...[[0, 0], [w, 0], [w, d], [0, d]].map((p, i, a) => ({ type: 'LINE', layer: '0', x: p[0], y: p[1], x2: a[(i + 1) % 4][0], y2: a[(i + 1) % 4][1] })), ...more] });
 const sub = (name, x, y) => ({ type: 'INSERT', name, layer: '0', x, y, xscale: 1, yscale: 1, a0: 0 });

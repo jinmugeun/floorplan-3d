@@ -232,7 +232,8 @@ export function buildProject(raw, {
     // clash(≥ 50 % 덮임)·overlap(기구끼리 AABB)은 기둥에 닿은 기구를 세지 않아 알림 "겹침 0 · 14"와 가져온 직후 배너 "충돌 30건"이 달랐다.
     // 끄면 기구가 없어 기둥끼리만 남는다(실도면 넷 0). 통계 둘은 점수판 열(equipClash)·회귀 감시에 그대로 남는다.
     // trimmed(2026-10-13 · 계획 14 Task A): 기둥에 ≤ equipTrim 들어가 그쪽 변을 깎은 기구 수 — colliding은 깎은 뒤의 아이템으로 센다.
-    // expanded(2026-10-13 · 계획 14 Task F): 묶음 대신 어휘 자식을 세운 복합 블록 수(insertBoxes.groupOwner — 사동 1 · 내곡 2 · 신상 A 1).
+    // expanded(2026-10-13 · 계획 14 Task F): 영역 안 자식을 후보로 올린 복합 블록(묶음) 수 — 올린 자식이 뒤에서 모두 빠져도 센다(insertBoxes.groupOwner ·
+    // 사동 1 · 내곡 2 · 신상 A 1 · 정의 문구 2026-10-13 최종 리뷰 X-11 · M-F4).
     equipment: { ...(({ placed, product, generic, anonymous, clash, overlap, trimmed, expanded }) => ({ placed, product, generic, anonymous, clash, overlap, trimmed, expanded }))(equip.stats), colliding: collidingIds(floor.items).size, skipped: equip.stats.skipped },
     size,
     // DXF 좌표 → 앱 좌표의 원점·배율(앱 = (DXF × stats.unitScale − origin) × scale, y 뒤집기 — 워커가 전개를 unitScale배로 mm로

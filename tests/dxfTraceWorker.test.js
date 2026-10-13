@@ -61,7 +61,7 @@ test('OffscreenCanvas가 있으면 워커가 굽는다 — 메인 폴백과 같�
   expect(t ?? []).toEqual([]);
   expect(segs.length).toBe(12);
   // 답한 **뒤** 스스로 닫는다: GPU 컨텍스트 해체(DestroyCommandBuffer)가 GPU가 한가한 지금 끝나야, 가져온 직후 첫 3D 프레임의
-  // 셰이더 링크 뒤에 줄을 서서 메인의 워커 종료 처리를 290~500 ms 막지 않는다(실측 · 보고서).
+  // 셰이더 링크 뒤에 줄을 서서 메인의 워커 종료 처리를 287~499 ms 막지 않는다(구현 실측 328·390·499 · 리뷰 재현 287~329).
   expect(closedBefore).toBe(0);
   expect(closes).toBe(1);
 });
