@@ -173,7 +173,9 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
         // §18.6: 폴백(추정)이면 그 벽을 낸 레이어를 **체크리스트에 미리 켠다** — 알림은 "체크를
         // 확인해 주세요"라고 하는데 켜진 줄이 하나도 없으면 확인할 것이 없다(리뷰 F-5).
         const guessed = m.stats?.guessed ? (m.stats.guessedLayers ?? []) : [];
-        if (guessed.length) { for (const n of guessed) { checked.add(n); initial.add(n); } renderLayers(); }
+        // 켜 넣은 추정 레이어의 높이 꼬리가 층고 칸을 바꾸면(WALL_2800만 있는 도면에서 벽 체크를 모두 껐다) 이 결과는 바뀌기 전 높이로 선 것이다 —
+        // 새 칸 값으로 다시 추출한다. schedule이 want를 올리므로 아래 검사가 새 결과까지 [가져오기]를 잠근다(2026-10-13 · 계획 16 Task A 리뷰 1차 Important 1).
+        if (guessed.length) { const h0 = q('height').value; for (const n of guessed) { checked.add(n); initial.add(n); } renderLayers(); if (q('height').value !== h0) schedule(); }
         progress(0); render();
         // 이 응답보다 뒤에 바뀐 것이 있으면(want가 앞서 있다) 아직 가져올 수 없다 — 최신 결과를 기다린다.
         if (id === want) { pending = false; q('import').disabled = false; }

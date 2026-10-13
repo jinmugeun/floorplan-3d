@@ -1098,3 +1098,29 @@ test('사람이 입력한 층고는 꼬리 없는 다음 도면에도 그대로�
   expect(q('notice').textContent).toContain(DXF_HEIGHT_FROM_LAYER(2800, '기존_2800'));
   expect(lastExtract(w).opts.height).toBe(2800);
 });
+
+// 리뷰 1차 Important 1(2026-10-13): 벽 체크를 모두 끄면 워커는 도형 추정으로 꼬리 레이어(WALL_2800 꼴)를 다시 고르고 **설정값 높이로** 벽을 세운다.
+// 결과가 그 레이어를 체크에 되돌려 놓으며 힌트가 층고 칸을 바꾸면, 그 결과는 칸과 다른 높이다 — 새 칸 값으로 다시 추출하고 그동안 [가져오기]를 잠근다.
+test('추정 레이어가 높이 꼬리로 층고 칸을 바꾸면 그 높이로 다시 추출하고, 새 결과가 올 때까지 [가져오기]를 잠근다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  w.emit(EXTRACTED); await flush();
+  for (const box of [...root.querySelectorAll('input[name="layer"]')].filter(b => b.checked)) {
+    box.checked = false; box.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  vi.advanceTimersByTime(250); await flush();
+  expect(lastExtract(w).opts.layers).toEqual([]);
+  expect(lastExtract(w).opts.height).toBe(3500);
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, guessed: true, guessedLayers: ['기존_2800'] } }); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(q('import').disabled).toBe(true);                                   // 3500으로 세운 결과를 2800 칸으로 가져가지 않는다
+  const n = w.posted.filter(m => m.type === 'extract').length;
+  vi.advanceTimersByTime(250); await flush();
+  expect(w.posted.filter(m => m.type === 'extract')).toHaveLength(n + 1);
+  expect(lastExtract(w).opts).toMatchObject({ height: 2800, layers: ['기존_2800'] });
+  expect(q('import').disabled).toBe(true);
+  w.emit(EXTRACTED); await flush();
+  expect(q('import').disabled).toBe(false);
+});
