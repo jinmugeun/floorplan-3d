@@ -2,6 +2,8 @@
 // §18.6의 검토 대화상자. 워커는 가짜를 주입하고(node에서 진짜 워커를 띄우지 않는다),
 // 캔버스는 tests/view2d.test.js의 Proxy 스텁 관례를 그대로 쓴다(jsdom에는 캔버스가 없다).
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { openDxfDialog, DXF_THICKNESS_RANGE } from '../src/ui/dxfDialog.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
 import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
@@ -697,6 +699,29 @@ test('"도면의 기구를 제품으로 배치" 칸은 기본 켬이고, 끄면 
   expect(q('import').disabled).toBe(false);
 });
 
+// 2026-10-13 · 최종 리뷰 X-3(M-A2): 기둥 면 깎기(계획 14 Task A · stats.equipment.trimmed — 사동 7 · 내곡 1)가 통계에만 있어 '손세정대 500-370'이
+// 500×355로 조용히 섰다. 알림 **맨 끝**(충돌·벽 겹침 칸 뒤)에 "기둥 면에 맞춰 줄임 n"을 붙인다 — 0이면 없다. 맨 끝이라 e2e의 기구 알림 정규식
+// (tools/dxf-corpus/e2e.mjs — 충돌 칸은 선택)이 두 꼴 모두 그대로 맞는다.
+test('깎은 기구 수는 기구 알림 맨 끝에 붙는다 — 0이면 없고, e2e 정규식은 그대로 맞는다', async () => {
+  expect(DXF_EQUIPMENT(234, 147, 87, 14, 0, 7)).toBe('기구 234개 배치 — 제품 147 · 일반 87 · 충돌 14건(기둥·기구 겹침 · 빨간 테두리) · 기둥 면에 맞춰 줄임 7');
+  expect(DXF_EQUIPMENT(17, 8, 9, 0, 0, 1)).toBe('기구 17개 배치 — 제품 8 · 일반 9 · 기둥 면에 맞춰 줄임 1');
+  expect(DXF_EQUIPMENT(11, 4, 7, 0, 2, 1)).toBe('기구 11개 배치 — 제품 4 · 일반 7 · 벽·기둥과 겹침 2 · 기둥 면에 맞춰 줄임 1');
+  expect(DXF_EQUIPMENT(1, 0, 1, 0, 0, 0)).toBe('기구 1개 배치 — 제품 0 · 일반 1');
+  const e2e = readFileSync(resolve(process.cwd(), 'tools/dxf-corpus/e2e.mjs'), 'utf8');   // jsdom 환경이라 import.meta.url이 file:이 아니다(dxfWiring.test.js와 같은 방식)
+  const re = new RegExp(e2e.match(/note\.match\(\/(.+?)\/\)/)[1]);
+  expect(DXF_EQUIPMENT(234, 147, 87, 14, 0, 7).match(re).slice(1)).toEqual(['234', '147', '87', '14']);
+  expect(DXF_EQUIPMENT(17, 8, 9, 0, 0, 1).match(re).slice(1)).toEqual(['17', '8', '9', undefined]);
+  // 검토 창은 워커 통계의 trimmed를 넘긴다.
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, equipment: { ...EQ_STATS, trimmed: 7 } } });
+  await flush();
+  expect(q('notice').textContent).toBe(DXF_EQUIPMENT(226, 143, 83, 30, 0, 7));
+  expect(q('notice').textContent.endsWith(' · 기둥 면에 맞춰 줄임 7')).toBe(true);
+});
+
 test('알림 줄: 기구 수는 다른 알림 뒤에 " / "로 이어 붙는다', async () => {
   const { w, q } = open({ file: fileOf() });
   await flush();
@@ -934,6 +959,29 @@ test('굽는 동안 칸을 바꿔도 누른 순간의 값으로 가져오고, �
   w.emit(extracted());
   await flush();
   expect(q('import').disabled).toBe(false);
+});
+
+// 2026-10-13 · 최종 리뷰 X-2(M-C2): 래스터를 기다리는 동안(보통 150~230 ms · 멈춘 워커면 ≤ 10 s) 새 파일을 떨어뜨리면 예전에는 새 파싱이 시작되고
+// 지난 결과(last)가 지워졌지만, 진행 중인 가져오기는 누른 순간의 옛 도면을 swap하고 창을 닫았다 — 닫기의 client.cancel()이 새 파싱을 버려
+// 새 파일은 사라지고 옛 도면이 들어갔다. 가져오는 중의 드롭·파일 선택은 무시한다(누른 도면을 끝까지 가져온다).
+test('래스터를 기다리는 동안 떨어뜨린 파일은 무시한다 — 새 파싱 0회 · 누른 순간의 도면이 들어간다', async () => {
+  vi.stubGlobal('OffscreenCanvas', class {});
+  const onImported = vi.fn(async () => true);
+  const { w, q, root, tw, ex } = await readyToImport({ onImported });
+  const parses = () => w.posted.filter(m => m.type === 'parse').map(m => m.fileName);
+  expect(parses()).toEqual(['평면도.dxf']);
+  q('import').click();
+  await flush();
+  root.dispatchEvent(Object.assign(new Event('drop', { bubbles: true }), { dataTransfer: { files: [fileOf('다른 도면.dxf')] } }));
+  await flush();
+  expect(parses()).toEqual(['평면도.dxf']);                         // 새 파일을 파싱하지 않는다
+  expect(q('step').textContent).not.toBe(DXF_STEP_READ);             // 진행 막대도 "파일 읽는 중"으로 돌아가지 않는다
+  tw.last().emit({ type: 'traced', bg: TRACE_BG, fallback: false });
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(onImported.mock.calls[0][0].project.floors).toBe(ex.project.floors);
+  expect(onImported.mock.calls[0][0].project.background).toEqual(TRACE_BG);
+  expect(document.getElementById('dxfDialog')).toBe(null);
 });
 
 test('검토 창의 미리보기에 가져올 기구가 함께 그려진다', async () => {

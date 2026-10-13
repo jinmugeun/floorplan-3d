@@ -54,10 +54,11 @@ for (const entry of corpus()) {
     const note = await page.evaluate(() => { const e = document.querySelector('#dxfDialog [name="notice"]'); return e && !e.hidden ? e.textContent : ''; });
     // 충돌 수(2026-10-12 · 최종 리뷰 F-3): 알림의 "충돌 c건"은 stats.equipment.colliding(완성된 아이템의 collidingIds)이고, 가져온 뒤 앱 배너와 같아야 한다(아래).
     // 충돌이 0이면 알림에 그 칸이 없다(2026-10-13 · 계획 14 Task D) — 없는 칸은 0으로 읽는다(충돌이 있는데 칸이 빠지면 0 ≠ c로 걸린다).
+    // 기둥 면에 맞춰 줄인 수(2026-10-13 · 계획 14 최종 리뷰 X-3)는 알림 **맨 끝** 칸이다 — 위 정규식은 그대로 맞고, 칸이 없으면 0으로 읽어 stats.equipment.trimmed와 견준다.
     const em = note.match(/기구 (\d+)개 배치 — 제품 (\d+) · 일반 (\d+)(?: · 충돌 (\d+)건)?/), generic = scored.stats.equipment?.generic ?? 0;
-    const colliding = scored.stats.equipment?.colliding ?? 0;
-    check('검토 창 기구 알림 = 점수판', want.equip > 0 ? !!em && +em[1] === want.equip && +em[2] === want.equipProd && +em[3] === generic && +(em[4] ?? 0) === colliding : !em,
-      `화면 "${em?.[0] ?? '기구 문구 없음'}" · 점수판 배치 ${want.equip} 제품 ${want.equipProd} 일반 ${generic} 충돌 ${colliding}`);
+    const colliding = scored.stats.equipment?.colliding ?? 0, trimmed = scored.stats.equipment?.trimmed ?? 0, tm = +(note.match(/ · 기둥 면에 맞춰 줄임 (\d+)$/)?.[1] ?? 0);
+    check('검토 창 기구 알림 = 점수판', want.equip > 0 ? !!em && +em[1] === want.equip && +em[2] === want.equipProd && +em[3] === generic && +(em[4] ?? 0) === colliding && tm === trimmed : !em,
+      `화면 "${em?.[0] ?? '기구 문구 없음'}"${tm ? ` … 줄임 ${tm}` : ''} · 점수판 배치 ${want.equip} 제품 ${want.equipProd} 일반 ${generic} 충돌 ${colliding} 줄임 ${trimmed}`);
     // 화면의 체크 그대로 다시 추출해도 같은 값이어야 한다(표시 = 계산): 관계없는 옵션을 껐다 켠다.
     for (let k = 0; k < 2; k++) { await page.click('#dxfDialog [name="trace"]'); await page.waitForTimeout(700); await ready(); }
     const again = await page.evaluate(() => document.querySelector('#dxfDialog [name="nums"]')?.textContent ?? '');

@@ -41,9 +41,12 @@ export const DXF_RAIL_DIVIDED = n => `난간으로 닫은 구획선 ${n}개를 �
 // 예전 "벽과 겹침 0 · 기구끼리 겹침 14"는 기둥에 닿은 기구를 세지 않아 배너 "충돌 30건"과 달랐다. 충돌은 바닥 아이템끼리(기둥·기구)라 벽은 들지 않는다.
 // 벽·기둥과 겹침(clash — 벽 띠·기둥에 절반 넘게 덮인 바닥 기구, 옮기지 않고 사람이 본다)은 0이 아닐 때만 덧붙인다(옛 문구 "벽과"는 기둥을 빠뜨렸다).
 // 충돌이 0이면 그 칸을 통째로 뺀다(2026-10-13 · 계획 14 Task D — "충돌 0건(…빨간 테두리)"은 볼 것이 없는 소음이다. 계획 14 Task A 뒤 내곡 2 → 0).
+// 기둥 면에 맞춰 줄임(2026-10-13 · 최종 리뷰 X-3 · M-A2): 기둥 면에 붙여 그려 기둥 안으로 ≤ equipTrim 들어간 바닥 기구는 그 변을 깎는다(계획 14 Task A ·
+// stats.equipment.trimmed — 사동 7 · 내곡 1). 통계에만 있어 '손세정대 500-370'이 500×355로 조용히 섰다 — 0이 아닐 때만 **맨 끝**에 붙인다
+// (충돌 칸 뒤라 e2e 기구 알림 정규식 `(?: · 충돌 (\d+)건)?`이 그대로 맞는다 — tests/dxfDialog.test.js가 e2e.mjs의 정규식으로 확인).
 export const DXF_EQUIPMENT_OPT = '도면의 기구를 제품으로 배치';
-export const DXF_EQUIPMENT = (placed, product, generic, colliding, clash = 0) =>
-  `기구 ${placed}개 배치 — 제품 ${product} · 일반 ${generic}${colliding ? ` · 충돌 ${colliding}건(기둥·기구 겹침 · 빨간 테두리)` : ''}${clash ? ` · 벽·기둥과 겹침 ${clash}` : ''}`;
+export const DXF_EQUIPMENT = (placed, product, generic, colliding, clash = 0, trimmed = 0) =>
+  `기구 ${placed}개 배치 — 제품 ${product} · 일반 ${generic}${colliding ? ` · 충돌 ${colliding}건(기둥·기구 겹침 · 빨간 테두리)` : ''}${clash ? ` · 벽·기둥과 겹침 ${clash}` : ''}${trimmed ? ` · 기둥 면에 맞춰 줄임 ${trimmed}` : ''}`;
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
 export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
 export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;

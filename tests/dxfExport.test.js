@@ -17,7 +17,7 @@ import { normalizeWalls } from '../src/geom/normalize.js';
 import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
 import { DXF_PARAMS } from '../src/io/dxf/params.js';
-import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT } from '../src/ui/dxfMessages.js';
+import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from '../src/ui/dxfMessages.js';
 import { matchEquip, sizeInName, skipReason } from '../src/io/dxf/equipVocab.js';
 import { importSnapshot } from '../src/io/dxfFeedback.js';
 import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
@@ -277,6 +277,11 @@ test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 �
   expect(html).toContain(`벽 선 전체를 감싸는 상자 밖으로 ${DXF_PARAMS.equipRegionPad / 1000} m보다 멀리 나간 기구는 다시 가져오지 않습니다`);
   expect(html).toContain('숨김·잠금 표시와 설비 설정(후드 면풍속·필터·번호 등)은');
   expect(html).toContain('숨겨 둔 기구도 보이게 돌아오고, 직접 고른 제품이면 견적에 다시 들어갑니다');
+  // §5(2026-10-13 · 최종 리뷰 X-3): 기둥 면 깎기(equipTrim · 계획 14 Task A)를 적고 검토 창 알림의 그 칸 이름을 쓴다 — "크기는 도면대로"에는 이 예외를 단다.
+  expect(html).toContain(`기둥 안으로 ${DXF_PARAMS.equipTrim} mm 이하 들어간 바닥 기구는 그 변을 기둥 면까지 줄입니다`);
+  expect(DXF_EQUIPMENT(1, 0, 1, 0, 0, 1)).toMatch(/ · 기둥 면에 맞춰 줄임 1$/);
+  expect(html).toContain('“기둥 면에 맞춰 줄임 n”');
+  expect(html).not.toMatch(/크기는 도면대로[,)]/);
   // §4: 교정 기록에는 기구와 원 블록 이름(dxfBlock)이 든다.
   expect(html).toContain('기구(제품·자리·크기와 원 블록 이름)');
   expect(importSnapshot(p.floors[0]).items[0]).toMatchObject({ dxfBlock: EXAMPLE, kind: 'product' });

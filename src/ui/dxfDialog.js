@@ -114,8 +114,8 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     const st = last?.stats ?? {}, fixed = (st.dividers || st.annexes) && DXF_RECONCILED(st.dividers ?? 0, st.annexes ?? 0);
     const byNames = st.nameDividers > 0 && DXF_NAME_DIVIDED(st.nameDividers);
     const byRails = st.railDividers > 0 && DXF_RAIL_DIVIDED(st.railDividers);       // 2026-10-12 최종 리뷰 X-4: 늘 켜진 난간 구획선도 알린다
-    // 2026-10-12 계획 13 Task 3 · 충돌 수는 앱 배너와 같은 colliding(최종 리뷰 F-3)
-    const eq = st.equipment, equip = eq?.placed > 0 && DXF_EQUIPMENT(eq.placed, eq.product, eq.generic, eq.colliding ?? 0, eq.clash);
+    // 2026-10-12 계획 13 Task 3 · 충돌 수는 앱 배너와 같은 colliding(최종 리뷰 F-3) · 기둥 면에 맞춰 줄인 수(trimmed — 2026-10-13 최종 리뷰 X-3)
+    const eq = st.equipment, equip = eq?.placed > 0 && DXF_EQUIPMENT(eq.placed, eq.product, eq.generic, eq.colliding ?? 0, eq.clash, eq.trimmed);
     notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byRails, byNames, equip].filter(Boolean).join(' / ') || null);
   };
   const regionIdx = () => Number(q('region').value) || 0;
@@ -181,8 +181,10 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
   };
   const schedule = () => { want++; pending = true; q('import').disabled = true; clearTimeout(timer); timer = setTimeout(runExtract, DEBOUNCE); };
 
+  // 가져오는 중(래스터 대기 · 보통 150~230 ms, 멈춘 워커면 ≤ 10 s)의 드롭·파일 선택은 무시한다(2026-10-13 · 최종 리뷰 X-2): 예전에는 새 파싱이 돌고
+  // last가 지워졌지만 진행 중인 가져오기가 누른 순간의 옛 도면을 swap하고 창을 닫아(close → client.cancel) 새 파일이 조용히 버려졌다.
   async function load(f) {
-    if (!f || closed) return;
+    if (!f || closed || importing) return;
     showError(null); notice(null); last = null;
     q('import').disabled = true;
     progress(1);
