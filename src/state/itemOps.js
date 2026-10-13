@@ -4,7 +4,7 @@
 import { activeFloor } from './schema.js';
 import { placeOnWall, isEmbed } from '../geom/items.js';
 import { itemsOf, movableItems, updateItems } from './floorOps.js';
-import { reattach, seatCopies, pruneEquipRefs } from './floorInternal.js';
+import { reattach, seatCopies, pruneEquipRefs, userCopy } from './floorInternal.js';
 
 export const sameProductIds = (floor, productId) => floor.items.filter(i => i.productId === productId).map(i => i.id);
 // "같은 …선택"이 고를 아이템(2026-10-13 · 계획 14 Task D · 근거: 계획 13 최종 리뷰 F-11 — 사동 '도면 기구' 83개 · 신상A 50개를 하나씩 바꿔야 했다).
@@ -74,9 +74,10 @@ export function replaceProduct(store, ids, product, opts = {}) {
 
 // 스냅샷은 `ui.clipboard`에 남아 있는 남의 객체다. 복제해서 넣는다(붙여넣기를 두 번 해도 서로 얽히지 않는다).
 // 사본은 seatCopies를 지난다: 벽 부착 제품은 붙여넣은 자리의 벽에 다시 앉거나 wallId를 비운다(I-2).
+// 사본은 사용자가 놓은 것이라 dxfProduct를 뗀다(userCopy — 2026-10-13 · 계획 14 Task D: 가져온 기구의 사본에 가격이 붙는다).
 export function pasteItems(store, snapshots, { delta = [200, 200] } = {}) {
   const { walls, items } = activeFloor(store.get());
-  const copies = seatCopies((snapshots ?? []).map(i => ({ ...structuredClone(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls, items });
+  const copies = seatCopies((snapshots ?? []).map(i => ({ ...userCopy(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls, items });
   if (!copies.length) return [];
   store.dispatch(d => { const f = activeFloor(d); f.items.push(...copies.map(c => structuredClone(c))); reattach(f); });
   return copies.map(c => c.id);

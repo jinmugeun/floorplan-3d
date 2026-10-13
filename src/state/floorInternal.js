@@ -58,6 +58,15 @@ export function seatCopy(draft, { walls = null, idMap = null, items = [] } = {})
   const r = placeOnWall(wall, t, hit.side, it.size, { embed: isEmbed(it) });
   return normalizeItem({ ...it, wallId: hit.wallId, t, side: hit.side, pos: [Math.round(r.pos[0]), Math.round(r.pos[1])], rot: r.rot });
 }
+// 사용자가 만든 사본의 초안(2026-10-13 · 계획 14 Task D · 근거: 계획 13 최종 재리뷰 M-1 이월 "복사본은 0원이 남는 edge"):
+// 붙여넣기·복제·배열 복사의 사본은 사용자가 놓은 것이라 dxfProduct(가져올 때 맞춘 제품 — estimate.isDrawnItem이 0원으로 센다)를 뗀다.
+// dxfBlock(원 블록 이름)은 도면 대조용으로 남긴다. 층 복사(floorMgmt.addFloor)는 도면을 통째로 옮기는 것이라 이것을 쓰지 않는다 —
+// 어휘의 대용 제품 예시 단가가 새 층 견적을 부풀리지 않게(계획 13 F-1: 사동 14.25 M → 145.87 M원).
+export function userCopy(item) {
+  const c = structuredClone(item);
+  delete c.dxfProduct;
+  return c;
+}
 // 사본끼리도 겹치지 않게, 앞서 앉힌 사본을 다음 사본의 "이미 앉은 아이템"에 더해 간다.
 export function seatCopies(drafts, ctx = {}) {
   const acc = [...(ctx.items ?? [])];

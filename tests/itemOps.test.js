@@ -296,6 +296,57 @@ describe('같은 이름 모두 선택(계획 14 Task D)', () => {
   });
 });
 
+// 2026-10-13 · 계획 14 Task D(근거: 계획 13 최종 재리뷰 M-1 이월 "복사본은 0원이 남는 edge"): 복사본은 사용자가 놓은 것이다 —
+// 붙여넣기·복제(상대이동 복사)·배열 복사가 만든 아이템은 dxfProduct를 떼어 그 제품 가격이 붙는다. dxfBlock(원 블록 이름)은 대조용으로 남는다.
+// 층 복사(addFloor copy 'all')는 도면을 통째로 옮기는 것이라 그대로 둔다(대용 제품의 예시 단가가 새 층 견적을 부풀리지 않게 — 계획 13 F-1).
+describe('복사본은 사용자의 것 — dxfProduct 해제(계획 14 Task D)', () => {
+  const sink = productById('sink-double');
+  const drawn = s => addItem(s, createItem(sink, { pos: [1000.5, 1000.25], name: '세정대 2조 1500-750', size: [1500, 750, 850], dxfBlock: '세정대 2조 1500-750', dxfProduct: sink.id }));
+  const copiesOf = (s, ids) => itemsOf(s.get(), ids);
+  const one = (s, id) => itemsOf(s.get(), [id])[0];
+  const expectUserCopies = (s, ids) => {
+    expect(ids.length).toBeGreaterThan(0);
+    for (const c of copiesOf(s, ids)) {
+      expect(c.dxfProduct).toBeUndefined();
+      expect(c.dxfBlock).toBe('세정대 2조 1500-750');
+      expect(c.productId).toBe(sink.id);
+    }
+  };
+  test('붙여넣기 사본은 dxfProduct가 없고 견적에 가격이 붙는다 — 원본은 그대로 0원', async () => {
+    const { estimateRows } = await import('../src/io/estimate.js');
+    const s = setup();
+    const a = drawn(s);
+    expect(estimateRows(activeFloor(s.get())).total).toBe(0);
+    const ids = pasteItems(s, itemsOf(s.get(), [a]).map(i => structuredClone(i)), { delta: [2000, 0] });
+    expectUserCopies(s, ids);
+    expect(one(s, a).dxfProduct).toBe(sink.id);                              // 원본은 가져온 그대로
+    expect(estimateRows(activeFloor(s.get())).total).toBe(sink.price);       // 사본 하나만 값이 붙는다
+  });
+
+  test('복제(duplicateItems · 상대이동 복사)와 배열 복사(직선·원형·회전·경로) 사본도 dxfProduct가 없다', async () => {
+    const { estimateRows } = await import('../src/io/estimate.js');
+    const s = setup();
+    const a = drawn(s);
+    expectUserCopies(s, duplicateItems(s, [a], { delta: [0, 1200] }));
+    expectUserCopies(s, relativeMove(s, [a], { dx: 2000, dy: 0, copy: true }));
+    expectUserCopies(s, arrayCopy(s, [a], 'linear', { dx: 1600, dy: 0, count: 2 }));
+    expectUserCopies(s, arrayCopy(s, [a], 'rotate', { count: 2, angle: 90 }));
+    expectUserCopies(s, arrayCopy(s, [a], 'circular', { count: 3, angle: 120, center: [2000, 1500] }));
+    expectUserCopies(s, arrayCopy(s, [a], 'path', { points: [[500, 2000], [3500, 2000]], count: 2 }));
+    expect(one(s, a).dxfProduct).toBe(sink.id);
+    const f = activeFloor(s.get());
+    expect(estimateRows(f).total).toBe(sink.price * (f.items.length - 1));    // 원본 하나만 0원
+  });
+
+  test('층 복사(addFloor copy all)는 도면을 통째로 옮기는 것이라 dxfProduct를 지킨다', async () => {
+    const { addFloor } = await import('../src/state/floorOps.js');
+    const s = setup();
+    drawn(s);
+    addFloor(s, { copy: 'all' });
+    expect(activeFloor(s.get()).items.map(i => i.dxfProduct)).toEqual([sink.id]);
+  });
+});
+
 // I-2: reattach·openingsOnWall은 "pos는 항상 (wallId, t)의 결과"를 전제한다. 사본을 만드는 세 경로가
 // wallId·t를 그대로 들고 가면 2D 자리와 3D 개구부가 어긋나고, 다음 벽 편집에서 사본이 원본에 겹쳤다.
 describe('사본의 벽 부착 불변식', () => {

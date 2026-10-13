@@ -2,7 +2,7 @@
 // (순환 import는 실행 시점엔 문제 없다: 아래 함수들은 호출될 때만 floorOps.js의 함수를 쓰고, 모듈 평가 시점엔 쓰지 않는다).
 import { uid, activeFloor } from './schema.js';
 import { itemsOf, movableItems, updateItems, duplicateItems } from './floorOps.js';
-import { reattach, seatCopies } from './floorInternal.js';
+import { reattach, seatCopies, userCopy } from './floorInternal.js';
 import { linearOffsets, circularPlacements, alignPatches, pathPlacements } from '../geom/arrange.js';
 
 // 그룹화(Ctrl+G): 2개 이상일 때만 만든다. 겹치는 기존 그룹은 지우고 새 그룹으로 대체한다(그룹 중첩 없음).
@@ -37,6 +37,7 @@ export function relativeMove(store, ids, { dx = 0, dy = 0, copy = false } = {}) 
 }
 // 배열 복사(직선·원형·회전). 원본은 그대로 두고 사본만 만든다(한 dispatch = undo 한 단계).
 // 사본은 seatCopies를 지난다: 벽 부착 제품은 사본 자리의 벽에 다시 앉거나 wallId를 비운다(I-2).
+// 사본은 사용자가 놓은 것이라 dxfProduct를 뗀다(userCopy — 2026-10-13 · 계획 14 Task D: 가져온 기구의 배열 사본에 가격이 붙는다).
 // kind: 'linear' | 'circular' | 'rotate' | 'path'('path'는 §13.1 — 캔버스에 그린 폴리라인을 따라 놓는다).
 export function arrayCopy(store, ids, kind, params = {}) {
   const f = activeFloor(store.get());
@@ -45,13 +46,13 @@ export function arrayCopy(store, ids, kind, params = {}) {
   const drafts = [];
   if (kind === 'linear') {
     for (const [dx, dy] of linearOffsets(params)) {
-      for (const it of src) drafts.push({ ...structuredClone(it), pos: [it.pos[0] + dx, it.pos[1] + dy] });
+      for (const it of src) drafts.push({ ...userCopy(it), pos: [it.pos[0] + dx, it.pos[1] + dy] });
     }
   } else if (kind === 'path') {
     // 여러 개를 고르면 아이템마다 같은 경로를 따른다(원형·회전 배열과 같은 규칙).
     for (const it of src) {
       for (const pl of pathPlacements(it, params.points, params)) {
-        drafts.push({ ...structuredClone(it), pos: [pl.pos[0], pl.pos[1]], rot: pl.rot });
+        drafts.push({ ...userCopy(it), pos: [pl.pos[0], pl.pos[1]], rot: pl.rot });
       }
     }
   } else {
@@ -60,7 +61,7 @@ export function arrayCopy(store, ids, kind, params = {}) {
     for (const it of src) {
       const center = kind === 'rotate' ? [...it.pos] : (params.center ?? groupCenter);
       for (const pl of circularPlacements(it, { ...params, center })) {
-        drafts.push({ ...structuredClone(it), pos: [pl.pos[0], pl.pos[1]], rot: pl.rot });
+        drafts.push({ ...userCopy(it), pos: [pl.pos[0], pl.pos[1]], rot: pl.rot });
       }
     }
   }

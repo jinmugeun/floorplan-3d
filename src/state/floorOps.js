@@ -3,7 +3,7 @@ import { pointInPolygon, centroid } from '../geom/rooms.js';
 import { transformWalls, wallDir } from '../geom/walls.js';
 import { eq, dot } from '../geom/vec.js';
 import { wallAxis, placeOnWall, isEmbed } from '../geom/items.js';
-import { reroom, reattach, seatCopies, movable, ROOM_PROPS, cloneProp, pruneDuctConnections } from './floorInternal.js';
+import { reroom, reattach, seatCopies, userCopy, movable, ROOM_PROPS, cloneProp, pruneDuctConnections } from './floorInternal.js';
 
 // mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds는 300줄을 넘어 itemOps.js로 나눴다.
 export * from './itemOps.js';
@@ -273,10 +273,10 @@ export function resizeItem(store, id, size, opts = {}) {
   return updateItem(store, id, patch, opts);
 }
 // 새 id를 먼저 만들어 돌려준다(dispatch는 상태를 복제하므로 안에서 만든 id를 밖에서 알 수 없다).
-// 사본은 seatCopies를 지난다: 벽 부착 제품은 옮겨진 자리의 벽에 다시 앉거나 wallId를 비운다(I-2).
+// 사본은 seatCopies를 지난다: 벽 부착 제품은 옮겨진 자리의 벽에 다시 앉거나 wallId를 비운다(I-2). 사본은 dxfProduct를 뗀다(userCopy · 계획 14 Task D).
 export function duplicateItems(store, ids, { delta = [0, 0] } = {}, opts) {
   const f = activeFloor(store.get());
-  const copies = seatCopies(itemsOf(store.get(), ids).map(i => ({ ...structuredClone(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls: f.walls, items: f.items });
+  const copies = seatCopies(itemsOf(store.get(), ids).map(i => ({ ...userCopy(i), pos: [i.pos[0] + delta[0], i.pos[1] + delta[1]] })), { walls: f.walls, items: f.items });
   store.dispatch(d => { const g = activeFloor(d); g.items.push(...copies.map(c => structuredClone(c))); reattach(g); }, opts);
   return copies.map(c => c.id);
 }
