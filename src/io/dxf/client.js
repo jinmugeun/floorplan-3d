@@ -8,17 +8,24 @@ import { DXF_PARAMS } from './params.js';
 export const defaultWorkerFactory = () => new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 export const defaultTraceWorkerFactory = () => new Worker(new URL('./traceWorker.js', import.meta.url), { type: 'module' });
 
-// 트레이스 래스터(2026-10-13 · 계획 14 Task C · 사전 검토 I-5): extracted로 받은 선분을 **일회용** 래스터 워커로 보낸다(transfer · 복사 0).
-// 답 하나 { type: 'traced', bg, fallback, segs }(선분은 돌아온다)를 받으면 곧바로 끝낸다 — 워커도 답하고 스스로 닫는다(traceWorker.js 머리).
+// 트레이스 래스터(2026-10-13 · 계획 14 Task C · 사전 검토 I-5): extracted로 받은 선분을 **일회용** 래스터 워커로 보낸다.
+// 답 하나 { type: 'traced', bg, fallback }를 받으면 곧바로 끝낸다 — 워커도 답하고 스스로 닫는다(traceWorker.js 머리).
 // 큐(createDxfClient)를 거치지 않는다: 이 워커는 이 요청 하나만 받는다. 오류 code는 'oom'(§18.6이 동결한 DXF_ERRORS의 폴백 칸).
-export function traceInWorker(segs, box, { workerFactory = defaultTraceWorkerFactory } = {}) {
+// 선분은 **복사**로 보낸다(리뷰 I-2 — 사동 1.1 MB · 메인 0.2~1.2 ms): transfer면 워커가 받은 뒤 죽을 때(배포 뒤 옛 탭의 청크 404 · CSP ·
+// 충돌 — error는 비동기라 postMessage 뒤에 온다) 메인 폴백에 그릴 선분이 남지 않았다.
+// 제한 시간(리뷰 I-1): 답하지 않는 워커(convertToBlob이 끝나지 않음 · 처리되지 않은 거절 · 청크 요청이 멈춤)가 가져오기를 영원히 잡지 않게
+// timeoutMs 뒤 그 워커를 끝내고 거절한다 — 부르는 쪽은 메인 폴백으로 간다. 대화상자를 닫아도 끝내지 않는다(다 굽고 스스로 닫혀야 GPU 해체가 싸다).
+export function traceInWorker(segs, box, { workerFactory = defaultTraceWorkerFactory, timeoutMs = 10_000 } = {}) {
   return new Promise((resolve, reject) => {
     const w = workerFactory();
-    const end = (fn, v) => { try { w.terminate(); } catch { /* 이미 닫혔다 */ } fn(v); };
-    const fail = e => Object.assign(new Error(String(e?.message ?? e ?? 'trace')), { code: 'oom' });
+    let timer = 0;
+    const end = (fn, v) => { clearTimeout(timer); try { w.terminate(); } catch { /* 이미 닫혔다 */ } fn(v); };
+    // 모듈 로드 실패의 error는 message 없는 평범한 Event다 — type으로 남긴다("[object Event]"가 아니게 · 리뷰 m-4).
+    const fail = e => Object.assign(new Error(String(e?.message ?? e?.type ?? e ?? 'trace')), { code: 'oom' });
     w.onmessage = ev => end(resolve, ev.data);
-    w.onerror = e => end(reject, fail(e));
-    try { w.postMessage({ type: 'trace', segs, box }, [segs.buffer]); } catch (e) { end(reject, fail(e)); }
+    w.onerror = w.onmessageerror = e => end(reject, fail(e));
+    timer = setTimeout(() => end(reject, fail('trace timeout')), timeoutMs);
+    try { w.postMessage({ type: 'trace', segs, box }); } catch (e) { end(reject, fail(e)); }
   });
 }
 

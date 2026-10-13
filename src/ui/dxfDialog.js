@@ -210,12 +210,11 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
 
   // 트레이스 래스터(2026-10-13 · 계획 14 Task C · 사전 검토 I-5 · §18.6 개정): OffscreenCanvas가 있으면 일회용 래스터 워커가 굽는다 —
   // 메인의 toDataURL 한 번(사동 143~308 ms)이 클릭을 막던 자리다(DXF 워커가 굽지 않는 이유는 io/dxf/traceWorker.js 머리). 선분은
-  // 워커로 갔다가 돌아온다(transfer). 워커가 fallback이라 하거나 이 창에 OffscreenCanvas가 없으면(jsdom · 옛 브라우저) 지금까지처럼
-  // 여기서 굽는다. 굽는 동안 닫혔으면 굽지 않는다(늦게 온 답은 버린다).
+  // 복사로 보낸다(리뷰 I-2). 워커가 fallback이라 하거나, 실패하거나 제한 시간(10 s · 리뷰 I-1)을 넘기거나, 이 창에 OffscreenCanvas가
+  // 없으면(jsdom · 옛 브라우저) 지금까지처럼 여기서 굽는다 — 배경 없음 안내는 메인 폴백도 못 구웠을 때만 뜬다. 굽는 동안 닫혔으면 굽지 않는다.
   async function rasterTrace(trace) {
     if (typeof OffscreenCanvas !== 'undefined') {
       const m = await traceInWorker(trace.segs, trace.box, { workerFactory: traceWorkerFactory }).catch(e => { warnErr(e); return null; });
-      if (m?.segs) trace.segs = m.segs;            // 돌려받는다 — 확인 창에서 취소하고 다시 누르면 이것을 다시 보낸다
       if (closed || (m && !m.fallback)) return m?.bg ?? null;
     }
     return traceBackground(trace.segs, trace.box, { makeCanvas: domCanvas });

@@ -10,7 +10,7 @@ import { traceBackgroundAsync } from './trace.js';
 
 const canOffscreen = g => { try { return typeof g.FileReaderSync === 'function' && !!new g.OffscreenCanvas(1, 1).getContext('2d'); } catch { return false; } };
 
-// 답 { type: 'traced', bg, fallback, segs } — 선분은 늘 돌려준다(transfer): 메인이 폴백으로 굽거나, 확인 창에서 취소하고 다시 누를 때 쓴다.
+// 답 { type: 'traced', bg, fallback } — 선분은 돌려주지 않는다: 메인이 복사로 보냈으므로 자기 선분을 그대로 갖고 있다(리뷰 I-2).
 // fallback: 여기서 못 굽는다(OffscreenCanvas·2D·FileReaderSync가 없거나 굽기가 던졌다) → 메인이 지금 경로로 굽는다.
 // 구웠는데 한도를 넘어 null이면 fallback이 아니다 — 메인에서 다시 구워도 같은 크기다(배경 없음 안내로 간다).
 async function raster({ segs, box }) {
@@ -24,13 +24,11 @@ async function raster({ segs, box }) {
       });
     } catch { bg = null; fallback = true; }
   }
-  return { type: 'traced', bg, fallback, segs };
+  return { type: 'traced', bg, fallback };
 }
 
-// raster는 던지지 않는다(굽기 실패는 fallback) — 답은 늘 하나이고, 그다음 닫힌다.
+// raster는 던지지 않는다(굽기 실패는 fallback) — 답은 늘 하나이고, 그다음 닫힌다(답이 오지 않으면 메인의 제한 시간이 끝낸다 · 리뷰 I-1).
 self.onmessage = async ev => {
-  const out = await raster(ev.data ?? {});
-  try { self.postMessage(out, out.segs?.buffer ? [out.segs.buffer] : []); }
-  catch { self.postMessage({ type: 'traced', bg: out.bg, fallback: out.fallback, segs: null }); }   // 선분을 못 넘기면 배경만이라도
+  self.postMessage(await raster(ev.data ?? {}));
   self.close();
 };

@@ -1,4 +1,4 @@
-// 계획 14 Task C(2026-10-13 · 사전 검토 I-5): [가져오기] 때 메인이 트레이스 선분을 **일회용 래스터 워커**(traceWorker.js)로 보내면(transfer)
+// 계획 14 Task C(2026-10-13 · 사전 검토 I-5): [가져오기] 때 메인이 트레이스 선분을 **일회용 래스터 워커**(traceWorker.js)로 보내면(복사 · 리뷰 I-2)
 // 워커가 OffscreenCanvas로 그리고 convertToBlob + FileReaderSync로 dataURL을 만들어 답한 뒤 **스스로 닫힌다** — 메인 toDataURL 한 번
 // (사동 143~308 ms)이 클릭을 막던 자리다. node에는 OffscreenCanvas·FileReaderSync가 없다 → 가짜를 전역에 꽂고 메시지를 직접 부른다.
 import { test, expect, beforeAll, afterAll, afterEach } from 'vitest';
@@ -42,7 +42,7 @@ const traced = async () => {
   throw new Error('traced 응답이 없다');
 };
 
-test('OffscreenCanvas가 있으면 워커가 굽는다 — 메인 폴백과 같은 명령열 · 같은 배경 모양, 선분은 돌려주고 스스로 닫힌다', async () => {
+test('OffscreenCanvas가 있으면 워커가 굽는다 — 메인 폴백과 같은 명령열 · 같은 배경 모양, 답은 배경만 · 스스로 닫힌다', async () => {
   const { log, blobs, read } = install();
   const segs = SEGS();
   send({ type: 'trace', segs, box: BOX });
@@ -56,21 +56,21 @@ test('OffscreenCanvas가 있으면 워커가 굽는다 — 메인 폴백과 같�
   expect(log).toEqual(main);
   expect(m.bg).toEqual(bg);
   expect(m.bg).toMatchObject({ src: URL_, width: 2048, height: 1365, offset: [-3000, -2000], opacity: 0.35, visible: true, locked: true });
-  // 선분은 transfer로 돌려준다(복사 0) — 확인 창에서 취소하고 다시 누르면 메인이 그것을 다시 보낸다.
-  expect(m.segs).toBe(segs);
-  expect(t).toEqual([segs.buffer]);
+  // 선분은 돌려주지 않는다(리뷰 I-2): 메인은 복사로 보냈으므로 자기 선분을 그대로 갖고 있다. 답에는 배경만.
+  expect(Object.keys(m).sort()).toEqual(['bg', 'fallback', 'type']);
+  expect(t ?? []).toEqual([]);
+  expect(segs.length).toBe(12);
   // 답한 **뒤** 스스로 닫는다: GPU 컨텍스트 해체(DestroyCommandBuffer)가 GPU가 한가한 지금 끝나야, 가져온 직후 첫 3D 프레임의
   // 셰이더 링크 뒤에 줄을 서서 메인의 워커 종료 처리를 290~500 ms 막지 않는다(실측 · 보고서).
   expect(closedBefore).toBe(0);
   expect(closes).toBe(1);
 });
 
-test('OffscreenCanvas가 없으면 굽지 않고 선분을 돌려주며 메인 폴백을 요청한다(지금 경로)', async () => {
-  const segs = SEGS();
-  send({ type: 'trace', segs, box: BOX });
+test('OffscreenCanvas가 없으면 굽지 않고 메인 폴백을 요청한다(지금 경로)', async () => {
+  send({ type: 'trace', segs: SEGS(), box: BOX });
   const { m, t } = await traced();
-  expect(m).toEqual({ type: 'traced', bg: null, fallback: true, segs });
-  expect(t).toEqual([segs.buffer]);
+  expect(m).toEqual({ type: 'traced', bg: null, fallback: true });
+  expect(t ?? []).toEqual([]);
   expect(closes).toBe(1);
 });
 

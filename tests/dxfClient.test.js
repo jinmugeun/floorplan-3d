@@ -174,29 +174,63 @@ test('postMessage가 던지면 그 요청만 거절되고 다음 요청은 그�
   await expect(p3).resolves.toBeTruthy();
 });
 
-// 계획 14 Task C(2026-10-13 · 사전 검토 I-5): [가져오기] 때 메인이 트레이스 선분을 **일회용 래스터 워커**로 보낸다(transfer · 복사 0).
-test('traceInWorker는 선분 버퍼를 transferable로 넘기고, 답 하나를 돌려준 뒤 그 워커를 끝낸다', async () => {
+// 계획 14 Task C(2026-10-13 · 사전 검토 I-5): [가져오기] 때 메인이 트레이스 선분을 **일회용 래스터 워커**로 보낸다.
+// **복사**다(리뷰 I-2): transfer면 워커가 받은 뒤 죽을 때(배포 뒤 옛 탭의 청크 404 · CSP · 충돌) 메인 폴백에 그릴 선분이 없었다.
+test('traceInWorker는 선분을 복사로 보내고(transfer 없음), 답 하나를 돌려준 뒤 그 워커를 끝낸다', async () => {
   const w = new FakeWorker();
   const segs = new Float32Array([0, 0, 100, 0]), box = [0, 0, 100, 0];
   const p = traceInWorker(segs, box, { workerFactory: () => w });
-  expect(w.posted).toEqual([{ msg: { type: 'trace', segs, box }, transfer: [segs.buffer] }]);
+  expect(w.posted).toHaveLength(1);
+  expect(w.posted[0].msg).toEqual({ type: 'trace', segs, box });
+  expect(w.posted[0].transfer ?? []).toEqual([]);
   expect(w.terminated).toBe(0);
-  const reply = { type: 'traced', bg: { src: 'data:image/png;base64,AA' }, fallback: false, segs };
+  const reply = { type: 'traced', bg: { src: 'data:image/png;base64,AA' }, fallback: false };
   w.emit(reply);
   await expect(p).resolves.toBe(reply);
   expect(w.terminated).toBe(1);                    // 일회용 — 워커가 스스로 닫히지만(close) 메인도 끝낸다
 });
 
-test('traceInWorker: 워커가 죽거나 postMessage가 던지면 code를 단 오류로 거절되고 워커를 끝낸다', async () => {
+test('traceInWorker: 워커가 죽거나 · messageerror · postMessage가 던지면 code를 단 오류로 거절되고 워커를 끝낸다', async () => {
   const w = new FakeWorker();
   const p = traceInWorker(new Float32Array(4), [0, 0, 1, 1], { workerFactory: () => w });
-  w.onerror({ message: 'boom' });
-  await expect(p).rejects.toMatchObject({ code: 'oom' });
+  w.onerror({ type: 'error' });                    // 모듈 로드 실패의 error는 message 없는 평범한 Event다
+  await expect(p).rejects.toMatchObject({ code: 'oom', message: 'error' });   // "[object Event]"가 아니다(리뷰 m-4)
   expect(w.terminated).toBe(1);
+  const m = new FakeWorker();
+  const pm = traceInWorker(new Float32Array(4), [0, 0, 1, 1], { workerFactory: () => m });
+  m.onmessageerror({ type: 'messageerror' });
+  await expect(pm).rejects.toMatchObject({ code: 'oom', message: 'messageerror' });
+  expect(m.terminated).toBe(1);
   const v = new FakeWorker();
   v.postMessage = () => { throw new Error('detached'); };
   await expect(traceInWorker(new Float32Array(4), [0, 0, 1, 1], { workerFactory: () => v })).rejects.toMatchObject({ code: 'oom' });
   expect(v.terminated).toBe(1);
+});
+
+// 리뷰 I-1: 답하지 않는 래스터 워커(convertToBlob이 끝나지 않음 · 처리되지 않은 거절 · 청크 요청이 멈춤)가 가져오기를 영원히 잡으면 안 된다.
+test('traceInWorker: 제한 시간(10 s) 안에 답이 없으면 워커를 끝내고 code oom으로 거절한다 — 늦은 답은 무시', async () => {
+  vi.useFakeTimers();
+  try {
+    const w = new FakeWorker();
+    let settled = null;
+    const p = traceInWorker(new Float32Array(4), [0, 0, 1, 1], { workerFactory: () => w });
+    p.then(() => { settled = 'ok'; }, e => { settled = e; });
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(settled).toBe(null);
+    expect(w.terminated).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toMatchObject({ code: 'oom', message: 'trace timeout' });
+    expect(w.terminated).toBe(1);
+    w.emit({ type: 'traced', bg: null, fallback: false });   // 늦은 답 — 이미 거절됐다
+    expect(settled).toMatchObject({ code: 'oom' });
+    // 답이 오면 타이머는 풀린다(나중에 terminate·거절이 다시 일어나지 않는다).
+    const u = new FakeWorker();
+    const q = traceInWorker(new Float32Array(4), [0, 0, 1, 1], { workerFactory: () => u, timeoutMs: 50 });
+    u.emit({ type: 'traced', bg: null, fallback: true });
+    await expect(q).resolves.toMatchObject({ fallback: true });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(u.terminated).toBe(1);
+  } finally { vi.useRealTimers(); }
 });
 
 // 워커 import 사슬을 따라가며 읽는다(정적 import만 — 워커에는 동적 import가 없다).
