@@ -3,6 +3,7 @@
 // 아래 함수들은 모두 호출될 때만 itemsOf/updateItems를 쓰고, 모듈 평가 시점엔 쓰지 않는다).
 import { activeFloor } from './schema.js';
 import { placeOnWall, isEmbed } from '../geom/items.js';
+import { productById } from '../products/catalog.js';
 import { itemsOf, movableItems, updateItems } from './floorOps.js';
 import { reattach, seatCopies, pruneEquipRefs, userCopy } from './floorInternal.js';
 
@@ -11,9 +12,14 @@ export const sameProductIds = (floor, productId) => floor.items.filter(i => i.pr
 // 가져온 기구(dxfBlock)는 제품 + 이름이 같은 것만: '도면 기구' 상자는 이름(도면 블록 이름)마다 다른 물건이라 productId로 다 고르면 83개가
 // 한꺼번에 엉뚱한 제품으로 바뀐다. 이름이 같으면(사동 식탁6인 61개) 한 번에 잡혀 기존 "제품 교체"(main.js replaceProductOf)가 전체에 든다.
 // 손으로 놓은 아이템은 예전 그대로 같은 productId 전부다.
-export const sameItemIds = (floor, item) => !item ? []
-  : item.dxfBlock ? floor.items.filter(i => i.productId === item.productId && i.name === item.name).map(i => i.id)
-  : sameProductIds(floor, item.productId);
+// 라벨 없는 가져온 기구(익명·쓰레기 이름 → name = 제품명)는 이름이 아무것도 말하지 않는다: 같은 블록(dxfBlock)끼리만 고른다(2026-10-13 · 리뷰 M-1 —
+// "같은 이름"이 사동 '도면 기구' 28개 = 블록 20종 · 신상A 18개 = 15종을 한 묶음으로 잡았고 손으로 놓은 상자까지 끌려왔다. 블록별로는 가장 큰 묶음 4 · 6).
+export function sameItemIds(floor, item) {
+  if (!item) return [];
+  if (!item.dxfBlock) return sameProductIds(floor, item.productId);
+  const unlabeled = item.name === productById(item.productId)?.name;
+  return floor.items.filter(i => i.productId === item.productId && (unlabeled ? i.dxfBlock === item.dxfBlock : i.name === item.name)).map(i => i.id);
+}
 
 // 좌우(h)·상하(v) 반전. 하나면 심벌만 뒤집고, 여러 개면 선택 묶음의 중심을 기준으로 위치도 반사한다.
 // 잠긴 아이템은 반전 대상에서 빠진다(위치가 바뀌는 동작이다 → I-5).

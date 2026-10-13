@@ -8,7 +8,7 @@ import { productById } from '../src/products/catalog.js';
 import { itemMenuItems } from '../src/ui/itemMenu.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 import { addDuct } from '../src/state/ductOps.js';
-import { SELECT_SAME_NAME } from '../src/ui/messages.js';
+import { SELECT_SAME_NAME, WHY_NO_SAME_NAME } from '../src/ui/messages.js';
 
 function setup(defs = []) {
   const store = createStore(createEmptyProject()), ui = createUiState();
@@ -124,7 +124,11 @@ describe('아이템 컨텍스트 메뉴', () => {
     expect(row.disabled).toBeFalsy();
     row.onSelect();
     expect(called).toEqual(['selectSame']);
-    expect(labels(itemMenuItems({ store, ui, ids: [c], itemActions: {} }))).toContain('같은 이름 1개 모두 선택');
+    // 리뷰 m-1(2026-10-13): 같은 이름이 자기뿐이면 고를 것이 없다 — "같은 이름 1개 모두 선택"이 켜져 있던 것을 끄고 사유를 붙인다.
+    const lone = itemMenuItems({ store, ui, ids: [c], itemActions: {} }).find(m => m !== 'sep' && m.label === SELECT_SAME_NAME(1));
+    expect(SELECT_SAME_NAME(1)).toBe('같은 이름 모두 선택');
+    expect(lone).toMatchObject({ disabled: true, title: WHY_NO_SAME_NAME });
+    expect(WHY_NO_SAME_NAME).toBe('같은 이름이 없음');
     // 둘 이상 고르면 예전처럼 "같은 제품 선택"이 꺼진다(하나만 고를 때의 동작이다).
     const two = itemMenuItems({ store, ui, ids: [a, b], itemActions: {} }).find(m => m !== 'sep' && m.label === '같은 제품 선택');
     expect(two.disabled).toBe(true);

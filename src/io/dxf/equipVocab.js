@@ -73,7 +73,10 @@ export const EQUIP_VOCAB = [
 // 세우면 안 되는 것(이유별 — equipment.js의 stats.skipped 칸). 영역 안 실측(Task 1 §7): 육가 11 · 그레이팅 7 · 매립 발판소독 16 · 배수구 3 · Z_DOT 30 ·
 // 신발250 19 · sss…dfdfsa 16(현관 구멍판 발판) · *B1203~1207(사동 AZ-LEAL 지시선·38 mm 막대) · 도면틀(권-효성a3 61 m · S-S3 63 m) · 포켓도어 11(문 —
 // Task 6(a)가 이름 규칙에 넣었다; 역할표·옛 규칙 경로를 위해 여기도 둔다) · 1f plan-1(위생 기구 8개를 품은 평면 블록) · 내곡 묶음(장애인화장실 대변기_평면 ·
-// afadfasdfasfd — 내장 기구 전개는 이월, 사전 검토 반영 9) · 내곡 벽 조각 1층_방풍실_식당(1140×6900 ×2).
+// afadfasdfasfd) · 내곡 벽 조각 1층_방풍실_식당(1140×6900 ×2).
+// composite 묶음 자체는 세우지 않는다. 그 안의 어휘 자식이 둘 이상이면 자식이 대신 선다(2026-10-13 · 계획 14 Task F · insertBoxes.groupOwner — 사동 `1f plan-1` 8 ·
+// 내곡 `afadfasdfasfd` ×2의 영유아거치대 · 세면대 평면). `장애인화장실 대변기_평면`은 afadfasdfasfd의 깊이 1 자식이고 이 목록이 빼므로 여전히 서지 않는다
+// (사전 검토 p14-preflight.md I-7 — 그 안에 내장 INSERT는 없다: 1089×857 선 501개의 대변기 한 벌).
 // "도어"는 숫자 바로 뒤가 아닐 때만 개구부다 — 냉장고 4도어·6도어는 문짝 수다(사전 검토 반영 3).
 export const EQUIP_SKIP = [
   { keys: [/(?<!\d\s*)도어/], reason: 'opening' },
@@ -94,12 +97,16 @@ export const isAnonymous = name => ANON.test(String(name ?? '')) || JUNK.test(St
 // 라틴 글자·숫자만인 이름에 같은 라틴 글자가 3번 이상 이어진다(dwaddddd · sss…dfdfsa) · `*`로 시작. 치수의 0 셋(1000-700)은 숫자라 반복으로 보지 않는다.
 // isAnonymous와 따로 둔다: 익명은 어휘를 건너뛰고 모양·자식 이름으로 맞추고 레이어 규칙도 다르다(equipment.js) — 이것은 **라벨만** 떼는 판정이라
 // 세우는 수(equip)를 바꾸지 않는다(계획 14 Task D 게이트). 익명처럼 이름을 주지 않으면 제품 이름 그대로라 라벨이 서지 않는다.
+// 한 글자라도 한자 하나·한글 음절 하나는 낱말이다(리뷰 m-3 — 공개 "炉"(레인지) ×2를 잃었다 · 716 → 718). 자모(ㅁ)·라틴·숫자 한 글자는 쓰레기.
+// 라틴 3연속은 공백 없는 한 덩어리 이름에서만 본다(리뷰 m-2 — 공백을 지우면 "Type III" · "AAA battery"가 III·AAA로 이어져 걸렸다 · 측정 라벨 변화 0).
+const WORD_CHAR = /^[\p{Unified_Ideograph}가-힣]$/u;
 export function isJunkName(name) {
-  const s = String(name ?? '').replace(/\s+/g, '');
+  const raw = String(name ?? '').trim(), s = raw.replace(/\s+/g, '');
   if (!s || s.startsWith('*') || !/\p{L}/u.test(s)) return true;
   const chars = [...s];
-  if (chars.length === 1 || (chars.length >= 3 && new Set(chars.map(c => c.toLowerCase())).size === 1)) return true;
-  return /^[a-z0-9]+$/i.test(s) && /([a-z])\1\1/i.test(s);
+  if (chars.length === 1) return !WORD_CHAR.test(s);
+  if (chars.length >= 3 && new Set(chars.map(c => c.toLowerCase())).size === 1) return true;
+  return !/\s/.test(raw) && /^[a-z0-9]+$/i.test(s) && /([a-z])\1\1/i.test(s);
 }
 
 const norm = s => String(s ?? '').toLowerCase().replace(/[\s_]+/g, '');

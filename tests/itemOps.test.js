@@ -283,6 +283,21 @@ describe('같은 이름 모두 선택(계획 14 Task D)', () => {
     expect(sameItemIds(f, undefined)).toEqual([]);
   });
 
+  // 리뷰 M-1(2026-10-13): 라벨 없는 가져온 상자(익명·쓰레기 이름 → name = 제품명 '도면 기구')는 이름이 아무것도 말하지 않는다 — "같은 이름"이
+  // 블록이 다른 상자를 한 묶음으로 잡았다(사동 28개 = 블록 20종 · 신상A 18개 = 15종). 이때는 같은 블록(dxfBlock)끼리만 고르고, 손으로 놓은 상자는 빠진다.
+  test('라벨 없는 가져온 상자(이름 = 제품명)는 같은 블록끼리만 — 다른 블록·손으로 놓은 "도면 기구"는 빠진다', () => {
+    const s = setup();
+    const anon = (block, x) => addItem(s, createItem(gen, { pos: [x + 0.5, 1000.25], size: [600, 600, 850], dxfBlock: block, dxfProduct: gen.id }));
+    const a = anon('zw$A', 500), b = anon('zw$A', 1500), c = anon('zw$B', 2500), d = anon('66666', 3500);
+    const hand = addItem(s, createItem(gen, { pos: [3000.5, 2000.25] }));
+    const f = activeFloor(s.get());
+    expect([a, b, c, d, hand].map(id => one(s, id).name)).toEqual(Array(5).fill(gen.name));   // 모두 '도면 기구' — 라벨 없음
+    expect(sameItemIds(f, one(s, a))).toEqual([a, b]);
+    expect(sameItemIds(f, one(s, c))).toEqual([c]);
+    expect(sameItemIds(f, one(s, d))).toEqual([d]);
+    expect(sameItemIds(f, one(s, hand))).toEqual([a, b, c, d, hand]);       // 손으로 놓은 쪽은 예전처럼 같은 제품 전부
+  });
+
   test('고른 둘을 제품 교체하면 둘 다 바뀌고 dxfProduct가 풀린다(dxfBlock은 남는다) · 다른 이름은 그대로', () => {
     const s = setup();
     const a = box(s, '운반카 튀김 620', 500), b = box(s, '운반카 튀김 620', 1500), c = box(s, '컵자동세척기', 2500);

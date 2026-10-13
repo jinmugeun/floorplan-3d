@@ -1,7 +1,7 @@
 import { activeFloor } from '../state/schema.js';
 import { ductLinksOf } from '../state/ductOps.js';
 import { sameItemIds } from '../state/itemOps.js';
-import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, PATH_2D_HINT, PATH_FP_HINT, SELECT_SAME_NAME } from './messages.js';
+import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, PATH_2D_HINT, PATH_FP_HINT, SELECT_SAME_NAME, WHY_NO_SAME_NAME } from './messages.js';
 // 사유 하나가 disabled와 title을 함께 만든다(리뷰 I-3): 세 메뉴가 같은 헬퍼를 쓴다.
 import { why } from './menuReason.js';
 
@@ -26,7 +26,10 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
   // "연결된 덕트가 있으면"만 보인다 — 설비가 아니거나 연결이 없으면 항목 자체를 뺀다(비활성 표시가 아니다).
   const link = one && items[0].kind === 'equipment' ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
   // 가져온 기구 하나면 "같은 이름 n개 모두 선택"(2026-10-13 · 계획 14 Task D): 고를 수를 미리 보여 준다 — 제품 교체가 그 n개 전체에 든다.
-  const sameLabel = one && items[0].dxfBlock ? SELECT_SAME_NAME(sameItemIds(f, items[0]).length) : '같은 제품 선택';
+  // 자기뿐이면(n = 1) 고를 것이 없다 — 끄고 사유를 단다(리뷰 m-1).
+  const sameN = one && items[0].dxfBlock ? sameItemIds(f, items[0]).length : null;
+  const sameLabel = sameN != null ? SELECT_SAME_NAME(sameN) : '같은 제품 선택';
+  const sameWhy = !one ? WHY_ONE_ONLY : sameN != null && sameN <= 1 ? WHY_NO_SAME_NAME : null;
   return [
     { label: '좌우 반전', shortcut: 'Alt+H', onSelect: call('mirror', 'h') },
     { label: '상하 반전', shortcut: 'Alt+V', onSelect: call('mirror', 'v') },
@@ -44,7 +47,7 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
     { label: '그룹화', shortcut: 'Ctrl+G', ...why(items.length < 2 ? WHY_MIN_TWO : null), onSelect: call('group') },
     { label: '그룹 해제', shortcut: 'Ctrl+Shift+G', ...why(grouped ? null : WHY_NOT_GROUPED), onSelect: call('ungroup') },
     'sep',
-    { label: sameLabel, ...why(one ? null : WHY_ONE_ONLY), onSelect: call('selectSame') },
+    { label: sameLabel, ...why(sameWhy), onSelect: call('selectSame') },
     { label: allHidden ? '숨김 해제' : '숨김', shortcut: 'Ctrl+H', onSelect: call('toggleHidden') },
     { label: allLocked ? '잠금 해제' : '잠금', shortcut: 'Ctrl+L', onSelect: call('toggleLocked') },
     'sep',

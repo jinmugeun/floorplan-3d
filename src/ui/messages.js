@@ -154,7 +154,9 @@ export const WHY_MIN_TWO = '제품이 2개 미만';
 export const WHY_NOT_GROUPED = '그룹이 아님';
 export const WHY_ONE_ONLY = '제품 하나만 고를 때';
 // 가져온 기구 하나를 고를 때의 "같은 제품 선택" 자리(2026-10-13 · 계획 14 Task D): 제품 + 이름이 같은 n개(자기 포함)를 고른다 — itemOps.sameItemIds.
-export const SELECT_SAME_NAME = n => `같은 이름 ${n}개 모두 선택`;
+// 자기뿐이면(n ≤ 1) 수를 적지 않고 항목을 끈다 — 사유 WHY_NO_SAME_NAME(리뷰 m-1: "같은 이름 1개 모두 선택"이 켜져 자기 자신을 다시 골랐다).
+export const SELECT_SAME_NAME = n => (n > 1 ? `같은 이름 ${n}개 모두 선택` : '같은 이름 모두 선택');
+export const WHY_NO_SAME_NAME = '같은 이름이 없음';
 export const WHY_CLIPBOARD_EMPTY = '복사한 제품이 없음';
 export const WHY_MIN_POINTS = '점이 2개뿐';
 // 동작(actions)이 붙지 않아 이 화면에서는 아예 쓸 수 없는 항목의 사유. surfaceMenu의

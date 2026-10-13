@@ -114,10 +114,13 @@ test('익명 블록 이름: zw$·A$C·*U·*B·$…와 자판 이름', () => {
 // 아무것도 말하지 않는 이름은 라벨을 달지 않는다(익명 블록처럼 제품 이름 그대로 · dxfBlock은 남는다).
 test('쓰레기 이름(isJunkName): 글자 없음(숫자만·기호만) · 한 글자 · 같은 글자 3번 이상 · *로 시작', () => {
   const junk = ['1', '66666', '007', '1-2', '-', '...', '#', '(  )', 'ccc', 'CCC', 'ssssss', '가가가', 'dwaddddd', 'sssssssssssdfdfsa', 'ffffffffffffff3f3f',
-    'A', '가', '床', '*U266', '*B1206', '*식탁', '', '   ', null, undefined];
+    'A', 'q', 'ㅁ', '*U266', '*B1206', '*식탁', '', '   ', null, undefined];
   for (const n of junk) expect(isJunkName(n), String(n)).toBe(true);
   // 진짜 이름 — 치수의 0 셋(1000)은 반복이 아니다(글자 반복은 라틴 글자만 본다). 익명 블록(A$C·zw$)은 isAnonymous의 몫이다.
+  // 리뷰 m-2: 여러 단어 이름은 라틴 3연속 규칙을 보지 않는다("Type III" · "AAA battery" — 공백을 지우면 단어가 이어져 III·AAA가 됐다).
+  // 리뷰 m-3: 한자 하나·한글 음절 하나는 그 자체로 낱말이다(공개 코퍼스 "炉"(레인지) ×2 — 716 → 718). 자모(ㅁ)·라틴 한 글자는 그대로 쓰레기.
   const real = ['식탁6인', '세정대 2조 1500-750', '배식대 1000-700', '냉장고 4도어 1100L 1260-850', 'A$C754401BD', 'zw$E75B', 'TR1800S', 'S-S3', 'To세면기A',
-    'toilet', 'INDEX1', 'LIFTD', '双人床', 'DT@STAIR', 'TYPE-III', 'cc', '6인', 'TV'];
+    'toilet', 'INDEX1', 'LIFTD', '双人床', 'DT@STAIR', 'TYPE-III', 'cc', '6인', 'TV',
+    'Type III', 'SINK TYPE III', 'AAA battery', '炉', '床', '솥', '가'];
   for (const n of real) expect(isJunkName(n), n).toBe(false);
 });
