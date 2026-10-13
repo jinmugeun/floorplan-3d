@@ -7,11 +7,17 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRebuildGate, shaderPrewarm, runWhenIdle } from '../src/view3d/rebuildGate.js';
-import { warmGroup, warmShaders } from '../src/view3d/shaderWarm.js';
+import { warmGroup, warmShaders, warmFloor } from '../src/view3d/shaderWarm.js';
 import { buildFloorGroup } from '../src/view3d/build.js';
 import { setLabelCanvasFactory, clearLabelCache } from '../src/view3d/labels3d.js';
+import { enableAssets, requestAsset, onAssetsReady, __setLoader, __reset } from '../src/view3d/itemAssets.js';
 import { buildSampleProject } from '../src/samples/gangdang.js';
+import { productById } from '../src/products/catalog.js';
 import { DEFAULT_VIEW, activeFloor } from '../src/state/schema.js';
+
+// 에셋 로더 대역(계획 15 Task B): GLB·네트워크 없이 작은 상자 하나를 돌려준다. 도착 알림은 setTimeout 0으로 모이므로 몇 틱 기다린다.
+const tinyModel = () => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 0.4), new THREE.MeshStandardMaterial())); return g; };
+const settle = async () => { for (let i = 0; i < 3; i++) await new Promise(r => setTimeout(r, 0)); };
 
 // 보이는지·서명을 바꿀 수 있는 문 + 수동 유휴 큐.
 function setup({ visible = false, warmup = null, prewarm = null } = {}) {
@@ -299,6 +305,22 @@ describe('예열 장면', () => {
       expect(r.compile).toHaveBeenCalledTimes(1);
     } finally { vi.unstubAllGlobals(); }
   });
+
+  // 계획 15 Task B · 사전 검토 I-6: 예열은 2D 시작 직후 유휴 시간에 돈다 — 예열 층의 제품(냉장고 등)에 asset이 붙으면 2D만 쓰는 세션이
+  // GLB·로더 청크를 받았다. 카탈로그는 이 테스트 동안만 고친다 — 이전 값을 되돌린다(2026-10-13 · 리뷰 B-m2: delete는 Task C처럼
+  // 진짜 asset이 붙은 제품이면 그 필드를 남은 테스트에서 지운다).
+  test('예열 장면(shaderWarm)은 에셋 없이 짓는다 — requestAsset 0회(대조: 같은 층을 실제 view로 지으면 요청한다)', async () => {
+    __reset(); enableAssets();
+    const loader = vi.fn(() => Promise.resolve(tinyModel())); __setLoader(loader);
+    const fridge = productById('fridge-2door'), prev = fridge.asset;
+    fridge.asset = 'fridge-2door';
+    try {
+      warmGroup(DEFAULT_VIEW); await settle();
+      expect(loader).not.toHaveBeenCalled();
+      buildFloorGroup(warmFloor(), DEFAULT_VIEW); await settle();
+      expect(loader).toHaveBeenCalledTimes(1);
+    } finally { if (prev === undefined) delete fridge.asset; else fridge.asset = prev; __reset(); }
+  });
 });
 
 // ── 배선: view3d.js가 이 문을 거친다(WebGL 없이 고정할 수 있는 유일한 방법이 소스 읽기다) ──
@@ -351,6 +373,33 @@ describe('view3d 배선', () => {
     expect(p.clone().project(cam).x).toBeCloseTo(0.5);                     // 낡은 행렬: 옮기기 전 자리
     cam.updateMatrixWorld();
     expect(p.clone().project(cam).x).toBeCloseTo(0);                       // 맞춘 행렬: 화면 가운데
+  });
+
+  // 계획 15 Task B · 사전 검토 I-3 · I-12: 에셋 도착은 서명 밖의 사유다 — 문을 강제로 열고(invalidate) 그리기를 따로 요청한다
+  // (보이는 동안 invalidate는 짓기만 하고, 재빌드 뒤 그리기는 라벨이 있을 때만 걸렸다 → 라벨 없는 장면에서 모델이 카메라를 움직일 때까지 안 나왔다).
+  test('에셋: 렌더러를 만들 때 켜고, 도착하면 문을 강제로 열고 그리기를 요청하며, destroy가 구독을 푼다', () => {
+    expect(v3).toMatch(/import \{ enableAssets, onAssetsReady \} from '\.\/itemAssets\.js';/);
+    expect(v3).toMatch(/container\.appendChild\(renderer\.domElement\); enableAssets\(\);/);
+    expect(v3).toMatch(/const offAssets = onAssetsReady\(\(\) => \{ gate\.invalidate\(\); requestRender\(\); \}\);/);
+    expect(v3).toMatch(/destroy\(\) \{[^\n]*\boffAssets\(\);/);
+  });
+
+  test('그 배선의 동작: 보이면 같은 서명이어도 한 번 짓고 그리기 요청(두 종류가 같은 틱에 와도 한 번) · 숨김이면 보류했다가 보일 때 짓고 그린다 · 구독을 풀면 더 부르지 않는다', async () => {
+    __reset(); enableAssets(); __setLoader(() => Promise.resolve(tinyModel()));
+    const { gate, calls, state, change } = setup({ visible: true });
+    change('a'); calls.length = 0;
+    const requestRender = () => calls.push('requestRender');           // view3d는 숨김이면 이 요청을 버린다(위 정규식)
+    const off = onAssetsReady(() => { gate.invalidate(); requestRender(); });   // view3d.js와 같은 배선(위 테스트가 소스를 고정한다)
+    try {
+      requestAsset({ id: 'a', asset: 'a' }); requestAsset({ id: 'b', asset: 'b' }); await settle();
+      expect(calls).toEqual(['rebuild', 'requestRender']);
+      state.visible = false; requestAsset({ id: 'c', asset: 'c' }); await settle();
+      expect(calls).toEqual(['rebuild', 'requestRender', 'requestRender']);
+      state.visible = true; gate.onVisible();
+      expect(calls).toEqual(['rebuild', 'requestRender', 'requestRender', 'rebuild', 'render']);
+      off(); requestAsset({ id: 'd', asset: 'd' }); await settle();
+      expect(calls).toHaveLength(5);
+    } finally { off(); __reset(); }
   });
 
   test('보류했던 리빌드 뒤 첫 3D 프레임은 라벨을 먼저 잰다 · 예열 둘이 배선돼 있다', () => {

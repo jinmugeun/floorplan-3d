@@ -7,6 +7,9 @@ test('option lists cover every schema flag with Korean labels', () => {
   expect(V3_OPTIONS.map(o => o[0]).sort()).toEqual(Object.keys(DEFAULT_VIEW.v3).sort());
   expect(V2_OPTIONS.find(o => o[0] === 'grid')[1]).toBe('격자');
   expect(V3_OPTIONS.find(o => o[0] === 'outerWalls')[1]).toBe('외벽 보기');
+  // 계획 15 Task B: 실사 제품 모델 토글(기본 켬 — 옛 프로젝트는 키가 없어 기본값 true로 읽는다).
+  expect(V3_OPTIONS.find(o => o[0] === 'assets')?.[1]).toBe('실사 제품 모델');
+  expect(DEFAULT_VIEW.v3.assets).toBe(true);
   expect(DISPLAY_MODES).toEqual([['normal', '일반'], ['white', '화이트 단색'], ['transparent', '투명']]);
   expect(PERF_MODES).toEqual([['display', '디스플레이 우선'], ['performance', '성능 우선']]);
 });

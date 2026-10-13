@@ -17,12 +17,12 @@ import { createOrthoView } from './orthoView.js';
 import { cullLabels, createCameraWatch, labelRefreshKind, LABEL_DEBOUNCE_MS } from './labels3d.js';
 import { labelDensity } from '../ui/prefs.js';
 import { createRebuildGate, shaderPrewarm } from './rebuildGate.js';
-import { warmShaders } from './shaderWarm.js';
+import { warmShaders } from './shaderWarm.js'; import { enableAssets, onAssetsReady } from './itemAssets.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true;
-  container.appendChild(renderer.domElement);
+  container.appendChild(renderer.domElement); enableAssets();   // 실사 에셋은 3D가 있을 때만 받는다(계획 15 Task B — 그 전에는 requestAsset이 no-op)
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef1f4);
   const persp = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
   const ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, -500, 1000);
@@ -31,7 +31,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   controls.enableDamping = true; controls.dampingFactor = 0.1; controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   // three r155+ 는 물리 광량 단위를 쓰므로 예전 값(0.9/0.8)으로는 장면이 어둡다.
   const hemi = new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.6); scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-12, 30, -18); sun.castShadow = true; scene.add(sun);
+  const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-12, 30, -18); sun.castShadow = true; sun.shadow.normalBias = 0.03; scene.add(sun);   // 그림자 여드름(줄무늬) 방지 — 텍셀 ≈ 2 cm(512² · ±5 m) · 계획 15 최종 리뷰 D-m6
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xdfe4e9 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.005; ground.receiveShadow = true; scene.add(ground);
 
   let group = null, mode = 'iso', raf = 0, alive = true, cullFirst = false;
@@ -39,7 +39,7 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   // (2026-10-13 · 계획 13 Task 3 리뷰 P3-1: 2D 가져오기 클릭에 숨은 3D 리빌드 178 ms + 셰이더 링크가 얹혔다 · 사전 검토 I-4 — rebuildGate.js).
   // 보류했던 리빌드 뒤 첫 프레임은 라벨을 먼저 잰다(cullFirst): 라벨 컬링은 120 ms 디바운스라 그 사이 첫 프레임에 라벨이 전부 겹쳐 보였다(전에는 숨은 컬링이 해 두었다).
   const gate = createRebuildGate({ isVisible: () => alive && ui.get().mode !== '2d', signature: () => sceneSignature(store.get()), rebuild, render: () => { cullFirst = true; requestRender(); },
-    warmup: () => alive && warmShaders(renderer, scene, ov.camera() ?? camera, store.get().view), prewarm: shaderPrewarm(renderer, scene, () => ov.camera() ?? camera) });
+    warmup: () => alive && warmShaders(renderer, scene, ov.camera() ?? camera, store.get().view), prewarm: shaderPrewarm(renderer, scene, () => ov.camera() ?? camera) }); const offAssets = onAssetsReady(() => { gate.invalidate(); requestRender(); });   // 에셋 도착은 서명 밖의 사유 + 보이는 동안 invalidate는 짓기만 한다(사전 검토 I-3)
   const fp = new PointerLockControls(camera, renderer.domElement);
   // 브라우저가 Esc로 포인터 락을 풀면 ISO로 돌아간다. setMode가 먼저 mode를 바꾼 경우(1/2/3 키)는 여기서 아무것도 하지 않는다.
   fp.addEventListener('unlock', () => { if (!alive || mode !== 'fp') return; setMode('iso'); onExitFp(); });
@@ -295,5 +295,5 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage: gate.fresh(renderImage), ensureFresh: gate.ensureFresh, getCameraInfo, setTarget, requestRender,
     // 라벨 밀도는 kvp라 sceneSignature에 없다(§17.10). '끔' 진입·이탈만 다시 짓고 나머지는 다시 센다(I-2).
     refreshLabels() { const d = labelDensity(), kind = labelRefreshKind(lastDensity, d); lastDensity = d; if (kind === 'rebuild') gate.invalidate(); else scheduleLabelCull(); requestRender(); },
-    setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: gate.fresh(() => renderer.domElement.toDataURL('image/png')), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+    setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: gate.fresh(() => renderer.domElement.toDataURL('image/png')), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); offAssets(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }

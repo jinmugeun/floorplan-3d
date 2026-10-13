@@ -1,7 +1,9 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { buildItems, itemMesh, itemVisible3, paintItem, COLLIDE_COLOR } from '../src/view3d/items3d.js';
-import { createItem } from '../src/state/schema.js';
+import { disposeGroup, sceneSignature } from '../src/view3d/build.js';
+import { enableAssets, requestAsset, templateOf, __setLoader, __reset } from '../src/view3d/itemAssets.js';
+import { createItem, createEmptyProject } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { RAD } from '../src/geom/items.js';
 import { collidingIds, memoCollisions } from '../src/geom/collide.js';
@@ -162,4 +164,96 @@ test('성능 우선 모드는 제품 윤곽선을 붙이지 않는다', () => {
   expect(edgeCount(off)).toBe(0);
   // 아이템 자체는 그대로 있다(형상만 남는다).
   expect(off.children).toHaveLength(1);
+});
+
+// ── 실사 에셋(2026-10-13 · 계획 15 Task B · 사전 검토 p15-preflight §8 · I-6 · S-7) ──
+// 로더는 __setLoader로 바꿔 끼운다(GLB·네트워크 없음). 카탈로그를 고치는 테스트는 그 테스트 안에서만 고치고 되돌린다.
+describe('실사 에셋', () => {
+  const box = (w, h, d) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial()); m.position.y = h / 2; const g = new THREE.Group(); g.add(m); return g; };
+  const flush = () => new Promise(r => setTimeout(r, 0));
+  const settle = async () => { await flush(); await flush(); await flush(); };
+  const withAsset = () => ({ ...productById('chair-dining'), asset: 'chair-dining' });
+  const sharedCount = obj => { let n = 0; obj.traverse(o => { if (o.userData.shared) n += 1; }); return n; };
+  afterEach(() => __reset());
+
+  test('에셋이 있는 제품은 템플릿 복제(공유)로 서고 자손 전부에 itemId, 윤곽선은 붙지 않으며, 충돌은 재질이 아니라 붉은 상자 선으로', async () => {
+    __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(0.45, 0.9, 0.5)));
+    const p = withAsset();
+    requestAsset(p); await settle();
+    const item = { id: 'c1', productId: 'chair-dining', kind: 'product', pos: [1000, 2000], z: 0, rot: 90, size: [450, 500, 900], color: '#cfd4da' };
+    const obj = itemMesh(item, { edges: true, assets: true, product: p });      // product 주입: 테스트가 카탈로그를 고치지 않는다(기본은 productById)
+    expect(obj.getObjectByProperty('isMesh', true).userData.shared).toBe(true);
+    expect(obj.getObjectByName('itemEdge')).toBeUndefined();                   // three getObjectByName은 못 찾으면 undefined
+    const ids = new Set(); obj.traverse(o => ids.add(o.userData.itemId)); expect([...ids]).toEqual(['c1']);
+    const mat = obj.getObjectByProperty('isMesh', true).material;
+    paintItem(obj, '#e5484d'); expect(mat.color.getHexString()).not.toBe('e5484d');
+    expect(obj.getObjectByName('collideBox')).toBeTruthy();
+    expect(obj.getObjectByName('collideBox').raycast).not.toBe(THREE.LineSegments.prototype.raycast);   // 픽에 안 잡히는 빈 raycast
+    expect(obj.getObjectByName('collideBox').userData.itemId).toBe('c1');     // 선도 어느 아이템인지 안다
+    paintItem(obj, '#e5484d');
+    expect(obj.children.filter(o => o.name === 'collideBox')).toHaveLength(1); // 다시 칠해도 선은 하나
+    // 위치·회전은 상자와 같은 규칙(아이템 중심 z + h/2 · -Y 회전), 모델은 아이템 size에 축별로 맞는다(바닥 = 아이템 바닥).
+    expect(obj.name).toBe('item');
+    expect(obj.position.y).toBeCloseTo(0.45); expect(obj.rotation.y).toBeCloseTo(-RAD(90));
+    const model = obj.children.find(o => o.name !== 'collideBox');            // 선은 아이템 크기 그대로라 재지 않는다
+    obj.rotation.y = 0; obj.position.set(0, 0.45, 0); obj.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(model);
+    expect([bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z].map(v => +v.toFixed(3))).toEqual([0.45, 0.9, 0.5]);
+    expect(bb.min.y).toBeCloseTo(0, 6);
+  });
+
+  test('에셋이 아직 없으면 상자로 서고 requestAsset이 불린다 · assets:false(토글)면 요청도 없다 · 성능 모드는 모델을 유지한다', async () => {
+    __reset(); enableAssets();
+    const loader = vi.fn(() => Promise.resolve(box(0.45, 0.9, 0.5))); __setLoader(loader);
+    const p = withAsset(), item = mk('chair-dining', { pos: [0, 0] });
+    itemMesh(item, { assets: false, product: p }); await settle();
+    expect(loader).not.toHaveBeenCalled();
+    const first = itemMesh(item, { edges: true, product: p });                // assets 기본 true · 템플릿은 아직 없다
+    expect(sharedCount(first)).toBe(0);
+    expect(first.getObjectByName('chairBack')).toBeTruthy();                   // 지금의 조합 형상 그대로
+    expect(first.getObjectByName('itemEdge')).toBeTruthy();                    // 상자에는 윤곽선도 그대로
+    await settle();
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(sharedCount(itemMesh(item, { product: p }))).toBeGreaterThan(0);    // 도착 뒤에는 모델
+    // buildItems: 토글(v3.assets)이 끄면 템플릿이 있어도 상자이고 요청도 없다. 성능 우선은 모델을 유지하고 요청한다(최종 리뷰).
+    // buildItems는 product 주입이 없어 카탈로그를 고친다 — 이전 값을 되돌린다(2026-10-13 · 리뷰 B-m2: Task C 뒤로 chair-dining에는
+    // 진짜 asset이 있어 delete하면 이 파일의 남은 테스트가 에셋 없는 카탈로그를 보았다).
+    const cat = productById('chair-dining'), prev = cat.asset;
+    cat.asset = 'chair-dining';
+    try {
+      const fl = floor([item]);
+      expect(sharedCount(buildItems(fl, { v3: {} }))).toBeGreaterThan(0);
+      expect(sharedCount(buildItems(fl, { v3: { assets: false } }))).toBe(0);
+      expect(sharedCount(buildItems(fl, { v3: {}, perfMode: 'performance' }))).toBeGreaterThan(0);   // 성능 모드도 모델(최종 리뷰)
+      __reset(); enableAssets(); loader.mockClear(); __setLoader(loader);
+      buildItems(fl, { v3: { assets: false } }); buildItems(fl, { v3: { assets: false }, perfMode: 'performance' }); await settle();
+      expect(loader).not.toHaveBeenCalled();
+      buildItems(fl, { v3: {}, perfMode: 'performance' }); buildItems(fl, { v3: {} }); await settle();
+      expect(loader).toHaveBeenCalledTimes(1);                                 // 성능 모드도 받는다 · 종류당 한 번
+    } finally { if (prev === undefined) delete cat.asset; else cat.asset = prev; }
+  });
+
+  test('disposeGroup은 shared 지오메트리를 dispose하지 않는다(재질도) · 충돌 상자 선(아이템 전용)은 버린다', async () => {
+    __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(0.45, 0.9, 0.5)));
+    const p = withAsset(); requestAsset(p); await settle();
+    const tm = templateOf('chair-dining').getObjectByProperty('isMesh', true);
+    const geoGone = vi.fn(), matGone = vi.fn();
+    tm.geometry.addEventListener('dispose', geoGone); tm.material.addEventListener('dispose', matGone);
+    const obj = itemMesh(mk('chair-dining', { pos: [0, 0] }), { product: p });
+    paintItem(obj, COLLIDE_COLOR);
+    const line = obj.getObjectByName('collideBox'), lineGone = vi.fn(), lineMatGone = vi.fn();
+    line.geometry.addEventListener('dispose', lineGone); line.material.addEventListener('dispose', lineMatGone);
+    const g = new THREE.Group(); g.add(obj); disposeGroup(g);
+    expect(geoGone).not.toHaveBeenCalled(); expect(matGone).not.toHaveBeenCalled();
+    expect(lineGone).toHaveBeenCalledTimes(1); expect(lineMatGone).toHaveBeenCalledTimes(1);
+  });
+
+  test('sceneSignature는 v3.assets와 assetsVersion을 품는다', async () => {
+    __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(1, 1, 1)));
+    const s = createEmptyProject();
+    const a = sceneSignature(s);
+    expect(sceneSignature({ ...s, view: { ...s.view, v3: { ...s.view.v3, assets: false } } })).not.toBe(a);
+    requestAsset({ id: 'x', asset: 'x' }); await settle();
+    expect(sceneSignature(s)).not.toBe(a);                                     // 도착 묶음마다 버전이 오른다
+  });
 });

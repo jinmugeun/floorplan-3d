@@ -23,6 +23,6 @@ export const EXTRA_PRODUCTS = [
   P('coffee-machine', '에스프레소 머신', 'AP-CM60', '가전', '주방가전', [600, 500, 700], 'floor', 'appliance', { color: '#9aa3ab', tags: '커피머신 에스프레소 카페' }),
   P('locker-12', '12칸 사물함', 'ST-LK12', '수납가구', '캐비닛', [900, 450, 1800], 'floor', 'box', { color: '#b6bdc4', tags: '사물함 로커 탈의' }),
   P('meeting-table-2400', '회의 탁자 2400', 'TB-MT24', '책상/테이블', '책상', [2400, 1200, 750], 'floor', 'table', { color: '#d8c9b4', tags: '회의 탁자 테이블 회의실' }),
-  P('desk-student', '학생 책상', 'TB-DS06', '책상/테이블', '책상', [600, 450, 750], 'floor', 'table', { color: '#e6e1d8', tags: '학생 책상 교실 강의' }),
+  P('desk-student', '학생 책상', 'TB-DS06', '책상/테이블', '책상', [600, 450, 750], 'floor', 'table', { color: '#e6e1d8', tags: '학생 책상 교실 강의', asset: 'desk-student' }),
   P('lectern', '교탁', 'TB-LC09', '책상/테이블', '책상', [900, 500, 1100], 'floor', 'table', { color: '#d8c9b4', tags: '교탁 강의 교실 연단' }),
 ];

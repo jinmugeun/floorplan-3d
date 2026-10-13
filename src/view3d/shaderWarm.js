@@ -38,8 +38,10 @@ export function warmFloor() {
 }
 
 // 예열 그룹: 실제 빌드 + 접힌 라벨 점(Points)은 컬링 때만 생기므로 여기서 하나 만든다.
+// 실사 에셋 없이 짓는다(2026-10-13 · 계획 15 Task B · 사전 검토 I-6): 예열은 2D 시작 직후 유휴 시간에 돈다 — 예열 층의 제품에 asset이
+// 붙으면 2D만 쓰는 세션이 GLB·로더 청크를 받는다. 모델 재질의 프로그램은 첫 3D 프레임이 링크한다.
 export function warmGroup(view = {}) {
-  const g = buildFloorGroup(warmFloor(), view);
+  const g = buildFloorGroup(warmFloor(), { ...view, v3: { ...view.v3, assets: false } });
   const labels = g.children.find(o => o.name === 'labels');
   const sprite = labels?.children.find(o => o.isSprite);
   if (sprite) syncLabelDots(labels, [sprite]);
