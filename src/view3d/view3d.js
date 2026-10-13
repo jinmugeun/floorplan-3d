@@ -261,8 +261,8 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   let labelTimer = 0, lastDensity = labelDensity();
   const fpMoved = createCameraWatch();   // 1인칭 렌더 루프는 움직인 프레임에만 디바운스를 건다
   function scheduleLabelCull() { clearTimeout(labelTimer); labelTimer = setTimeout(cullNow, LABEL_DEBOUNCE_MS); }
-  function cullNow() {
-    clearTimeout(labelTimer); labelTimer = 0;
+  function cullNow() { // 행렬부터(2026-10-13 · 최종 리뷰 X-5): lookAt은 새 회전 전에 matrixWorld를 갱신해, 숨은 렌더가 없는 첫 컬링(직교·2D 프리셋)이 옛 자세로 쟀다
+    (ov.camera() ?? camera).updateMatrixWorld(); clearTimeout(labelTimer); labelTimer = 0;
     const g = group?.children.find(m => m.name === 'labels');
     if (!g || !g.children.length) return;
     cullLabels(g, ov.camera() ?? camera, { width: container.clientWidth || 1, height: container.clientHeight || 1, density: labelDensity() });

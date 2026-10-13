@@ -402,6 +402,15 @@ test('80 mm 들어간 것은 진짜 겹침(그린 대로 두고 사람이 본다
   expect(trimToColumns([touch], [colAt(1000, 0)]).items[0]).toEqual(touch);
 });
 
+// 2026-10-13 · 최종 리뷰 X-10(M-A1): 두 축 모두 ≤ equipTrim인 모서리 접촉은 **작은 축**만 깎는다(equipTrim.js — 겹침이 얕은 쪽이 작도 오차다).
+// 이 단언이 없어 큰 축을 깎게 바꿔도 테스트가 모두 지났다. 기구 x [−290, 710] · y [270, 870] vs 기둥 x [700, 1300] · y [−300, 300] → x 10 · y 30.
+test('모서리 접촉(두 축 모두 ≤ equipTrim)은 작은 축만 깎는다', () => {
+  const r = trimToColumns([gen([210, 570], [1000, 600])], [colAt(1000, 0)]);
+  expect(r.trimmed).toBe(1);
+  expect(r.items[0]).toMatchObject({ pos: [205, 570], size: [990, 600, 850] });
+  expect(collidingIds([colAt(1000, 0), ...r.items]).size).toBe(0);
+});
+
 test('두 기둥 사이에 낀 기구 → 양쪽 변을 다 깎는다', () => {
   const it = gen([5, 0], [1430, 600]);                                    // x [−710, 720] — 왼쪽 기둥 [−1300, −700]에 10 · 오른쪽 [700, 1300]에 20
   const r = trimToColumns([it], [colAt(-1000, 0), colAt(1000, 0)]);
@@ -484,6 +493,25 @@ test('복합 블록(실제 전개): 어휘 자식 3 → 세 아이템이 제 전
   ]);
   expect(r.stats).toMatchObject({ placed: 3, product: 3, expanded: 1 });
   expect(r.stats.skipped.composite).toBe(0);
+});
+
+// 2026-10-13 · 최종 리뷰 X-10(M-F3): 전개는 **깊이 1**만 본다(insertBoxes.groupOwner의 top(p) — 사전 검토 I-7: 건물 블록 안 묶음의 손자까지 올리면 사동이 236).
+// 어휘가 아닌 깊이 1 자식(화장실묶음) 아래 어휘 손자가 둘 이상이어도 손자는 올라오지 않고, 바깥 묶음이 지금처럼 상자 하나다. 이 단언이 없어 top(p)를 지워도 지났다.
+test('groupOwner: 깊이 1 제한 — 어휘 아닌 자식 아래 어휘 손자 둘은 올라오지 않는다', () => {
+  const vocab = n => ['변기', '세면대'].includes(n);
+  const I = (name, parent) => ({ name, ...(parent != null ? { parent } : {}) });
+  const { owner, groups } = groupOwner([I('G'), I('Y', 0), I('변기', 1), I('세면대', 1)], vocab);
+  expect(owner).toEqual([0, 0, 0, 0]);
+  expect(groups.size).toBe(0);
+});
+
+test('복합 블록(실제 전개): 깊이 2의 어휘 손자는 서지 않는다 — 바깥 묶음 상자 하나 · expanded 0', () => {
+  const doc = groupDoc(KIDS, []);
+  doc.blocks.set('외곽', rectBlock(4500, 2500, [sub('화장실묶음', 200, 200)]));
+  doc.entities = [{ type: 'INSERT', name: '외곽', layer: '급식기구', x: 10000, y: 0, xscale: 1, yscale: 1, a0: 0 }];
+  const r = run(explode(doc));
+  expect(r.items.map(i => [i.dxfBlock, i.productId, i.pos, i.size.slice(0, 2)])).toEqual([['외곽', 'equip-generic', [12250, -1250], [4500, 2500]]]);
+  expect(r.stats).toMatchObject({ placed: 1, expanded: 0 });
 });
 
 // 2026-10-13 · 최종 리뷰 X-4(M-F1): 내곡 afadfasdfasfd ×2의 깊이 1 자식은 영유아거치대 · 세면대 평면 · 장애인화장실 대변기_평면(변기 한 벌 1089×857)이다.

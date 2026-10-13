@@ -5,7 +5,7 @@
 // URL 기본값은 로컬 미리보기(npm run build && npx vite preview --port 5173). 화면 캡처는 out/<id>/ 에 남는다.
 // playwright-core는 의존성에 넣지 않았다: 있으면 그것을, 없으면 PW_MODULES(node_modules 경로)에서 찾는다.
 import { createRequire } from 'node:module';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { corpus, runDrawing, fileOf } from './lib.mjs';
@@ -14,6 +14,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const URL_ = args.find(a => /^https?:/.test(a)) ?? 'http://localhost:5173/';
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
+// 가져온 직후 2D 렌더샷의 drawn 하한(아래 · 2026-10-13 최종 리뷰 X-10). 실측(SwiftShader): 사동 0.7156 · 신상B 0.4232 · 신상A 0.6305 · 내곡 0.3627.
+// 리뷰가 제안한 nonBg ≥ 0.95(배경·바닥색이 아닌 화소)는 쓰지 않는다: renderImage를 gate.fresh 없이 부르게 바꾼 변형 빌드(숨은 3D가 짓지 않고 찍음)의
+// 빈 한 색 그림이 nonBg 1.0으로 통과했다 — drawn(가장 흔한 색에서 먼 불투명 화소)은 그 그림이 0이다(실패).
+const SHOT_MIN = 0.2;
 async function loadPlaywright() {
   try { return (await import('playwright-core')).chromium; } catch { /* 아래 경로에서 찾는다 */ }
   const base = process.env.PW_MODULES ?? 'C:/Users/User/AppData/Local/npm-cache/_npx/9833c18b2d85bc59/node_modules/';
@@ -72,6 +76,41 @@ for (const entry of corpus()) {
     check('가져온 뒤 배너: 끊긴 끝점 안내 + 충돌 수 = 알림', (want.openEnds > 0 ? /이어지지 않은 곳이 \d+군데/.test(bn.text) && bn.view : true) && bc === colliding,
       `배너 "${bn.text.slice(0, 90)}" · 끊긴 끝점 ${want.openEnds} · 알림 충돌 ${colliding}`);
     await page.screenshot({ path: resolve(out, '2-2d.png') });
+    // 가져온 직후 2D에서 렌더샷(2026-10-13 · 계획 14 최종 리뷰 X-10 · Task B 리뷰 M-B1): 2D를 보는 동안 3D 리빌드를 보류하므로(Task B) 숨긴 채 찍는 렌더샷은
+    // gate.fresh로 먼저 짓고 컷어웨이·라벨 컬링을 한 뒤 그린다 — 첫 구현에서 이 길이 빠져 앞 벽·라벨 접힘이 없었다(지금은 소스 정규식만 지켰다).
+    // 1280×720 미리보기 PNG가 비어 있지 않은지(가장 흔한 색에서 먼 불투명 화소 비율 drawn ≥ SHOT_MIN — 위 SHOT_MIN 주석)와 콘솔 오류 0(아래)을 본다.
+    // 캡처는 out/<id>/2b-render-2d.png. nonBg(Task B 리뷰의 판정)는 보고만 한다.
+    // 한계(X-6 · 이전부터 · 회귀 아님 · 계획 15): 가져온 뒤에는 2D만 맞추고(view.fit) 3D 카메라는 시작 때의 빈 프로젝트 프레이밍에 남는다 — 이 그림은 도면
+    // 한 귀퉁이만 보이고, 라벨은 숨은 컨테이너(1×1)로 재서 모두 점이다. drawn은 그런 그림도 통과한다(사동 0.72). 프레이밍·라벨 검사는 X-6을 고친 뒤에.
+    await page.click('#btnRender'); await page.waitForTimeout(200);
+    await page.selectOption('.modal.render [name="size"]', '1280×720');
+    await page.click('.modal.render [name="render"]');
+    await page.waitForFunction(() => { const i = document.querySelector('.modal.render [data-part="preview"]'); return i && !i.hidden && i.src.startsWith('data:image/png'); }, { timeout: 30000 });
+    const shot = await page.evaluate(async () => {
+      const src = document.querySelector('.modal.render [data-part="preview"]').src, img = new Image();
+      img.src = src; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data, n = d.length / 4;
+      let other = 0, opaque = 0;   // nonBg: 배경(0xeef1f4)·바닥(0xdfe4e9) 근처가 아닌 화소(Task B 리뷰 측정과 같은 판정 — 보고용)
+      const bins = new Map();       // drawn: 불투명 화소 중 가장 흔한 색(채널당 16단계로 묶은 칸)에서 먼 화소 — 빈 그림(한 색·투명)은 0이다
+      for (let i = 0; i < d.length; i += 4) {
+        const near = (r, gg, b) => Math.abs(d[i] - r) + Math.abs(d[i + 1] - gg) + Math.abs(d[i + 2] - b) < 24;
+        if (!near(0xee, 0xf1, 0xf4) && !near(0xdf, 0xe4, 0xe9)) other++;
+        if (d[i + 3] < 255) continue;
+        opaque++;
+        const k = (d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4), e = bins.get(k) ?? bins.set(k, [0, 0, 0, 0]).get(k);
+        e[0]++; e[1] += d[i]; e[2] += d[i + 1]; e[3] += d[i + 2];
+      }
+      const top = [...bins.values()].sort((a, b) => b[0] - a[0])[0] ?? [1, 0, 0, 0], m = top.slice(1).map(v => v / top[0]);
+      let drawn = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 255 && Math.abs(d[i] - m[0]) + Math.abs(d[i + 1] - m[1]) + Math.abs(d[i + 2] - m[2]) >= 24) drawn++;
+      return { src, w: c.width, h: c.height, nonBg: +(other / n).toFixed(4), opaque: +(opaque / n).toFixed(4), drawn: +(drawn / n).toFixed(4) };
+    });
+    writeFileSync(resolve(out, '2b-render-2d.png'), Buffer.from(shot.src.split(',')[1], 'base64'));
+    check('가져온 직후 2D 렌더샷이 비어 있지 않다', shot.w === 1280 && shot.h === 720 && shot.drawn >= SHOT_MIN,
+      `${shot.w}×${shot.h} · ${shot.src.length} B · drawn ${shot.drawn} · opaque ${shot.opaque} · nonBg ${shot.nonBg}`);
+    await page.click('.modal.render [name="close"]'); await page.waitForTimeout(200);
     await page.mouse.move(700, 380); for (let k = 0; k < 5; k++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(100); }
     await page.waitForTimeout(400); await page.screenshot({ path: resolve(out, '3-2d-zoom.png') });
     const b3 = await page.$('button:has-text("3D")');

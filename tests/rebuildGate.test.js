@@ -336,6 +336,23 @@ describe('view3d 배선', () => {
     expect(v3).toMatch(/prepFrame\(\); renderer\.render\(scene, ov\.camera\(\) \?\? camera\);/);   // 화면 프레임과 같은 함수
   });
 
+  // 2026-10-13 · 최종 리뷰 X-5(M-B2): 라벨 컬링은 카메라의 matrixWorldInverse로 투영한다(labels3d.projectSprite → Vector3.project). OrbitControls.update의
+  // lookAt은 새 회전을 쓰기 **전에** matrixWorld를 갱신하고, 숨은 렌더가 없어진 뒤(계획 14 Task B)에는 첫 컬링 전에 행렬을 고쳐 주는 것이 없다 —
+  // 직교·2D 투영 프리셋에서 첫 컬링이 옛 자세로 계산되고 120 ms 뒤 다시 재기가 바로잡았다(리뷰 실측 · 원근은 spriteScreenHeight가 가렸다).
+  test('라벨 컬링은 카메라 행렬부터 맞추고 잰다 — 낡은 행렬로 컬링하지 않는다', () => {
+    const body = v3.match(/function cullNow\(\) \{([^\n]*\n(?: {4}[^\n]*\n)*?) {2}\}/)?.[1] ?? '';
+    const upd = body.indexOf('(ov.camera() ?? camera).updateMatrixWorld();'), cull = body.indexOf('cullLabels(');
+    expect([upd >= 0, cull > upd]).toEqual([true, true]);
+    expect(body.split('\n')[1]).toContain('updateMatrixWorld()');           // cullNow의 첫 줄(재기 전 — 일찍 돌아가는 길보다도 앞)
+    // 까닭(three): 자리를 옮긴 뒤 updateMatrixWorld 없이 투영하면 옛 자세의 화면 자리다.
+    const cam = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100), p = new THREE.Vector3(5, 0, 0);
+    cam.position.set(0, 10, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+    cam.position.set(5, 10, 0);
+    expect(p.clone().project(cam).x).toBeCloseTo(0.5);                     // 낡은 행렬: 옮기기 전 자리
+    cam.updateMatrixWorld();
+    expect(p.clone().project(cam).x).toBeCloseTo(0);                       // 맞춘 행렬: 화면 가운데
+  });
+
   test('보류했던 리빌드 뒤 첫 3D 프레임은 라벨을 먼저 잰다 · 예열 둘이 배선돼 있다', () => {
     expect(v3).toMatch(/render: \(\) => \{ cullFirst = true; requestRender\(\); \}/);
     expect(v3).toMatch(/function frame\(t\) \{\s*if \(cullFirst\) \{ cullFirst = false; cullNow\(\); \}[^\n]*\n\s*raf = 0;/);
