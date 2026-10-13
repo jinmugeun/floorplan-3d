@@ -316,7 +316,7 @@ test('안내 페이지의 아키스케치 호환 문장: 높이 꼬리 · HATCH 
   expect(html).toContain('-archisketch.dxf');
   expect(html).toContain('중심선은 쓰지 않');
   expect(html).toContain('벽을 끊지 못한 통로');
-  expect(html).toContain(`${DXF_PARAMS.bandGap} mm보다 두꺼운 벽`);
+  expect(html).toContain(`${DXF_PARAMS.bandGap} mm보다 두꺼운 벽은 벽으로 읽히지 않고`);   // §5 줄에만 있는 문구(WALL 행 · 벽 그리기 줄의 520은 따로)
   expect(html).toContain('정규화 DXF를 쓰세요');
 });
 
