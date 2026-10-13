@@ -678,7 +678,9 @@ test('"도면의 기구를 제품으로 배치" 칸은 기본 켬이고, 끄면 
   expect(q('notice').textContent).toBe(DXF_EQUIPMENT(226, 143, 83, 30, 0));
   expect(DXF_EQUIPMENT(226, 143, 83, 30, 0)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 충돌 30건(기둥·기구 겹침 · 빨간 테두리)');
   expect(DXF_EQUIPMENT(226, 143, 83, 30, 2)).toBe('기구 226개 배치 — 제품 143 · 일반 83 · 충돌 30건(기둥·기구 겹침 · 빨간 테두리) · 벽·기둥과 겹침 2');
-  expect(DXF_EQUIPMENT(1, 0, 1, 0)).toBe('기구 1개 배치 — 제품 0 · 일반 1 · 충돌 0건(기둥·기구 겹침 · 빨간 테두리)');
+  // 충돌이 없으면 "충돌 0건(…)"을 적지 않는다(2026-10-13 · 계획 14 Task D — 0건 안내는 소음이다).
+  expect(DXF_EQUIPMENT(1, 0, 1, 0)).toBe('기구 1개 배치 — 제품 0 · 일반 1');
+  expect(DXF_EQUIPMENT(11, 4, 7, 0, 2)).toBe('기구 11개 배치 — 제품 4 · 일반 7 · 벽·기둥과 겹침 2');
   expect(q('notice').textContent).not.toMatch(/벽과|기구끼리/);   // 앱 배너에 없는 수(overlap 14)는 문구에서 뺐다
   q('equipment').click();
   expect(q('import').disabled).toBe(true);                  // 최신 결과가 올 때까지 잠긴다

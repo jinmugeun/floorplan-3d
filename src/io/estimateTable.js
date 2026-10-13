@@ -20,9 +20,11 @@ const KIND_LABEL = { supply: '급기', exhaust: '배기' };
 // DXF 가져오기의 일반 상자(equip-generic)가 든 카테고리 — catalogDrawing.js와 같은 글자다(estimate.test.js가 못 박는다).
 // 정의를 이 잎 모듈에 두는 까닭: estimate.js가 이 파일을 다시 내보내므로, 거꾸로 import하면 순환이 된다.
 export const DRAWING_CATEGORY = '도면 기구';
-// 가져온 기구가 0원인 까닭(2026-10-12 · 계획 13 최종 리뷰 F-1): '도면 기구' 행이 있을 때만 견적 화면·인쇄·CSV 꼬리에 붙는다(estimate.productRows의 규칙).
+// 가져온 기구가 0원인 까닭(2026-10-12 · 계획 13 최종 리뷰 F-1): **가져온** 기구 행(estimate.productRows의 drawn — dxfBlock이 있고
+// productId === dxfProduct)이 있을 때만 견적 화면·인쇄·CSV 꼬리에 붙는다. 구분이 '도면 기구'인지로 보지 않는다(2026-10-13 · 계획 14 Task D):
+// 라이브러리에서 손으로 놓은 '도면 기구' 상자·가져온 기구의 사본에 "도면에서 가져온 기구는…"이 붙으면 틀린 말이다.
 export const DRAWING_PRICE_NOTE = '도면에서 가져온 기구는 제품을 바꾸기 전까지 0원';
-export const hasDrawingRows = rows => (rows?.products ?? []).some(r => r.category === DRAWING_CATEGORY);
+export const hasDrawingRows = rows => (rows?.products ?? []).some(r => r.drawn === true);
 
 // estimateRows(io/estimate.js)의 결과를 한 벌의 행으로 편다. 순서는 제품 → 도면 기구 → 마감재 → 덕트다.
 // 도면 기구(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-1): DXF 가져오기의 일반 상자는 "구분"이 '도면 기구'다 — 0원 행이

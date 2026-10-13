@@ -130,6 +130,9 @@ describe('견적서 대화상자', () => {
     const a = setup();
     const note = () => a.root.querySelector('[data-part="drawNote"]');
     expect(note().hidden).toBe(true);                                   // 소파만 — 안내 없음
+    // 라이브러리에서 손으로 놓은 '도면 기구' 상자는 가져온 것이 아니다 — 안내 없음(2026-10-13 · 계획 14 Task D).
+    addItem(a.store, createItem(productById('equip-generic'), { pos: [2500, 1000] }));
+    expect(note().hidden).toBe(true);
     const sink = productById('sink-double');
     addItem(a.store, createItem(sink, { pos: [1000, 1000], name: '세정대 2조 1500-750', dxfBlock: '세정대 2조 1500-750', dxfProduct: sink.id }));
     expect(note().hidden).toBe(false);

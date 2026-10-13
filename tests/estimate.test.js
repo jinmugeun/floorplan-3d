@@ -9,7 +9,7 @@ import { materialById } from '../src/materials/catalog.js';
 import { estimateRows, estimateCsv, ductRows, DUCT_PRICE_PER_M2, DRAWING_CATEGORY } from '../src/io/estimate.js';
 import { normalizeDuct } from '../src/state/ductSchema.js';
 import { buildSampleProject } from '../src/samples/gangdang.js';
-import { estimateLines, estimateCsvText, csvFooter, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE, DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
+import { estimateLines, estimateCsvText, csvFooter, EST_COLUMNS, EST_TABLE_COLUMNS, PRICE_NOTE, DRAWING_PRICE_NOTE, hasDrawingRows } from '../src/io/estimateTable.js';
 import { replaceProduct } from '../src/state/itemOps.js';
 import { parseProject } from '../src/io/file.js';
 
@@ -399,5 +399,24 @@ describe('가져온 기구는 제품을 바꾸기 전까지 0원(최종 리뷰 F
     expect(withDrawn.split('\n').at(-1).split(',')).toHaveLength(EST_COLUMNS.length);   // 꼬리도 8열 그대로
     const plain = estimateCsvText(estimateRows({ walls: [], rooms: [], items: [createItem(productById('sofa-3'), { pos: [0, 0] })] }));
     expect(plain).not.toContain(DRAWING_PRICE_NOTE);
+  });
+
+  // 2026-10-13 · 계획 14 Task D: 안내는 **가져온** 기구(dxfBlock이 있고 productId === dxfProduct)가 있을 때만이다 — 라이브러리에서 손으로 놓은
+  // '도면 기구' 상자(구분은 같은 '도면 기구' · 0원)에 "도면에서 가져온 기구는…"이 붙으면 틀린 말이다. 가져온 일반 상자에는 붙는다.
+  test('손으로 놓은 "도면 기구" 상자에는 0원 안내가 붙지 않고, 가져온 일반 상자에는 붙는다', () => {
+    const gen = productById('equip-generic');
+    const handBox = createItem(gen, { pos: [0, 0] });
+    const handRows = estimateRows({ walls: [], rooms: [], items: [handBox] });
+    expect(handRows.products.map(r => [r.category, r.drawn])).toEqual([[DRAWING_CATEGORY, false]]);   // 구분은 그대로 '도면 기구'
+    expect(hasDrawingRows(handRows)).toBe(false);
+    expect(estimateCsvText(handRows)).not.toContain(DRAWING_PRICE_NOTE);
+    const imported = createItem(gen, { pos: [2000, 0], name: '운반카 튀김 620', size: [620, 720, 850], dxfBlock: '운반카 튀김 620', dxfProduct: gen.id });
+    const both = estimateRows({ walls: [], rooms: [], items: [handBox, imported] });
+    expect(hasDrawingRows(both)).toBe(true);
+    expect(estimateCsvText(both).split('\n').at(-1)).toContain(DRAWING_PRICE_NOTE);
+    // 가져온 상자라도 사본(dxfProduct 없음)이면 사용자가 놓은 것이다 — 안내 없음.
+    const { dxfProduct, ...copy } = imported;
+    expect(dxfProduct).toBe(gen.id);
+    expect(hasDrawingRows(estimateRows({ walls: [], rooms: [], items: [copy] }))).toBe(false);
   });
 });

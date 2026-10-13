@@ -40,9 +40,10 @@ export const DXF_RAIL_DIVIDED = n => `난간으로 닫은 구획선 ${n}개를 �
 // 충돌 = 가져오자마자 앱 배너가 말할 수와 **같은 수**(2026-10-12 · 최종 리뷰 F-3 · I3-2 — stats.equipment.colliding = 완성된 아이템의 collidingIds):
 // 예전 "벽과 겹침 0 · 기구끼리 겹침 14"는 기둥에 닿은 기구를 세지 않아 배너 "충돌 30건"과 달랐다. 충돌은 바닥 아이템끼리(기둥·기구)라 벽은 들지 않는다.
 // 벽·기둥과 겹침(clash — 벽 띠·기둥에 절반 넘게 덮인 바닥 기구, 옮기지 않고 사람이 본다)은 0이 아닐 때만 덧붙인다(옛 문구 "벽과"는 기둥을 빠뜨렸다).
+// 충돌이 0이면 그 칸을 통째로 뺀다(2026-10-13 · 계획 14 Task D — "충돌 0건(…빨간 테두리)"은 볼 것이 없는 소음이다. 계획 14 Task A 뒤 내곡 2 → 0).
 export const DXF_EQUIPMENT_OPT = '도면의 기구를 제품으로 배치';
 export const DXF_EQUIPMENT = (placed, product, generic, colliding, clash = 0) =>
-  `기구 ${placed}개 배치 — 제품 ${product} · 일반 ${generic} · 충돌 ${colliding}건(기둥·기구 겹침 · 빨간 테두리)${clash ? ` · 벽·기둥과 겹침 ${clash}` : ''}`;
+  `기구 ${placed}개 배치 — 제품 ${product} · 일반 ${generic}${colliding ? ` · 충돌 ${colliding}건(기둥·기구 겹침 · 빨간 테두리)` : ''}${clash ? ` · 벽·기둥과 겹침 ${clash}` : ''}`;
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';
 export const DXF_IMPORTED = (walls, rooms) => `벽 ${walls}개 · 방 ${rooms}개를 가져왔습니다`;
 export const DXF_OPEN_END_COUNT = n => `⚠ 끊긴 끝점 ${n}개`;

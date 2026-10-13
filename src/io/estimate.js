@@ -71,7 +71,9 @@ export function productRows(items) {
     const row = m.get(key);
     if (row) { row.qty += 1; row.total = row.qty * row.unitPrice; continue; }
     const unitPrice = drawn ? 0 : p?.price ?? 0;
-    m.set(key, { key, productId: it.productId || it.id, name, code: it.code || p?.code || '', size, category: drawn ? DRAWING_CATEGORY : p?.category ?? '', qty: 1, unitPrice, total: unitPrice });
+    // drawn = 가져온 기구 행(2026-10-13 · 계획 14 Task D): 0원 안내(estimateTable.hasDrawingRows)는 이 표지로만 붙는다 — 구분이 같은 '도면 기구'라도
+    // 라이브러리에서 손으로 놓은 상자(equip-generic · dxfBlock 없음)는 "도면에서 가져온" 것이 아니다.
+    m.set(key, { key, productId: it.productId || it.id, name, code: it.code || p?.code || '', size, category: drawn ? DRAWING_CATEGORY : p?.category ?? '', qty: 1, unitPrice, total: unitPrice, drawn });
   }
   const drawn = r => (r.category === DRAWING_CATEGORY ? 1 : 0);
   return [...m.values()].sort((a, b) => drawn(a) - drawn(b) || a.name.localeCompare(b.name, 'ko') || a.size.localeCompare(b.size, 'ko', { numeric: true }));
