@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync, crc32 } from 'node:zlib';               // zlib.crc32: Node ≥ 22.2 / 20.15 (CI Node 20 최신 20.x면 있음 · 사전 검토 S-11)
 import { fileURLToPath } from 'node:url';
-import { ASSET_BUDGET, ALLOWED_EXTENSIONS, FRONT_YAW, normalizeTransform, checkManifestEntry, manifestEntry, sheetLayout } from '../tools/assets/lib.mjs';
+import { ASSET_BUDGET, ALLOWED_EXTENSIONS, FRONT_YAW, normalizeTransform, checkManifestEntry, manifestEntry, sheetLayout, perfVerdict } from '../tools/assets/lib.mjs';
 
 test('normalizeTransform: +Y 위·정면 +Z 모델은 회전 0, 균일 배율은 가장 큰 축 기준, 원점은 바닥 중심', () => {
   // 모델 bbox(m): 가로 0.5 · 높이 1.0 · 깊이 0.4, 바닥이 y = 0.2에 떠 있고 중심이 x = 1
@@ -49,6 +49,47 @@ test('sheetLayout: 6장은 3 × 2 · 칸 400 px, 1·4·5·16장과 너비 옵션
   expect(sheetLayout(16)).toEqual({ cols: 4, rows: 4, cell: 300 });
   expect(sheetLayout(4, { width: 601 })).toEqual({ cols: 2, rows: 2, cell: 300 });   // 정수 px로 내린다
   for (const n of [0, NaN, 2.5]) expect(() => sheetLayout(n)).toThrow(RangeError);
+});
+
+// 성능 판정(2026-10-13 · 계획 15 Task D 리뷰 I-1): perf.mjs가 모델 첫 프레임 대기 타임아웃을 삼키면 modelMs가 null이 되고 `null <= 500`이 참이라
+// 모델이 하나도 안 선 장면이 목표 3 "통과"를 찍었다(궤도도 상자 대 상자 비교). 판정은 유한수끼리만 비교하고, 에셋 장면은 모델 프레임 ·
+// GLB 요청 ≥ 1 · 전송 > 0 · 지오메트리 감소(공유)가 있어야 측정이 성립한다. 값은 Task D 보고서의 vsync 끔 3회 중앙값.
+const PERF_OK = {
+  box: { firstMs: 327.5, modelMs: null, orbitGapMs: 11.7, geometries: 1210, glbCount: 0, glbBytes: 0, errors: 0 },
+  cold: { firstMs: 353.3, modelMs: 561.2, orbitGapMs: 3.4, geometries: 11, glbCount: 1, glbBytes: 203480, errors: 0 },
+  warm: { firstMs: 251.1, modelMs: 379.5, orbitGapMs: 3.9, geometries: 11, glbCount: 1, glbBytes: 203480, errors: 0 },
+};
+test('perfVerdict: 보고서 값은 통과(모델 첫 프레임 561 ms는 참고 — 판정에 넣지 않는다), 장면별 문제는 빈 목록', () => {
+  expect(perfVerdict(PERF_OK)).toEqual({ ok: true, orbit: true, firstFrame: true, modelFrame: false, problems: { box: [], cold: [], warm: [] } });
+  // 성능 모드 장면(perf)은 상자처럼 첫 프레임·궤도·오류만 본다(모델 없음이 정상)
+  const withPerf = perfVerdict({ ...PERF_OK, perf: { firstMs: 198.4, modelMs: null, orbitGapMs: 5.7, geometries: 610, glbCount: 0, glbBytes: 0, errors: 0 } });
+  expect([withPerf.ok, withPerf.problems.perf]).toEqual([true, []]);
+});
+
+test('perfVerdict: 모델이 안 선 에셋 장면(modelMs null · GLB 0 · 지오메트리 그대로)은 실패 — 궤도가 상자 대 상자로 같아도', () => {
+  const noModel = { ...PERF_OK.box, firstMs: 340, orbitGapMs: 11.7 };       // 리뷰 I-1: 모델 대기 타임아웃 → 장면은 조합 형상 그대로
+  const v = perfVerdict({ ...PERF_OK, cold: noModel, warm: noModel });
+  expect(v.ok).toBe(false);
+  expect(v.modelFrame).toBe(false);
+  expect(v.problems.cold).toEqual(['model', 'glb', 'glbBytes', 'geometries']);
+  expect(v.problems.warm).toEqual(['model', 'glb', 'glbBytes', 'geometries']);
+  expect(v.problems.box).toEqual([]);
+  // GLB는 왔지만 모델 프레임만 못 잡은 경우도 실패
+  expect(perfVerdict({ ...PERF_OK, warm: { ...PERF_OK.warm, modelMs: undefined } }).problems.warm).toEqual(['model']);
+});
+
+test('perfVerdict: non-finite(null · NaN · undefined)는 비교에서 통과가 아니라 실패, 장면이 빠지거나 오류가 있어도 실패', () => {
+  const v = perfVerdict({ ...PERF_OK, box: { ...PERF_OK.box, orbitGapMs: null }, cold: { ...PERF_OK.cold, firstMs: NaN } });
+  expect([v.ok, v.orbit, v.firstFrame]).toEqual([false, false, false]);
+  expect(v.problems.box).toEqual(['orbitGapMs']);
+  expect(v.problems.cold).toEqual(['firstMs']);
+  expect(perfVerdict({ ...PERF_OK, warm: { ...PERF_OK.warm, orbitGapMs: undefined } }).orbit).toBe(false);
+  expect(perfVerdict({ ...PERF_OK, cold: { ...PERF_OK.cold, firstMs: 501 } })).toMatchObject({ ok: false, firstFrame: false, problems: { cold: [] } });
+  expect(perfVerdict({ ...PERF_OK, box: { ...PERF_OK.box, orbitGapMs: 3 } })).toMatchObject({ ok: false, orbit: false });   // 에셋이 상자보다 느리다
+  const err = perfVerdict({ ...PERF_OK, warm: { ...PERF_OK.warm, errors: 2 } });
+  expect([err.ok, err.problems.warm]).toEqual([false, ['errors']]);
+  const missing = perfVerdict({ box: PERF_OK.box, cold: PERF_OK.cold });
+  expect([missing.ok, missing.orbit, missing.problems.warm]).toEqual([false, false, ['missing']]);
 });
 
 // ── pack CLI 통합(Step 6) — 사전 검토 scratch/p15/pkg/step6.test.js의 통과 코드(1 passed · 7,488 B · 24 삼각형)를 옮겼다.

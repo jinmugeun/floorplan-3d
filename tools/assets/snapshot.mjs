@@ -95,9 +95,10 @@ async function shots(browser, url, id, withItem) {
     await restoreProject(page, url, project);
     let glb = null; const persp = [];
     if (withItem) {
-      const res = page.waitForResponse(r => new RegExp(`models/${id}\\.glb$`).test(r.url()), { timeout: 30000 });
-      await page.click('[data-mode="iso"]');                      // 2D → 3D(원근): 첫 리빌드가 모델을 요청한다
-      const r = await res; glb = { status: r.status(), bytes: (await r.body()).length };
+      // 2D → 3D(원근): 첫 리빌드가 모델을 요청한다. 응답 대기와 클릭을 Promise.all로 묶는다(2026-10-13 · 리뷰 I-2) — 예전처럼 대기 약속을
+      // 따로 만들어 두면 클릭이 실패할 때 그 약속의 거절이 처리되지 않아 Node가 finally(server.stop)를 못 돌고 끝나 vite가 고아로 남았다.
+      const [r] = await Promise.all([page.waitForResponse(x => new RegExp(`models/${id}\\.glb$`).test(x.url()), { timeout: 30000 }), page.click('[data-mode="iso"]')]);
+      glb = { status: r.status(), bytes: (await r.body()).length };
       if (glb.status !== 200) throw new Error(`models/${id}.glb HTTP ${glb.status}`);
       await page.waitForFunction(() => window.__three.scenes.some(s => { let n = 0; s.traverse(o => { if (o.isMesh && o.userData.shared) n++; }); return n > 0; }), null, { timeout: 15000 });
       await frames(page);

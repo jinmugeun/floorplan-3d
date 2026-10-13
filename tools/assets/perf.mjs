@@ -1,6 +1,7 @@
 // 에셋 성능 측정(2026-10-13 · 계획 15 Task D · 목표 3): 같은 자리의 제품 n개(기본 chair-dining 100개)를 실사 모델(v3.assets 켬)과
 // 조합 형상(v3.assets=false)으로 앱 화면(프리뷰 빌드 · 헤드 Chrome)에 띄워 잰다 → 표 + 목표 3 판정(에셋 ≤ 상자 · 첫 프레임 ≤ 500 ms).
 //   npm run build && node tools/assets/perf.mjs [URL] [--vsync off|on] [--runs 3] [--n 100] [--product chair-dining] [--port 5196] [--perf-mode]
+// 목표 3 실패 · 측정 검사 실패(에셋 장면에 모델·GLB가 없는 등 — lib perfVerdict · 리뷰 I-1) · 페이지 오류가 있으면 종료 1.
 // URL을 주지 않으면 dist를 vite preview로 띄우고 끝에 내린다(browser.mjs). 회마다 ① 상자 ② 에셋 · 새 세션(모델·로더 청크를 처음 받는다)
 // ③ 에셋 · 캐시 뒤(②와 같은 브라우저·컨텍스트의 두 번째 페이지 — HTTP 캐시)를 잰다. --perf-mode면 ④ 성능 모드(view.perfMode = 'performance' —
 // 지금 규칙으로는 모델 대신 상자 · 윤곽선·그림자·라벨 없음 · 픽셀 비율 1)도 잰다.
@@ -15,6 +16,7 @@
 //   렌더러는 __THREE_DEVTOOLS__ 'observe'로 잡는다(browser.mjs threeHook — src 변경 없음).
 // 기준선(사전 검토 · 같은 PC · 같은 장면 · 계획 15 전 코드): 3D 첫 프레임 408 ms(vsync 끔) / 278 ms(vsync 켬) · 궤도 간격 10.4 ms(vsync 끔) · draw 1,436.
 import { productById } from '../../src/products/catalog.js';
+import { perfVerdict } from './lib.mjs';
 import { launchChrome, startPreview, threeHook, makeProject, restoreProject, collectErrors, median } from './browser.mjs';
 
 const argv = process.argv.slice(2), arg = (k, d) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : d);
@@ -67,6 +69,7 @@ async function measure(context, url, kind) {
     const first = await page.evaluate(() => { const f = window.__frames.find(x => x.start >= window.__click); return { ms: f.start + f.total - window.__click, draws: f.draws }; });
     let model = null;
     if (kind === 'asset') {
+      // 타임아웃은 여기서 삼키고 model = null로 남긴다 — 측정은 끝까지 하고, 판정(lib perfVerdict · 리뷰 I-1)이 그 장면을 'model' 문제로 실패시킨다.
       await page.waitForFunction(d => window.__frames.some(x => x.start >= window.__click && x.draws <= d / 2), first.draws, { timeout: 20000 }).catch(() => {});
       model = await page.evaluate(d => {
         const f = window.__frames.find(x => x.start >= window.__click && x.draws <= d / 2);
@@ -126,21 +129,23 @@ const sum = k => ({
   errors: rows[k].reduce((a, x) => a + x.errors.length, 0),
 });
 const S = Object.fromEntries(['box', 'cold', 'warm', ...(withPerf ? ['perf'] : [])].map(k => [k, sum(k)]));
-const verdict = {
-  orbit: S.cold.orbitGapMs <= S.box.orbitGapMs && S.warm.orbitGapMs <= S.box.orbitGapMs,
-  firstFrame: S.cold.firstMs <= 500 && S.warm.firstMs <= 500,
-  modelFrame: S.cold.modelMs <= 500 && S.warm.modelMs <= 500,
-};
+// 판정은 lib의 순수 함수(리뷰 I-1 · 2026-10-13): 예전 `S.cold.modelMs <= 500`은 모델이 안 서 null이어도 참이었고 종료 코드는 콘솔 오류만 셌다.
+// 이제 비교는 유한수끼리만, 에셋 장면은 모델 프레임·GLB·지오메트리 감소가 있어야 하고, 장면 문제가 하나라도 있거나 목표 3이 실패면 종료 1.
+const verdict = perfVerdict(S);
+const PROBLEM_NOTE = { model: '모델 프레임 없음(대기 타임아웃)', glb: 'GLB 요청 0', glbBytes: 'GLB 전송 0·읽기 실패', geometries: '지오메트리가 상자보다 줄지 않음(공유 안 됨)', firstMs: '첫 프레임 값 없음', orbitGapMs: '궤도 값 없음', errors: '페이지 오류', missing: '장면 없음' };
 const cell = v => (v == null ? '—' : String(v));
-const line = (name, k) => `| ${name} | ${cell(S[k].firstMs)} | ${cell(S[k].modelMs)} | ${cell(S[k].glbDoneMs)} | ${cell(S[k].orbitGapMs)} (p90 ${cell(S[k].orbitP90Ms)}) | ${cell(S[k].orbitCbMs)} | ${cell(S[k].draws)} | ${cell(S[k].geometries)} / ${cell(S[k].textures)} | ${cell(S[k].glbBytes)} (${cell(S[k].glbCount)}) |`;
+const check = k => (verdict.problems[k].length ? `**실패**(${verdict.problems[k].join(', ')})` : '통과');
+const line = (name, k) => `| ${name} | ${cell(S[k].firstMs)} | ${cell(S[k].modelMs)} | ${cell(S[k].glbDoneMs)} | ${cell(S[k].orbitGapMs)} (p90 ${cell(S[k].orbitP90Ms)}) | ${cell(S[k].orbitCbMs)} | ${cell(S[k].draws)} | ${cell(S[k].geometries)} / ${cell(S[k].textures)} | ${cell(S[k].glbBytes)} (${cell(S[k].glbCount)}) | ${check(k)} |`;
+const seen = [...new Set(Object.values(verdict.problems).flat())];
 console.log([
   '', `${pid} ×${n} · vsync ${vsync ? '켬' : '끔'} · ${runs}회 중앙값 · GPU ${rows.box[0]?.gpu}`,
-  '| 장면 | 3D 첫 프레임 ms | 모델 첫 프레임 ms | GLB 도착 ms | 궤도 간격 ms | 궤도 JS ms | draw/프레임 | geometries / textures | models 전송 B(요청 수) |',
-  '|---|---|---|---|---|---|---|---|---|',
+  '| 장면 | 3D 첫 프레임 ms | 모델 첫 프레임 ms | GLB 도착 ms | 궤도 간격 ms | 궤도 JS ms | draw/프레임 | geometries / textures | models 전송 B(요청 수) | 측정 검사 |',
+  '|---|---|---|---|---|---|---|---|---|---|',
   line('상자(v3.assets=false)', 'box'), line('에셋 · 새 세션', 'cold'), line('에셋 · 캐시 뒤', 'warm'),
   ...(withPerf ? [line('성능 모드(perfMode=performance)', 'perf')] : []),
-  `| 기준선(사전 검토 · 계획 15 전) | ${BASELINE.firstMs} | — | — | ${BASELINE.orbitGapMs} | — | 1,436 | — | — |`,
-  '', `목표 3: 궤도 에셋 ≤ 상자 ${verdict.orbit ? '통과' : '실패'} · 3D 첫 프레임 ≤ 500 ms ${verdict.firstFrame ? '통과' : '실패'} · (참고) 모델 첫 프레임 ≤ 500 ms ${verdict.modelFrame ? '예' : '아니오'}`,
+  `| 기준선(사전 검토 · 계획 15 전) | ${BASELINE.firstMs} | — | — | ${BASELINE.orbitGapMs} | — | 1,436 | — | — | — |`,
+  ...(seen.length ? ['', `측정 검사 문제: ${seen.map(p => `${p} = ${PROBLEM_NOTE[p] ?? p}`).join(' · ')}`] : []),
+  '', `목표 3 ${verdict.ok ? '통과' : '**실패**'}: 궤도 에셋 ≤ 상자 ${verdict.orbit ? '통과' : '실패'} · 3D 첫 프레임 ≤ 500 ms ${verdict.firstFrame ? '통과' : '실패'} · 측정 검사 ${seen.length ? '실패' : '통과'} · (참고) 모델 첫 프레임 ≤ 500 ms ${verdict.modelFrame ? '예' : '아니오'}`,
 ].join('\n'));
 console.log(JSON.stringify({ product: pid, n, vsync, runs, gpu: rows.box[0]?.gpu, summary: S, verdict }));
-process.exit(Object.values(S).some(s => s.errors) ? 1 : 0);
+process.exit(verdict.ok ? 0 : 1);

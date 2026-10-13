@@ -55,6 +55,37 @@ export function sheetLayout(n, { width = 1200, maxCell = 400 } = {}) {
   return { cols, rows: Math.ceil(n / cols), cell: Math.min(maxCell, Math.floor(width / cols)) };
 }
 
+// 성능 판정(2026-10-13 · 계획 15 Task D 리뷰 I-1): perf.mjs의 장면별 요약(회 중앙값) → 목표 3 판정 + 장면별 문제 목록. ok가 거짓이면 perf.mjs는 종료 1.
+// 왜: 모델 첫 프레임 대기가 조용히 타임아웃되면 modelMs가 null이었고 `null <= 500`이 참이라, 모델이 하나도 안 선 장면이 "통과"했다(궤도도
+// 상자 대 상자 비교였다). 그래서 비교는 양쪽이 유한수일 때만 참이고, 에셋 장면(cold 새 세션 · warm 캐시 뒤)은 모델 프레임 · GLB 요청 ≥ 1 ·
+// 전송 > 0 · 지오메트리 < 상자(공유 복제)가 있어야 측정이 성립한다 — 없으면 그 장면의 문제(model · glb · glbBytes · geometries)로 표에 찍힌다.
+// 판정 = 궤도 에셋 ≤ 상자 · 3D 첫 프레임 ≤ firstMaxMs(cold·warm 둘 다) · 모든 장면 문제 없음(오류 0 포함). modelFrame(모델 첫 프레임 ≤ firstMaxMs)은
+// 참고다 — 에셋 장면의 첫 프레임은 조합 형상으로 서고 모델이 늦게 서는 것은 목표 3 판정 항목이 아니다(Task D 보고서 · 새 세션 561 ms).
+// summary: { box, cold, warm, perf? } — 각 { firstMs, modelMs, orbitGapMs, geometries, glbCount, glbBytes, errors }. perf(성능 모드)는 상자처럼 본다.
+const PERF_ASSET_SCENES = ['cold', 'warm'];
+export function perfVerdict(summary, { firstMaxMs = 500 } = {}) {
+  const fin = Number.isFinite, le = (a, b) => fin(a) && fin(b) && a <= b;
+  const { box, cold, warm } = summary, problems = {};
+  for (const k of new Set(['box', ...PERF_ASSET_SCENES, ...Object.keys(summary)])) {
+    const s = summary[k];
+    if (!s) { problems[k] = ['missing']; continue; }
+    const p = [];
+    if (!fin(s.firstMs)) p.push('firstMs');
+    if (!fin(s.orbitGapMs)) p.push('orbitGapMs');
+    if (PERF_ASSET_SCENES.includes(k)) {
+      if (!fin(s.modelMs)) p.push('model');
+      if (!(s.glbCount >= 1)) p.push('glb');                    // `!(x >= 1)`: null · NaN · undefined도 문제로
+      if (!(s.glbBytes > 0)) p.push('glbBytes');
+      if (!(fin(s.geometries) && fin(box?.geometries) && s.geometries < box.geometries)) p.push('geometries');
+    }
+    if (s.errors !== 0) p.push('errors');
+    problems[k] = p;
+  }
+  const both = f => [cold, warm].every(s => s && f(s));
+  const orbit = both(s => le(s.orbitGapMs, box?.orbitGapMs)), firstFrame = both(s => le(s.firstMs, firstMaxMs)), modelFrame = both(s => le(s.modelMs, firstMaxMs));
+  return { ok: orbit && firstFrame && Object.values(problems).every(p => !p.length), orbit, firstFrame, modelFrame, problems };
+}
+
 // 출처 종류별 라이선스 근거 URL. Poly Haven은 /info에 license 필드가 없고 사이트 전체가 CC0-1.0이라(사전 검토 I-5) 사이트 라이선스 쪽을 적는다.
 export const LICENSE_URLS = Object.freeze({ polyhaven: 'https://polyhaven.com/license' });
 // manifest source.kind 값(2026-10-13 · 계획 15 Task E): polyhaven(시드) · generated(ComfyUI 생성 — URL이 없어 pack에 --source-kind로 준다) · other.
