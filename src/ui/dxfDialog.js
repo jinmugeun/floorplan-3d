@@ -10,13 +10,13 @@ import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { buildImportMeta } from '../io/dxfFeedback.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
-import { dxfNotes, UNITS, unitName } from './dxfNotes.js';   // 단위 이름 표는 알림과 한 곳(계획 16 Task D)
+import { dxfNotes, UNITS, unitName } from './dxfNotes.js';   // 단위 이름 표는 알림과 한 곳(2026-10-13 · 계획 16 Task D)
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_TRACE_SKIPPED, DXF_REGION, DXF_REGION_LABEL,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
   DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_EQUIPMENT_OPT } from './messages.js';
 
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
-// §18.6이 글자로 정한 `기본 두께` 범위(층고 쪽 정본은 설정에도 남는 prefs.js의 DXF_HEIGHT_RANGE다).
+// §18.6이 글자로 정한 `기본 두께` 범위(층고 쪽 정본은 io/dxf/params.js HEIGHT_RANGE — prefs.js DXF_HEIGHT_RANGE가 재수출 · 2026-10-13 계획 16 · 최종 리뷰 F-6).
 export const DXF_THICKNESS_RANGE = [50, 1000];
 // 범위를 화면에만 적어 두면 지켜지지 않는다(최종 리뷰 I-1): <input min max>는 타이핑을 막지 않고
 // 이 대화상자에는 폼 제출도 없다. 층고 99999는 normalizeProject를 **빠져나간다** — floor.height와
@@ -197,7 +197,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
       initial = new Set(summary.checked);
       checked = new Set(summary.checked);
       q('units').value = String(summary.unitScale);
-      if (summary.layerHeight) autoHeight = true;   // 꼬리 있는 도면은 그 높이에서 시작한다 — 아래 renderLayers(→ syncPreset → applyHint)가 칸을 채운다
+      if (summary.layerHeight) autoHeight = true;   // 2026-10-13 · 꼬리 있는 도면은 그 높이에서 시작한다 —아래 renderLayers(→ syncPreset → applyHint)가 칸을 채운다
       // 도면 후보가 둘 이상이면 고르는 칸을 연다(첫 후보 = 가장 큰 덩어리가 기본값).
       const regions = summary.regions ?? [];
       q('region').innerHTML = regions.map((r, i) => `<option value="${i}">${esc(DXF_REGION(i + 1, km(r.size[0]), km(r.size[1]), r.hint))}</option>`).join('');
@@ -284,8 +284,8 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     renderLayers(); schedule();
   });
   for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'equipment', 'trace']) q(n).addEventListener('change', schedule);
-  q('height').addEventListener('input', () => { autoHeight = false; notes(); });   // 사람이 층고를 만졌다 — 힌트를 놓고 알림도 곧바로 지운다(사전 검토 9-2)
-  q('units').addEventListener('change', notes);   // 사람이 단위를 골랐다 — 단위 변환 알림을 추출 답을 기다리지 않고 곧바로 맞춘다(계획 16 Task D)
+  q('height').addEventListener('input', () => { autoHeight = false; notes(); });   // 2026-10-13 · 사람이 층고를 만졌다 — 힌트를 놓고 알림도 곧바로 지운다(사전 검토 9-2)
+  q('units').addEventListener('change', notes);   // 2026-10-13 · 사람이 단위를 골랐다 — 단위 변환 알림을 추출 답을 기다리지 않고 곧바로 맞춘다(계획 16 Task D)
   q('region').addEventListener('change', () => { setHead(); schedule(); });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel(); } });
 

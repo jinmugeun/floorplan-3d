@@ -87,6 +87,8 @@ export const DXF_EXPORT_FAILED = '정규화 DXF를 내보내지 못했습니다.
 // lost = 벽을 끊지 못해 빠진 통로 수(buildDxf.uncutPasses — 아키스케치 파일에는 블록도 틈도 없다 · 사전 검토 9).
 export const DXF_EXPORT_AS_MENU = '아키스케치용 DXF 내보내기';
 export const DXF_EXPORTED_AS = lost => `아키스케치용 DXF를 내보냈습니다 — 레이어 wall_층고 · door · window · column${lost ? ` · 벽을 끊지 못한 통로 ${lost}개는 빠졌습니다` : ''}`;
+// 실패(2026-10-13 · 최종 리뷰 F-2 · B-m1): 예전에는 정규화 실패 문구를 같이 써서 "정규화 DXF를…"이라는 틀린 이름이 떴다. 원인·조치는 정규화와 같다.
+export const DXF_EXPORT_AS_FAILED = '아키스케치용 DXF를 내보내지 못했습니다. 작업을 저장한 뒤 페이지를 새로 고쳐 다시 시도해 주세요';
 // 교정 기록 내보내기(2026-10-12 · 계획 12 Task 10 — io/dxfFeedback.js): 더보기 메뉴 · DXF로 가져온 프로젝트가 아닐 때 · 내보낸 뒤의 수.
 // 알림은 합계(changes)를 먼저, 그다음 **0이 아닌 범주만**(2026-10-12 · 최종 리뷰 X-7 · M10-1): 예전 알림은 범주 일곱만 늘 적어, 새 방·크기·추가만
 // 바뀐 기록이 "벽 지움 0 · 그림 0 · …" 0만 늘어놓았고, 지운 기둥을 "문·창 지움"으로 셌다. 지운 것은 문·창(개구부)과 기둥(columnsDeleted)을 가른다.

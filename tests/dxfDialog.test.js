@@ -14,7 +14,7 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED,
-  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT, DXF_UNITS_CONVERTED, DXF_UNITS_GUESS } from '../src/ui/messages.js';
+  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT, DXF_UNITS_CONVERTED, DXF_UNITS_GUESS, DXF_MANY_SHEETS } from '../src/ui/messages.js';
 import { dxfNotes } from '../src/ui/dxfNotes.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
@@ -1159,4 +1159,10 @@ test('dxfNotes: 단위 변환 칸은 단위 추정 뒤·기구 앞이고, unitsM
   expect(dxfNotes({ summary: s, stats: { equipment: eq }, unitsMatch: true })).toBe(`${DXF_UNITS_CONVERTED('inch')} / ${DXF_EQUIPMENT(3, 1, 2, 0, undefined, undefined)}`);
   expect(dxfNotes({ summary: s, hint: { height: 2800, layer: 'wall_2800' } })).toBe(`${DXF_UNITS_CONVERTED('inch')} / ${DXF_HEIGHT_FROM_LAYER(2800, 'wall_2800')}`);   // 높이 꼬리 앞 · unitsMatch 기본 true
   expect(dxfNotes({ summary: s, stats: {}, unitsMatch: false })).toBeNull();
+  // 칸 순서 전체(2026-10-13 · 최종 리뷰 F-7 · A-m3·D-m3): 기구 맨 끝은 e2e 정규식(tools/dxf-corpus/e2e.mjs)의 계약이다.
+  // 단위 추정(DXF_UNITS_GUESS)과 단위 변환은 함께 나올 수 없어 변환 쪽만 넣는다.
+  const all = { ...s, regions: [{}, {}], layers: [{ ...ROWS[0], guessed: true }, ...ROWS.slice(1)], manySheets: true };
+  const st = { dividers: 2, railDividers: 1, nameDividers: 3, equipment: eq }, hint = { height: 2800, layer: 'wall_2800' };
+  expect(dxfNotes({ summary: all, stats: st, hint })).toBe([DXF_MANY_PLANS(2), DXF_LAYERS_GUESSED, DXF_MANY_SHEETS, DXF_UNITS_CONVERTED('inch'), DXF_HEIGHT_FROM_LAYER(2800, 'wall_2800'),
+    DXF_RECONCILED(2, 0), DXF_RAIL_DIVIDED(1), DXF_NAME_DIVIDED(3), DXF_EQUIPMENT(3, 1, 2, 0, undefined, undefined)].join(' / '));
 });

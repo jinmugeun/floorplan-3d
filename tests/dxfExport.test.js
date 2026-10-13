@@ -319,6 +319,10 @@ test('안내 페이지의 아키스케치 호환 문장: 높이 꼬리 · HATCH 
   expect(html).toContain('벽을 끊지 못한 통로');
   expect(html).toContain(`${DXF_PARAMS.bandGap} mm보다 두꺼운 벽은 벽으로 읽히지 않고`);   // §5 줄에만 있는 문구(WALL 행 · 벽 그리기 줄의 520은 따로)
   expect(html).toContain('정규화 DXF를 쓰세요');
+  // 최종 리뷰 F-4: 아키스케치 절은 정규화 DXF 전용 "CAD에서 고칠 때" 목록 뒤 · 4절 앞이다. F-9: 그 목록은 이음 틈(JOINT_GAP)을 메우지 말라고 한다.
+  const at = s => html.indexOf(s);
+  expect([at('<h3>CAD에서 고칠 때</h3>') < at('<h3>아키스케치(오늘의집 3D)에 올릴 때</h3>'), at('<h3>아키스케치(오늘의집 3D)에 올릴 때</h3>') < at('<h2>4.')]).toEqual([true, true]);
+  expect(html).toContain(`이음의 ${JOINT_GAP} mm 틈은 일부러 둔 것`);
 });
 
 // 가져오기는 레이어가 겹치지 않는 두 면선 사이 틈(≥ cavityMin 150)에서만 붙은 두 벽을 가른다 — 한 레이어면 두 벽이 550 띠 하나가 된다(내곡중).
@@ -671,6 +675,10 @@ test('아키스케치 프로필: 레이어는 0·wall_층고·door·window·colu
   expect(lines.every(l => l[8] === 'wall_2800')).toBe(true);
   expect(lines.some(l => l[6] === 'CENTER')).toBe(false);
   const inserts = modelEnts(ps, 'INSERT').map(i => [i[2], i[8]]);
+  // 있음 먼저(최종 리뷰 F-8 · B-m5): 픽스처가 바뀌어 문·창·기둥이 없어지면 아래 every가 소리 없이 공허해진다.
+  expect(inserts.filter(([n]) => /^(DR|POCKET|SLIDING)-/.test(n)).length).toBeGreaterThanOrEqual(1);
+  expect(inserts.filter(([n]) => /^WIN-/.test(n)).length).toBeGreaterThanOrEqual(1);
+  expect(modelEnts(ps, 'LWPOLYLINE').length).toBeGreaterThanOrEqual(1);                    // 기둥 사각형(아래 every가 레이어 column을 본다)
   expect(inserts.filter(([n]) => /^(DR|POCKET|SLIDING)-/.test(n)).every(([, l]) => l === ARCHI_LAYERS.door)).toBe(true);
   expect(inserts.filter(([n]) => /^WIN-/.test(n)).every(([, l]) => l === ARCHI_LAYERS.window)).toBe(true);
   expect(inserts.some(([n]) => /^PASS-|^EQ-/.test(n))).toBe(false);
@@ -710,18 +718,20 @@ test('기본(정규화) 프로필은 바이트 단위로 그대로다 — 프로
   expect(buildDxf(equipFixture()).profile).toBe('ours');
   expect(layersOf(pairs(exportDxf(equipFixture()))).table).toEqual(['0', ...EXPORT_LAYERS.map(l => l.name)]);
   expect(profileOf('없는-프로필')).toBe(PROFILES.ours);                                    // 모르는 이름은 정규화 DXF로 쓴다
+  // 상속 키(toString · __proto__ …)도 모르는 이름이다 — 예전에는 함수·Object.prototype을 돌려줘 buildDxf가 던졌다(최종 리뷰 F-5 · B-m4).
+  for (const k of ['toString', 'constructor', 'hasOwnProperty', '__proto__']) expect(profileOf(k)).toBe(PROFILES.ours);
 });
 
 test('아키스케치용 DXF를 우리 앱에 다시 가져오면 불러와지고 층고 힌트가 wall_층고의 값이다 — 벽이 모두 520 이하·두께가 바뀌는 이음·구획선 없는 도면이면 벽·방도 정규화 왕복과 같다', () => {
   const p = synthetic(); p.floors[0].height = 2800;
-  for (const w of p.floors[0].walls) w.thickness = Math.min(w.thickness, 500);            // 사전 검토 1: 윗벽 600은 중심선 없이 두 띠로 갈라진다(7→5) · 500이면 7=7·2=2
+  for (const w of p.floors[0].walls) w.thickness = Math.min(w.thickness, 500);            // 윗벽 600은 중심선 없이 한 띠로 서지 못해 빠진다(7→5 · 최종 리뷰 F-3) · 500이면 7=7·2=2
   const ours = importText(exportDxf(p)), archi = importText(buildDxf(p, { profile: 'archisketch' }).text);
   expect(archi.summary.layerHeight).toEqual({ height: 2800, layer: 'wall_2800' });
   expect(archi.project.floors[0].walls.length).toBe(ours.project.floors[0].walls.length);
   expect(archi.project.floors[0].rooms.length).toBe(ours.project.floors[0].rooms.length);
   const kinds = fl => fl.items.filter(it => /^(door-|window-)/.test(it.productId)).map(it => [it.productId.replace(/-.*/, ''), it.size?.[0]]).sort();
   expect(kinds(archi.project.floors[0])).toEqual(kinds(ours.project.floors[0]));           // 사전 검토 4: door/window 레이어 블록은 문·창을 바꾸지 않는다
-  // 두꺼운 벽(600)이 있는 원래 synthetic은 벽이 갈라진다 — 안내 §5의 한계(수치는 그대로 적는다).
+  // 두꺼운 벽(600)이 있는 원래 synthetic은 벽이 빠진다(7→5) — 안내 §5의 한계("벽으로 읽히지 않고 빠질 수 있고")의 방향을 고정한다(최종 리뷰 F-3).
   const thick = synthetic(); thick.floors[0].height = 2800;
-  expect(importText(buildDxf(thick, { profile: 'archisketch' }).text).project.floors[0].walls.length).not.toBe(importText(exportDxf(thick)).project.floors[0].walls.length);
+  expect(importText(buildDxf(thick, { profile: 'archisketch' }).text).project.floors[0].walls.length).toBeLessThan(importText(exportDxf(thick)).project.floors[0].walls.length);
 });
