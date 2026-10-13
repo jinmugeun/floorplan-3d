@@ -1,7 +1,9 @@
 // 에셋 포장 CLI(2026-10-13 · 계획 15 Task A): glTF/GLB 하나를 앱 규약(아키텍처 §19 — m · 바닥 중심 원점 · +Y 위 · 정면 +Z · 가장 큰 축 = 카탈로그 size)으로
 // 정규화하고 감량 → 텍스처 WebP → meshopt 압축해 `<out>/<productId>.glb`로 쓰고 manifest 항목을 갱신한다. stdout은 항목 JSON 한 줄(seed.mjs·comfy-batch.mjs가 읽는다).
 //   node tools/assets/pack.mjs <in.glb|.gltf> --product <id> [--front +z] [--up y] [--tris 8000] [--tex 1024]
-//        [--source-url U --license L --author A] [--out public/models] [--manifest <out>/manifest.json]
+//        [--source-url U --license L --author A] [--source-kind polyhaven|generated|other] [--out public/models] [--manifest <out>/manifest.json]
+// --source-kind(2026-10-13 · 계획 15 Task E): 주지 않으면 URL로 짐작한다(polyhaven.com → polyhaven, 그 밖 → other). ComfyUI 생성 모델은 URL이 없어
+// comfy-batch.mjs가 `--source-kind generated`를 넘긴다 — 종류만 줘도 source가 생긴다(NOTICE의 생성 문장이 이 값을 본다).
 // 저장소 manifest(public/models/manifest.json)를 쓸 때는 저장소 루트 NOTICE.md도 manifest에서 다시 만든다(계획 15 Task C · lib.noticeMarkdown).
 // --front는 **up 변환 뒤**의 정면 축(+z · -z · +x · -x): Blender식 Z-up · 정면 −Y 모델은 X −90° 뒤 정면이 +Z라 `--up z --front +z`(사전 검토 C-1).
 // 사전 검토 scratch/p15/pkg/pack-proto.mjs(gltf-transform 4.5.1 실측 — painted_wooden_chair_01 492 KB → 203 KB · dining_chair_02 22,013 → 9,499 삼각형)를 정식으로 옮겼다.
@@ -15,7 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join as pjoin, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { productById } from '../../src/products/catalog.js';
-import { ASSET_BUDGET, FRONT_YAW, checkManifestEntry, manifestEntry, noticeMarkdown, normalizeTransform } from './lib.mjs';
+import { ASSET_BUDGET, FRONT_YAW, SOURCE_KINDS, checkManifestEntry, manifestEntry, noticeMarkdown, normalizeTransform } from './lib.mjs';
 
 const fail = msg => { console.error(`pack: ${msg}`); process.exit(1); };
 const argv = process.argv.slice(2);
@@ -31,6 +33,8 @@ if (!product) fail(`카탈로그에 없는 제품: ${id ?? '(--product 없음)'}
 // 오타(`--front z`)가 조용히 회전 0으로 지나가면 모델이 벽을 본다 — 표에 있는 값만 받는다.
 if (!Object.hasOwn(FRONT_YAW, front)) fail(`--front는 ${Object.keys(FRONT_YAW).join(' · ')} 중 하나: ${front}`);
 if (up !== 'y' && up !== 'z') fail(`--up은 y 또는 z: ${up}`);
+const sourceKind = opt('--source-kind');
+if (sourceKind !== undefined && !SOURCE_KINDS.includes(sourceKind)) fail(`--source-kind는 ${SOURCE_KINDS.join(' · ')} 중 하나: ${sourceKind}`);
 if (!(Number.isInteger(maxTris) && maxTris > 0 && Number.isInteger(tex) && tex > 0)) fail('--tris·--tex는 양의 정수');
 const man = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : { version: 1, products: {} };
 if (man.version !== 1 || !man.products || typeof man.products !== 'object') fail(`manifest 형식이 다르다(version 1 · products 필요): ${manifestPath}`);
@@ -78,9 +82,9 @@ const glb = await io.writeBinary(doc);
 writeFileSync(pjoin(outDir, `${id}.glb`), glb);
 const textures = await Promise.all(root.listTextures().map(async t => { const m = await sharp(t.getImage()).metadata(); return { w: m.width, h: m.height, format: t.getMimeType() }; }));
 const url = opt('--source-url'), license = opt('--license'), author = opt('--author');
-// 출처 종류는 URL로 정한다 — seed.mjs(Task C)는 --source-url·--license·--author만 넘긴다.
-const source = url || license || author
-  ? { kind: /^https?:\/\/(www\.)?polyhaven\.com\//.test(url ?? '') ? 'polyhaven' : 'other', url: url ?? null, license: license ?? null, author: author ?? null } : null;
+// 출처 종류는 --source-kind가 있으면 그것, 없으면 URL로 정한다 — seed.mjs(Task C)는 --source-url·--license·--author만 넘긴다.
+const source = sourceKind || url || license || author
+  ? { kind: sourceKind ?? (/^https?:\/\/(www\.)?polyhaven\.com\//.test(url ?? '') ? 'polyhaven' : 'other'), url: url ?? null, license: license ?? null, author: author ?? null } : null;
 const entry = manifestEntry({ id, bytes: glb.byteLength, tris: triCount(), textures, size: [...product.size], fit: n.fit.map(f => +f.toFixed(4)),
   extensions: root.listExtensionsUsed().map(e => e.extensionName).sort(), source, sha256: createHash('sha256').update(glb).digest('hex'), packedAt: new Date().toISOString() });
 // 제품 id 순으로 적는다 — 포장 순서가 달라도 manifest diff가 흔들리지 않게.

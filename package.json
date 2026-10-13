@@ -15,7 +15,8 @@
     "assets:check": "node tools/assets/check.mjs",
     "assets:seed": "node tools/assets/seed.mjs",
     "assets:snapshot": "node tools/assets/snapshot.mjs",
-    "assets:perf": "node tools/assets/perf.mjs --vsync off"
+    "assets:perf": "node tools/assets/perf.mjs --vsync off",
+    "assets:comfy": "node tools/assets/comfy-batch.mjs"
   },
   "dependencies": {
     "three": "0.169.0"

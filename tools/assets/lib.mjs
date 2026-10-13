@@ -57,6 +57,9 @@ export function sheetLayout(n, { width = 1200, maxCell = 400 } = {}) {
 
 // 출처 종류별 라이선스 근거 URL. Poly Haven은 /info에 license 필드가 없고 사이트 전체가 CC0-1.0이라(사전 검토 I-5) 사이트 라이선스 쪽을 적는다.
 export const LICENSE_URLS = Object.freeze({ polyhaven: 'https://polyhaven.com/license' });
+// manifest source.kind 값(2026-10-13 · 계획 15 Task E): polyhaven(시드) · generated(ComfyUI 생성 — URL이 없어 pack에 --source-kind로 준다) · other.
+// pack.mjs가 이 밖의 값을 거부한다(오타가 NOTICE에 그대로 남지 않게).
+export const SOURCE_KINDS = Object.freeze(['polyhaven', 'generated', 'other']);
 
 // NOTICE.md 본문(2026-10-13 · 계획 15 Task C): manifest의 출처를 제품 id 순 표로. pack.mjs가 저장소 manifest를 쓸 때마다 다시 만들고,
 // tests/assetsCatalog.test.js가 파일 = 이 출력인지 본다 — 손으로 고치거나 포장 뒤 빠뜨리면 테스트가 잡는다. nameOf(제품 id → 이름)는
@@ -67,8 +70,12 @@ export function noticeMarkdown(man, nameOf = () => null) {
     const s = e.source ?? {}, licUrl = LICENSE_URLS[s.kind];
     return `| ${cell(id)} | ${cell(nameOf(id))} | ${cell(s.url)} | ${cell(s.author)} | ${cell(s.license && licUrl ? `${s.license} (${licUrl})` : s.license)} |`;
   });
+  // 생성 모델 문장(2026-10-13 · 계획 15 Task E)은 generated 항목이 있을 때만 — 시드만인 지금은 NOTICE.md가 바이트 그대로다(assetsCatalog.test.js).
+  // 근거: 조사 2026-10-06-research-comfyui-trellis2.md §8(가중치 MIT · 네이티브 노드라 nvdiffrast 없음) · tools/assets/README.md 입력 사진 규칙.
+  const generated = Object.values(man.products ?? {}).some(e => e.source?.kind === 'generated')
+    ? ['생성 모델(출처 종류 generated — 출처 칸 —)은 사진 한 장에서 ComfyUI 네이티브 TRELLIS.2/Pixal3D(가중치 MIT · nvdiffrast 없는 경로)로 만들어 같은 규약으로 포장한 것이다. 입력 사진은 쓸 권리가 있는 것(직접 찍은 사진 · CC0 · 허락받은 제조사 사진)만 쓴다 — `tools/assets/README.md`.'] : [];
   return ['# NOTICE — 제품 3D 모델 출처', '',
     '`public/models/`에 든 제품 3D 모델(GLB)의 출처·작가·라이선스다. `public/models/manifest.json`에서 `tools/assets/pack.mjs`가 만든다 — 손으로 고치지 않는다(`npm run assets:seed`·`assets:pack`이 다시 쓴다).',
     'Poly Haven 에셋은 사이트 전체가 CC0-1.0(퍼블릭 도메인 헌정)이다 — https://polyhaven.com/license . 표기 의무는 없지만 출처와 작가를 남긴다. 포장 때 크기·축·원점을 앱 규약에 맞추고, 삼각형이 많으면 줄이고, 텍스처를 WebP로 바꿨다.',
-    '', '| 제품 | 이름 | 출처 | 작가 | 라이선스 |', '|---|---|---|---|---|', ...rows, ''].join('\n');
+    ...generated, '', '| 제품 | 이름 | 출처 | 작가 | 라이선스 |', '|---|---|---|---|---|', ...rows, ''].join('\n');
 }

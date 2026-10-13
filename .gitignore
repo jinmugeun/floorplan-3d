@@ -2,3 +2,4 @@ node_modules
 dist
 .claude/
 tools/dxf-corpus/out/
+tools/assets/incoming/
