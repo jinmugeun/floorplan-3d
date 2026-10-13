@@ -1,7 +1,7 @@
 // 기구 블록 이름 어휘표(src/io/dxf/equipVocab.js · 2026-10-12 계획 13 Task 2). 대표 이름은 세 도면(사동중·신상중·내곡중)의 실제 블록 이름이다
 // (Task 1 진단 p13-task-1-report.md §6·§7 · 사전 검토 p13-preflight.md §3).
 import { test, expect } from 'vitest';
-import { EQUIP_VOCAB, EQUIP_SKIP, matchEquip, isSkipped, skipReason, cleanName, sizeInName, isAnonymous } from '../src/io/dxf/equipVocab.js';
+import { EQUIP_VOCAB, EQUIP_SKIP, matchEquip, isSkipped, skipReason, cleanName, sizeInName, isAnonymous, isJunkName } from '../src/io/dxf/equipVocab.js';
 import { productById } from '../src/products/catalog.js';
 
 test('어휘표의 모든 제품 id가 카탈로그에 있다', () => {
@@ -108,4 +108,16 @@ test('이름의 치수: W-D(-H)·WxDxH — 낱말에 붙은 수(4도어·200L·1
 test('익명 블록 이름: zw$·A$C·*U·*B·$…와 자판 이름', () => {
   for (const n of ['zw$E75B', 'A$C754401BD', '*U513', '*B1206', '$0$zw$B716', 'sssssssssssdfdfsa', 'afadfasdfasfd', 'ffffffffffffff3f3f']) expect(isAnonymous(n), n).toBe(true);
   for (const n of ['식탁6인', 'TR1800S', 'S-S3', '워터릴', 'To세면기A']) expect(isAnonymous(n), n).toBe(false);
+});
+
+// 2026-10-13 · 계획 14 Task D(근거: 계획 13 최종 리뷰 F-11 — 공개 코퍼스 이름 라벨 803개 중 "1" ×16 · "66666" ×8 · "ccc" ×9 · "dwaddddd" ×7):
+// 아무것도 말하지 않는 이름은 라벨을 달지 않는다(익명 블록처럼 제품 이름 그대로 · dxfBlock은 남는다).
+test('쓰레기 이름(isJunkName): 글자 없음(숫자만·기호만) · 한 글자 · 같은 글자 3번 이상 · *로 시작', () => {
+  const junk = ['1', '66666', '007', '1-2', '-', '...', '#', '(  )', 'ccc', 'CCC', 'ssssss', '가가가', 'dwaddddd', 'sssssssssssdfdfsa', 'ffffffffffffff3f3f',
+    'A', '가', '床', '*U266', '*B1206', '*식탁', '', '   ', null, undefined];
+  for (const n of junk) expect(isJunkName(n), String(n)).toBe(true);
+  // 진짜 이름 — 치수의 0 셋(1000)은 반복이 아니다(글자 반복은 라틴 글자만 본다). 익명 블록(A$C·zw$)은 isAnonymous의 몫이다.
+  const real = ['식탁6인', '세정대 2조 1500-750', '배식대 1000-700', '냉장고 4도어 1100L 1260-850', 'A$C754401BD', 'zw$E75B', 'TR1800S', 'S-S3', 'To세면기A',
+    'toilet', 'INDEX1', 'LIFTD', '双人床', 'DT@STAIR', 'TYPE-III', 'cc', '6인', 'TV'];
+  for (const n of real) expect(isJunkName(n), n).toBe(false);
 });

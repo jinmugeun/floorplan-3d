@@ -89,6 +89,19 @@ export const EQUIP_SKIP = [
 const ANON = /^(zw\$|a\$c|\*[a-z]|\$)/i, JUNK = /^[asdf3]{6,}$/i;
 export const isAnonymous = name => ANON.test(String(name ?? '')) || JUNK.test(String(name ?? ''));
 
+// 아무것도 말하지 않는 이름(2026-10-13 · 계획 14 Task D · 근거: 계획 13 최종 리뷰 F-11 — 공개 코퍼스 라벨 803개 중 "1" ×16 · "66666" ×8 ·
+// "ccc" ×9 · "dwaddddd" ×7): 글자가 없다(숫자만·기호만 — 숫자는 \p{L}이 아니다) · 공백 빼고 한 글자 · 한 글자를 3번 이상 되풀이한 것뿐 ·
+// 라틴 글자·숫자만인 이름에 같은 라틴 글자가 3번 이상 이어진다(dwaddddd · sss…dfdfsa) · `*`로 시작. 치수의 0 셋(1000-700)은 숫자라 반복으로 보지 않는다.
+// isAnonymous와 따로 둔다: 익명은 어휘를 건너뛰고 모양·자식 이름으로 맞추고 레이어 규칙도 다르다(equipment.js) — 이것은 **라벨만** 떼는 판정이라
+// 세우는 수(equip)를 바꾸지 않는다(계획 14 Task D 게이트). 익명처럼 이름을 주지 않으면 제품 이름 그대로라 라벨이 서지 않는다.
+export function isJunkName(name) {
+  const s = String(name ?? '').replace(/\s+/g, '');
+  if (!s || s.startsWith('*') || !/\p{L}/u.test(s)) return true;
+  const chars = [...s];
+  if (chars.length === 1 || (chars.length >= 3 && new Set(chars.map(c => c.toLowerCase())).size === 1)) return true;
+  return /^[a-z0-9]+$/i.test(s) && /([a-z])\1\1/i.test(s);
+}
+
 const norm = s => String(s ?? '').toLowerCase().replace(/[\s_]+/g, '');
 const hit = (keys, raw) => { const n = norm(raw); return keys.some(k => (k instanceof RegExp ? k.test(raw) : n.includes(norm(k)))); };
 
