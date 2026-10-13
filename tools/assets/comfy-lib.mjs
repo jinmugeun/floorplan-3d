@@ -82,8 +82,33 @@ const errorText = st => {
   return (st.messages ?? []).map(m => m?.[0]).filter(Boolean).join(', ') || 'status error';
 };
 
+// 폴링 시간 초과만 따로 가리는 종류(2026-10-13 · 리뷰 I-1): 다른 실패(메모리 부족 · 검증 · 예산)는 그 제품만의 문제라 다음으로 가지만,
+// 시간 초과는 서버가 멎었거나 큐가 막힌 것이라 일괄 전체를 멈춰야 한다(runBatch). cancel = 취소 요청에서 난 문제 목록(generateGlb가 채운다).
+export class PollTimeout extends Error {
+  constructor(promptId, timeout) {
+    super(`시간 초과 ${Math.round(timeout / 1000)}초(prompt ${promptId})`);
+    this.name = 'PollTimeout'; this.promptId = promptId; this.cancel = null;
+  }
+}
+
+// 서버에 남은 작업 취소(2026-10-13 · 리뷰 I-1): 시간 초과된 prompt는 ComfyUI 큐에 그대로 남아 다음 제품이 그 뒤에 줄을 선다.
+// POST /queue { delete: [id] } — 대기 중이면 큐에서 뺀다(도는 중인 것은 이것으로 못 뺀다) → POST /interrupt { prompt_id } — 도는 중이면 멈춘다.
+// 순서는 이대로: 먼저 빼야 인터럽트로 앞 작업이 끝난 틈에 우리 것이 시작되지 않는다. 최신 ComfyUI는 prompt_id가 지금 도는 것일 때만 멈추고,
+// 옛 판은 본문을 무시하고 도는 것을 멈춘다(우리 전용 GPU라 앞에 멎은 작업이 있으면 그것도 멈추는 편이 낫다).
+// 하나가 실패해도 다른 하나는 시도한다. 던지지 않고 문제 목록을 돌려준다([] = 둘 다 받아들여짐) — 시간 초과 오류를 가리지 않게.
+export async function cancelPrompt(fetchImpl, server, promptId) {
+  const problems = [];
+  for (const [path, payload] of [['/queue', { delete: [promptId] }], ['/interrupt', { prompt_id: promptId }]]) {
+    try {
+      const res = await fetchImpl(`${serverBase(server)}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) problems.push(`${path} HTTP ${res.status}`);
+    } catch (err) { problems.push(`${path} ${err.message}`); }
+  }
+  return problems;
+}
+
 // GET /history/<id>를 every ms마다 묻는다. 항목이 생기면 끝(성공이면 항목을 돌려주고, status_str 'error'면 노드·예외 문구로 던진다).
-// 줄 서 있는 동안도 {}라 timeout은 대기 + 실행 합이다(기본 30분 — 1024³ 기준 4090 약 1분/개 · 조사 §7).
+// 줄 서 있는 동안도 {}라 timeout은 대기 + 실행 합이다(기본 30분 — 1024³ 기준 4090 약 1분/개 · 조사 §7). 넘으면 PollTimeout(취소는 generateGlb).
 // 잠깐의 502·네트워크 오류(RunPod 프록시 등)는 retries번 연속까지 견딘다 — 30분 폴링 하나 끊겼다고 이미 돈 GPU 결과를 버리지 않게.
 // sleep·now는 테스트가 가짜 시계를 넣는 자리다.
 export async function pollUntilDone(fetchImpl, server, promptId, { every = 2000, timeout = 1_800_000, retries = 3, sleep = ms => new Promise(r => setTimeout(r, ms)), now = Date.now } = {}) {
@@ -103,16 +128,27 @@ export async function pollUntilDone(fetchImpl, server, promptId, { every = 2000,
       if (e.status?.status_str === 'error') throw new Error(`생성 실패(prompt ${promptId}): ${errorText(e.status)}`);
       return e;
     }
-    if (now() - start >= timeout) throw new Error(`시간 초과 ${Math.round(timeout / 1000)}초(prompt ${promptId}) — 서버 큐(/queue)를 확인`);
+    if (now() - start >= timeout) throw new PollTimeout(promptId, timeout);
     await sleep(every);
   }
 }
 
 // 제품 하나: 워크플로 바꾸기 → 제출 → 폴링 → 접두사(기본 '3d/<id>' — 조사 §6)로 시작하는 출력 GLB를 /view로 받기 → 'glTF' 머리 확인.
 // image는 서버 input/에 이미 있는 이름(uploadImage의 반환값). 돌려주는 값: { promptId, file, bytes(Uint8Array) }.
+// 폴링 시간 초과면 제출한 prompt를 서버에서 취소하고(cancelPrompt) 결과를 문구·err.cancel에 붙여 PollTimeout을 그대로 던진다(2026-10-13 · 리뷰 I-1) —
+// 제출한 쪽이 치워야 큐에 멎은 작업이 남지 않는다.
 export async function generateGlb(fetchImpl, { server, workflow, id, image, prefix = `3d/${id}`, ...poll }) {
   const promptId = await submitPrompt(fetchImpl, server, patchWorkflow(workflow, { image, prefix }));
-  const entry = await pollUntilDone(fetchImpl, server, promptId, poll);
+  let entry;
+  try { entry = await pollUntilDone(fetchImpl, server, promptId, poll); } catch (err) {
+    if (err instanceof PollTimeout) {
+      err.cancel = await cancelPrompt(fetchImpl, server, promptId);
+      err.message += err.cancel.length
+        ? ` — 서버 작업 취소 실패(${err.cancel.join(' · ')}): ${serverBase(server)}/queue에서 직접 지운다`
+        : ' — 서버 작업 취소 요청함(/queue delete · /interrupt)';
+    }
+    throw err;
+  }
   const all = glbOutputs(entry), path = f => (f.subfolder ? `${f.subfolder}/${f.filename}` : f.filename);
   const hits = all.filter(f => path(f).startsWith(prefix));
   const file = hits.find(f => f.type === 'output') ?? hits[0];
@@ -122,6 +158,31 @@ export async function generateGlb(fetchImpl, { server, workflow, id, image, pref
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (!isGlb(bytes)) throw new Error(`받은 파일이 GLB가 아니다(${bytes.length} B · ${path(file)})`);
   return { promptId, file, bytes };
+}
+
+// 일괄 루프(2026-10-13 · 리뷰 I-1로 CLI에서 떼어 옴 — 가짜 fetch로 "시간 초과면 멈춘다"를 보려고). 파일·포장은 부르는 쪽 콜백:
+// photo(id) → { name, bytes } · save(id, { promptId, file, bytes }) → 포장 칸 문구(던지면 그 제품 실패). 서버 큐에 몰아 넣지 않고 하나씩.
+// 다른 실패는 그 제품만 실패로 적고 다음으로 가지만, PollTimeout이면 멈춘다: 30분 안에 못 끝낸 서버(멎은 노드 · 막힌 큐)에 다음 제품을 넣으면
+// 그 뒤에 줄을 서 또 시간 초과 — 남은 제품마다 30분씩 유료 GPU를 태운다. 인터럽트는 노드 사이에서만 듣기 때문에 취소가 먹었는지도 여기서는 모른다.
+// 돌려주는 값: results([{ id, ok, ms, …generateGlb 결과, packed } | { id, ok: false, ms, error }]) · stopped(PollTimeout | null) ·
+// skipped(멈춰서 돌지 않은 id) · retry(실패 + skipped — CLI의 "다시: --products"). now는 시간 칸과 폴링이 같이 쓴다(테스트의 가짜 시계).
+export async function runBatch(fetchImpl, { server, workflow, ids, photo, save = async () => '—', log = () => {}, now = Date.now, ...poll }) {
+  const results = [];
+  let stopped = null, skipped = [];
+  for (const [i, id] of ids.entries()) {
+    const t0 = now();
+    try {
+      const { name, bytes } = await photo(id);
+      log(`[${i + 1}/${ids.length}] ${id} ← ${name}`);
+      const image = await uploadImage(fetchImpl, server, { name, bytes });
+      const r = await generateGlb(fetchImpl, { server, workflow, id, image, now, ...poll });
+      results.push({ id, ok: true, ...r, packed: await save(id, r), ms: now() - t0 });
+    } catch (error) {
+      results.push({ id, ok: false, error, ms: now() - t0 });
+      if (error instanceof PollTimeout) { stopped = error; skipped = ids.slice(i + 1); break; }
+    }
+  }
+  return { results, stopped, skipped, retry: [...results.filter(r => !r.ok).map(r => r.id), ...skipped] };
 }
 
 // pack.mjs 인자: 생성 모델은 URL이 없으므로 출처 종류를 직접 준다(--source-kind generated · lib.SOURCE_KINDS). glTF는 Y-up이 규격이라 --up은 기본(y).

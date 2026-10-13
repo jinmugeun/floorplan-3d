@@ -11,7 +11,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateGlb, glbOutputs, packArgs, patchWorkflow, pollUntilDone, submitPrompt, uploadImage, viewUrl } from '../tools/assets/comfy-lib.mjs';
+import { PollTimeout, generateGlb, glbOutputs, packArgs, patchWorkflow, pollUntilDone, runBatch, submitPrompt, uploadImage, viewUrl } from '../tools/assets/comfy-lib.mjs';
 import { noticeMarkdown } from '../tools/assets/lib.mjs';
 
 // API 형식(Dev mode "Save (API Format)") — 노드 id는 문자열 키이고 값은 { class_type, inputs }. id는 워크플로마다 다르므로 class_type으로 찾는다.
@@ -90,7 +90,9 @@ describe('제출 · 폴링 · 받기', () => {
 
   test('pollUntilDone: 끝나지 않으면 timeout에서 멈춘다 — 0 · 2 · … · 10초 여섯 번 묻고 던진다', async () => {
     const { fetch, calls } = fake(() => json({}));
-    await expect(pollUntilDone(fetch, 'http://h:8188', 'p9', { every: 2000, timeout: 10_000, ...clock() })).rejects.toThrow(/시간 초과.*p9/);
+    const p = pollUntilDone(fetch, 'http://h:8188', 'p9', { every: 2000, timeout: 10_000, ...clock() });
+    await expect(p).rejects.toThrow(/시간 초과.*p9/);
+    await expect(p).rejects.toBeInstanceOf(PollTimeout);                              // 배치가 "멈출 실패"를 이 종류로 가린다(리뷰 I-1)
     expect(calls).toHaveLength(6);
   });
 
@@ -143,6 +145,83 @@ describe('제출 · 폴링 · 받기', () => {
     const html = fake(call => (call.path === '/prompt' ? json({ prompt_id: 'p6' }) : call.path === '/view' ? new Response('<html>')
       : done('p6', { 120: { '3d': [{ filename: 'bed-queen_00001_.glb', subfolder: '3d', type: 'output' }] } })));
     await expect(generateGlb(html.fetch, { server: 'http://h:8188', workflow: WF, id: 'bed-queen', image: 'bed-queen.png', ...clock() })).rejects.toThrow(/GLB가 아니다/);
+  });
+});
+
+// 시간 초과된 prompt는 ComfyUI 큐에 남는다(한 번에 하나) — 그냥 다음 제품으로 가면 그 뒤에 줄을 서 또 시간 초과, 남은 제품마다 30분씩
+// 유료 GPU를 태우고, 다시 돌릴 목록으로 다시 돌리면 같은 것을 두 번 생성한다(2026-10-13 · 리뷰 I-1).
+describe('시간 초과 — 서버 작업 취소 · 배치 중단(리뷰 I-1)', () => {
+  const nothing = () => new Response('', { status: 200 });                           // ComfyUI /queue · /interrupt는 빈 200
+  test('generateGlb: 시간 초과면 POST /queue {delete:[id]} → POST /interrupt {prompt_id} 순서로 취소하고 PollTimeout을 던진다', async () => {
+    const { fetch, calls } = fake(call => {
+      if (call.path === '/prompt') return json({ prompt_id: 'p7' });
+      if (call.path === '/history/p7') return json({});
+      if (call.method === 'POST' && (call.path === '/queue' || call.path === '/interrupt')) return nothing();
+      throw new Error(`예상 밖 요청 ${call.method} ${call.path}`);
+    });
+    const err = await generateGlb(fetch, { server: 'http://h:8188', workflow: WF, id: 'bed-queen', image: 'bed-queen.png', every: 2000, timeout: 4000, ...clock() }).catch(e => e);
+    expect(err).toBeInstanceOf(PollTimeout);
+    expect(err.promptId).toBe('p7');
+    expect(err.cancel).toEqual([]);                                                     // 둘 다 받아들여졌다
+    expect(err.message).toMatch(/시간 초과.*p7.*취소 요청/);
+    expect(calls.map(x => `${x.method} ${x.path}`)).toEqual(['POST /prompt', 'GET /history/p7', 'GET /history/p7', 'GET /history/p7', 'POST /queue', 'POST /interrupt']);
+    expect(JSON.parse(calls[4].body)).toEqual({ delete: ['p7'] });                    // 대기 중이면 큐에서 뺀다
+    expect(JSON.parse(calls[5].body)).toEqual({ prompt_id: 'p7' });                   // 도는 중이면 멈춘다(최신 ComfyUI는 이 prompt일 때만)
+  });
+
+  test('취소 요청이 실패해도(HTTP 오류 · 네트워크) 둘 다 시도하고 이유를 문구에 남겨 PollTimeout으로 던진다', async () => {
+    const { fetch, calls } = fake(call => {
+      if (call.path === '/prompt') return json({ prompt_id: 'p8' });
+      if (call.path === '/history/p8') return json({});
+      if (call.path === '/queue') return json({ error: 'boom' }, 500);
+      if (call.path === '/interrupt') throw new TypeError('fetch failed');
+      throw new Error(`예상 밖 요청 ${call.method} ${call.path}`);
+    });
+    const err = await generateGlb(fetch, { server: 'http://h:8188', workflow: WF, id: 'bed-queen', image: 'bed-queen.png', every: 2000, timeout: 2000, ...clock() }).catch(e => e);
+    expect(err).toBeInstanceOf(PollTimeout);
+    expect(err.cancel).toEqual(['/queue HTTP 500', '/interrupt fetch failed']);
+    expect(err.message).toMatch(/취소 실패.*\/queue HTTP 500.*\/interrupt fetch failed/);
+    expect(calls.slice(-2).map(x => `${x.method} ${x.path}`)).toEqual(['POST /queue', 'POST /interrupt']);
+  });
+
+  test('runBatch: 다른 실패는 다음 제품으로 가지만 시간 초과면 멈춘다 — 남은 제품은 올리지도 않고, 다시 돌릴 목록 = 실패 + 돌지 않은 것', async () => {
+    const OOM = { status_str: 'error', completed: false, messages: [['execution_error', { node_id: '57', node_type: 'Trellis2UpsampleStage', exception_message: 'CUDA out of memory' }]] };
+    const { fetch, calls } = fake(call => {
+      if (call.path === '/upload/image') return json({ name: call.body.get('image').name, subfolder: '', type: 'input' });
+      if (call.path === '/prompt') return json({ prompt_id: `p-${JSON.parse(call.body).prompt[76].inputs.image.replace(/\.png$/, '')}` });
+      if (call.path === '/history/p-fridge-2door') return done('p-fridge-2door', { 120: { '3d': [{ filename: 'fridge-2door_00001_.glb', subfolder: '3d', type: 'output' }] } });
+      if (call.path === '/history/p-range-gas-6') return done('p-range-gas-6', {}, OOM);
+      if (call.path === '/history/p-sink-double') return json({});                    // 멎었다 — 끝나지 않는다
+      if (call.path === '/view') return new Response(GLB);
+      if (call.method === 'POST' && (call.path === '/queue' || call.path === '/interrupt')) return nothing();
+      throw new Error(`예상 밖 요청 ${call.method} ${call.path}`);
+    });
+    const saved = [];
+    const opts = {
+      server: 'http://h:8188', workflow: WF, every: 2000, timeout: 10_000, ...clock(),
+      photo: id => ({ name: `${id}.png`, bytes: new Uint8Array([1]) }),
+      save: async (id, { bytes }) => { saved.push([id, bytes.length]); return '12 KB'; },
+    };
+    const r = await runBatch(fetch, { ...opts, ids: ['fridge-2door', 'range-gas-6', 'sink-double', 'bed-queen'] });
+    expect(r.results.map(x => [x.id, x.ok])).toEqual([['fridge-2door', true], ['range-gas-6', false], ['sink-double', false]]);
+    expect(r.results[0]).toMatchObject({ promptId: 'p-fridge-2door', packed: '12 KB', file: { filename: 'fridge-2door_00001_.glb' } });
+    expect(r.results[1].error.message).toMatch(/CUDA out of memory/);                // 실행 오류는 멈추지 않고 다음으로
+    expect(r.stopped).toBeInstanceOf(PollTimeout);
+    expect(r.stopped).toBe(r.results[2].error);
+    expect(r.skipped).toEqual(['bed-queen']);
+    expect(r.retry).toEqual(['range-gas-6', 'sink-double', 'bed-queen']);
+    expect(saved).toEqual([['fridge-2door', 12]]);
+    const reqs = calls.map(x => `${x.method} ${x.path}`);
+    expect(reqs.filter(x => x === 'POST /upload/image')).toHaveLength(3);            // bed-queen은 올리지도 않았다
+    expect(reqs.filter(x => x === 'POST /prompt')).toHaveLength(3);
+    expect(reqs.slice(-2)).toEqual(['POST /queue', 'POST /interrupt']);              // 취소가 마지막 요청 — 그 뒤 제출 없음
+    expect(JSON.parse(calls.at(-2).body)).toEqual({ delete: ['p-sink-double'] });
+
+    // 시간 초과가 없으면 끝까지 돌고 멈춤 표시가 없다.
+    calls.length = 0;
+    const ok = await runBatch(fetch, { ...opts, ids: ['range-gas-6', 'fridge-2door'] });
+    expect([ok.results.map(x => x.ok), ok.stopped, ok.skipped, ok.retry]).toEqual([[false, true], null, [], ['range-gas-6']]);
+    expect(calls.some(x => x.path === '/queue' || x.path === '/interrupt')).toBe(false);
   });
 });
 

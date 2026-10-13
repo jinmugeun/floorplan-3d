@@ -8,14 +8,15 @@
 // --pack이면 곧바로 pack.mjs(--front · --source-kind generated · 작가 · 라이선스)로 public/models/<id>.glb + manifest + NOTICE까지.
 // 주의: --pack은 이미 있는 모델(시드 포함)을 덮는다 — 시드와 비교만 할 제품은 --pack 없이 돌린다(README "첫 시험").
 // 시작 전에 다 확인하고 멈춘다(제품 id · 사진 · 워크플로 형식·노드 · 서버 응답) — 돈 내는 GPU 시간을 오타로 버리지 않게.
-// 하나가 실패해도 다음 제품으로 간다. 끝에 표와 "다시 돌릴 목록"을 찍고, 실패가 있으면 종료 1.
+// 하나가 실패해도 다음 제품으로 간다 — 시간 초과만은 서버 작업을 취소하고(POST /queue delete · /interrupt) 일괄을 멈춘다(2026-10-13 · 리뷰 I-1:
+// 남은 제품이 멎은 작업 뒤에 줄을 서 30분씩 유료 GPU를 태우지 않게). 끝에 표와 "다시 돌릴 목록"(실패 + 돌지 않은 제품)을 찍고, 실패가 있으면 종료 1.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { productById } from '../../src/products/catalog.js';
 import { FRONT_YAW, checkManifestEntry } from './lib.mjs';
-import { generateGlb, packArgs, patchWorkflow, serverBase, uploadImage } from './comfy-lib.mjs';
+import { packArgs, patchWorkflow, runBatch, serverBase } from './comfy-lib.mjs';
 
 const fail = msg => { console.error(`comfy: ${msg}`); process.exit(1); };
 const argv = process.argv.slice(2);
@@ -51,33 +52,32 @@ try {
   console.log(`comfy: 서버 ${server} · ComfyUI ${stats?.system?.comfyui_version ?? '?'} · ${d ? `${d.name} · VRAM ${(d.vram_total / 2 ** 30).toFixed(1)} GB` : '장치 정보 없음'}`);
 } catch (e) { fail(`서버에 닿지 않는다(${server}/system_stats): ${e.message} — ComfyUI가 떠 있는지 · RunPod면 8188 프록시 주소인지`); }
 
-// ── 제품마다 차례로(서버 큐에 몰아 넣지 않는다 — 하나씩 결과를 받아 바로 저장 · 실패를 표에 남긴다)
+// ── 제품마다 차례로(runBatch — 서버 큐에 몰아 넣지 않는다 · 하나씩 결과를 받아 바로 저장 · 실패를 표에 남긴다 · 시간 초과면 멈춘다)
 mkdirSync(outDir, { recursive: true });
 const kb = n => `${(n / 1024).toFixed(0)} KB`;
-const rows = [], failed = [];
-for (const [i, id] of ids.entries()) {
-  const t0 = Date.now(), photo = photoOf(id);
-  console.log(`comfy: [${i + 1}/${ids.length}] ${id} ← ${basename(photo)}`);
-  try {
-    const image = await uploadImage(fetchT, server, { name: basename(photo), bytes: readFileSync(photo) });
-    const { promptId, file, bytes } = await generateGlb(fetchT, { server, workflow, id, image, ...POLL });
-    const glb = join(outDir, `${id}.glb`);
-    writeFileSync(glb, bytes);
-    let packed = '—';
-    if (doPack) {
-      const r = spawnSync(process.execPath, [PACK, ...packArgs({ glb, id, front, author, license })], { encoding: 'utf8' });
-      if (r.status !== 0) throw new Error(`포장 실패 — ${(r.stderr || r.stdout || String(r.error)).trim()}`);
-      const e = JSON.parse(r.stdout.trim().split('\n').pop()), { problems } = checkManifestEntry(e);
-      packed = `${kb(e.bytes)} · ${e.tris.toLocaleString('en')} 삼각형 · fit ${e.fit.join('/')}`;
-      if (problems.length) throw new Error(`예산 밖(${problems.join(', ')}) — ${packed} · npm run assets:check가 막는다`);
-    }
-    rows.push([id, promptId, `${file.subfolder}/${file.filename}`, kb(bytes.length), `${((Date.now() - t0) / 1000).toFixed(0)} s`, packed, '통과']);
-  } catch (err) {
-    failed.push(id);
-    rows.push([id, '—', '—', '—', `${((Date.now() - t0) / 1000).toFixed(0)} s`, '—', `실패: ${err.message}`]);
-  }
-}
+const save = (id, { bytes }) => {
+  const glb = join(outDir, `${id}.glb`);
+  writeFileSync(glb, bytes);
+  if (!doPack) return '—';
+  const r = spawnSync(process.execPath, [PACK, ...packArgs({ glb, id, front, author, license })], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`포장 실패 — ${(r.stderr || r.stdout || String(r.error)).trim()}`);
+  const e = JSON.parse(r.stdout.trim().split('\n').pop()), { problems } = checkManifestEntry(e);
+  const packed = `${kb(e.bytes)} · ${e.tris.toLocaleString('en')} 삼각형 · fit ${e.fit.join('/')}`;
+  if (problems.length) throw new Error(`예산 밖(${problems.join(', ')}) — ${packed} · npm run assets:check가 막는다`);
+  return packed;
+};
+const { results, stopped, skipped, retry } = await runBatch(fetchT, {
+  server, workflow, ids, ...POLL, save, log: m => console.log(`comfy: ${m}`),
+  photo: id => { const p = photoOf(id); return { name: basename(p), bytes: readFileSync(p) }; },
+});
+const secs = ms => `${(ms / 1000).toFixed(0)} s`;
+const rows = results.map(r => (r.ok
+  ? [r.id, r.promptId, `${r.file.subfolder}/${r.file.filename}`, kb(r.bytes.length), secs(r.ms), r.packed, '통과']
+  : [r.id, '—', '—', '—', secs(r.ms), '—', `실패: ${r.error.message}`]));
+for (const id of skipped) rows.push([id, '—', '—', '—', '—', '—', '돌지 않음(시간 초과로 멈춤)']);
 console.log(['| 제품 | prompt | 서버 출력 | 원본 | 시간 | 포장 | 결과 |', '|---|---|---|---|---|---|---|', ...rows.map(r => `| ${r.join(' | ')} |`)].join('\n'));
 console.log(`comfy: 원본 GLB → ${outDir}${doPack ? ' · 포장 → public/models(manifest·NOTICE 갱신)' : ' · 포장은 npm run assets:pack(README)'}`);
-if (failed.length) console.log(`comfy: ${ids.length}종 중 ${failed.length}종 실패 — 다시: --products ${failed.join(',')}`);
-process.exitCode = failed.length ? 1 : 0;
+// 멈췄을 때: 취소가 받아들여졌어도 인터럽트는 노드 사이에서만 먹으므로 /queue가 빈 것을 본 뒤 다시 돌린다(README 10절).
+if (stopped) console.log(`comfy: ${stopped.promptId} 시간 초과로 멈췄다(남은 ${skipped.length}종은 돌지 않음) — ${server}/queue가 비었는지 확인한 뒤 아래 목록을 다시`);
+if (retry.length) console.log(`comfy: ${ids.length}종 중 ${retry.length}종 실패·미실행 — 다시: --products ${retry.join(',')}`);
+process.exitCode = retry.length ? 1 : 0;

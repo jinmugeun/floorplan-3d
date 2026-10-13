@@ -138,7 +138,8 @@ npm run assets:comfy -- --server … --workflow … --images … --products <목
 
 - 시작 전에 다 확인하고 멈춘다: 제품 id(카탈로그) · 사진 · 워크플로 형식과 노드 · 서버(`/system_stats` — GPU 이름과 VRAM을 찍는다).
 - 제품마다 차례로: `POST /upload/image` → `POST /prompt` → `GET /history/<id>` 2초 간격(한도 30분 · 잠깐의 502는 3번 연속까지 견딘다) → `GET /view`로 접두사 `3d/<id>`인 GLB.
-- 하나가 실패해도(메모리 부족 · 검증 오류 · 시간 초과 · 예산 밖) 다음으로 간다. 끝에 표와 `다시: --products …` 한 줄 · 실패가 있으면 종료 1.
+- 하나가 실패해도(메모리 부족 · 검증 오류 · 예산 밖) 다음으로 간다. **시간 초과만은 멈춘다**: 그 작업을 서버에서 취소하고(`POST /queue {"delete":[id]}` → `POST /interrupt {"prompt_id":id}`) 남은 제품은 돌리지 않는다 — 30분 안에 못 끝낸 서버(멎은 노드 · 막힌 큐)에 다음 제품을 넣으면 그 뒤에 줄을 서 또 시간 초과, 남은 제품마다 30분씩 유료 GPU를 태운다.
+- 끝에 표와 `다시: --products …` 한 줄(실패 + 멈춰서 돌지 않은 제품) · 실패가 있으면 종료 1.
 
 ## 7. 생성 뒤 — 포장 → 게이트 → 검수 → 카탈로그 → NOTICE
 
@@ -202,7 +203,8 @@ washer-drum,dryer,aircon-stand,tv-55,bed-single,bed-super-single,bed-queen,bed-k
 | `제출 실패 HTTP 400 … UNETLoader … not in list` | 모델 파일이 없거나 폴더가 틀렸다(3.1) |
 | `제출 실패 … LoadImage … Invalid image file` | 사진 파일이 깨졌거나 이미지가 아니다 — `--images`의 `<id>.png`를 열어 본다 |
 | `생성 실패 … CUDA out of memory` | Upsample 1536 → 1024, 텍스처 1024, AO 끄기(4절) · 16 GB에서 bf16 → int8 |
-| `시간 초과 1800초` | 서버 큐에 다른 작업이 밀렸다(`<server>/queue`) — 끝나면 실패 목록만 다시 |
+| `시간 초과 1800초 … 서버 작업 취소 요청함` · 일괄이 멈춤 | 서버가 30분 안에 못 끝냈다(멎은 노드 · 다른 작업이 큐를 막음). 스크립트가 그 작업을 취소 요청했지만 인터럽트는 노드 사이에서만 먹는다 — `<server>/queue`의 running · pending이 비었는지 본다(남았으면 웹의 Queue에서 지우거나 ComfyUI 재시작 · RunPod면 Pod 재시작) → 찍힌 `다시: --products …`를 그대로 |
+| `시간 초과 … 서버 작업 취소 실패(…)` | 취소 요청도 닿지 않았다(서버 · 프록시가 멎음) — 위와 같이 `/queue`를 직접 비우고 다시 |
 | `출력에 접두사 3d/<id>의 GLB가 없다` | 저장 노드가 GLB가 아닌 형식으로 썼거나 다른 노드의 접두사를 바꿨다 — 오류 문구의 "찾은 것"과 저장 노드 설정(GLB)을 본다 |
 | `assets:check`의 `fit` | 사진의 비율 · 구도가 카탈로그 size와 다르다 — 정면 사진으로 다시, 또는 상자로 둔다 |
 | 시트에서 정면이 뒤 | 다시 생성하지 말고 `assets:pack`을 `--front -z`로(7절 1번) — 일괄 전체가 그렇다면 `assets:comfy`에 `--front -z` |
