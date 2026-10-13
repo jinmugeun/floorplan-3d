@@ -22,6 +22,7 @@
 // 두 번째 왕복에서 기둥 크기는 바뀌지 않는다(마감선 오라클 · liningOracle).
 //  - 기구(EQUIP · dxfExportEquip.js · 2026-10-13 계획 14 Task E): 기구 하나 = `EQ-이름-WxDxH@제품` 블록 INSERT — 다시 들여오면 그대로 선다.
 //    opts.equipment === false면 예전처럼 빼고 쓴다.
+// 프로필(2026-10-13 · 계획 16 Task B): opts.profile 'archisketch'는 레이어 이름과 쓰는 요소만 바꾼다(dxfExportProfile.js) — 아키스케치 입력용이지 우리 왕복 형식이 아니다.
 // 이 파일은 DOM을 모른다.
 import { dxfDocument, CENTER_LTYPE, PASS_LAYER, num } from './dxfExportTemplate.js';
 import { roomArea } from '../geom/rooms.js';
@@ -31,6 +32,7 @@ import { refDimensions } from './dxfExportDims.js';
 import { DXF_PARAMS } from './dxf/params.js';
 import { findColumns, findPilasters, growLinings } from './dxf/columns.js';
 import { equipExport } from './dxfExportEquip.js';
+import { profileOf } from './dxfExportProfile.js';
 
 const D = p => [p[0], -p[1]];                        // 앱 → DXF(y 위)
 const NAME_H = 300, AREA_H = 250;                    // 실명·면적 글자 높이(mm) — roomLabels가 200~600만 실명으로 본다
@@ -183,10 +185,12 @@ function nameLines(name) {
 // project → DXF 텍스트. floor: 층 번호(기본 = 지금 층).
 export const exportDxf = (project, opts = {}) => buildDxf(project, opts).text;
 
-// → { text, uncutPasses, equipment }. uncutPasses: 가져오기가 틈을 그 자리·폭으로 읽지 못해 벽을 끊지 않은(블록만 있는) 통로 수. 옛 skippedPasses(다시
+// → { text, uncutPasses, equipment, profile }. uncutPasses: 가져오기가 틈을 그 자리·폭으로 읽지 못해 벽을 끊지 않은(블록만 있는) 통로 수. 옛 skippedPasses(다시
 // 들여오면 사라지는 통로 수)는 모든 통로가 PASS 블록으로 돌아온 뒤로 늘 0이라 지웠다(2026-10-12 · 최종 리뷰 X-6 · N3-3). equipment: 내보낸 기구 INSERT 수.
-export function buildDxf(project, { floor: index = project?.activeFloor ?? 0, equipment = true } = {}) {
+// profile: 쓴 프로필 id('ours' | 'archisketch' — archisketch에서 uncutPasses는 파일에서 빠진 통로 수다: 블록도 틈도 없다).
+export function buildDxf(project, { floor: index = project?.activeFloor ?? 0, equipment = true, profile = 'ours' } = {}) {
   const floor = project?.floors?.[index] ?? project?.floors?.[0] ?? { walls: [], rooms: [], items: [] };
+  const prof = profileOf(profile), H = Math.round(Number(floor.height) || DXF_PARAMS.height);   // 프로필 = 레이어 이름·무엇을 쓸지(dxfExportProfile.js)
   // 거의 축에 나란한 벽은 정확히 맞춘다(rectify — 1 mm 안팎의 기울기가 다시 들여올 때 T자 접점을 갈라놓았다).
   const walls = rectify((floor.walls ?? []).map(w => ({ id: w.id, a: D(w.a), b: D(w.b), t: Math.max(1, Number(w.thickness) || 200), virtual: !!w.virtual, axisShift: w.axisShift })));
   const solid = walls.filter(w => !w.virtual);
@@ -205,13 +209,13 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0, eq
   const outside = p => p[0] < wb[0] - 1 || p[1] < wb[1] - 1 || p[0] > wb[2] + 1 || p[1] > wb[3] + 1;
   const corners = cols.map(rects => rects.flat()).filter(pts => pts.some(outside)), reach = DXF_PARAMS.colMax / 2 + 200;
   // 벽 선의 레이어는 WALL 또는 WALL-2(나란히 붙은 이웃 벽 — dxfExportGeom.colourWalls).
-  for (const [a, b, layer] of unlined(unboxed([...splitNear(faces, corners, reach), ...jambs]), asImported)) entities.push(line(layer, a, b));
-  for (const [a, b, layer] of splitNear(centers, corners, reach)) entities.push(line(layer, a, b, CENTER_LTYPE));
-  for (const w of walls.filter(x => x.virtual)) entities.push(line('DIVIDER', w.a, w.b));
+  for (const [a, b, layer] of unlined(unboxed([...splitNear(faces, corners, reach), ...jambs]), asImported)) entities.push(line(prof.wall(layer, H), a, b));
+  if (prof.centers) for (const [a, b, layer] of splitNear(centers, corners, reach)) entities.push(line(layer, a, b, CENTER_LTYPE));
+  if (prof.dividers) for (const w of walls.filter(x => x.virtual)) entities.push(line('DIVIDER', w.a, w.b));
   // 통로 표시(X · 레이어 '개구부' = 역할 개구부): 가져오기의 줄 잇기는 줄 끝 토막(짧고 두꺼운 run)을 문·창 **근거** 없는 다리로만 붙어
   // 있으면 떼어 버린다(bands.chainRuns · evidence.js) — 통로 틈 한가운데에 개구부 레이어 점이 있어야 그 다리가 근거를 갖는다.
   // 45° 짧은 선이라 어느 벽과도 나란하지 않아 창 구간(windowSpans)·벽 띠가 되지 않는다.
-  for (const o of passes) {
+  if (prof.passMarks) for (const o of passes) {
     const k = Math.min(o.width, o.wall.t) / 2, n = [-o.u[1], o.u[0]];
     const p = (i, j) => [o.c[0] + (o.u[0] * i + n[0] * j) * k, o.c[1] + (o.u[1] * i + n[1] * j) * k];
     entities.push(line(PASS_LAYER, p(-1, -1), p(1, 1)), line(PASS_LAYER, p(-1, 1), p(1, -1)));
@@ -221,20 +225,21 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0, eq
   // 같은 자리의 블록 통로와 틈 통로는 가져오기가 하나로 앉힌다(openings.js의 충돌 검사).
   const blocks = new Map();
   for (const o of opens) {
+    if (o.kind === 'PASS' && !prof.passBlock) continue;          // 아키스케치: 통로는 끊은 벽 틈으로만(블록 정의도 남기지 않는다 — 사전 검토 9-9)
     const W = Math.round(o.width), T = Math.round(o.wall.t);
     const name = `${o.kind}-${W}-${T}`;
     if (!blocks.has(name)) blocks.set(name, { name, entities: [poly('0', [[-W / 2, -T / 2], [W / 2, -T / 2], [W / 2, T / 2], [-W / 2, T / 2]])] });
-    entities.push(insert('OPENING', name, o.c, Math.atan2(o.u[1], o.u[0]) * 180 / Math.PI));
+    entities.push(insert(prof.opening(o.kind), name, o.c, Math.atan2(o.u[1], o.u[0]) * 180 / Math.PI));
   }
   // ③ 기둥(사각 = columnRects · 원형 = CIRCLE).
-  for (const rects of cols) for (const pts of rects) entities.push(poly('COLUMN', pts));
+  for (const rects of cols) for (const pts of rects) entities.push(poly(prof.column, pts));
   for (const it of floor.items ?? []) {
     if (it.kind !== 'column' || it.productId !== 'column-round') continue;
     const c = D(it.pos);
-    entities.push({ type: 'CIRCLE', layer: 'COLUMN', body: [[100, 'AcDbCircle'], [10, num(c[0])], [20, num(c[1])], [30, 0], [40, num((it.size?.[0] ?? 400) / 2)]] });
+    entities.push({ type: 'CIRCLE', layer: prof.column, body: [[100, 'AcDbCircle'], [10, num(c[0])], [20, num(c[1])], [30, 0], [40, num((it.size?.[0] ?? 400) / 2)]] });
   }
   // ④ 방: 윤곽 + 실명·면적(실명이 있는 방만 — 이름 없는 방의 면적 글자는 가져오기에 실명 후보가 아니다).
-  for (const room of floor.rooms ?? []) {
+  if (prof.rooms) for (const room of floor.rooms ?? []) {
     const pts = (room.points ?? []).map(D);
     if (pts.length < 3) continue;
     entities.push(poly('ROOM', pts));
@@ -254,10 +259,10 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0, eq
     box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
   }
   const any = Number.isFinite(box[0]);
-  if (clean(project?.name) && any) entities.push(mtext('TITLE', [box[0], box[3]], TITLE_H, project.name, 7));
+  if (prof.title && clean(project?.name) && any) entities.push(mtext('TITLE', [box[0], box[3]], TITLE_H, project.name, 7));
   if (!any) box.splice(0, 4, 0, 0, 0, 0);
   // ⑤ 기준선 치수(dxfExportDims.js) — 다시 들여온 방의 도면 기준 넓이가 같게.
-  const dims = any ? refDimensions(walls.map(w => ({ ...w, a: D(w.a), b: D(w.b) })), box) : { blocks: [], entities: [] };
-  const eq = equipment ? equipExport(floor) : { blocks: [], entities: [], count: 0 };     // ⑥ 기구(EQUIP · dxfExportEquip.js)
-  return { text: dxfDocument({ blocks: [...blocks.values(), ...eq.blocks, ...dims.blocks], entities: [...entities, ...eq.entities, ...dims.entities], box }), uncutPasses: skipped.length, equipment: eq.count };
+  const dims = prof.dims && any ? refDimensions(walls.map(w => ({ ...w, a: D(w.a), b: D(w.b) })), box) : { blocks: [], entities: [] };
+  const eq = equipment && prof.equipment ? equipExport(floor) : { blocks: [], entities: [], count: 0 };     // ⑥ 기구(EQUIP · dxfExportEquip.js)
+  return { text: dxfDocument({ layers: prof.layers(H), blocks: [...blocks.values(), ...eq.blocks, ...dims.blocks], entities: [...entities, ...eq.entities, ...dims.entities], box }), uncutPasses: skipped.length, equipment: eq.count, profile: prof.id };
 }

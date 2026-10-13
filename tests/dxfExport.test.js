@@ -33,6 +33,8 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { itemMenuItems } from '../src/ui/itemMenu.js';
 import { SELECT_SAME_NAME } from '../src/ui/messages.js';
+import { PROFILES, profileOf, ARCHI_LAYERS, archiWallLayer } from '../src/io/dxfExportProfile.js';
+import { createHash } from 'node:crypto';
 
 let handle;
 beforeAll(async () => {
@@ -604,4 +606,81 @@ test('워커 요약은 체크된 벽 레이어의 높이 꼬리를 layerHeight�
   expect(r.summary.layerHeight).toEqual({ height: 2800, layer: 'WALL_2800' });
   expect(r.summary.layers.find(l => l.name === 'WALL_2800')).toMatchObject({ role: 'wall', height: 2800 });
   expect(importText(exportDxf(synthetic())).summary.layerHeight).toBeNull();
+});
+
+// ── 아키스케치용 프로필(2026-10-13 · 계획 16 Task B · dxfExportProfile.js): 아키스케치(오늘의집 3D) CAD 업로드가 읽는 레이어 넷만 쓴다.
+// 레이어 표(LAYER TABLE의 이름들)와 ENTITIES 구역의 엔티티 레이어(위 '엔티티가 쓰는 레이어는 모두 LAYER 표에 있고' 테스트와 같은 규칙).
+function layersOf(ps) {
+  const table = [], used = new Set();
+  let inLayer = false, section = null;
+  ps.forEach(([c, v], i) => {
+    if (c === '0' && v === 'SECTION') section = ps[i + 1][1];
+    if (c === '0' && v === 'TABLE') inLayer = ps[i + 1][1] === 'LAYER';
+    if (c === '0' && v === 'ENDTAB') inLayer = false;
+    if (c === '2' && inLayer && ps[i - 1]?.[1] !== 'TABLE') table.push(v);
+    if (c === '8' && (section === 'ENTITIES' || section === 'BLOCKS')) used.add(v);
+  });
+  return { table, used };
+}
+// ENTITIES 구역의 엔티티만(블록 정의 안의 틀 사각형은 레이어 0이라 뺀다 — 사전 검토 3).
+function modelEnts(ps, type) {
+  let section = null; const out = [];
+  for (let i = 0; i < ps.length; i++) {
+    const [c, v] = ps[i];
+    if (c === '0' && v === 'SECTION') section = ps[i + 1][1];
+    if (section !== 'ENTITIES' || c !== '0' || v !== type) continue;
+    const r = {}; for (let j = i + 1; j < ps.length && ps[j][0] !== '0'; j++) r[ps[j][0]] = ps[j][1];
+    out.push(r);
+  }
+  return out;
+}
+
+test('아키스케치 프로필: 레이어는 0·wall_층고·door·window·column뿐 — 면선만(중심선·extra run 없음) · 문 블록은 door · 창은 window · 통로 블록·X·방·치수·제목·기구·구획선은 없다', () => {
+  // 합성 평면(문·창·통로·기둥·600 벽 중심선·실명) + 기구 일곱(equipFixture) + 구획선 하나 — 정규화 DXF에는 기구·DIVIDER가 있는 평면이다(대조).
+  const p = equipFixture(); p.floors[0].height = 2800;
+  p.floors[0].walls.push({ ...makeWall({ a: [-4000, 0], b: [0, 0], thickness: 20, height: 3500 }), virtual: true });
+  expect([buildDxf(p).equipment, modelEnts(pairs(exportDxf(p)), 'LINE').some(l => l[8] === 'DIVIDER')]).toEqual([7, true]);
+  const r = buildDxf(p, { profile: 'archisketch' });
+  expect(r.profile).toBe('archisketch');
+  expect(r.equipment).toBe(0);
+  const ps = pairs(r.text), { table, used } = layersOf(ps);
+  expect(table).toEqual(['0', 'wall_2800', ARCHI_LAYERS.door, ARCHI_LAYERS.window, ARCHI_LAYERS.column]);
+  expect([...used].filter(l => !table.includes(l))).toEqual([]);
+  expect(archiWallLayer(2800)).toBe('wall_2800');
+  const lines = modelEnts(ps, 'LINE');
+  expect(lines.length).toBeGreaterThan(0);
+  expect(lines.every(l => l[8] === 'wall_2800')).toBe(true);
+  expect(lines.some(l => l[6] === 'CENTER')).toBe(false);
+  const inserts = modelEnts(ps, 'INSERT').map(i => [i[2], i[8]]);
+  expect(inserts.filter(([n]) => /^(DR|POCKET|SLIDING)-/.test(n)).every(([, l]) => l === ARCHI_LAYERS.door)).toBe(true);
+  expect(inserts.filter(([n]) => /^WIN-/.test(n)).every(([, l]) => l === ARCHI_LAYERS.window)).toBe(true);
+  expect(inserts.some(([n]) => /^PASS-|^EQ-/.test(n))).toBe(false);
+  expect(modelEnts(ps, 'LWPOLYLINE').every(e => e[8] === ARCHI_LAYERS.column)).toBe(true);       // ROOM 윤곽 없음(모형 공간)
+  expect(modelEnts(ps, 'MTEXT')).toEqual([]);
+  expect(modelEnts(ps, 'DIMENSION')).toEqual([]);
+  expect(r.text).toMatch(/\n\$INSUNITS\n\s*70\n\s*4\n/);
+  // 우리 가져오기의 역할: wall_2800·column → 벽, door·window → 개구부(블록은 이름으로 읽는다).
+  expect(['wall_2800', ARCHI_LAYERS.door, ARCHI_LAYERS.window, ARCHI_LAYERS.column].map(classifyLayer)).toEqual(['wall', 'opening', 'opening', 'wall']);
+});
+
+test('기본(정규화) 프로필은 바이트 단위로 그대로다 — 프로필 분기가 기본 출력을 건드리면 이 해시가 바뀐다', () => {
+  // 2026-10-13 사전 검토 8: equipFixture() 내보내기의 sha256. 기본 출력을 **일부러** 바꾸는 계획은 이 값을 사유와 함께 갱신한다.
+  expect(createHash('sha256').update(exportDxf(equipFixture())).digest('hex')).toBe('88c26aa83b9675941de864d937e872d8e594fd91f2f9dd02476e4c26ac206b96');
+  expect(buildDxf(equipFixture()).profile).toBe('ours');
+  expect(layersOf(pairs(exportDxf(equipFixture()))).table).toEqual(['0', ...EXPORT_LAYERS.map(l => l.name)]);
+  expect(profileOf('없는-프로필')).toBe(PROFILES.ours);                                    // 모르는 이름은 정규화 DXF로 쓴다
+});
+
+test('아키스케치용 DXF를 우리 앱에 다시 가져오면 불러와지고 층고 힌트가 wall_층고의 값이다 — 벽이 모두 520 이하·구획선 없는 도면이면 벽·방도 정규화 왕복과 같다', () => {
+  const p = synthetic(); p.floors[0].height = 2800;
+  for (const w of p.floors[0].walls) w.thickness = Math.min(w.thickness, 500);            // 사전 검토 1: 윗벽 600은 중심선 없이 두 띠로 갈라진다(7→5) · 500이면 7=7·2=2
+  const ours = importText(exportDxf(p)), archi = importText(buildDxf(p, { profile: 'archisketch' }).text);
+  expect(archi.summary.layerHeight).toEqual({ height: 2800, layer: 'wall_2800' });
+  expect(archi.project.floors[0].walls.length).toBe(ours.project.floors[0].walls.length);
+  expect(archi.project.floors[0].rooms.length).toBe(ours.project.floors[0].rooms.length);
+  const kinds = fl => fl.items.filter(it => /^(door-|window-)/.test(it.productId)).map(it => [it.productId.replace(/-.*/, ''), it.size?.[0]]).sort();
+  expect(kinds(archi.project.floors[0])).toEqual(kinds(ours.project.floors[0]));           // 사전 검토 4: door/window 레이어 블록은 문·창을 바꾸지 않는다
+  // 두꺼운 벽(600)이 있는 원래 synthetic은 벽이 갈라진다 — 안내 §5의 한계(수치는 그대로 적는다).
+  const thick = synthetic(); thick.floors[0].height = 2800;
+  expect(importText(buildDxf(thick, { profile: 'archisketch' }).text).project.floors[0].walls.length).not.toBe(importText(exportDxf(thick)).project.floors[0].walls.length);
 });
