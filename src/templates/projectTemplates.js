@@ -5,6 +5,7 @@ import { rectWalls } from '../geom/walls.js';
 import { normalizeWalls } from '../geom/normalize.js';
 import { detectRooms } from '../geom/rooms.js';
 import { buildSampleProject } from '../samples/gangdang.js';
+import { buildSinsangProject } from '../samples/sinsang.js';
 import { placeTemplate, templateById } from './roomTemplates.js';
 
 export const TEMPLATE_KEY = 'kvp.templates';
@@ -27,6 +28,8 @@ function buildStudio() {
 export const BUILTIN_TEMPLATES = [
   { id: 'builtin-empty', name: '빈 프로젝트', desc: '빈 화면에서 방과 벽을 직접 그립니다.', build: () => migrate(createEmptyProject()) },
   { id: 'builtin-gangdang', name: '강당중 조리실', desc: '방 11개 · 환기 설비 39개 · 덕트 10계통이 그려진 예제 도면으로 시작합니다.', build: () => buildSampleProject() },
+  // 2026-10-13 · 사용자 요청: 경산 신상중 급식기구 배치도(DXF)를 가져온 결과를 누구나 시작 화면에서 열어 보게 — samples/sinsang.js.
+  { id: 'builtin-sinsang', name: '경산 신상중 급식실', desc: 'CAD 도면(DXF)에서 가져온 급식실 — 방 13개 · 문·창 32개 · 급식기구 167개가 배치된 예제입니다.', build: () => buildSinsangProject() },
   { id: 'builtin-studio', name: '원룸 6평', desc: '침대·옷장·책상이 놓인 원룸 한 칸.', build: buildStudio },
 ];
 
