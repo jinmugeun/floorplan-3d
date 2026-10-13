@@ -28,6 +28,10 @@ import { eqBlockName, parseEqBlock, eqPlacement, eqWalls, eqSafe, EQ_LAYER } fro
 import { isDrawnItem, productRows } from '../src/io/estimate.js';
 import { blockKindByName } from '../src/io/dxf/blockOpenings.js';
 import { placeOnWall, wallAxis } from '../src/geom/items.js';
+import { sameItemIds } from '../src/state/itemOps.js';
+import { createStore } from '../src/state/store.js';
+import { createUiState } from '../src/state/uistate.js';
+import { itemMenuItems } from '../src/ui/itemMenu.js';
 
 let handle;
 beforeAll(async () => {
@@ -512,9 +516,10 @@ test('EQ- 인서트 → 아이템 자리: 회전·거울은 배율 부호로 되
   expect(at('EQ-인덕션_3구-750x520x60@range-induction!', 900, 750, 520).patch).toMatchObject({ attach: 'floorLay', z: 900 });
   expect(at('EQ-도면_기구-800x150x1000@equip-generic', 1100, 800, 150).patch).toMatchObject({ attach: 'floor', z: 1100 });
   expect(at('EQ-천장형_배기_후드(박스형)-1600x1200x600@hood-box!', 2900, 1600, 1200).patch).toMatchObject({ attach: 'ceiling', z: 0 });
-  // 가격 표지: `!`면 dxfProduct를 두지 않는다(그 제품 가격) · 없으면 dxfProduct = 제품(0원 '도면 기구'). dxfBlock은 둘 다 EQ- 이름.
+  // 가격 표지: `!`면 dxfProduct를 두지 않는다(그 제품 가격) · 없으면 dxfProduct = 제품(0원 '도면 기구').
+  // dxfBlock은 표지 없는 것(도면에서 가져온 기구)만 EQ- 이름이다 — `!`는 사람이 놓은 제품이라 두지 않는다(2026-10-13 · 최종 리뷰 X-1).
   const priced = at('EQ-1조_싱크대-1200x750x850@sink-single!', 0, 1200, 750).patch, drawn = at('EQ-1조_싱크대-1200x750x850@sink-single', 0, 1200, 750).patch;
-  expect(['dxfProduct' in priced, priced.dxfBlock, drawn.dxfProduct]).toEqual([false, 'EQ-1조_싱크대-1200x750x850@sink-single!', 'sink-single']);
+  expect(['dxfProduct' in priced, 'dxfBlock' in priced, drawn.dxfBlock, drawn.dxfProduct]).toEqual([false, false, 'EQ-1조_싱크대-1200x750x850@sink-single', 'sink-single']);
   // 다시 앉을 벽은 기구 방향과 나란한 것뿐이다(eqWalls) — 구석의 벽걸이 기구를 직각 벽이 가로채지 않게(2026-10-13 실측: 사동 에어커튼 90° · 95 mm).
   const H = makeWall({ a: [0, 0], b: [4000, 0], thickness: 200, height: 3000 }), V = makeWall({ a: [4000, 0], b: [4000, 3000], thickness: 200, height: 3000 });
   expect([eqWalls([H, V], 270), eqWalls([H, V], 180.5), eqWalls([H, V], 45)]).toEqual([[V], [H], []]);
@@ -523,7 +528,8 @@ test('EQ- 인서트 → 아이템 자리: 회전·거울은 배율 부호로 되
 test('기구 왕복: 수·중심(≤ 10 mm)·크기·이름·제품·부착·z·회전·거울·가격이 그대로 돌아오고, 기구 선은 벽·방·개구부를 바꾸지 않는다', () => {
   const P0 = equipFixture(), A = P0.floors[0].items.filter(isExportEquip);
   const r1 = importText(exportDxf(P0));
-  const got = r => r.project.floors[0].items.filter(i => String(i.dxfBlock ?? '').startsWith('EQ-'));
+  // 돌아온 기구 = 제품·설비 아이템 전부(문·창·통로·기둥 빼고) — 사람이 고른 제품(`!`)은 dxfBlock이 없으니 블록 이름으로 거르지 않는다(최종 리뷰 X-1).
+  const got = r => r.project.floors[0].items.filter(isExportEquip);
   // 벽 판넬(익명 상자를 벽에 붙인 것)은 부착을 잃고 바닥으로 온다(이름에 없다 — 자리·z 900은 그대로 · 바닥 기구를 벽으로 옮기는 규칙은 두지 않는다).
   const attachOf = a => (a.dxfBlock === 'zw$A460' ? 'floor' : a.attach);
   const same = (A, B, back) => {
@@ -546,6 +552,10 @@ test('기구 왕복: 수·중심(≤ 10 mm)·크기·이름·제품·부착·z·
   expect(total(got(r1))).toBe(total(A));
   expect(total(A)).toBeGreaterThan(0);
   expect(got(r1).filter(isDrawnItem).map(i => i.productId).sort()).toEqual(['equip-generic', 'equip-generic', 'sink-double']);
+  // 도면 기구만 EQ- 블록 이름을 dxfBlock에 둔다 — 사람이 고른 제품(`!`)은 dxfBlock도 dxfProduct도 없다(최종 리뷰 X-1).
+  const tag = i => `${i.productId}:${String(i.dxfBlock ?? '-').slice(0, 3)}:${i.dxfProduct ?? '-'}`;
+  expect(got(r1).map(tag).sort()).toEqual(['cabinet-upper:-:-', 'equip-generic:EQ-:equip-generic', 'equip-generic:EQ-:equip-generic', 'fridge-2door:-:-',
+    'hood-box:-:-', 'sink-double:EQ-:sink-double', 'ventcap-150:-:-']);
   // 기구 선(EQUIP 레이어)은 벽 판정에 끼지 않는다 — 기구를 빼고 내보낸 것과 벽·방·개구부·기둥이 같다.
   const r0 = importText(exportDxf(P0, { equipment: false })), W0 = digest(r0, r0.back), W1 = digest(r1, r1.back);
   sameWalls(W0, W1, 0.5);
@@ -553,4 +563,23 @@ test('기구 왕복: 수·중심(≤ 10 mm)·크기·이름·제품·부착·z·
   // 두 번째 왕복도 같다(고정점 — r2.back은 r1의 앱 좌표로 되돌린다).
   const r2 = importText(exportDxf(r1.project));
   same(got(r1), got(r2), r2.back);
+});
+
+// 2026-10-13 · 최종 리뷰 X-1(M-E5/N-2): 손으로 놓은 같은 제품 둘(폭 900 · 1000 냉장고)을 왕복하면 예전에는 둘 다 dxfBlock(크기가 든 EQ- 이름)을 얻어
+// itemOps.sameItemIds가 "가져온 기구"로 보고 블록끼리만 묶었다 — 메뉴가 "같은 이름 1개"로 꺼졌다(실측 네 도면 모두 n = 1).
+// 사람이 놓은 제품(`!`)은 왕복 뒤에도 사람이 놓은 아이템이다: dxfBlock 없음 → 같은 productId 전부 · 메뉴 "같은 제품 선택"이 켜진다.
+test('왕복한 가격 아이템은 사용자의 것 — dxfBlock 없음 · "같은 제품 선택"이 같은 제품 전부를 고른다', () => {
+  const P0 = equipFixture(), f0 = P0.floors[0], fridge = productById('fridge-2door');
+  f0.items.push(createItem(fridge, { pos: [-1200, -2000], size: [1000, fridge.size[1], fridge.size[2]] }));   // 폭이 다른 둘째 — 블록 이름이 다르다
+  const before = f0.items.filter(i => i.productId === 'fridge-2door');
+  expect(before.map(i => sameItemIds(f0, i).length)).toEqual([2, 2]);
+  const r = importText(exportDxf(P0)), f = r.project.floors[0];
+  const back = f.items.filter(i => i.productId === 'fridge-2door');
+  expect(back.map(i => i.size[0]).sort()).toEqual([1000, 900]);
+  expect(back.map(i => [i.dxfBlock ?? null, i.dxfProduct ?? null, isDrawnItem(i)])).toEqual([[null, null, false], [null, null, false]]);
+  for (const it of back) expect(sameItemIds(f, it).sort()).toEqual(back.map(i => i.id).sort());
+  const menu = itemMenuItems({ store: createStore(r.project), ui: createUiState(), ids: [back[0].id], itemActions: {} });
+  expect(menu.filter(m => m?.label === '같은 제품 선택').map(m => m.disabled)).toEqual([false]);
+  // 도면에서 가져온 기구는 그대로 EQ- 꼬리표다 — 같은 이름·같은 블록 묶음(계획 14 Task D)은 바뀌지 않는다.
+  expect(f.items.find(i => i.productId === 'sink-double').dxfBlock).toMatch(/^EQ-세정대/);
 });

@@ -6,7 +6,7 @@
 //    이름 W-D 순서가 로컬 축과 21 % 반대), 이름 긴 변이 상자 긴 변과 20 % 넘게 다르면 상자. 식탁은 카탈로그 크기(상자가 의자를 품는다).
 //    축 정렬이 아닌 인서트(이동 카트·작업대 14개)만 rot을 쓰고 크기는 로컬 상자(앱 rot = −DXF rot — 앱 y가 뒤집혀 기둥과 같은 부호).
 //  - 이름: item.name = 도면 이름 정리본(제품명으로 덮지 않는다 — 사람이 도면과 대조한다 · 익명 블록은 제품 이름), item.code = 제품 코드,
-//    item.dxfBlock = 원 블록 이름(모든 기구 아이템).
+//    item.dxfBlock = 원 블록 이름(모든 기구 아이템 — 정규화 DXF의 `EQ-…!`(사람이 고른 제품)만 빼고: 최종 리뷰 X-1 · equipName.eqPlacement).
 //  - 겹침: 벽 띠·기둥과 equipClash 이상 겹쳐도 **세우고** 센다(자동으로 옮기지 않는다 — 사람이 본다). 아이템끼리 겹침도 센다(사전 검토 I-4).
 //    기둥 면에 붙여 그려 ≤ equipTrim 들어간 바닥 기구만 그쪽 변을 깎는다(2026-10-13 · 계획 14 Task A · equipTrim.js — 자리는 그대로).
 // 이 파일도 워커의 import 사슬이다: DOM·ui를 건드리지 않는다. 앱 좌표의 벽(walls)·기둥 아이템(columns)과 DXF → 앱 변환(toApp)을 받는다.
@@ -170,7 +170,8 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
   const skip = why => { stats.skipped[why]++; };
   let hoods = 0;
   // ⑤ 벽 자리·천장 z·후드 번호·통계 — 도면 블록(②~④)과 정규화 DXF 기구 `EQ-…`(2026-10-13 계획 14 Task E · equipName.js — ②~④의 제외·크기·어휘 없이 그대로 ·
-  //    나란한 벽에만 · 얇은 판넬 규칙 없음(사람이 놓은 바닥 기구를 벽으로 옮기지 않는다) · 가격 표지 `!`면 dxfProduct 없음)의 같은 길. eqWs = EQ-의 벽 후보.
+  //    나란한 벽에만 · 얇은 판넬 규칙 없음(사람이 놓은 바닥 기구를 벽으로 옮기지 않는다) · 가격 표지 `!`면 dxfProduct·dxfBlock 없음 — 최종 리뷰 X-1)의 같은 길.
+  //    eqWs = EQ-의 벽 후보.
   const place = (pid, patch, v, anon, f, eqWs = null) => { const { size, pos, rot } = patch, product = productById(pid);
     const floorCover = patch.attach === 'floor' ? coverage(patch, bands, cols) : 0;
     const thin = !eqWs && patch.attach === 'floor' && Math.min(size[0], size[1]) <= THIN && floorCover >= P.equipClash;

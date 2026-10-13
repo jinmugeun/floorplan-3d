@@ -4,8 +4,9 @@
 //     EQ-<이름>-<W>x<D>x<H>@<productId>[!]     (W·D = 블록 사각형 · H = 높이 · mm 정수 · `!` = 가격 있는 제품)
 // 크기를 이름에 넣는 까닭(사전 검토 I-6): 블록 하나 = 사각형 하나라, 이름만으로 블록을 나누면 이름이 같고 크기가 다른 것(사동 '도면 기구'
 // 28개가 20종 · Task A로 깎인 500×400 → 482×400)이 첫 크기로 돌아온다. 같은 전체 이름이면 블록 하나다(dxfExportEquip.js).
-// 꼬리 `!`(2026-10-13 · Task E 리뷰 I-2): 사람이 고른 제품(estimate.isDrawnItem이 아닌 것 — 손으로 놓았거나 제품을 바꾼 것). 다시 들여오면 dxfProduct를
-// 두지 않아 그 제품 가격이다. 없으면 도면에서 가져온 기구 — 0원 '도면 기구'(예전 파일도 이 뜻 그대로 읽힌다). 리뷰 프로브: 표지 없이 8,350,000 → 0원.
+// 꼬리 `!`(2026-10-13 · Task E 리뷰 I-2): 사람이 고른 제품(estimate.isDrawnItem이 아닌 것 — 손으로 놓았거나 제품을 바꾼 것). 다시 들여오면 dxfProduct도
+// dxfBlock도 두지 않아 그 제품 가격이고 사람이 놓은 아이템이다(최종 리뷰 X-1 — eqPlacement). 없으면 도면에서 가져온 기구 — 0원 '도면 기구'(예전 파일도
+// 이 뜻 그대로 읽힌다). 리뷰 프로브: 표지 없이 8,350,000 → 0원.
 // 이름은 **오른쪽부터** 읽는다: `@` 뒤가 제품 id(`@`·`!`가 없는 꼴), 그 앞 `-WxDxH` — 본체에 `-`·숫자·`@`가 있어도(세정대 2조 1500-750) 갈리지 않는다.
 // 삽입점 높이(코드 30)가 아이템 z다(explode의 inserts.z — 리뷰 m-1). 천장 기구만 층고 − 높이로 다시 잰다.
 // 이 파일이 형식의 정본이다: 내보내기(io/dxfExportEquip.js)와 가져오기(io/dxf/equipment.js)가 함께 쓴다. 워커 import 사슬 — DOM을 모른다.
@@ -62,7 +63,9 @@ function frame(segs, deg) {
 // 다른 기구와 같은 길로 잇는다. 어휘·제외·크기 문턱을 건너뛴다 — 이름·크기·자리·제품을 그대로 세운다.
 //  - 회전: explode의 rot(rotOf)은 x 배율이 음수(좌우 뒤집기)면 180°를 더한 값이다 — 빼고 앱 rot = −DXF rot(기둥과 같은 부호). 배율 부호 → flipH·flipV.
 //  - 제품: `@` 뒤 id가 카탈로그에 있으면 그것, 없으면 '도면 기구'(일반 상자). dxfProduct = 그 제품(견적 0원 '도면 기구' 행 — estimate.isDrawnItem),
-//    꼬리 `!`(사람이 고른 제품)면 두지 않는다 — 그 제품 가격(리뷰 I-2). dxfBlock은 둘 다 EQ- 이름(교정 기록·같은 블록 고르기의 꼬리표).
+//    dxfBlock = EQ- 이름(교정 기록·같은 블록 고르기의 꼬리표). 꼬리 `!`(사람이 고른 제품)면 **둘 다** 두지 않는다 — 그 제품 가격(리뷰 I-2)이고,
+//    사람이 놓은 아이템 그대로다(2026-10-13 · 최종 리뷰 X-1: dxfBlock을 두면 itemOps.sameItemIds가 가져온 기구로 보고 크기가 든 블록끼리만 묶어,
+//    폭이 다른 2도어 냉장고 둘을 손으로 놓고 왕복하면 "같은 제품 선택"이 n = 1로 꺼졌다 · 교정 기록도 도면 기구로 셌다).
 //  - 부착(사전 검토 I-6): 이름 본체의 어휘가 **그 제품을 가리키거나 제품이 일반 상자면** 어휘 — 처음 가져올 때 어휘가 정한 것이라 같은 답이 나온다
 //    (워터릴 = 일반 상자 · 벽, 후드 = 천장). 어휘가 다른 제품을 가리키면 제품의 부착이다(사람이 놓은 '벽걸이 후드'가 이름의 '후드' 때문에 천장으로
 //    가지 않게). 위생 기구 묶음(maxLong 초과)은 처음처럼 바닥. 이름에 없는 부착은 잃는다: 익명 블록이 안쪽 글자로 얻은 벽 부착, 벽 띠 위에 그려
@@ -83,7 +86,7 @@ export function eqPlacement(it, segs, { toApp = p => p, sc = 1 } = {}) {
   if (v?.maxLong && Math.max(size[0], size[1]) > v.maxLong) v = { productId: GEN, attach: 'floor', z: 0 };
   v ??= { productId: pid, attach: product.attach, z: product.zDefault ?? 0 };
   const attach = v.attach ?? product.attach, z = Number.isFinite(it.z) ? r0(it.z * sc) : attach === 'floor' ? 0 : v.z ?? 0;
-  const patch = { name: !eq.name || eq.body === eqSafe(product.name) ? product.name : eq.name, dxfBlock: it.name, ...(eq.priced ? {} : { dxfProduct: pid }),
+  const patch = { name: !eq.name || eq.body === eqSafe(product.name) ? product.name : eq.name, ...(eq.priced ? {} : { dxfBlock: it.name, dxfProduct: pid }),
     pos: toApp(f?.c ?? it.pos).map(r0), rot: normDeg(-deg), size, attach, z: attach === 'ceiling' ? 0 : z, flipH, flipV };
   return { patch, v: { ...v, attach, z }, pid };
 }
