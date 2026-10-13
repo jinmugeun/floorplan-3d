@@ -16,7 +16,7 @@ import { placeOnWall, wallAxis, itemAABB, pointInItem, normDeg } from '../../geo
 import { blockKind, OPEN_BLOCK } from './blockOpenings.js';
 import { classifyLayer } from './classify.js';
 import { DXF_PARAMS } from './params.js';
-import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous } from './equipVocab.js';
+import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous, isJunkName } from './equipVocab.js';
 import { topOwner, insertBoxes, insertParts, arcEnds } from './insertBoxes.js';
 import { trimToColumns } from './equipTrim.js';
 
@@ -212,7 +212,10 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     // `dxfBlock`에 남긴다(도면과 대조 · 교정 기록 — normalizeItem은 모르는 칸을 그대로 둔다).
     // dxfProduct = 가져올 때 맞춘 제품 id(2026-10-12 · 최종 리뷰 F-1): 견적은 productId가 이것과 같은 동안 0원 '도면 기구' 행으로 센다(estimate.productRows) —
     // 어휘의 대용 제품(취반기(전기) → 가스 취반기 등)의 예시 단가가 사동 견적을 ≈ 10배로 부풀렸다. 사람이 제품을 바꾸면 그 제품 가격이다.
-    let patch = { ...(anon ? {} : { name: cleanName(it.name) || it.name }), dxfBlock: it.name, dxfProduct: pid, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 };
+    // 쓰레기 이름("1"·"66666"·"ccc" — 공개 도면 라벨 803 중 87, 계획 14 Task D ②)은 익명과 같이 이름을 주지 않는다(제품 이름 → 라벨 없음).
+    // 매칭·통계는 그대로 이름 있는 블록으로 센다(어휘에는 안 맞으니 일반 상자) — equip 수가 바뀌지 않게.
+    const nm = cleanName(it.name) || it.name;
+    let patch = { ...(anon || isJunkName(nm) ? {} : { name: nm }), dxfBlock: it.name, dxfProduct: pid, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 };
     const floorCover = patch.attach === 'floor' ? coverage(patch, bands, cols) : 0;
     const thin = patch.attach === 'floor' && Math.min(size[0], size[1]) <= THIN && floorCover >= P.equipClash;
     if (patch.attach === 'wall' || thin) {

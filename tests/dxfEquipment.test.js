@@ -89,6 +89,13 @@ test('어휘에 없는 이름 → 도면 기구(정리한 도면 이름) · 익�
   expect(only(run(one('세정대 2조 1500-750-', [0, 0, 1500, 750])))).toMatchObject({ name: '세정대 2조 1500-750', dxfBlock: '세정대 2조 1500-750-' });
 });
 
+// 2026-10-13 계획 14 Task D ②(연결은 컨트롤러): 쓰레기 이름 블록은 이름을 받지 않아 라벨이 서지 않지만, 익명이 아니라 이름 있는 일반 상자로 센다.
+test('쓰레기 이름("66666"·"ccc") → 제품 이름(라벨 없음)이지만 named로 세고 dxfBlock에는 원 이름', () => {
+  const r = run(exOf([ins('66666'), ins('ccc')], [...box(0, 0, 0, 1200, 800), ...box(1, 5000, 0, 6200, 800)]));
+  expect(r.items.map(i => [i.name, i.dxfBlock])).toEqual([['도면 기구', '66666'], ['도면 기구', 'ccc']]);
+  expect(r.stats).toMatchObject({ placed: 2, generic: 2, anonymous: 0, named: 2 });
+});
+
 test('dxfBlock은 저장·불러오기 왕복(normalizeProject → JSON → migrate)과 교정 기록 스냅숏을 지난다', () => {
   const r = run(exOf([ins('zw$E75B'), ins('워터릴')], [...box(0, 0, 0, 1500, 1800), seg([0, 0], [1500, 1800], 0), seg([0, 1800], [1500, 0], 0), ...box(1, 5000, 0, 5550, 420)]));
   const floor = { ...createFloor('1F'), items: r.items };
