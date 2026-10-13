@@ -197,7 +197,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
       initial = new Set(summary.checked);
       checked = new Set(summary.checked);
       q('units').value = String(summary.unitScale);
-      if (summary.layerHeight) autoHeight = true;   // 2026-10-13 · 꼬리 있는 도면은 그 높이에서 시작한다 —아래 renderLayers(→ syncPreset → applyHint)가 칸을 채운다
+      if (summary.layerHeight) autoHeight = true;   // 2026-10-13 · 꼬리 있는 도면은 그 높이에서 시작한다 — 아래 renderLayers(→ syncPreset → applyHint)가 칸을 채운다
       // 도면 후보가 둘 이상이면 고르는 칸을 연다(첫 후보 = 가장 큰 덩어리가 기본값).
       const regions = summary.regions ?? [];
       q('region').innerHTML = regions.map((r, i) => `<option value="${i}">${esc(DXF_REGION(i + 1, km(r.size[0]), km(r.size[1]), r.hint))}</option>`).join('');
