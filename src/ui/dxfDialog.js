@@ -4,6 +4,7 @@
 import { focusTrap } from './dialogBase.js';
 import { esc } from '../util/html.js';
 import { createDxfClient, traceInWorker } from '../io/dxf/client.js';
+import { heightHint } from '../io/dxf/classify.js';
 import { traceBackground } from '../io/dxf/trace.js';
 import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
@@ -76,6 +77,9 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
   // want: 지금까지 요청된 재추출의 번호. 결과는 **그 번호가 아직 최신일 때만** 가져올 수 있다 — 옵션을 바꾼 순간부터
   // 최신 결과가 올 때까지 [가져오기]를 잠근다(2026-09-29 리뷰: 층고를 바꾸고 곧바로 누르면 옛 결과가 들어갔다).
   let want = 0, pending = false;
+  // autoHeight: 사람이 층고 칸을 아직 만지지 않아 이 창이 채운다(지금 체크의 높이 꼬리 · 없으면 설정값 — 2026-10-13 · 계획 16 Task A). 칸에 입력하면 꺼지고,
+  // 꼬리 있는 도면이 열리면 다시 켜진다(도면의 값이 다른 도면에 입력한 값보다 앞선다). 꼬리 없는 도면은 사람이 입력한 값을 그대로 둔다(계획 16 전과 같다).
+  let autoHeight = true;
 
   const setError = text => { const e = q('error'); e.textContent = text ?? ''; e.hidden = !text; };
   const showError = code => setError(code ? (DXF_ERRORS[code] ?? DXF_ERRORS.oom) : null);
@@ -98,7 +102,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
   const syncPreset = () => {
     const def = wallOnly(summary?.layers ?? []);
     q('preset').checked = checked.size === def.size && [...def].every(n => checked.has(n));
-    guide();
+    guide(); applyHint();
   };
   // 입력 도면 안내 줄(2026-10-12 · 계획 12 Task 3): 선 수 · 체크한(벽) 레이어 수 · 안내 페이지 — 선이 너무 많으면 도면부터 간편화하게.
   // 체크가 바뀌는 자리(syncPreset)마다 다시 쓴다.
@@ -108,8 +112,13 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     g.innerHTML = summary ? `${esc(DXF_GUIDE_LINE(summary.segs, checked.size))} · <a href="${DXF_GUIDE_HREF}" target="_blank" rel="noopener">${esc(DXF_GUIDE_LINK)}</a>` : '';
   };
   const renderLayers = () => { q('layers').innerHTML = summary ? layerListHtml(summary.layers, checked) : ''; syncPreset(); };
-  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정 …(조립과 순서는 dxfNotes.js — 2026-10-13 계획 16).
-  const notes = () => notice(dxfNotes({ summary, stats: last?.stats ?? {} }));
+  // 벽 레이어 이름의 높이 꼬리(2026-10-13 · 계획 16 Task A): 지금 체크 집합의 힌트를 층고 칸에 넣는다 — 사람이 칸을 만지기 전(autoHeight)에만. 힌트가 없어지면
+  // (체크를 껐다 · 꼬리 없는 다음 파일) 설정값으로 되돌린다. 레이어에서 온 값은 설정(prefs)에 남기지 않는다(다음 도면의 기본값이 이 도면의 층고가 되면 안 된다).
+  // 체크가 바뀌는 자리는 모두 syncPreset을 지나므로 거기서 한 번 부른다. 사람이 입력한 뒤에는 아무것도 하지 않는다(체크를 바꿔도 사람의 값을 설정값으로 덮지 않게).
+  const hint = () => (summary && autoHeight ? heightHint(summary.layers ?? [], checked) : null);
+  const applyHint = () => { if (!autoHeight) return; const h = hint(); q('height').value = String(h ? h.height : dxfHeight()); notes(); };
+  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정 · 높이 꼬리 …(조립과 순서는 dxfNotes.js — 2026-10-13 계획 16).
+  const notes = () => notice(dxfNotes({ summary, stats: last?.stats ?? {}, hint: hint() }));
   const regionIdx = () => Number(q('region').value) || 0;
   const km = mm => (mm / 1000).toFixed(1);
   const setHead = () => {
@@ -187,6 +196,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
       initial = new Set(summary.checked);
       checked = new Set(summary.checked);
       q('units').value = String(summary.unitScale);
+      if (summary.layerHeight) autoHeight = true;   // 꼬리 있는 도면은 그 높이에서 시작한다 — 아래 renderLayers(→ syncPreset → applyHint)가 칸을 채운다
       // 도면 후보가 둘 이상이면 고르는 칸을 연다(첫 후보 = 가장 큰 덩어리가 기본값).
       const regions = summary.regions ?? [];
       q('region').innerHTML = regions.map((r, i) => `<option value="${i}">${esc(DXF_REGION(i + 1, km(r.size[0]), km(r.size[1]), r.hint))}</option>`).join('');
@@ -235,7 +245,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
         if (bg) project.background = bg;
         else toast(DXF_TRACE_SKIPPED);
       }
-      setDxfHeight(height);
+      if (!(autoHeight && height === hint()?.height)) setDxfHeight(height);   // 레이어 꼬리에서 온 층고는 설정에 남기지 않는다(계획 16 Task A — 판정은 가져오는 값으로)
       setDxfTrace(traceOn);
       const ok = await onImported({ project, stats });
       if (ok !== false) close();
@@ -273,6 +283,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     renderLayers(); schedule();
   });
   for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'equipment', 'trace']) q(n).addEventListener('change', schedule);
+  q('height').addEventListener('input', () => { autoHeight = false; notes(); });   // 사람이 층고를 만졌다 — 힌트를 놓고 알림도 곧바로 지운다(사전 검토 9-2)
   q('region').addEventListener('change', () => { setHead(); schedule(); });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel(); } });
 

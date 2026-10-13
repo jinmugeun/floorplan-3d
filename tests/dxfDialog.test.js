@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { openDxfDialog, DXF_THICKNESS_RANGE } from '../src/ui/dxfDialog.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
-import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
+import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE, dxfHeight } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
 import { createDxfActions } from '../src/app/dxfActions.js';
@@ -14,7 +14,7 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED,
-  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from '../src/ui/messages.js';
+  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT } from '../src/ui/messages.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -997,4 +997,104 @@ test('검토 창의 미리보기에 가져올 기구가 함께 그려진다', as
   const fills = ctx.calls.filter(c => c.op === 'fill').map(c => c.fillStyle);
   expect(fills).toContain(PREVIEW_COLORS.item);
   expect(fills.indexOf(PREVIEW_COLORS.item)).toBeLessThan(fills.indexOf(PREVIEW_COLORS.wall));
+});
+
+// ── 2026-10-13 계획 16 Task A: 벽 레이어 이름의 높이 꼬리(아키스케치 wall_2800 규칙 · classify.layerHeight) → 층고 칸 미리 채움 ──────────
+// 가짜 워커의 순서(사전 검토 2): 답 없는 요청 뒤의 요청은 큐에만 서고, 다음에 오는 메시지가 **걸려 있는 요청**의 답이 된다(client.js) —
+// 그래서 체크·층고를 바꾸기 전과 다른 파일을 떨어뜨리기 전에 걸린 추출마다 EXTRACTED로 답한다.
+const withSuffix = () => {
+  const rows = ROWS.map(r => (r.name === '기존' ? { ...r, name: '기존_2800', height: 2800 } : r));
+  return { ...SUMMARY, layers: rows, checked: [...wallOnly(rows)], layerHeight: { height: 2800, layer: '기존_2800' } };
+};
+const lastExtract = w => w.posted.filter(m => m.type === 'extract').at(-1);
+// 다른 파일을 떨어뜨린다('파일을 잇달아' 테스트의 떨어뜨리기와 같은 꼴).
+const drop = (root, f) => root.dispatchEvent(Object.assign(new Event('drop', { bubbles: true }), { dataTransfer: { files: [f] } }));
+
+test('벽 레이어 이름의 높이 꼬리가 있으면 층고 칸에 미리 넣고 알리고 그 행에 배지를 단다 — 설정에는 레이어 값이 남지 않는다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(q('notice').textContent).toContain(DXF_HEIGHT_FROM_LAYER(2800, '기존_2800'));
+  expect(root.querySelector('label[title="기존_2800"] .badge.height').textContent).toBe(DXF_BADGE_HEIGHT(2800));
+  expect(root.querySelectorAll('.badge.height')).toHaveLength(1);                         // 벽 역할 행에만
+  expect(layerRowHtml(row('TEXT_2500', 'text', 0, { texts: 3, height: 2500 }), false)).not.toContain('badge height');   // 문자 행의 꼬리는 높이가 아니다
+  expect(lastExtract(w).opts.height).toBe(2800);
+  w.emit(EXTRACTED); await flush();
+  q('import').click(); await flush();
+  expect(dxfHeight()).toBe(3500);
+});
+
+test('높이 꼬리로 채운 뒤 사람이 층고를 고치면 그 값으로 추출하고 알림은 사라지며 설정에도 남는다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  w.emit(EXTRACTED); await flush();
+  q('height').value = '3000';
+  q('height').dispatchEvent(new Event('input', { bubbles: true })); q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  expect(lastExtract(w).opts.height).toBe(3000);
+  expect(q('notice').textContent).not.toContain('층고로 씁니다');
+  w.emit(EXTRACTED); await flush();
+  // 사람이 고친 값은 체크를 바꿔도 힌트(나 설정값)가 덮지 않는다.
+  q('wallOnly').click(); await flush();
+  expect(q('height').value).toBe('3000');
+  vi.advanceTimersByTime(250); await flush();
+  expect(lastExtract(w).opts.height).toBe(3000);
+  w.emit(EXTRACTED); await flush();
+  q('import').click(); await flush();
+  expect(dxfHeight()).toBe(3000);
+});
+
+test('꼬리 레이어의 체크를 끄면 힌트가 따라가고, 꼬리 없는 다른 파일을 이어 열면 층고 칸은 설정값으로 돌아간다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  w.emit(EXTRACTED); await flush();
+  const box = root.querySelector('input[name="layer"][value="기존_2800"]');
+  box.checked = false; box.dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  expect(q('height').value).toBe('3500');
+  expect(lastExtract(w).opts.height).toBe(3500);
+  expect(q('notice').textContent).not.toContain('층고로 씁니다');
+  w.emit(EXTRACTED); await flush();
+  box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(lastExtract(w).opts.height).toBe(2800);
+  w.emit(EXTRACTED); await flush();
+  // 둘째 파일(꼬리 없음)
+  drop(root, fileOf('둘째.dxf')); await flush();
+  expect(w.posted.filter(m => m.type === 'parse').map(m => m.fileName)).toEqual(['평면도.dxf', '둘째.dxf']);
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  expect(q('height').value).toBe('3500');
+  expect(lastExtract(w).opts.height).toBe(3500);
+  w.emit(EXTRACTED); await flush();
+  q('import').click(); await flush();
+  expect(dxfHeight()).toBe(3500);
+});
+
+test('사람이 입력한 층고는 꼬리 없는 다음 도면에도 그대로이고(계획 16 전과 같다), 꼬리 있는 도면이 열리면 그 높이를 미리 넣는다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  w.emit(EXTRACTED); await flush();
+  q('height').value = '3000';
+  q('height').dispatchEvent(new Event('input', { bubbles: true })); q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  w.emit(EXTRACTED); await flush();
+  drop(root, fileOf('둘째.dxf')); await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  expect(q('height').value).toBe('3000');
+  expect(lastExtract(w).opts.height).toBe(3000);
+  w.emit(EXTRACTED); await flush();
+  drop(root, fileOf('셋째.dxf')); await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(q('notice').textContent).toContain(DXF_HEIGHT_FROM_LAYER(2800, '기존_2800'));
+  expect(lastExtract(w).opts.height).toBe(2800);
 });

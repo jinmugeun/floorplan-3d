@@ -66,6 +66,9 @@ export const DXF_BADGE_HATCH = '해치(벽 채움)';
 // 이름이 아니라 내용으로 판정한 레이어(layerGuess.refineByContent) — 사람이 확인할 줄이다.
 export const DXF_BADGE_GUESSED = '도형으로 추정';
 export const DXF_BADGE_COLOR = '색으로 판정';
+// 벽 레이어 이름의 높이 꼬리(2026-10-13 · 계획 16 Task A · classify.layerHeight): 층고 칸에 미리 넣었음을 알리고 벽 행에 배지를 단다.
+export const DXF_HEIGHT_FROM_LAYER = (h, layer) => `벽 레이어 이름의 높이 ${h} mm를 층고로 씁니다(${layer}) — 다르면 위에서 바꿔 주세요`;
+export const DXF_BADGE_HEIGHT = h => `높이 ${h}`;
 
 // 시작 화면의 네 번째 동작 카드(§18.7). 문구는 §18.7이 글자로 정했다.
 export const DXF_CARD_TITLE = 'DXF 도면 가져오기';

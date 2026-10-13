@@ -1,8 +1,8 @@
 // §18.2. 이 파일의 표는 조사 §1.4의 실측 레이어 목록이다 — 자동 판정이 그 표와 어긋나면
 // 검토 화면의 기본 체크가 틀린다(그리고 이 도면에서는 벽이 0개가 된다).
 import { test, expect } from 'vitest';
-import { LAYER_RULES, ROLE_LABEL, classifyLayer, layerStats, defaultChecked, roleLayers } from '../src/io/dxf/classify.js';
-import { DXF_PARAMS } from '../src/io/dxf/params.js';
+import { LAYER_RULES, ROLE_LABEL, classifyLayer, layerStats, defaultChecked, roleLayers, layerHeight, heightHint } from '../src/io/dxf/classify.js';
+import { DXF_PARAMS, HEIGHT_RANGE } from '../src/io/dxf/params.js';
 
 // 실파일의 레이어 이름 32개 ↔ 조사 §1.4가 적은 역할.
 const TABLE = [
@@ -258,4 +258,33 @@ test('divider는 정확 이름만: DIVIDER·divider·" Divider "는 난간, MY-D
   expect(['DIVIDER', 'divider', ' Divider '].map(classifyLayer)).toEqual(['rail', 'rail', 'rail']);
   expect(['MY-DIVIDERS', 'TOILET DIVIDER', 'ROOM DIVIDER', 'DIVIDER-PANEL'].map(classifyLayer)).toEqual(['other', 'other', 'other', 'other']);
   expect(['A-RAIL-DIVIDER', 'HANDRAIL-2'].map(classifyLayer)).toEqual(['rail', 'rail']);   // 부분 문자열 키(rail)는 그대로 — divider와 상관없이
+});
+
+// 2026-10-13 계획 16 Task A: 레이어 이름의 높이 꼬리(아키스케치 CAD 업로드의 `wall_2800` 규칙 · 조사 2026-10-13-research-rea-archisketch.md §1.1).
+test('레이어 이름 끝 _높이(2000~8000)는 그 레이어 벽의 높이다 — 아키스케치 wall_2800 규칙과 같다', () => {
+  expect(HEIGHT_RANGE).toEqual([2000, 8000]);
+  expect(layerHeight('WALL_2800')).toBe(2800);
+  expect(layerHeight('wall_2800')).toBe(2800);
+  expect(layerHeight(' A-WALL_3500 ')).toBe(3500);           // 앞뒤 공백은 이름이 아니다
+  expect(layerHeight('WALL-2')).toBeNull();                  // 우리 내보내기의 둘째 벽 레이어 — 꼬리가 아니다
+  expect(layerHeight('WALL_280')).toBeNull();                // 세 자리라도 범위 밖
+  expect(layerHeight('BLO_1000')).toBeNull();                // 범위 아래(도면 번호 꼴)
+  expect(layerHeight('WALL_9000')).toBeNull();               // 범위 위
+  expect(layerHeight('WALL_2800A')).toBeNull();              // 끝이 아니다
+  expect(layerHeight(null)).toBeNull();
+});
+
+test('layerStats 행은 height를 갖고, heightHint는 체크된 벽 레이어 중 선분이 가장 많은 것의 높이를 고른다', () => {
+  const doc = { layers: new Map([['WALL_2800', { color: 7, flags: 0 }], ['COL_3000', { color: 7, flags: 0 }], ['TEXT_2500', { color: 7, flags: 0 }]]) };
+  const seg = (layer, n) => Array.from({ length: n }, (_, i) => ({ a: [i * 1000, 0], b: [i * 1000 + 900, 0], layer }));
+  const ex = { segs: [...seg('WALL_2800', 5), ...seg('COL_3000', 2)], texts: Array.from({ length: 3 }, () => ({ layer: 'TEXT_2500' })) };
+  const rows = layerStats(doc, ex);
+  const by = Object.fromEntries(rows.map(r => [r.name, r]));
+  expect(by.WALL_2800).toMatchObject({ role: 'wall', height: 2800 });
+  expect(by.COL_3000).toMatchObject({ role: 'wall', height: 3000 });
+  expect(by.TEXT_2500).toMatchObject({ role: 'text', height: 2500 });       // 행에는 달린다 — 쓰는 쪽이 벽만 본다
+  expect(heightHint(rows, new Set(['WALL_2800', 'COL_3000']))).toEqual({ height: 2800, layer: 'WALL_2800' });
+  expect(heightHint(rows, new Set(['COL_3000']))).toEqual({ height: 3000, layer: 'COL_3000' });
+  expect(heightHint(rows, new Set(['TEXT_2500']))).toBeNull();            // 문자 레이어는 층고가 아니다
+  expect(heightHint(rows, new Set())).toBeNull();
 });

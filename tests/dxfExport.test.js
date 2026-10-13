@@ -596,3 +596,12 @@ test('왕복한 가격 아이템은 사용자의 것 — dxfBlock 없음 · "같
   // 도면에서 가져온 기구는 그대로 EQ- 꼬리표다 — 같은 이름·같은 블록 묶음(계획 14 Task D)은 바뀌지 않는다.
   expect(f.items.find(i => i.productId === 'sink-double').dxfBlock).toMatch(/^EQ-세정대/);
 });
+
+// 2026-10-13 계획 16 Task A: 벽 레이어 이름의 높이 꼬리(아키스케치 wall_2800 규칙)는 파싱 요약에 층고 후보로 실린다 — 검토 창이 층고 칸에 미리 넣는다.
+test('워커 요약은 체크된 벽 레이어의 높이 꼬리를 layerHeight로 싣는다(WALL_2800 → { 2800, WALL_2800 }) · 없으면 null', () => {
+  const txt = exportDxf(synthetic()).replace(/\nWALL\n/g, '\nWALL_2800\n');       // 레이어 표의 2 WALL · 엔티티의 8 WALL 둘 다(WALL-2는 그대로)
+  const r = importText(txt);
+  expect(r.summary.layerHeight).toEqual({ height: 2800, layer: 'WALL_2800' });
+  expect(r.summary.layers.find(l => l.name === 'WALL_2800')).toMatchObject({ role: 'wall', height: 2800 });
+  expect(importText(exportDxf(synthetic())).summary.layerHeight).toBeNull();
+});

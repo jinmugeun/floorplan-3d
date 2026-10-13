@@ -3,6 +3,7 @@
 // 이 도면의 WALL·CON·DOR·DOOR·A-WALL·WALL-FIN은 정의만 있고 엔티티가 0개이고, 실제 벽은
 // WAL·WAL-2·기존·FIN·ST-PL·BLO·COL 일곱에 흩어져 있다 — 이름만 믿는 구현은 벽 0개를 반환한다.
 import { refineByContent, CYAN } from './layerGuess.js';
+import { HEIGHT_RANGE } from './params.js';
 
 // 앞의 규칙이 이긴다. 비교는 소문자 부분일치다(keys) — exact는 앞뒤 공백을 뗀 소문자 이름 전체가 같을 때만(2026-10-12 · 계획 13 Task 7 · rail의 divider).
 // grid의 'dote'(2026-10-12 · 계획 12 Task 4): 공개 코퍼스의 TArch 축선 레이어 `DOTE` — 2suite (1) 선 65개 · 길이 중앙값 3,000 mm, 6suite (6)
@@ -37,6 +38,22 @@ export const classifyLayer = name => {
   return 'other';
 };
 
+// 레이어 이름의 높이 꼬리(2026-10-13 · 계획 16 Task A): 이름 끝 `_숫자 3~4자리`가 HEIGHT_RANGE 안이면 그 레이어 벽의 높이(mm)다. 아키스케치 CAD 업로드의
+// `wall_2800` 규칙과 같다(조사 2026-10-13-research-rea-archisketch.md §1.1) — 사무소가 층고를 도면에 적을 수 있는 가장 싼 길. 범위 밖(`BLO_1000` 같은
+// 도면 번호 꼴)은 꼬리가 아니다. 우리 내보내기의 `WALL-2`(붙임표·한 자리)는 맞지 않는다. 코퍼스 43파일의 레이어 이름 442개 중 맞는 것은 0(사전 검토 5).
+// 지금은 층고 **하나**로 납작해진다(레이어마다 다른 높이는 범위 밖 — 선분이 가장 많은 체크 벽 레이어의 값이 층고 칸에 간다).
+export const layerHeight = name => {
+  const m = /_(\d{3,4})$/.exec(String(name ?? '').trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  return h >= HEIGHT_RANGE[0] && h <= HEIGHT_RANGE[1] ? h : null;
+};
+// 체크된 벽 레이어의 높이 꼬리 → 층고 후보 하나(선분이 가장 많은 레이어의 값). 검토 창이 **지금 체크 집합**으로 다시 계산해 층고 칸에 미리 넣고 사람이 고친다.
+export const heightHint = (rows, checked) => {
+  const r = rows.filter(x => x.role === 'wall' && x.height && checked.has(x.name)).sort((a, b) => b.segs - a.segs)[0];
+  return r ? { height: r.height, layer: r.name } : null;
+};
+
 // 도형 신호는 **셋만** 키워드를 뒤집는다 — 증거 없는 승격 규칙을 더하지 않는다.
 // 사전 검토 C-3의 두 정정이 여기 있다:
 //  ⓐ 이름이 개구부 키워드를 맞히면 도형 통계가 뒤집지 못한다. 실파일의 `04창호`는 선분 3,069개에
@@ -66,7 +83,7 @@ export function layerStats(doc, ex, { roles = null } = {}) {
   const get = name => {
     let r = rows.get(name ?? '0');
     if (!r) {
-      r = { name: name ?? '0', color: 7, off: false, frozen: false, role: 'other', keyRole: 'other',
+      r = { name: name ?? '0', color: 7, off: false, frozen: false, role: 'other', keyRole: 'other', height: null,
         segs: 0, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 0, medianSeg: 0, cyan: 0, lens: [] };
       rows.set(r.name, r);
     }
@@ -97,6 +114,7 @@ export function layerStats(doc, ex, { roles = null } = {}) {
     delete r.lens;
     r.keyRole = classifyLayer(r.name);
     r.role = shapeRole(r);
+    r.height = layerHeight(r.name);     // 행에는 역할과 상관없이 단다 — 층고 후보(heightHint)·배지는 벽 행만 본다(2026-10-13 계획 16 Task A)
     out.push(r);
   }
   // 내용으로 고치기(청록 창호 · 이름으로 벽을 못 찾았을 때의 벽 추정) — 레이어별 선분은 필요할 때만 모은다.

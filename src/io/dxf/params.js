@@ -74,3 +74,7 @@ export const DXF_PARAMS = Object.freeze({
   dividerMinArea: 2_000_000,
   equipMin: 150, equipMax: 8000, equipClash: 0.5, equipTrim: 50, equipRegionPad: 1000,
 });
+
+// 층고 범위(mm)의 정본(2026-10-13 · 계획 16 Task A). 설정(ui/prefs.js DXF_HEIGHT_RANGE)·검토 창 입력 칸·레이어 이름 높이 꼬리(classify.layerHeight)가 같은
+// 값을 봐야 한다 — io/dxf는 DOM을 모르므로 범위를 여기에 두고 prefs가 가져다 쓴다. DXF_PARAMS 표 밖이다(표의 키 수는 테스트가 52로 고정).
+export const HEIGHT_RANGE = Object.freeze([2000, 8000]);
