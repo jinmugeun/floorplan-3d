@@ -4,6 +4,6 @@
   "sofa-3": { "kind": "polyhaven", "asset": "sofa_02", "front": "+z", "up": "y", "resolution": "1k" },
   "dining-6": { "kind": "polyhaven", "asset": "painted_wooden_table", "front": "+z", "up": "y", "resolution": "1k" },
   "side-table": { "kind": "polyhaven", "asset": "painted_wooden_nightstand", "front": "+z", "up": "y", "resolution": "1k" },
-  "desk-student": { "kind": "polyhaven", "asset": "SchoolDesk_01", "front": "+z", "up": "y", "resolution": "1k" },
+  "desk-student": { "kind": "polyhaven", "asset": "SchoolDesk_01", "front": "-z", "up": "y", "resolution": "1k" },
   "light-pendant": { "kind": "polyhaven", "asset": "modern_ceiling_lamp_01", "front": "+z", "up": "y", "resolution": "1k" }
 }

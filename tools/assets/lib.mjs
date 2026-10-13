@@ -46,6 +46,15 @@ export function checkManifestEntry(e, budget = ASSET_BUDGET) {
   return { ok: problems.length === 0, problems };
 }
 
+// 검수 시트 격자(2026-10-13 · 계획 15 Task D): snapshot.mjs가 제품마다 여섯 장(투영 앞·뒤·좌·위 + 원근 앞·뒤 비스듬히)을 한 PNG로 붙인다 —
+// 사람이 정면·구멍·뒤집힌 면을 한눈에 본다. 거의 정사각(열 = ⌈√n⌉)이라 여섯 장이면 3 × 2. 기본 1200 px · 칸 400 px 시트(1200 × 864)는
+// 팔레트 PNG로 시드 7종 모두 200 KB(커밋 예산) 안이다(2026-10-13 실측 — tools/assets/snapshots/*.png).
+export function sheetLayout(n, { width = 1200, maxCell = 400 } = {}) {
+  if (!(Number.isInteger(n) && n >= 1)) throw new RangeError(`sheetLayout: 장 수는 1 이상의 정수여야 한다 — ${n}`);
+  const cols = Math.ceil(Math.sqrt(n));
+  return { cols, rows: Math.ceil(n / cols), cell: Math.min(maxCell, Math.floor(width / cols)) };
+}
+
 // 출처 종류별 라이선스 근거 URL. Poly Haven은 /info에 license 필드가 없고 사이트 전체가 CC0-1.0이라(사전 검토 I-5) 사이트 라이선스 쪽을 적는다.
 export const LICENSE_URLS = Object.freeze({ polyhaven: 'https://polyhaven.com/license' });
 

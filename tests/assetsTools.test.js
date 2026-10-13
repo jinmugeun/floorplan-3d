@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync, crc32 } from 'node:zlib';               // zlib.crc32: Node ≥ 22.2 / 20.15 (CI Node 20 최신 20.x면 있음 · 사전 검토 S-11)
 import { fileURLToPath } from 'node:url';
-import { ASSET_BUDGET, ALLOWED_EXTENSIONS, FRONT_YAW, normalizeTransform, checkManifestEntry, manifestEntry } from '../tools/assets/lib.mjs';
+import { ASSET_BUDGET, ALLOWED_EXTENSIONS, FRONT_YAW, normalizeTransform, checkManifestEntry, manifestEntry, sheetLayout } from '../tools/assets/lib.mjs';
 
 test('normalizeTransform: +Y 위·정면 +Z 모델은 회전 0, 균일 배율은 가장 큰 축 기준, 원점은 바닥 중심', () => {
   // 모델 bbox(m): 가로 0.5 · 높이 1.0 · 깊이 0.4, 바닥이 y = 0.2에 떠 있고 중심이 x = 1
@@ -37,6 +37,18 @@ test('checkManifestEntry: 예산 안이면 ok, 넘거나 fit이 0.85 미만이�
   const bad = { ...ok, bytes: 2_000_000, tris: 20_000, textures: [{ w: 2048, h: 2048, format: 'image/png' }], fit: [0.5, 1, 1.05], extensions: ['KHR_materials_pbrSpecularGlossiness'] };
   expect(checkManifestEntry(bad).problems).toEqual(expect.arrayContaining(['bytes', 'tris', 'texture', 'fit', 'extension:KHR_materials_pbrSpecularGlossiness']));
   expect(ASSET_BUDGET).toEqual({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85 });
+});
+
+// 검수 시트 격자(2026-10-13 · 계획 15 Task D): snapshot.mjs가 제품마다 여섯 장(투영 앞·뒤·좌·위 + 원근 앞·뒤 비스듬히)을 한 장으로 붙일 때 쓴다.
+// 열 = ⌈√n⌉ · 행 = ⌈n / 열⌉(거의 정사각) · 칸 = 시트 너비(기본 1200) / 열(정수 px, 칸 상한 400 이하). 장 수가 1 이상의 정수가 아니면 던진다.
+test('sheetLayout: 6장은 3 × 2 · 칸 400 px, 1·4·5·16장과 너비 옵션, 0·NaN·2.5장은 오류', () => {
+  expect(sheetLayout(6)).toEqual({ cols: 3, rows: 2, cell: 400 });
+  expect(sheetLayout(4)).toEqual({ cols: 2, rows: 2, cell: 400 });
+  expect(sheetLayout(1)).toEqual({ cols: 1, rows: 1, cell: 400 });            // 칸 상한 — 한 장이 시트 너비 전체로 커지지 않게
+  expect(sheetLayout(5)).toEqual({ cols: 3, rows: 2, cell: 400 });
+  expect(sheetLayout(16)).toEqual({ cols: 4, rows: 4, cell: 300 });
+  expect(sheetLayout(4, { width: 601 })).toEqual({ cols: 2, rows: 2, cell: 300 });   // 정수 px로 내린다
+  for (const n of [0, NaN, 2.5]) expect(() => sheetLayout(n)).toThrow(RangeError);
 });
 
 // ── pack CLI 통합(Step 6) — 사전 검토 scratch/p15/pkg/step6.test.js의 통과 코드(1 passed · 7,488 B · 24 삼각형)를 옮겼다.

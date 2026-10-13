@@ -14,13 +14,15 @@ const ids = Object.keys(man.products);
 const SEEDS = ['chair-dining', 'chair-office', 'desk-student', 'dining-6', 'light-pendant', 'side-table', 'sofa-3'];
 
 describe('시드 에셋(계획 15 Task C)', () => {
-  test('sources.json은 사전 검토의 7쌍(Poly Haven · 1k · 정면 +Z · Y-up)이고 manifest가 같은 7종을 담는다', () => {
+  // 정면은 SchoolDesk_01만 −Z다(2026-10-13 · 계획 15 Task D 검수 시트): 책 상자의 트인 쪽(학생이 앉는 쪽)이 원본에서 −Z였다 — 원근으로 앞(+Z)·뒤에서
+  // 찍어 보니 +Z 쪽은 막힌 판, −Z 쪽에서 상자 안이 보였다. 앱의 앞은 사용자 쪽 +Z다(교실 템플릿: 책상 rot 0 · 교탁이 −Y에서 마주 본다).
+  test('sources.json은 사전 검토의 7쌍(Poly Haven · 1k · Y-up)이고 정면은 +Z(학생 책상만 −Z) · manifest가 같은 7종을 담는다', () => {
     expect(Object.keys(sources).sort()).toEqual(SEEDS);
     expect(Object.fromEntries(Object.entries(sources).map(([id, s]) => [id, s.asset]))).toEqual({
       'chair-dining': 'painted_wooden_chair_01', 'chair-office': 'GreenChair_01', 'sofa-3': 'sofa_02', 'dining-6': 'painted_wooden_table',
       'side-table': 'painted_wooden_nightstand', 'desk-student': 'SchoolDesk_01', 'light-pendant': 'modern_ceiling_lamp_01',
     });
-    for (const s of Object.values(sources)) expect(s).toMatchObject({ kind: 'polyhaven', front: '+z', up: 'y', resolution: '1k' });
+    for (const [id, s] of Object.entries(sources)) expect(s, id).toMatchObject({ kind: 'polyhaven', front: id === 'desk-student' ? '-z' : '+z', up: 'y', resolution: '1k' });
     expect([...ids].sort()).toEqual(SEEDS);
   });
 

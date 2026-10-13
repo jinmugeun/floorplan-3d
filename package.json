@@ -13,7 +13,9 @@
     "dxf:public": "node tools/dxf-corpus/public.mjs",
     "assets:pack": "node tools/assets/pack.mjs",
     "assets:check": "node tools/assets/check.mjs",
-    "assets:seed": "node tools/assets/seed.mjs"
+    "assets:seed": "node tools/assets/seed.mjs",
+    "assets:snapshot": "node tools/assets/snapshot.mjs",
+    "assets:perf": "node tools/assets/perf.mjs --vsync off"
   },
   "dependencies": {
     "three": "0.169.0"

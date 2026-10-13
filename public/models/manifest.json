@@ -93,7 +93,7 @@
     },
     "desk-student": {
       "id": "desk-student",
-      "bytes": 143448,
+      "bytes": 143488,
       "tris": 4162,
       "textures": [
         {
@@ -133,8 +133,8 @@
         "license": "CC0-1.0",
         "author": "Ethan Place"
       },
-      "sha256": "46e867b9db06d40feb135e31ddb3a771a1fa13d5366f1d4489d3c6227f3ef0f1",
-      "packedAt": "2026-10-13T09:22:42.407Z"
+      "sha256": "202da91156e981b9ec9dfa9e8ddcd0375f97e5ce807b5100b22f1ce275ce86bc",
+      "packedAt": "2026-10-13T09:46:29.380Z"
     },
     "dining-6": {
       "id": "dining-6",
