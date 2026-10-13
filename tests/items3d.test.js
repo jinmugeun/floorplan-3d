@@ -188,7 +188,7 @@ describe('실사 에셋', () => {
     const mat = obj.getObjectByProperty('isMesh', true).material;
     paintItem(obj, '#e5484d'); expect(mat.color.getHexString()).not.toBe('e5484d');
     expect(obj.getObjectByName('collideBox')).toBeTruthy();
-    expect(obj.getObjectByName('collideBox').raycast).toBeDefined();          // 픽에 안 잡히는 빈 raycast
+    expect(obj.getObjectByName('collideBox').raycast).not.toBe(THREE.LineSegments.prototype.raycast);   // 픽에 안 잡히는 빈 raycast
     expect(obj.getObjectByName('collideBox').userData.itemId).toBe('c1');     // 선도 어느 아이템인지 안다
     paintItem(obj, '#e5484d');
     expect(obj.children.filter(o => o.name === 'collideBox')).toHaveLength(1); // 다시 칠해도 선은 하나

@@ -36,6 +36,8 @@ test('checkManifestEntry: 예산 안이면 ok, 넘거나 fit이 0.85 미만이�
   expect(checkManifestEntry(ok)).toEqual({ ok: true, problems: [] });
   const bad = { ...ok, bytes: 2_000_000, tris: 20_000, textures: [{ w: 2048, h: 2048, format: 'image/png' }], fit: [0.5, 1, 1.05], extensions: ['KHR_materials_pbrSpecularGlossiness'] };
   expect(checkManifestEntry(bad).problems).toEqual(expect.arrayContaining(['bytes', 'tris', 'texture', 'fit', 'extension:KHR_materials_pbrSpecularGlossiness']));
+  for (const fit of [[], [NaN, 1, 1], undefined]) expect(checkManifestEntry({ ...ok, fit }).problems, String(fit)).toContain('fit');
+  for (const t of [{ format: 'image/webp' }, { w: 512, h: 512, format: 'image/png' }]) expect(checkManifestEntry({ ...ok, textures: [t] }).problems, t.format).toContain('texture');
   expect(ASSET_BUDGET).toEqual({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85 });
 });
 
@@ -178,7 +180,7 @@ test('check: 포장 직후 manifest는 종료 0, GLB 한 바이트를 바꾸면 
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }, 30000);
 
-test('check: 저장소의 빈 manifest(public/models/manifest.json)는 종료 0 — 게이트가 시드 전에도 돈다', () => {
+test('check: 저장소 manifest(시드 7종)는 종료 0 — npm run assets:check 게이트와 같다', () => {
   const man = fileURLToPath(new URL('../public/models/manifest.json', import.meta.url));
   expect(JSON.parse(readFileSync(man, 'utf8'))).toMatchObject({ version: 1 });
   expect(check(man).status).toBe(0);

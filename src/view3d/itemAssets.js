@@ -47,7 +47,8 @@ function normalize(obj) {
   obj.position.add(off); bb.translate(off);
   const g = new THREE.Group(); g.add(obj);
   g.userData.bbox = { min: bb.min.toArray(), max: bb.max.toArray() };
-  g.traverse(o => { if (o.isMesh) { o.userData.shared = true; o.castShadow = o.receiveShadow = true; } });
+  // 선·점 프리미티브도 공유(칠하기·dispose 금지) — CAD 유래 GLB의 모서리 선(최종 리뷰 B-m4)
+  g.traverse(o => { if (o.geometry) { o.userData.shared = true; if (o.isMesh) o.castShadow = o.receiveShadow = true; } });
   return g;
 }
 
@@ -56,7 +57,9 @@ export function requestAsset(p) {
   const url = assetUrl(p);
   if (!enabled || !url || cache.has(p.id)) return;
   cache.set(p.id, null);
-  (loader ?? defaultLoader)(url).then(obj => { cache.set(p.id, normalize(obj)); }).catch(() => {}).finally(settle);
+  // 실패 경고는 기본 로더일 때만(최종 리뷰 B-m8 — 정적 배포 404가 진단 불가였다). 요청 시점의 로더로 판정해 __reset 뒤 늦게 끝나는 대역은 조용하다(B-m9).
+  const load = loader ?? defaultLoader;
+  load(url).then(obj => { cache.set(p.id, normalize(obj)); }).catch(e => { if (load === defaultLoader) console.warn(`실사 모델 실패 ${url}: ${e?.message ?? e}`); }).finally(settle);
 }
 
 // 템플릿을 복제해(지오메트리·재질 공유) 아이템 size에 축별로 맞춘다. items3d가 아이템 중심(z + h/2)에 세우므로 바닥을 −h/2로 내린다.

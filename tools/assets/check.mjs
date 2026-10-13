@@ -1,7 +1,7 @@
 // 에셋 게이트(2026-10-13 · 계획 15 Task A): manifest의 모든 항목을 파일과 대조한다 — 존재 · bytes · sha256 · 예산(lib.checkManifestEntry).
 // 문제가 하나라도 있으면 표를 찍고 종료 1(계획 15 공통 게이트 `npm run assets:check` 종료 0). 모델 파일은 manifest와 같은 폴더의 `<id>.glb`(pack.mjs 기본 배치 · 런타임 `models/<id>.glb`).
 //   node tools/assets/check.mjs [--manifest public/models/manifest.json]
-// 문제 이름: file(파일 없음) · file-bytes(파일 크기 ≠ 항목 bytes) · sha256(내용이 포장 뒤 바뀜) · id(키 ≠ 항목 id) · bytes·tris·texture·fit·extension:<이름>(예산 — lib.mjs).
+// 문제 이름: file(파일 없음) · file-bytes(파일 크기 ≠ 항목 bytes) · sha256(내용이 포장 뒤 바뀜) · id(키 ≠ 항목 id) · bytes·tris·texture(크기 초과·크기 없음·WebP 아님)·fit·extension:<이름>(예산 — lib.mjs).
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';

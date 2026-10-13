@@ -37,14 +37,27 @@ test('종류당 한 번만 받고, 한 틱에 모아 알리며 버전이 오른�
   requestAsset({ id: 'bad', asset: 'bad' }); await flush();
   expect(loader).toHaveBeenCalledTimes(2);
   off();
+  // 실패 경고는 기본 로더일 때만(최종 리뷰 B-m8): 테스트 대역의 실패는 조용하고, 기본 로더(정적 배포의 404 등)는 콘솔에 한 줄 남긴다.
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    expect(warn).not.toHaveBeenCalled();
+    __reset(); enableAssets();                                  // 로더 없음 = 기본 로더(동적 import → GLTFLoader) · node에서는 상대 URL이라 실패한다
+    requestAsset({ id: 'nope', asset: 'nope' });
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    expect(warn.mock.calls[0][0]).toMatch(/models\/nope\.glb/);
+  } finally { warn.mockRestore(); }
 });
 
 test('템플릿은 바닥 중심·bbox·shared 표시를 갖고, fitClone은 아이템 크기에 축별로 맞추며 지오메트리·재질을 공유한다', async () => {
-  __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(0.45, 0.9, 0.5, 0.1)));
+  // 메시 안에 같은 크기의 선 프리미티브(CAD 유래 GLB의 모서리 선 — 최종 리뷰 B-m4)를 붙인다: bbox는 그대로다.
+  const withEdges = () => { const g = box(0.45, 0.9, 0.5, 0.1); g.children[0].add(new THREE.LineSegments(new THREE.EdgesGeometry(g.children[0].geometry))); return g; };
+  __reset(); enableAssets(); __setLoader(() => Promise.resolve(withEdges()));
   requestAsset({ id: 'chair-dining', asset: 'chair-dining' }); await flush(); await flush(); await flush();
   const t = templateOf('chair-dining');
   expect(t.userData.bbox.min[1]).toBeCloseTo(0, 6);
   expect(t.getObjectByProperty('isMesh', true).userData.shared).toBe(true);
+  const edge = t.getObjectByProperty('isLineSegments', true);
+  expect([edge.userData.shared, edge.castShadow]).toEqual([true, false]);   // 선도 공유(칠하기·dispose 금지) · 그림자는 메시만
   const item = { id: 'i1', productId: 'chair-dining', size: [900, 1000, 900], z: 0 };
   const c = fitClone(t, item);
   const mesh = c.getObjectByProperty('isMesh', true);

@@ -1,6 +1,6 @@
 // 에셋 도구의 순수 부분(2026-10-13 · 계획 15 Task A). 규약(아키텍처 §19): 단위 m · 원점 = 바닥 중심 · +Y 위 · **정면 +Z**(앱의 등받이·헤드보드가 −Z — itemShapes.js:110 ·
 // symbols.js:22-36 · 사전 검토 C-1) · 크기 = 카탈로그 size(w·d·h mm → x·z·y). 생성 모델·CC0 모델은 크기·축·원점이 제각각이라 이 정규화 없이는 앱에 못 넣는다(조사 §4.2 4).
-// gltf-transform을 import하지 않는다 — 수학·판정만 두어 단위 테스트가 devDependency 없이도 돌고, pack.mjs·check.mjs(그리고 Task B~D)가 같은 이름을 쓴다.
+// gltf-transform을 import하지 않는다 — 수학·판정만 두어 이 모듈 자체는 devDependency 없이 import된다(check.mjs가 가볍게 쓴다). pack.mjs·check.mjs(그리고 Task B~D)가 같은 이름을 쓴다.
 
 // 예산(계획 15 Global Constraints): 한 파일 ≤ 1.5 MB · 삼각형 ≤ 10,000 · 텍스처 ≤ 1024² · 균일 맞춤 뒤 가장 작은 축 fit ≥ 0.85(시드 채택 기준 — 사전 검토 I-8).
 export const ASSET_BUDGET = Object.freeze({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85 });
@@ -35,13 +35,14 @@ export function normalizeTransform({ bbox, size, front = '+z', up = 'y' }) {
 export const manifestEntry = e => ({ id: e.id, bytes: e.bytes, tris: e.tris, textures: e.textures ?? [], size: e.size, fit: e.fit ?? [1, 1, 1], extensions: e.extensions ?? [], source: e.source ?? null, sha256: e.sha256, packedAt: e.packedAt ?? null });
 
 // 예산 판정 — 문제 이름 목록(bytes · tris · texture · fit · extension:<이름>). fit 상한 1.02는 균일 맞춤의 반올림 여유이고, 실제 뜻은 하한(fitMin) 검사다(사전 검토 I-8 · S-5).
-// `!(x <= 한도)`로 쓴다: 값이 빠지거나 NaN이면 통과가 아니라 문제로 잡히게.
+// `!(x <= 한도)`로 쓴다: 값이 빠지거나 NaN이면 통과가 아니라 문제로 잡히게. 텍스처는 크기가 있어야 하고 WebP여야 한다(§19.1.4 — pack이 늘
+// WebP로 바꾼다) · fit은 세 축 모두 유한(2026-10-13 · 계획 15 최종 리뷰 F-3: 예전에는 fit 없음·빈 배열·NaN · w/h 없음 · WebP 아님이 통과했다).
 export function checkManifestEntry(e, budget = ASSET_BUDGET) {
   const problems = [];
   if (!(e.bytes <= budget.bytes)) problems.push('bytes');
   if (!(e.tris <= budget.tris)) problems.push('tris');
-  if ((e.textures ?? []).some(t => t.w > budget.texture || t.h > budget.texture)) problems.push('texture');
-  if ((e.fit ?? []).some(f => f < budget.fitMin || f > 1.02)) problems.push('fit');
+  if ((e.textures ?? []).some(t => !(t.w <= budget.texture && t.h <= budget.texture) || t.format !== 'image/webp')) problems.push('texture');
+  if (!(Array.isArray(e.fit) && e.fit.length === 3 && e.fit.every(f => f >= budget.fitMin && f <= 1.02))) problems.push('fit');
   for (const x of e.extensions ?? []) if (!ALLOWED_EXTENSIONS.includes(x)) problems.push(`extension:${x}`);
   return { ok: problems.length === 0, problems };
 }
