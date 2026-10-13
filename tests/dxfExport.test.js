@@ -16,8 +16,8 @@ import { makeWall, rectWalls } from '../src/geom/walls.js';
 import { normalizeWalls } from '../src/geom/normalize.js';
 import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
-import { DXF_PARAMS } from '../src/io/dxf/params.js';
-import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from '../src/ui/dxfMessages.js';
+import { DXF_PARAMS, HEIGHT_RANGE } from '../src/io/dxf/params.js';
+import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_EXPORT_AS_MENU } from '../src/ui/dxfMessages.js';
 import { matchEquip, sizeInName, skipReason } from '../src/io/dxf/equipVocab.js';
 import { importSnapshot } from '../src/io/dxfFeedback.js';
 import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
@@ -300,6 +300,24 @@ test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 �
   expect(html).toContain(`'${productById('equip-generic').name}' 상자`);
   expect(html).toContain('기구끼리 겹친 자리는 도면 그대로');
   expect(html).toContain(`긴 변이 ${DXF_PARAMS.equipMax / 1000} m를 넘는 블록은 세우지 않고, ${ITEM_RANGE.size[1] / 1000} m를 넘는 기구는 ${ITEM_RANGE.size[1] / 1000} m로 잘립니다`);
+});
+
+// 2026-10-13 · 계획 16 Task C: 아키스케치 호환 넷(레이어 높이 꼬리 · HATCH 자가 점검 · 아키스케치용 내보내기 · 그 파일의 왕복 한계)을 설계 사무소에 보내는
+// 안내에 적는다. 범위(HEIGHT_RANGE) · 메뉴 이름(DXF_EXPORT_AS_MENU) · 레이어 이름(ARCHI_LAYERS) · 중심선 문턱(bandGap)을 코드 값으로 고정한다.
+test('안내 페이지의 아키스케치 호환 문장: 높이 꼬리 · HATCH 점검 · 아키스케치용 내보내기(메뉴 · 레이어 넷 · 빠지는 것 · 끊지 못한 통로 · 왕복 한계)', () => {
+  const html = readFileSync(fileURLToPath(new URL('../public/dxf-guide.html', import.meta.url)), 'utf8');
+  expect(html).toContain('<code>WALL_2800</code>');
+  expect(html).toContain(`${HEIGHT_RANGE[0]}~${HEIGHT_RANGE[1]}`);
+  expect(html).toMatch(/HATCH/);
+  expect(html).toContain('한 번에 채워지면');
+  expect(html).toContain(DXF_EXPORT_AS_MENU);
+  expect(html).toContain('<code>wall_층고</code>');
+  for (const n of [ARCHI_LAYERS.door, ARCHI_LAYERS.window, ARCHI_LAYERS.column]) expect(html).toContain(`<code>${n}</code>`);
+  expect(html).toContain('-archisketch.dxf');
+  expect(html).toContain('중심선은 쓰지 않');
+  expect(html).toContain('벽을 끊지 못한 통로');
+  expect(html).toContain(`${DXF_PARAMS.bandGap} mm보다 두꺼운 벽`);
+  expect(html).toContain('정규화 DXF를 쓰세요');
 });
 
 // 가져오기는 레이어가 겹치지 않는 두 면선 사이 틈(≥ cavityMin 150)에서만 붙은 두 벽을 가른다 — 한 레이어면 두 벽이 550 띠 하나가 된다(내곡중).
