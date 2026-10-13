@@ -1,6 +1,7 @@
 import { activeFloor } from '../state/schema.js';
 import { ductLinksOf } from '../state/ductOps.js';
-import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, PATH_2D_HINT, PATH_FP_HINT } from './messages.js';
+import { sameItemIds } from '../state/itemOps.js';
+import { WHY_CLIPBOARD_EMPTY, WHY_MIN_TWO, WHY_NOT_GROUPED, WHY_ONE_ONLY, PATH_2D_HINT, PATH_FP_HINT, SELECT_SAME_NAME } from './messages.js';
 // 사유 하나가 disabled와 title을 함께 만든다(리뷰 I-3): 세 메뉴가 같은 헬퍼를 쓴다.
 import { why } from './menuReason.js';
 
@@ -24,6 +25,8 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
   // 설비에 이어진 덕트 꼭짓점은 설비 아래에 숨는다: 메뉴에서 바로 그 꼭짓점을 고를 수 있게 한다(§12.5).
   // "연결된 덕트가 있으면"만 보인다 — 설비가 아니거나 연결이 없으면 항목 자체를 뺀다(비활성 표시가 아니다).
   const link = one && items[0].kind === 'equipment' ? (ductLinksOf(f, items[0].id)[0] ?? null) : null;
+  // 가져온 기구 하나면 "같은 이름 n개 모두 선택"(2026-10-13 · 계획 14 Task D): 고를 수를 미리 보여 준다 — 제품 교체가 그 n개 전체에 든다.
+  const sameLabel = one && items[0].dxfBlock ? SELECT_SAME_NAME(sameItemIds(f, items[0]).length) : '같은 제품 선택';
   return [
     { label: '좌우 반전', shortcut: 'Alt+H', onSelect: call('mirror', 'h') },
     { label: '상하 반전', shortcut: 'Alt+V', onSelect: call('mirror', 'v') },
@@ -41,7 +44,7 @@ export function itemMenuItems({ store, ui, ids, itemActions = {} }) {
     { label: '그룹화', shortcut: 'Ctrl+G', ...why(items.length < 2 ? WHY_MIN_TWO : null), onSelect: call('group') },
     { label: '그룹 해제', shortcut: 'Ctrl+Shift+G', ...why(grouped ? null : WHY_NOT_GROUPED), onSelect: call('ungroup') },
     'sep',
-    { label: '같은 제품 선택', ...why(one ? null : WHY_ONE_ONLY), onSelect: call('selectSame') },
+    { label: sameLabel, ...why(one ? null : WHY_ONE_ONLY), onSelect: call('selectSame') },
     { label: allHidden ? '숨김 해제' : '숨김', shortcut: 'Ctrl+H', onSelect: call('toggleHidden') },
     { label: allLocked ? '잠금 해제' : '잠금', shortcut: 'Ctrl+L', onSelect: call('toggleLocked') },
     'sep',

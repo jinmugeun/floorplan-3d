@@ -1,7 +1,7 @@
 import { createStore } from './state/store.js';
 import { createUiState } from './state/uistate.js';
 import { createEmptyProject, activeFloor } from './state/schema.js';
-import { transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
+import { transformFloor, pruneSelection, pruneSolo, itemsOf, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameItemIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from './state/floorOps.js';
 import { createView2D } from './view2d/view2d.js';
 import { createOpenEnds } from './view2d/openEnds2d.js';
 import { createMinimap } from './view2d/minimap.js';
@@ -76,9 +76,10 @@ const itemActions = {
   // 붙여넣기에는 없어 "먹었나?" 싶었다(§15.14 · 감사 §30).
   paste: () => { const made = pasteItems(store, ui.get().clipboard ?? [], { delta: [200, 200] }); if (made.length) { selectItems(made); shell.toast(PASTE_RESULT(made.length)); } },
   remove: () => deleteSelection(),
+  // 가져온 기구(dxfBlock)는 제품 + 이름이 같은 것만 고른다(2026-10-13 · 계획 14 Task D — itemOps.sameItemIds): 고른 뒤 "제품 교체"가 그 전체에 든다.
   selectSame: () => {
     const it = itemsOf(store.get(), selectedItemIds())[0];
-    if (it) selectItems(sameProductIds(activeFloor(store.get()), it.productId));
+    if (it) selectItems(sameItemIds(activeFloor(store.get()), it));
   },
   toggleHidden: () => setItemFlag(store, selectedItemIds(), 'hidden'),
   toggleLocked: () => setItemFlag(store, selectedItemIds(), 'locked'),

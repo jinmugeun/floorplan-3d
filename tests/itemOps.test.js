@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { createStore } from '../src/state/store.js';
 import { createEmptyProject, activeFloor, normalizeItem, createItem, normalizeProject } from '../src/state/schema.js';
-import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from '../src/state/floorOps.js';
+import { addWalls, addItem, updateItem, updateItems, deleteItems, duplicateItems, itemsOf, expandGroups, selectionStillValid, pruneSelection, setWalls, deleteWall, setWallLength, deleteWalls, nudgeItems, mirrorItems, setItemFlag, replaceProduct, pasteItems, sameProductIds, sameItemIds, groupItems, ungroupItems, alignSelection, relativeMove, arrayCopy } from '../src/state/floorOps.js';
 import { rectWalls, moveWallParallel } from '../src/geom/walls.js';
 import { placeOnWall, isEmbed } from '../src/geom/items.js';
 import { openingsOnWall } from '../src/geom/openings.js';
@@ -252,6 +252,47 @@ describe('아이템 편집 동작', () => {
     expect(activeFloor(s.get()).items[3].pos).toEqual([1200, 1200]);
     expect(sameProductIds(activeFloor(s.get()), 'chair-dining')).toHaveLength(3);
     expect(pasteItems(s, [], {})).toEqual([]);
+  });
+});
+
+// 2026-10-13 · 계획 14 Task D(근거: 계획 13 최종 리뷰 F-11 · 계획 14 근거 "일반 상자 83개(사동)·50개(신상A)를 하나씩 바꿔야 한다"):
+// 가져온 기구(dxfBlock)의 "같은 …선택"은 제품 + 이름이 같은 것만 고른다 — '도면 기구' 상자는 이름(도면 블록 이름)마다 다른 물건이라
+// 같은 productId로 다 고르면 83개가 한꺼번에 엉뚱한 제품으로 바뀐다. 고른 뒤에는 기존 "제품 교체"(main.js replaceProductOf)가 선택 전체에 든다.
+describe('같은 이름 모두 선택(계획 14 Task D)', () => {
+  const gen = productById('equip-generic'), dining = productById('dining-6');
+  const box = (s, name, x, product = gen) => addItem(s, createItem(product, { pos: [x + 0.5, 1000.25], name, size: [600, 600, 850], dxfBlock: name, dxfProduct: product.id }));
+  const one = (s, id) => itemsOf(s.get(), [id])[0];
+  test('도면 기구 셋(이름 둘) — 짝 하나를 고르면 그 둘만 · 혼자인 이름은 자기만', () => {
+    const s = setup();
+    const a = box(s, '운반카 튀김 620', 500), b = box(s, '운반카 튀김 620', 1500), c = box(s, '컵자동세척기', 2500);
+    const f = activeFloor(s.get());
+    expect(sameItemIds(f, one(s, a))).toEqual([a, b]);
+    expect(sameItemIds(f, one(s, b))).toEqual([a, b]);
+    expect(sameItemIds(f, one(s, c))).toEqual([c]);
+    expect(sameProductIds(f, gen.id)).toHaveLength(3);                       // 옛 규칙이면 셋 다였다
+  });
+
+  test('제품으로 맞춘 가져온 기구(식탁6인)도 같은 이름끼리 — 손으로 놓은 같은 제품은 이름이 달라 빠진다', () => {
+    const s = setup();
+    const a = box(s, '식탁6인', 500, dining), b = box(s, '식탁6인', 2500, dining);
+    const hand = addItem(s, createItem(dining, { pos: [3000.5, 2000.25] }));  // 이름 = 제품명('6인 식탁')
+    const f = activeFloor(s.get());
+    expect(sameItemIds(f, one(s, a))).toEqual([a, b]);
+    // 손으로 놓은 아이템(dxfBlock 없음)은 예전처럼 같은 productId 전부다.
+    expect(sameItemIds(f, one(s, hand))).toEqual([a, b, hand]);
+    expect(sameItemIds(f, undefined)).toEqual([]);
+  });
+
+  test('고른 둘을 제품 교체하면 둘 다 바뀌고 dxfProduct가 풀린다(dxfBlock은 남는다) · 다른 이름은 그대로', () => {
+    const s = setup();
+    const a = box(s, '운반카 튀김 620', 500), b = box(s, '운반카 튀김 620', 1500), c = box(s, '컵자동세척기', 2500);
+    const work = productById('worktable-1800');
+    replaceProduct(s, sameItemIds(activeFloor(s.get()), one(s, a)), work);
+    for (const id of [a, b]) {
+      expect(one(s, id)).toMatchObject({ productId: work.id, name: work.name, dxfBlock: '운반카 튀김 620' });
+      expect(one(s, id).dxfProduct).toBeUndefined();
+    }
+    expect(one(s, c)).toMatchObject({ productId: gen.id, name: '컵자동세척기', dxfProduct: gen.id });
   });
 });
 

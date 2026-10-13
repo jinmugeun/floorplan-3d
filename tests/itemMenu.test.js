@@ -8,6 +8,7 @@ import { productById } from '../src/products/catalog.js';
 import { itemMenuItems } from '../src/ui/itemMenu.js';
 import { createSelectTool } from '../src/view2d/tools/selectTool.js';
 import { addDuct } from '../src/state/ductOps.js';
+import { SELECT_SAME_NAME } from '../src/ui/messages.js';
 
 function setup(defs = []) {
   const store = createStore(createEmptyProject()), ui = createUiState();
@@ -106,6 +107,27 @@ describe('아이템 컨텍스트 메뉴', () => {
     expect(ui.get().selection).toEqual({ type: 'item', id: ids[0] });
     const roomMenu = t.onContextMenu([500, 2000], {});
     expect(labels(roomMenu)).toContain('방 복사');   // 아이템이 없는 자리는 2A 분기로 내려간다
+  });
+
+  // 2026-10-13 · 계획 14 Task D: 가져온 기구 하나를 고르면 "같은 이름 n개 모두 선택"(n = 고를 수 — 자기 포함). 손으로 놓은 제품은 그대로 "같은 제품 선택".
+  test('가져온 기구(dxfBlock)는 "같은 이름 n개 모두 선택" — 같은 동작(selectSame)을 부른다', () => {
+    const gen = productById('equip-generic');
+    const box = name => createItem(gen, { pos: [1000.5, 1000.25], name, size: [600, 600, 850], dxfBlock: name, dxfProduct: gen.id });
+    const { store, ui } = setup([['sofa-3', { pos: [2000.5, 1500.25] }]]);
+    const a = addItem(store, box('운반카 튀김 620')), b = addItem(store, box('운반카 튀김 620')), c = addItem(store, box('컵자동세척기'));
+    const called = [];
+    const menu = itemMenuItems({ store, ui, ids: [a], itemActions: { selectSame: () => called.push('selectSame') } });
+    expect(SELECT_SAME_NAME(2)).toBe('같은 이름 2개 모두 선택');
+    expect(labels(menu)).toContain('같은 이름 2개 모두 선택');
+    expect(labels(menu)).not.toContain('같은 제품 선택');
+    const row = menu.find(m => m !== 'sep' && m.label === SELECT_SAME_NAME(2));
+    expect(row.disabled).toBeFalsy();
+    row.onSelect();
+    expect(called).toEqual(['selectSame']);
+    expect(labels(itemMenuItems({ store, ui, ids: [c], itemActions: {} }))).toContain('같은 이름 1개 모두 선택');
+    // 둘 이상 고르면 예전처럼 "같은 제품 선택"이 꺼진다(하나만 고를 때의 동작이다).
+    const two = itemMenuItems({ store, ui, ids: [a, b], itemActions: {} }).find(m => m !== 'sep' && m.label === '같은 제품 선택');
+    expect(two.disabled).toBe(true);
   });
 
   test('비활성 항목에는 모두 사유(title)가 있다(§16.5)', () => {
