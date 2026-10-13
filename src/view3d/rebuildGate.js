@@ -11,7 +11,7 @@
 // 숨긴 채 씬을 읽는 길(렌더샷·시방서 입면 = renderImage, capture)은 ensureFresh/fresh로 먼저 짓는다 — 호출 자리 전수는 tests/rebuildGate.test.js.
 //
 // 예열(shaderWarm.js): ① 문을 만든 뒤 유휴 시간에 한 번 warmup(실제 재질 공장으로 지은 작은 장면을 compile — 숨김이어도 한다).
-// ② 처음 보이는 리빌드 뒤 유휴 시간에 한 번 prewarm(실제 장면 compileAsync — 첫 프레임이 아직 쓰지 않은 변형, 예: 사용자 재질 무늬).
+// ② 처음 보이는 리빌드 뒤 유휴 시간에 한 번 prewarm(실제 장면 compile — 첫 프레임이 아직 쓰지 않은 변형, 예: 사용자 재질 무늬).
 // 예열은 덤이다: 던지거나 거부돼도 삼킨다(컨텍스트 소실 등).
 
 // 브라우저가 한가할 때 cb를 부른다. requestIdleCallback이 없으면(사파리 일부·node) setTimeout으로 내려간다.
@@ -22,12 +22,14 @@ export function runWhenIdle(cb) {
   return setTimeout(cb, 200);
 }
 
-// 실제 장면 예열 함수. three 0.169는 compileAsync(r158+)가 있고, 없으면 compile로, 둘 다 없으면(jsdom 가짜 렌더러) null — 생략.
+// 실제 장면 예열 함수. renderer.compile이 없으면(jsdom 가짜 렌더러) null — 생략.
 // 카메라는 부르는 순간의 것을 읽는다(원근↔직교·2D 투영이 바뀌어도 그때의 카메라로 컴파일한다).
+// compileAsync를 쓰지 않는다(2026-10-13 · 계획 14 Task B 리뷰 I-1): compileAsync는 compile 뒤 three의 setTimeout(10)으로
+// properties.get(재질).currentProgram.isReady()를 폴링한다(KHR_parallel_shader_compile이 있으면 다 링크될 때까지). 그사이 3D 편집이
+// 리빌드해 옛 재질을 dispose하면 currentProgram이 없어져 **three의 타이머 안에서** TypeError가 난다 — Promise 거부가 아니라 quietly가
+// 못 잡는다. 결과 Promise는 아무도 기다리지 않으니 compileAsync가 주는 것도 없다: 링크 요청은 compile(동기)이 똑같이 GPU 쪽에 건다.
 export function shaderPrewarm(renderer, scene, getCamera) {
-  if (typeof renderer?.compileAsync === 'function') return () => renderer.compileAsync(scene, getCamera());
-  if (typeof renderer?.compile === 'function') return () => renderer.compile(scene, getCamera());
-  return null;
+  return typeof renderer?.compile === 'function' ? () => renderer.compile(scene, getCamera()) : null;
 }
 
 // 예열은 덤이다: 동기 예외도, 거부된 Promise도 밖으로 내보내지 않는다.

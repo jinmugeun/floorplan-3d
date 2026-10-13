@@ -188,17 +188,51 @@ describe('셰이더 예열 일정', () => {
     expect(unhandled).not.toHaveBeenCalled();
   });
 
-  test('shaderPrewarm: compileAsync가 있으면 그것을, 없으면 compile을, 둘 다 없으면(jsdom) null', () => {
+  test('shaderPrewarm: compileAsync가 있어도 compile(동기)을 쓴다, 없으면(jsdom) null — 계획 14 Task B 리뷰 I-1', () => {
     const scene = { isScene: true }, cam = { isCamera: true };
     const r1 = { compileAsync: vi.fn(() => Promise.resolve()), compile: vi.fn() };
     shaderPrewarm(r1, scene, () => cam)();
-    expect(r1.compileAsync).toHaveBeenCalledWith(scene, cam);
-    expect(r1.compile).not.toHaveBeenCalled();
-    const r2 = { compile: vi.fn() };
-    shaderPrewarm(r2, scene, () => cam)();
-    expect(r2.compile).toHaveBeenCalledWith(scene, cam);
+    expect(r1.compile).toHaveBeenCalledWith(scene, cam);
+    expect(r1.compileAsync).not.toHaveBeenCalled();
+    expect(shaderPrewarm({ compileAsync: vi.fn() }, scene, () => cam)).toBeNull();
     expect(shaderPrewarm({}, scene, () => cam)).toBeNull();
     expect(shaderPrewarm(null, scene, () => cam)).toBeNull();
+  });
+
+  // three r169의 compile/compileAsync를 그대로 본뜬 가짜(WebGLRenderer.js:936-1080): compile은 재질마다 프로그램을 붙이고,
+  // compileAsync는 그 뒤 setTimeout(10)으로 properties.get(재질).currentProgram.isReady()를 폴링한다. properties는 WeakMap이라
+  // dispose된 재질은 빈 객체를 돌려준다 → currentProgram이 undefined → 타이머 안 TypeError(Promise 거부가 아니다).
+  function threeLikeRenderer() {
+    const props = new WeakMap();
+    const get = m => { if (!props.has(m)) props.set(m, {}); return props.get(m); };
+    const r = {
+      compile: vi.fn(scene => { const mats = new Set(); scene.traverse(o => { if (o.material) { get(o.material).currentProgram = { isReady: () => false }; mats.add(o.material); } }); return mats; }),
+      compileAsync: vi.fn(scene => { const mats = r.compile(scene); return new Promise(res => { const poll = () => { mats.forEach(m => { if (get(m).currentProgram.isReady()) mats.delete(m); }); if (!mats.size) { res(); return; } setTimeout(poll, 10); }; setTimeout(poll, 10); }); }),
+      dispose: m => props.delete(m),   // deallocateMaterial → properties.remove
+    };
+    return r;
+  }
+  test('예열과 리빌드가 겹쳐도(유휴 예열 직후 3D 편집이 옛 재질을 dispose) 아무것도 던지지 않는다 — 리뷰 I-1', () => {
+    vi.useFakeTimers();
+    try {
+      // 가짜가 버그를 재현하는지 먼저 본다: compileAsync 폴링 중 dispose → 타이머가 던진다
+      const bad = threeLikeRenderer(), m0 = new THREE.MeshStandardMaterial(), s0 = new THREE.Scene();
+      s0.add(new THREE.Mesh(new THREE.BoxGeometry(), m0));
+      bad.compileAsync(s0); bad.dispose(m0);
+      expect(() => vi.runAllTimers()).toThrow(/isReady/);
+      // 실제 배선: 보이는 리빌드 → 유휴 예열(shaderPrewarm) → 같은 틱에 편집이 다시 지으며 옛 재질을 버린다
+      const r = threeLikeRenderer(), scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
+      let mat = null;
+      const rebuild = () => { if (mat) r.dispose(mat); scene.clear(); mat = new THREE.MeshStandardMaterial(); scene.add(new THREE.Mesh(new THREE.BoxGeometry(), mat)); };
+      const idleQueue = [], sig = { v: 'a' };
+      const gate = createRebuildGate({ isVisible: () => true, signature: () => sig.v, rebuild, prewarm: shaderPrewarm(r, scene, () => cam), idle: cb => idleQueue.push(cb) });
+      gate.onStoreChange();
+      idleQueue.splice(0).forEach(cb => cb());
+      sig.v = 'b'; gate.onStoreChange();
+      expect(() => vi.runAllTimers()).not.toThrow();
+      expect(r.compile).toHaveBeenCalledTimes(1);
+      expect(r.compileAsync).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
   });
 
   test('runWhenIdle: requestIdleCallback이 있으면 시한을 붙여 쓰고, 없으면 setTimeout으로 내려간다', () => {
@@ -238,19 +272,18 @@ describe('예열 장면', () => {
     expect([...warm].some(k => k.startsWith('Mesh|MeshStandardMaterial|t1'))).toBe(true);    // 창·덕트(반투명)
   });
 
-  test('warmShaders: 실제 장면을 세 번째 인자(조명·그림자)로 넘기고, 재질은 dispose하지 않는다(프로그램을 붙들어 둔다)', async () => {
+  test('warmShaders: compile(동기)에 실제 장면을 세 번째 인자(조명·그림자)로 넘기고, 재질은 dispose하지 않는다(프로그램을 붙들어 둔다)', async () => {
     const scene = { isScene: true }, cam = { isCamera: true };
     let warm = null;
-    const r = { compileAsync: vi.fn((s, c, target) => { warm = s; expect(c).toBe(cam); expect(target).toBe(scene); return Promise.resolve(); }) };
+    const r = { compileAsync: vi.fn(), compile: vi.fn((s, c, target) => { warm = s; expect(c).toBe(cam); expect(target).toBe(scene); }) };
     // three는 프로그램을 쓰는 마지막 재질이 dispose되면 프로그램을 지운다(WebGLPrograms.releaseProgram) → 예열이 사라진다
     const dispose = vi.spyOn(THREE.Material.prototype, 'dispose');
     try { await warmShaders(r, scene, cam, DEFAULT_VIEW); expect(dispose).not.toHaveBeenCalled(); } finally { dispose.mockRestore(); }
-    expect(r.compileAsync).toHaveBeenCalledTimes(1);
+    expect(r.compile).toHaveBeenCalledTimes(1);
+    expect(r.compileAsync).not.toHaveBeenCalled();   // 리뷰 I-1: 폴링 타이머가 renderer.dispose와 부딪칠 수 있다 — 기다리는 쪽도 없다
     expect(warm.isScene).toBe(true);
     expect(warm.children[0].children.length).toBeGreaterThan(5);
-    const r2 = { compile: vi.fn() };
-    await warmShaders(r2, scene, cam, DEFAULT_VIEW);
-    expect(r2.compile.mock.calls[0][2]).toBe(scene);
+    expect(warmShaders({ compileAsync: vi.fn() }, scene, cam, DEFAULT_VIEW)).toBeNull();
     expect(warmShaders({}, scene, cam, DEFAULT_VIEW)).toBeNull();
   });
 

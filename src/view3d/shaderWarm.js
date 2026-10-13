@@ -53,13 +53,15 @@ export function warmGroup(view = {}) {
 // HEAD와 조금 다르다(라벨 수·접힘·컷어웨이는 같다). 글꼴 조각이 도착하면 라벨을 다시 그리는 일은 이 태스크 밖이다.
 const fontsReady = () => (typeof document !== 'undefined' && document.fonts?.ready) || null;
 
-// 예열 1회. compileAsync(r158+)가 있으면 그것을, 없으면 compile을 부른다. 둘 다 없으면(jsdom 가짜 렌더러) null — 생략.
+// 예열 1회. renderer.compile이 없으면(jsdom 가짜 렌더러) null — 생략.
+// 여기서도 compileAsync를 쓰지 않는다(2026-10-13 · 계획 14 Task B 리뷰 I-1 — rebuildGate.shaderPrewarm과 같은 판단): 예열 재질은 버리지 않으니
+// 폴링이 리빌드와 부딪치지는 않지만, renderer.dispose(view3d destroy)는 three의 properties를 비워 같은 타이머 TypeError를 낸다. 결과 Promise를
+// 기다리는 쪽이 없으므로 compileAsync가 더 주는 것은 없고, 링크 요청은 compile이 똑같이 건다.
 export function warmShaders(renderer, scene, camera, view = {}) {
-  const fn = typeof renderer?.compileAsync === 'function' ? 'compileAsync' : typeof renderer?.compile === 'function' ? 'compile' : null;
-  if (!fn) return null;
+  if (typeof renderer?.compile !== 'function') return null;
   return Promise.resolve(fontsReady()).then(() => {
     const warm = new THREE.Scene();
     warm.add(warmGroup(view));
-    return renderer[fn](warm, camera, scene);
+    return renderer.compile(warm, camera, scene);
   });
 }
