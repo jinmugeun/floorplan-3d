@@ -202,7 +202,7 @@ describe('실사 에셋', () => {
     expect(bb.min.y).toBeCloseTo(0, 6);
   });
 
-  test('에셋이 아직 없으면 상자로 서고 requestAsset이 불린다 · assets:false(성능 모드·토글)면 요청도 없다', async () => {
+  test('에셋이 아직 없으면 상자로 서고 requestAsset이 불린다 · assets:false(토글)면 요청도 없다 · 성능 모드는 모델을 유지한다', async () => {
     __reset(); enableAssets();
     const loader = vi.fn(() => Promise.resolve(box(0.45, 0.9, 0.5))); __setLoader(loader);
     const p = withAsset(), item = mk('chair-dining', { pos: [0, 0] });
@@ -215,7 +215,7 @@ describe('실사 에셋', () => {
     await settle();
     expect(loader).toHaveBeenCalledTimes(1);
     expect(sharedCount(itemMesh(item, { product: p }))).toBeGreaterThan(0);    // 도착 뒤에는 모델
-    // buildItems: 토글(v3.assets)·성능 우선이면 템플릿이 있어도 상자이고 요청도 없다.
+    // buildItems: 토글(v3.assets)이 끄면 템플릿이 있어도 상자이고 요청도 없다. 성능 우선은 모델을 유지하고 요청한다(최종 리뷰).
     // buildItems는 product 주입이 없어 카탈로그를 고친다 — 이전 값을 되돌린다(2026-10-13 · 리뷰 B-m2: Task C 뒤로 chair-dining에는
     // 진짜 asset이 있어 delete하면 이 파일의 남은 테스트가 에셋 없는 카탈로그를 보았다).
     const cat = productById('chair-dining'), prev = cat.asset;
@@ -224,12 +224,12 @@ describe('실사 에셋', () => {
       const fl = floor([item]);
       expect(sharedCount(buildItems(fl, { v3: {} }))).toBeGreaterThan(0);
       expect(sharedCount(buildItems(fl, { v3: { assets: false } }))).toBe(0);
-      expect(sharedCount(buildItems(fl, { v3: {}, perfMode: 'performance' }))).toBe(0);
+      expect(sharedCount(buildItems(fl, { v3: {}, perfMode: 'performance' }))).toBeGreaterThan(0);   // 성능 모드도 모델(최종 리뷰)
       __reset(); enableAssets(); loader.mockClear(); __setLoader(loader);
-      buildItems(fl, { v3: { assets: false } }); buildItems(fl, { v3: {}, perfMode: 'performance' }); await settle();
+      buildItems(fl, { v3: { assets: false } }); buildItems(fl, { v3: { assets: false }, perfMode: 'performance' }); await settle();
       expect(loader).not.toHaveBeenCalled();
-      buildItems(fl, { v3: {} }); buildItems(fl, { v3: {} }); await settle();
-      expect(loader).toHaveBeenCalledTimes(1);                                 // 종류당 한 번
+      buildItems(fl, { v3: {}, perfMode: 'performance' }); buildItems(fl, { v3: {} }); await settle();
+      expect(loader).toHaveBeenCalledTimes(1);                                 // 성능 모드도 받는다 · 종류당 한 번
     } finally { if (prev === undefined) delete cat.asset; else cat.asset = prev; }
   });
 

@@ -4,7 +4,7 @@
 // 목표 3 실패 · 측정 검사 실패(에셋 장면에 모델·GLB가 없는 등 — lib perfVerdict · 리뷰 I-1) · 페이지 오류가 있으면 종료 1.
 // URL을 주지 않으면 dist를 vite preview로 띄우고 끝에 내린다(browser.mjs). 회마다 ① 상자 ② 에셋 · 새 세션(모델·로더 청크를 처음 받는다)
 // ③ 에셋 · 캐시 뒤(②와 같은 브라우저·컨텍스트의 두 번째 페이지 — HTTP 캐시)를 잰다. --perf-mode면 ④ 성능 모드(view.perfMode = 'performance' —
-// 지금 규칙으로는 모델 대신 상자 · 윤곽선·그림자·라벨 없음 · 픽셀 비율 1)도 잰다.
+// 모델 유지 · 윤곽선·그림자·라벨 없음 · 픽셀 비율 1 — 계획 15 최종 리뷰)도 잰다.
 //
 // 재는 것(사전 검토 p15-preflight §5의 perf-baseline.mjs 방식 그대로 — 기준선 비교가 되게):
 // - 초기화 스크립트가 WebGL draw*와 requestAnimationFrame을 감싼다: draw가 있었던 rAF 콜백 = 3D 프레임(2D·미니맵은 Canvas 2D라 섞이지 않는다).
@@ -68,7 +68,7 @@ async function measure(context, url, kind) {
     await page.waitForFunction(() => window.__frames.some(x => x.start >= window.__click), null, { timeout: 15000 });
     const first = await page.evaluate(() => { const f = window.__frames.find(x => x.start >= window.__click); return { ms: f.start + f.total - window.__click, draws: f.draws }; });
     let model = null;
-    if (kind === 'asset') {
+    if (kind !== 'box') {   // 성능 모드 장면도 모델 프레임을 기다린 뒤 궤도를 잰다(성능 모드도 모델 — 최종 리뷰)
       // 타임아웃은 여기서 삼키고 model = null로 남긴다 — 측정은 끝까지 하고, 판정(lib perfVerdict · 리뷰 I-1)이 그 장면을 'model' 문제로 실패시킨다.
       await page.waitForFunction(d => window.__frames.some(x => x.start >= window.__click && x.draws <= d / 2), first.draws, { timeout: 20000 }).catch(() => {});
       model = await page.evaluate(d => {

@@ -10,7 +10,7 @@ const stubRenderer = () => {
 describe('성능 모드', () => {
   test('두 모드의 설정이 §13.4대로 고정되어 있고 기본은 디스플레이 우선이다', () => {
     expect(PERF_SETTINGS.display).toEqual({ pixelRatio: null, shadows: true, labels: true, edges: true, assets: true });
-    expect(PERF_SETTINGS.performance).toEqual({ pixelRatio: 1, shadows: false, labels: false, edges: false, assets: false });   // 계획 15 Task B: 실사 모델도 상자로
+    expect(PERF_SETTINGS.performance).toEqual({ pixelRatio: 1, shadows: false, labels: false, edges: false, assets: true });   // 계획 15 최종 리뷰: 성능 모드도 모델 유지
     expect(DEFAULT_VIEW.perfMode).toBe('display');
     expect(perfSettings('performance').shadows).toBe(false);
     expect(perfSettings('없음')).toEqual(PERF_SETTINGS.display);   // 모르는 값은 디스플레이 우선

@@ -73,7 +73,7 @@ function assetGroup(tpl, item) {
 // 아이템 하나를 3D 오브젝트로. 실사 에셋이 있으면 템플릿 복제 Group, 심벌에 조합 형상이 있으면 Group, 없으면 예전처럼 Mesh다.
 // 좌표: 월드 (x, y)가 three (x, z)이고 z(높이)가 three y다. 월드 회전 rot은 three -Y 회전이다.
 // assets(2026-10-13 · 계획 15 Task B): 제품에 asset이 있으면 늘 모델이다(LOD 없음 — 근거는 itemAssets.js 머리). 템플릿이 아직 없으면
-// 요청만 걸고 이번에는 상자로 선다 — 도착하면 view3d가 다시 짓는다. 성능 모드·v3.assets 토글·셰이더 예열은 false(요청도 없다).
+// 요청만 걸고 이번에는 상자로 선다 — 도착하면 view3d가 다시 짓는다. v3.assets 토글·셰이더 예열은 false(요청도 없다) — 성능 모드는 모델을 유지한다(perfMode.js).
 // product는 테스트 주입용이다(기본은 카탈로그).
 export function itemMesh(item, { edges = false, assets = true, product = productById(item.productId) } = {}) {
   if (item.kind === 'opening') return null;
@@ -101,7 +101,7 @@ export function buildItems(floor, view = {}) {
   g.name = 'items';
   const v3 = view.v3 ?? {};
   const edges = v3.itemEdges !== false && perfSettings(view.perfMode).edges;   // 성능 우선은 플래그를 그대로 두고 렌더에서만 생략(§13.4)
-  const assets = v3.assets !== false && perfSettings(view.perfMode).assets;    // 실사 모델도 같다(계획 15 Task B) — 옛 프로젝트(키 없음)는 켬
+  const assets = v3.assets !== false && perfSettings(view.perfMode).assets;    // 토글이 끄면 상자 · 성능 모드도 모델 유지(perfMode.js · 최종 리뷰) — 옛 프로젝트(키 없음)는 켬
   // 충돌은 2D·배너·속성 패널과 같은 캐시에서 읽는다(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-5): 예전에는 재빌드마다
   // collidingIds를 다시 돌려, 가져온 기구 330개에서 재빌드 한 번에 50~65 ms가 더해졌다. 스토어가 불변 스냅숏이라
   // 같은 배열 = 같은 결과다. 돌려받는 Set은 캐시 내부 객체라 읽기만 한다(has).

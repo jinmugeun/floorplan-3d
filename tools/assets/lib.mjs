@@ -61,7 +61,7 @@ export function sheetLayout(n, { width = 1200, maxCell = 400 } = {}) {
 // 전송 > 0 · 지오메트리 < 상자(공유 복제)가 있어야 측정이 성립한다 — 없으면 그 장면의 문제(model · glb · glbBytes · geometries)로 표에 찍힌다.
 // 판정 = 궤도 에셋 ≤ 상자 · 3D 첫 프레임 ≤ firstMaxMs(cold·warm 둘 다) · 모든 장면 문제 없음(오류 0 포함). modelFrame(모델 첫 프레임 ≤ firstMaxMs)은
 // 참고다 — 에셋 장면의 첫 프레임은 조합 형상으로 서고 모델이 늦게 서는 것은 목표 3 판정 항목이 아니다(Task D 보고서 · 새 세션 561 ms).
-// summary: { box, cold, warm, perf? } — 각 { firstMs, modelMs, orbitGapMs, geometries, glbCount, glbBytes, errors }. perf(성능 모드)는 상자처럼 본다.
+// summary: { box, cold, warm, perf? } — 각 { firstMs, modelMs, orbitGapMs, geometries, glbCount, glbBytes, errors }. perf(성능 모드 — 모델 유지 · 그림자 없음)는 첫 프레임·궤도·오류만 본다(모델 판정은 cold·warm).
 const PERF_ASSET_SCENES = ['cold', 'warm'];
 export function perfVerdict(summary, { firstMaxMs = 500 } = {}) {
   const fin = Number.isFinite, le = (a, b) => fin(a) && fin(b) && a <= b;

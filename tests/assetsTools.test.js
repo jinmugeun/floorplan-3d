@@ -61,7 +61,7 @@ const PERF_OK = {
 };
 test('perfVerdict: 보고서 값은 통과(모델 첫 프레임 561 ms는 참고 — 판정에 넣지 않는다), 장면별 문제는 빈 목록', () => {
   expect(perfVerdict(PERF_OK)).toEqual({ ok: true, orbit: true, firstFrame: true, modelFrame: false, problems: { box: [], cold: [], warm: [] } });
-  // 성능 모드 장면(perf)은 상자처럼 첫 프레임·궤도·오류만 본다(모델 없음이 정상)
+  // 성능 모드 장면(perf)은 첫 프레임·궤도·오류만 본다(모델 판정은 cold·warm만 — 아래 표본은 최종 리뷰 전 규칙(상자)의 실측)
   const withPerf = perfVerdict({ ...PERF_OK, perf: { firstMs: 198.4, modelMs: null, orbitGapMs: 5.7, geometries: 610, glbCount: 0, glbBytes: 0, errors: 0 } });
   expect([withPerf.ok, withPerf.problems.perf]).toEqual([true, []]);
 });
