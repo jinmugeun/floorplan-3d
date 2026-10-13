@@ -21,6 +21,9 @@ export const DXF_ERRORS = { 'not-dxf': DXF_NOT_DXF, binary: DXF_BINARY, dwg: DXF
 // DXF_OPEN_ENDS·DXF_OPEN_ENDS_VIEW 둘은 배너(§18.10)가 먼저 올려 두었으므로 여기서 다시 내보내지 않는다.
 export const DXF_MANY_SHEETS = '도면 좌표 범위가 너무 넓습니다 — 가장 큰 도면 한 장만 가져옵니다';
 export const DXF_UNITS_GUESS = '도면에 단위가 없어 mm로 봅니다. 다르면 위에서 바꿔 주세요';
+// 단위 변환 알림(2026-10-13 · 계획 16 Task D): $INSUNITS가 mm가 아니면 워커가 mm로 바꿔 읽는다(toProject.INSUNITS_SCALE) — 머리줄에만 보여 조용했다.
+// 아키스케치는 mm가 아니면 거절한다("CAD에서 도면의 단위를 mm로 변환 후 다시 시도하세요"); 우리는 바꿔 읽고 **알린다**(코퍼스 43도면 중 해당 0 — 공개 40은 단위 없음).
+export const DXF_UNITS_CONVERTED = unit => `도면 단위가 ${unit}라 mm로 바꿔 읽습니다(INSUNITS) — 틀리면 위에서 바꿔 주세요`;
 export const DXF_LAYERS_GUESSED = '벽 레이어를 찾지 못해 도형으로 추정했습니다. 체크를 확인해 주세요';
 // 2026-10-02: 한 파일에 도면이 여러 벌일 때(신상중: 같은 건물의 두 안) 고르는 칸의 알림과 항목.
 export const DXF_MANY_PLANS = n => `이 파일에 도면이 ${n}개 있습니다. 가져올 도면을 골라 주세요`;

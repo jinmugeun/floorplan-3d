@@ -14,7 +14,8 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED,
-  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT } from '../src/ui/messages.js';
+  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT, DXF_UNITS_CONVERTED, DXF_UNITS_GUESS } from '../src/ui/messages.js';
+import { dxfNotes } from '../src/ui/dxfNotes.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -1123,4 +1124,39 @@ test('추정 레이어가 높이 꼬리로 층고 칸을 바꾸면 그 높이로
   expect(q('import').disabled).toBe(true);
   w.emit(EXTRACTED); await flush();
   expect(q('import').disabled).toBe(false);
+});
+
+// ── 2026-10-13 계획 16 Task D: 단위 변환 알림 — 아키스케치는 mm가 아닌 도면을 거절한다(unsupportedDxfUnitError). 우리는 바꿔 읽고 **알린다** ──────────
+// 경우마다 창을 새로 연다(사전 검토 7): 같은 창에 두 번째 'parsed'를 보내면 걸려 있는 추출의 답으로 먹힌다(위 Task A 머리의 가짜 워커 순서).
+// 단위를 바꾼 뒤의 추출은 큐에만 서고 답이 오지 않는다 — 알림은 추출 답을 기다리지 않고 곧바로 바뀌어야 한다.
+test('INSUNITS가 mm가 아니면 "도면 단위가 inch라 mm로 바꿔 읽습니다"를 알리고, 사람이 단위를 바꾸면 알리지 않는다', async () => {
+  const { w, q } = open({ file: fileOf() }); await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, insunits: 1, unitScale: 25.4, unitsGuessed: false } }); await flush();
+  expect(q('head').textContent).toContain('inch (INSUNITS=1)');
+  expect(q('notice').textContent).toContain(DXF_UNITS_CONVERTED('inch'));
+  q('units').value = '1'; q('units').dispatchEvent(new Event('change', { bubbles: true })); vi.advanceTimersByTime(250); await flush();
+  expect(q('notice').textContent).not.toContain('mm로 바꿔 읽습니다');               // 사람이 단위를 바꾸면 변환 알림은 내리지 않는다
+  q('units').value = '25.4'; q('units').dispatchEvent(new Event('change', { bubbles: true })); await flush();
+  expect(q('notice').textContent).toContain(DXF_UNITS_CONVERTED('inch'));           // 도면의 단위로 되돌리면 다시 알린다(셀렉트 값 === unitScale)
+});
+
+test('단위가 없어 추정했으면 추정 알림만 내고 변환 알림은 내지 않는다', async () => {
+  const { w, q } = open({ file: fileOf() }); await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, insunits: 0, unitScale: 1000, unitsGuessed: true } }); await flush();
+  expect(q('notice').textContent).toContain(DXF_UNITS_GUESS);
+  expect(q('notice').textContent).not.toContain('mm로 바꿔 읽습니다');
+});
+
+test('도면 단위가 mm면 변환 알림은 없다', async () => {
+  const { w, q } = open({ file: fileOf() }); await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  expect(q('notice').textContent).not.toContain('mm로 바꿔 읽습니다');
+});
+
+test('dxfNotes: 단위 변환 칸은 단위 추정 뒤·기구 앞이고, unitsMatch가 아니면 없다', () => {
+  const s = { ...SUMMARY, insunits: 1, unitScale: 25.4, unitsGuessed: false };
+  const eq = { placed: 3, product: 1, generic: 2, colliding: 0 };
+  expect(dxfNotes({ summary: s, stats: { equipment: eq }, unitsMatch: true })).toBe(`${DXF_UNITS_CONVERTED('inch')} / ${DXF_EQUIPMENT(3, 1, 2, 0, undefined, undefined)}`);
+  expect(dxfNotes({ summary: s, hint: { height: 2800, layer: 'wall_2800' } })).toBe(`${DXF_UNITS_CONVERTED('inch')} / ${DXF_HEIGHT_FROM_LAYER(2800, 'wall_2800')}`);   // 높이 꼬리 앞 · unitsMatch 기본 true
+  expect(dxfNotes({ summary: s, stats: {}, unitsMatch: false })).toBeNull();
 });

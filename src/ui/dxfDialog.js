@@ -10,12 +10,11 @@ import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { buildImportMeta } from '../io/dxfFeedback.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
-import { dxfNotes } from './dxfNotes.js';
+import { dxfNotes, UNITS, unitName } from './dxfNotes.js';   // 단위 이름 표는 알림과 한 곳(계획 16 Task D)
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_TRACE_SKIPPED, DXF_REGION, DXF_REGION_LABEL,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
   DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_EQUIPMENT_OPT } from './messages.js';
 
-const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
 // §18.6이 글자로 정한 `기본 두께` 범위(층고 쪽 정본은 설정에도 남는 prefs.js의 DXF_HEIGHT_RANGE다).
 export const DXF_THICKNESS_RANGE = [50, 1000];
@@ -96,7 +95,6 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     q('step').textContent = s ? stepLabel(s, blocks) : '';
   };
   const onProgress = m => { if (!closed) progress(DXF_PHASE_STEP[m.phase] ?? 1, m.blocks); };
-  const unitName = v => UNITS.find(([, x]) => x === v)?.[0] ?? 'mm';
   // "벽만 남기기"는 모드가 아니라 **필터 프리셋**이다(§18.6): 칸은 지금 체크 집합이 기본 집합과
   // 같은지를 그대로 비춘다 — [전체]나 개별 체크 뒤에도 거짓을 말하지 않는다(리뷰 F-4).
   const syncPreset = () => {
@@ -117,8 +115,9 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
   // 체크가 바뀌는 자리는 모두 syncPreset을 지나므로 거기서 한 번 부른다. 사람이 입력한 뒤에는 아무것도 하지 않는다(체크를 바꿔도 사람의 값을 설정값으로 덮지 않게).
   const hint = () => (summary && autoHeight ? heightHint(summary.layers ?? [], checked) : null);
   const applyHint = () => { if (!autoHeight) return; const h = hint(); q('height').value = String(h ? h.height : dxfHeight()); notes(); };
-  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정 · 높이 꼬리 …(조립과 순서는 dxfNotes.js — 2026-10-13 계획 16).
-  const notes = () => notice(dxfNotes({ summary, stats: last?.stats ?? {}, hint: hint() }));
+  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정 · 단위 변환 · 높이 꼬리 …(조립과 순서는 dxfNotes.js — 2026-10-13 계획 16).
+  // 단위 변환 알림은 셀렉트가 도면의 단위 그대로일 때만(Task D) — 사람이 단위를 바꿨으면 "바꿔 읽습니다"는 거짓이다.
+  const notes = () => notice(dxfNotes({ summary, stats: last?.stats ?? {}, hint: hint(), unitsMatch: Number(q('units').value) === summary?.unitScale }));
   const regionIdx = () => Number(q('region').value) || 0;
   const km = mm => (mm / 1000).toFixed(1);
   const setHead = () => {
@@ -286,6 +285,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
   });
   for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'equipment', 'trace']) q(n).addEventListener('change', schedule);
   q('height').addEventListener('input', () => { autoHeight = false; notes(); });   // 사람이 층고를 만졌다 — 힌트를 놓고 알림도 곧바로 지운다(사전 검토 9-2)
+  q('units').addEventListener('change', notes);   // 사람이 단위를 골랐다 — 단위 변환 알림을 추출 답을 기다리지 않고 곧바로 맞춘다(계획 16 Task D)
   q('region').addEventListener('change', () => { setHead(); schedule(); });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel(); } });
 
