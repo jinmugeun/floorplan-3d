@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { openDxfDialog, DXF_THICKNESS_RANGE } from '../src/ui/dxfDialog.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
-import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE } from '../src/ui/prefs.js';
+import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE, dxfHeight } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
 import { createDxfActions } from '../src/app/dxfActions.js';
@@ -14,7 +14,8 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED,
-  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from '../src/ui/messages.js';
+  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT, DXF_UNITS_CONVERTED, DXF_UNITS_GUESS, DXF_MANY_SHEETS } from '../src/ui/messages.js';
+import { dxfNotes } from '../src/ui/dxfNotes.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
 const ROWS = [
@@ -997,4 +998,171 @@ test('검토 창의 미리보기에 가져올 기구가 함께 그려진다', as
   const fills = ctx.calls.filter(c => c.op === 'fill').map(c => c.fillStyle);
   expect(fills).toContain(PREVIEW_COLORS.item);
   expect(fills.indexOf(PREVIEW_COLORS.item)).toBeLessThan(fills.indexOf(PREVIEW_COLORS.wall));
+});
+
+// ── 2026-10-13 계획 16 Task A: 벽 레이어 이름의 높이 꼬리(아키스케치 wall_2800 규칙 · classify.layerHeight) → 층고 칸 미리 채움 ──────────
+// 가짜 워커의 순서(사전 검토 2): 답 없는 요청 뒤의 요청은 큐에만 서고, 다음에 오는 메시지가 **걸려 있는 요청**의 답이 된다(client.js) —
+// 그래서 체크·층고를 바꾸기 전과 다른 파일을 떨어뜨리기 전에 걸린 추출마다 EXTRACTED로 답한다.
+const withSuffix = () => {
+  const rows = ROWS.map(r => (r.name === '기존' ? { ...r, name: '기존_2800', height: 2800 } : r));
+  return { ...SUMMARY, layers: rows, checked: [...wallOnly(rows)], layerHeight: { height: 2800, layer: '기존_2800' } };
+};
+const lastExtract = w => w.posted.filter(m => m.type === 'extract').at(-1);
+// 다른 파일을 떨어뜨린다('파일을 잇달아' 테스트의 떨어뜨리기와 같은 꼴).
+const drop = (root, f) => root.dispatchEvent(Object.assign(new Event('drop', { bubbles: true }), { dataTransfer: { files: [f] } }));
+
+test('벽 레이어 이름의 높이 꼬리가 있으면 층고 칸에 미리 넣고 알리고 그 행에 배지를 단다 — 설정에는 레이어 값이 남지 않는다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(q('notice').textContent).toContain(DXF_HEIGHT_FROM_LAYER(2800, '기존_2800'));
+  expect(root.querySelector('label[title="기존_2800"] .badge.height').textContent).toBe(DXF_BADGE_HEIGHT(2800));
+  expect(root.querySelectorAll('.badge.height')).toHaveLength(1);                         // 벽 역할 행에만
+  expect(layerRowHtml(row('TEXT_2500', 'text', 0, { texts: 3, height: 2500 }), false)).not.toContain('badge height');   // 문자 행의 꼬리는 높이가 아니다
+  expect(lastExtract(w).opts.height).toBe(2800);
+  w.emit(EXTRACTED); await flush();
+  q('import').click(); await flush();
+  expect(dxfHeight()).toBe(3500);
+});
+
+test('높이 꼬리로 채운 뒤 사람이 층고를 고치면 그 값으로 추출하고 알림은 사라지며 설정에도 남는다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  w.emit(EXTRACTED); await flush();
+  q('height').value = '3000';
+  q('height').dispatchEvent(new Event('input', { bubbles: true })); q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  expect(lastExtract(w).opts.height).toBe(3000);
+  expect(q('notice').textContent).not.toContain('층고로 씁니다');
+  w.emit(EXTRACTED); await flush();
+  // 사람이 고친 값은 체크를 바꿔도 힌트(나 설정값)가 덮지 않는다.
+  q('wallOnly').click(); await flush();
+  expect(q('height').value).toBe('3000');
+  vi.advanceTimersByTime(250); await flush();
+  expect(lastExtract(w).opts.height).toBe(3000);
+  w.emit(EXTRACTED); await flush();
+  q('import').click(); await flush();
+  expect(dxfHeight()).toBe(3000);
+});
+
+test('꼬리 레이어의 체크를 끄면 힌트가 따라가고, 꼬리 없는 다른 파일을 이어 열면 층고 칸은 설정값으로 돌아간다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  w.emit(EXTRACTED); await flush();
+  const box = root.querySelector('input[name="layer"][value="기존_2800"]');
+  box.checked = false; box.dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  expect(q('height').value).toBe('3500');
+  expect(lastExtract(w).opts.height).toBe(3500);
+  expect(q('notice').textContent).not.toContain('층고로 씁니다');
+  w.emit(EXTRACTED); await flush();
+  box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(lastExtract(w).opts.height).toBe(2800);
+  w.emit(EXTRACTED); await flush();
+  // 둘째 파일(꼬리 없음)
+  drop(root, fileOf('둘째.dxf')); await flush();
+  expect(w.posted.filter(m => m.type === 'parse').map(m => m.fileName)).toEqual(['평면도.dxf', '둘째.dxf']);
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  expect(q('height').value).toBe('3500');
+  expect(lastExtract(w).opts.height).toBe(3500);
+  w.emit(EXTRACTED); await flush();
+  q('import').click(); await flush();
+  expect(dxfHeight()).toBe(3500);
+});
+
+test('사람이 입력한 층고는 꼬리 없는 다음 도면에도 그대로이고(계획 16 전과 같다), 꼬리 있는 도면이 열리면 그 높이를 미리 넣는다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  w.emit(EXTRACTED); await flush();
+  q('height').value = '3000';
+  q('height').dispatchEvent(new Event('input', { bubbles: true })); q('height').dispatchEvent(new Event('change', { bubbles: true }));
+  vi.advanceTimersByTime(250); await flush();
+  w.emit(EXTRACTED); await flush();
+  drop(root, fileOf('둘째.dxf')); await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  expect(q('height').value).toBe('3000');
+  expect(lastExtract(w).opts.height).toBe(3000);
+  w.emit(EXTRACTED); await flush();
+  drop(root, fileOf('셋째.dxf')); await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(q('notice').textContent).toContain(DXF_HEIGHT_FROM_LAYER(2800, '기존_2800'));
+  expect(lastExtract(w).opts.height).toBe(2800);
+});
+
+// 리뷰 1차 Important 1(2026-10-13): 벽 체크를 모두 끄면 워커는 도형 추정으로 꼬리 레이어(WALL_2800 꼴)를 다시 고르고 **설정값 높이로** 벽을 세운다.
+// 결과가 그 레이어를 체크에 되돌려 놓으며 힌트가 층고 칸을 바꾸면, 그 결과는 칸과 다른 높이다 — 새 칸 값으로 다시 추출하고 그동안 [가져오기]를 잠근다.
+test('추정 레이어가 높이 꼬리로 층고 칸을 바꾸면 그 높이로 다시 추출하고, 새 결과가 올 때까지 [가져오기]를 잠근다', async () => {
+  localStorage.setItem(DXF_HEIGHT_KEY, '3500');
+  const { w, q, root } = open({ file: fileOf(), onImported: () => true });
+  await flush();
+  w.emit({ type: 'parsed', summary: withSuffix() }); await flush();
+  w.emit(EXTRACTED); await flush();
+  for (const box of [...root.querySelectorAll('input[name="layer"]')].filter(b => b.checked)) {
+    box.checked = false; box.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  vi.advanceTimersByTime(250); await flush();
+  expect(lastExtract(w).opts.layers).toEqual([]);
+  expect(lastExtract(w).opts.height).toBe(3500);
+  w.emit({ ...EXTRACTED, stats: { ...EXTRACTED.stats, guessed: true, guessedLayers: ['기존_2800'] } }); await flush();
+  expect(q('height').value).toBe('2800');
+  expect(q('import').disabled).toBe(true);                                   // 3500으로 세운 결과를 2800 칸으로 가져가지 않는다
+  const n = w.posted.filter(m => m.type === 'extract').length;
+  vi.advanceTimersByTime(250); await flush();
+  expect(w.posted.filter(m => m.type === 'extract')).toHaveLength(n + 1);
+  expect(lastExtract(w).opts).toMatchObject({ height: 2800, layers: ['기존_2800'] });
+  expect(q('import').disabled).toBe(true);
+  w.emit(EXTRACTED); await flush();
+  expect(q('import').disabled).toBe(false);
+});
+
+// ── 2026-10-13 계획 16 Task D: 단위 변환 알림 — 아키스케치는 mm가 아닌 도면을 거절한다(unsupportedDxfUnitError). 우리는 바꿔 읽고 **알린다** ──────────
+// 경우마다 창을 새로 연다(사전 검토 7): 같은 창에 두 번째 'parsed'를 보내면 걸려 있는 추출의 답으로 먹힌다(위 Task A 머리의 가짜 워커 순서).
+// 단위를 바꾼 뒤의 추출은 큐에만 서고 답이 오지 않는다 — 알림은 추출 답을 기다리지 않고 곧바로 바뀌어야 한다.
+test('INSUNITS가 mm가 아니면 "도면 단위가 inch라 mm로 바꿔 읽습니다"를 알리고, 사람이 단위를 바꾸면 알리지 않는다', async () => {
+  const { w, q } = open({ file: fileOf() }); await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, insunits: 1, unitScale: 25.4, unitsGuessed: false } }); await flush();
+  expect(q('head').textContent).toContain('inch (INSUNITS=1)');
+  expect(q('notice').textContent).toContain(DXF_UNITS_CONVERTED('inch'));
+  q('units').value = '1'; q('units').dispatchEvent(new Event('change', { bubbles: true })); vi.advanceTimersByTime(250); await flush();
+  expect(q('notice').textContent).not.toContain('mm로 바꿔 읽습니다');               // 사람이 단위를 바꾸면 변환 알림은 내리지 않는다
+  q('units').value = '25.4'; q('units').dispatchEvent(new Event('change', { bubbles: true })); await flush();
+  expect(q('notice').textContent).toContain(DXF_UNITS_CONVERTED('inch'));           // 도면의 단위로 되돌리면 다시 알린다(셀렉트 값 === unitScale)
+});
+
+test('단위가 없어 추정했으면 추정 알림만 내고 변환 알림은 내지 않는다', async () => {
+  const { w, q } = open({ file: fileOf() }); await flush();
+  w.emit({ type: 'parsed', summary: { ...SUMMARY, insunits: 0, unitScale: 1000, unitsGuessed: true } }); await flush();
+  expect(q('notice').textContent).toContain(DXF_UNITS_GUESS);
+  expect(q('notice').textContent).not.toContain('mm로 바꿔 읽습니다');
+});
+
+test('도면 단위가 mm면 변환 알림은 없다', async () => {
+  const { w, q } = open({ file: fileOf() }); await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY }); await flush();
+  expect(q('notice').textContent).not.toContain('mm로 바꿔 읽습니다');
+});
+
+test('dxfNotes: 단위 변환 칸은 단위 추정 뒤·기구 앞이고, unitsMatch가 아니면 없다', () => {
+  const s = { ...SUMMARY, insunits: 1, unitScale: 25.4, unitsGuessed: false };
+  const eq = { placed: 3, product: 1, generic: 2, colliding: 0 };
+  expect(dxfNotes({ summary: s, stats: { equipment: eq }, unitsMatch: true })).toBe(`${DXF_UNITS_CONVERTED('inch')} / ${DXF_EQUIPMENT(3, 1, 2, 0, undefined, undefined)}`);
+  expect(dxfNotes({ summary: s, hint: { height: 2800, layer: 'wall_2800' } })).toBe(`${DXF_UNITS_CONVERTED('inch')} / ${DXF_HEIGHT_FROM_LAYER(2800, 'wall_2800')}`);   // 높이 꼬리 앞 · unitsMatch 기본 true
+  expect(dxfNotes({ summary: s, stats: {}, unitsMatch: false })).toBeNull();
+  // 칸 순서 전체(2026-10-13 · 최종 리뷰 F-7 · A-m3·D-m3): 기구 맨 끝은 e2e 정규식(tools/dxf-corpus/e2e.mjs)의 계약이다.
+  // 단위 추정(DXF_UNITS_GUESS)과 단위 변환은 함께 나올 수 없어 변환 쪽만 넣는다.
+  const all = { ...s, regions: [{}, {}], layers: [{ ...ROWS[0], guessed: true }, ...ROWS.slice(1)], manySheets: true };
+  const st = { dividers: 2, railDividers: 1, nameDividers: 3, equipment: eq }, hint = { height: 2800, layer: 'wall_2800' };
+  expect(dxfNotes({ summary: all, stats: st, hint })).toBe([DXF_MANY_PLANS(2), DXF_LAYERS_GUESSED, DXF_MANY_SHEETS, DXF_UNITS_CONVERTED('inch'), DXF_HEIGHT_FROM_LAYER(2800, 'wall_2800'),
+    DXF_RECONCILED(2, 0), DXF_RAIL_DIVIDED(1), DXF_NAME_DIVIDED(3), DXF_EQUIPMENT(3, 1, 2, 0, undefined, undefined)].join(' / '));
 });

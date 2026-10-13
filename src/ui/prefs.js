@@ -1,6 +1,8 @@
 // 브라우저에만 남는 로컬 설정(kvp.*). 프로젝트 파일·저장 형식은 건드리지 않는다(§14의 전역 규칙).
 // 패널 폭(layout.js)·미니맵 높이(shell.js)·즐겨찾기(libraryPanel.js)와 같은 성격이고,
 // 사람마다·브라우저마다 다른 작업 습관을 담는다. 저장이 막힌 브라우저에서도 죽지 않는다.
+import { HEIGHT_RANGE } from '../io/dxf/params.js';
+
 export const STICKY_TOOLS_KEY = 'kvp.stickyTools';
 
 // 방·벽·기둥·개구부 도구를 커밋 뒤에도 켜 둘지(기본 켜짐 — 오늘의집과 같은 연속 그리기).
@@ -43,9 +45,10 @@ export function setDxfTrace(on) {
   try { localStorage.setItem(DXF_TRACE_KEY, on ? '1' : '0'); } catch { /* 저장 불가 */ }
 }
 
-// 층고는 도면에 없다(§18.8). 3500은 강당중 조리실의 실적값이고, 사람이 고친 값을 기억한다.
+// 층고는 도면에 없다(§18.8). 3500은 강당중 조리실의 실적값이고, 사람이 고친 값을 기억한다. 예외: 벽 레이어 이름의 높이 꼬리(`WALL_2800`)는
+// 검토 창이 층고 칸에 미리 넣지만 여기에는 남기지 않는다(2026-10-13 · 계획 16 Task A — 다음 도면의 기본값이 이 도면의 층고가 되면 안 된다).
 export const DXF_HEIGHT_KEY = 'kvp.dxfHeight';
-export const DXF_HEIGHT_RANGE = [2000, 8000];
+export const DXF_HEIGHT_RANGE = HEIGHT_RANGE;   // 정본은 params.js — 레이어 이름 높이 꼬리와 같은 범위를 본다(2026-10-13 계획 16)
 export function dxfHeight() {
   try {
     const n = Number(localStorage.getItem(DXF_HEIGHT_KEY));

@@ -4,18 +4,19 @@
 import { focusTrap } from './dialogBase.js';
 import { esc } from '../util/html.js';
 import { createDxfClient, traceInWorker } from '../io/dxf/client.js';
+import { heightHint } from '../io/dxf/classify.js';
 import { traceBackground } from '../io/dxf/trace.js';
 import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { buildImportMeta } from '../io/dxfFeedback.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
-import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED, DXF_MANY_PLANS, DXF_REGION, DXF_REGION_LABEL, DXF_RECONCILED,
+import { dxfNotes, UNITS, unitName } from './dxfNotes.js';   // 단위 이름 표는 알림과 한 곳(2026-10-13 · 계획 16 Task D)
+import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_TRACE_SKIPPED, DXF_REGION, DXF_REGION_LABEL,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
-  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from './messages.js';
+  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_EQUIPMENT_OPT } from './messages.js';
 
-const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
-// §18.6이 글자로 정한 `기본 두께` 범위(층고 쪽 정본은 설정에도 남는 prefs.js의 DXF_HEIGHT_RANGE다).
+// §18.6이 글자로 정한 `기본 두께` 범위(층고 쪽 정본은 io/dxf/params.js HEIGHT_RANGE — prefs.js DXF_HEIGHT_RANGE가 재수출 · 2026-10-13 계획 16 · 최종 리뷰 F-6).
 export const DXF_THICKNESS_RANGE = [50, 1000];
 // 범위를 화면에만 적어 두면 지켜지지 않는다(최종 리뷰 I-1): <input min max>는 타이핑을 막지 않고
 // 이 대화상자에는 폼 제출도 없다. 층고 99999는 normalizeProject를 **빠져나간다** — floor.height와
@@ -75,6 +76,9 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
   // want: 지금까지 요청된 재추출의 번호. 결과는 **그 번호가 아직 최신일 때만** 가져올 수 있다 — 옵션을 바꾼 순간부터
   // 최신 결과가 올 때까지 [가져오기]를 잠근다(2026-09-29 리뷰: 층고를 바꾸고 곧바로 누르면 옛 결과가 들어갔다).
   let want = 0, pending = false;
+  // autoHeight: 사람이 층고 칸을 아직 만지지 않아 이 창이 채운다(지금 체크의 높이 꼬리 · 없으면 설정값 — 2026-10-13 · 계획 16 Task A). 칸에 입력하면 꺼지고,
+  // 꼬리 있는 도면이 열리면 다시 켜진다(도면의 값이 다른 도면에 입력한 값보다 앞선다). 꼬리 없는 도면은 사람이 입력한 값을 그대로 둔다(계획 16 전과 같다).
+  let autoHeight = true;
 
   const setError = text => { const e = q('error'); e.textContent = text ?? ''; e.hidden = !text; };
   const showError = code => setError(code ? (DXF_ERRORS[code] ?? DXF_ERRORS.oom) : null);
@@ -91,13 +95,12 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     q('step').textContent = s ? stepLabel(s, blocks) : '';
   };
   const onProgress = m => { if (!closed) progress(DXF_PHASE_STEP[m.phase] ?? 1, m.blocks); };
-  const unitName = v => UNITS.find(([, x]) => x === v)?.[0] ?? 'mm';
   // "벽만 남기기"는 모드가 아니라 **필터 프리셋**이다(§18.6): 칸은 지금 체크 집합이 기본 집합과
   // 같은지를 그대로 비춘다 — [전체]나 개별 체크 뒤에도 거짓을 말하지 않는다(리뷰 F-4).
   const syncPreset = () => {
     const def = wallOnly(summary?.layers ?? []);
     q('preset').checked = checked.size === def.size && [...def].every(n => checked.has(n));
-    guide();
+    guide(); applyHint();
   };
   // 입력 도면 안내 줄(2026-10-12 · 계획 12 Task 3): 선 수 · 체크한(벽) 레이어 수 · 안내 페이지 — 선이 너무 많으면 도면부터 간편화하게.
   // 체크가 바뀌는 자리(syncPreset)마다 다시 쓴다.
@@ -107,17 +110,14 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     g.innerHTML = summary ? `${esc(DXF_GUIDE_LINE(summary.segs, checked.size))} · <a href="${DXF_GUIDE_HREF}" target="_blank" rel="noopener">${esc(DXF_GUIDE_LINK)}</a>` : '';
   };
   const renderLayers = () => { q('layers').innerHTML = summary ? layerListHtml(summary.layers, checked) : ''; syncPreset(); };
-  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정.
-  const notes = () => {
-    const n = summary?.regions?.length ?? 0;
-    const guessed = summary?.layers?.some(r => r.guessed) || last?.stats?.guessed;
-    const st = last?.stats ?? {}, fixed = (st.dividers || st.annexes) && DXF_RECONCILED(st.dividers ?? 0, st.annexes ?? 0);
-    const byNames = st.nameDividers > 0 && DXF_NAME_DIVIDED(st.nameDividers);
-    const byRails = st.railDividers > 0 && DXF_RAIL_DIVIDED(st.railDividers);       // 2026-10-12 최종 리뷰 X-4: 늘 켜진 난간 구획선도 알린다
-    // 2026-10-12 계획 13 Task 3 · 충돌 수는 앱 배너와 같은 colliding(최종 리뷰 F-3) · 기둥 면에 맞춰 줄인 수(trimmed — 2026-10-13 최종 리뷰 X-3)
-    const eq = st.equipment, equip = eq?.placed > 0 && DXF_EQUIPMENT(eq.placed, eq.product, eq.generic, eq.colliding ?? 0, eq.clash, eq.trimmed);
-    notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byRails, byNames, equip].filter(Boolean).join(' / ') || null);
-  };
+  // 벽 레이어 이름의 높이 꼬리(2026-10-13 · 계획 16 Task A): 지금 체크 집합의 힌트를 층고 칸에 넣는다 — 사람이 칸을 만지기 전(autoHeight)에만. 힌트가 없어지면
+  // (체크를 껐다 · 꼬리 없는 다음 파일) 설정값으로 되돌린다. 레이어에서 온 값은 설정(prefs)에 남기지 않는다(다음 도면의 기본값이 이 도면의 층고가 되면 안 된다).
+  // 체크가 바뀌는 자리는 모두 syncPreset을 지나므로 거기서 한 번 부른다. 사람이 입력한 뒤에는 아무것도 하지 않는다(체크를 바꿔도 사람의 값을 설정값으로 덮지 않게).
+  const hint = () => (summary && autoHeight ? heightHint(summary.layers ?? [], checked) : null);
+  const applyHint = () => { if (!autoHeight) return; const h = hint(); q('height').value = String(h ? h.height : dxfHeight()); notes(); };
+  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정 · 단위 변환 · 높이 꼬리 …(조립과 순서는 dxfNotes.js — 2026-10-13 계획 16).
+  // 단위 변환 알림은 셀렉트가 도면의 단위 그대로일 때만(Task D) — 사람이 단위를 바꿨으면 "바꿔 읽습니다"는 거짓이다.
+  const notes = () => notice(dxfNotes({ summary, stats: last?.stats ?? {}, hint: hint(), unitsMatch: Number(q('units').value) === summary?.unitScale }));
   const regionIdx = () => Number(q('region').value) || 0;
   const km = mm => (mm / 1000).toFixed(1);
   const setHead = () => {
@@ -172,7 +172,9 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
         // §18.6: 폴백(추정)이면 그 벽을 낸 레이어를 **체크리스트에 미리 켠다** — 알림은 "체크를
         // 확인해 주세요"라고 하는데 켜진 줄이 하나도 없으면 확인할 것이 없다(리뷰 F-5).
         const guessed = m.stats?.guessed ? (m.stats.guessedLayers ?? []) : [];
-        if (guessed.length) { for (const n of guessed) { checked.add(n); initial.add(n); } renderLayers(); }
+        // 켜 넣은 추정 레이어의 높이 꼬리가 층고 칸을 바꾸면(WALL_2800만 있는 도면에서 벽 체크를 모두 껐다) 이 결과는 바뀌기 전 높이로 선 것이다 —
+        // 새 칸 값으로 다시 추출한다. schedule이 want를 올리므로 아래 검사가 새 결과까지 [가져오기]를 잠근다(2026-10-13 · 계획 16 Task A 리뷰 1차 Important 1).
+        if (guessed.length) { const h0 = q('height').value; for (const n of guessed) { checked.add(n); initial.add(n); } renderLayers(); if (q('height').value !== h0) schedule(); }
         progress(0); render();
         // 이 응답보다 뒤에 바뀐 것이 있으면(want가 앞서 있다) 아직 가져올 수 없다 — 최신 결과를 기다린다.
         if (id === want) { pending = false; q('import').disabled = false; }
@@ -195,6 +197,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
       initial = new Set(summary.checked);
       checked = new Set(summary.checked);
       q('units').value = String(summary.unitScale);
+      if (summary.layerHeight) autoHeight = true;   // 2026-10-13 · 꼬리 있는 도면은 그 높이에서 시작한다 — 아래 renderLayers(→ syncPreset → applyHint)가 칸을 채운다
       // 도면 후보가 둘 이상이면 고르는 칸을 연다(첫 후보 = 가장 큰 덩어리가 기본값).
       const regions = summary.regions ?? [];
       q('region').innerHTML = regions.map((r, i) => `<option value="${i}">${esc(DXF_REGION(i + 1, km(r.size[0]), km(r.size[1]), r.hint))}</option>`).join('');
@@ -243,7 +246,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
         if (bg) project.background = bg;
         else toast(DXF_TRACE_SKIPPED);
       }
-      setDxfHeight(height);
+      if (!(autoHeight && height === hint()?.height)) setDxfHeight(height);   // 레이어 꼬리에서 온 층고는 설정에 남기지 않는다(계획 16 Task A — 판정은 가져오는 값으로)
       setDxfTrace(traceOn);
       const ok = await onImported({ project, stats });
       if (ok !== false) close();
@@ -281,6 +284,8 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     renderLayers(); schedule();
   });
   for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'equipment', 'trace']) q(n).addEventListener('change', schedule);
+  q('height').addEventListener('input', () => { autoHeight = false; notes(); });   // 2026-10-13 · 사람이 층고를 만졌다 — 힌트를 놓고 알림도 곧바로 지운다(사전 검토 9-2)
+  q('units').addEventListener('change', notes);   // 2026-10-13 · 사람이 단위를 골랐다 — 단위 변환 알림을 추출 답을 기다리지 않고 곧바로 맞춘다(계획 16 Task D)
   q('region').addEventListener('change', () => { setHead(); schedule(); });
   root.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel(); } });
 

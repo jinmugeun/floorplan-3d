@@ -99,7 +99,8 @@ test('정규화 DXF 내보내기는 .dxf 파일을 내려받고 알린다', asyn
 
 // 2026-10-12 · 최종 리뷰 X-6(M3-3): 내보내기 코드는 누를 때 불러오는 청크라, 탭을 연 채 재배포를 지나면 "Failed to fetch dynamically imported
 // module"로 실패한다 — 그 거절이 토스트 없이 사라졌다. 청크 로드 실패든 내보내기 예외든 알리고, 파일은 쓰지 않으며, 동작은 던지지 않는다.
-test('정규화 DXF 내보내기가 실패하면(청크 로드 실패 · 내보내기 예외) 알리고 파일을 쓰지 않는다', async () => {
+// 2026-10-13 · 계획 16 최종 리뷰 F-2(B-m1·B-m3): 아키스케치용 내보내기가 실패하면 "정규화 DXF를…"이 떴다(틀린 이름) — 제 문구(DXF_EXPORT_AS_FAILED)로 알린다.
+test('정규화·아키스케치용 DXF 내보내기가 실패하면(청크 로드 실패 · 내보내기 예외) 제 이름으로 알리고 파일을 쓰지 않는다', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   for (const factory of [
@@ -111,12 +112,36 @@ test('정규화 DXF 내보내기가 실패하면(청크 로드 실패 · 내보�
     const a = setup();
     addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
     await expect(a.actions.exportDxf()).resolves.toBeUndefined();
-    expect(a.toasts).toEqual([M.DXF_EXPORT_FAILED]);
+    await expect(a.actions.exportDxfArchisketch()).resolves.toBeUndefined();
+    expect(a.toasts).toEqual([M.DXF_EXPORT_FAILED, M.DXF_EXPORT_AS_FAILED]);
     vi.doUnmock('../src/io/dxfExport.js');
   }
   expect(click).not.toHaveBeenCalled();
   click.mockRestore(); warn.mockRestore();
   expect(typeof M.DXF_EXPORT_FAILED).toBe('string');
+  expect(M.DXF_EXPORT_AS_FAILED).toMatch(/^아키스케치용 DXF를 내보내지 못했습니다/);
+});
+
+// 2026-10-13 · 계획 16 Task B: 아키스케치용 DXF — 같은 내보내기에 프로필만 'archisketch'(레이어 wall_층고·door·window·column). 이름은 <이름>-archisketch.dxf.
+const readBlob = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsText(b); });   // tests/dxfFeedback.test.js와 같은 꼴
+test('exportDxfArchisketch는 아키스케치 프로필로 -archisketch.dxf를 내려주고 끊지 못한 통로 수와 함께 알린다', async () => {
+  const a = setup();
+  addWalls(a.store, rectWalls([0, 0], [4000, 3000], 200));
+  const blobs = [], names = [];
+  global.URL.createObjectURL = b => { blobs.push(b); return 'blob:x'; };
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () { names.push(this.download); });
+  await a.actions.exportDxfArchisketch();
+  click.mockRestore();
+  expect(names).toHaveLength(1);
+  expect(names[0]).toMatch(/-archisketch\.dxf$/);
+  expect(blobs[0].type).toBe('application/dxf');
+  const text = await readBlob(blobs[0]);
+  expect(text).toContain('\nwall_');
+  expect(text).not.toContain('\nWALL\n');
+  expect(a.toasts.at(-1)).toBe(M.DXF_EXPORTED_AS(0));
+  // 문구: 0이면 통로 말이 없고, n이면 수를 덧붙인다(buildDxf.uncutPasses — 아키스케치 파일에는 블록도 틈도 없다).
+  expect(M.DXF_EXPORTED_AS(0)).not.toContain('통로');
+  expect(M.DXF_EXPORTED_AS(3)).toContain('통로 3개는 빠졌습니다');
 });
 
 // 2026-10-12 · 계획 12 Task 10: 교정 기록은 DXF로 가져온 프로젝트(meta.dxfImport)에서만 — 아니면 알리기만 하고 아무것도 쓰지 않는다.

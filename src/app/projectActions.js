@@ -11,7 +11,7 @@ import { openBackgroundDialog } from '../ui/backgroundDialog.js';
 import { confirmDialog } from '../ui/confirmDialog.js';
 import { promptDialog } from '../ui/promptDialog.js';
 import { projectIsEmpty, confirmLeave } from './topbar.js';
-import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN, DXF_EXPORTED, DXF_EXPORT_FAILED, DXF_FEEDBACK_NONE, DXF_FEEDBACK_EXPORTED } from '../ui/messages.js';
+import { RESTORED, TEMPLATE_SAVED, TEMPLATE_SAVE_FAIL, JSON_EXPORTED, NAME_REQUIRED, TEMPLATE_NAME_TAKEN, DXF_EXPORTED, DXF_EXPORTED_AS, DXF_EXPORT_FAILED, DXF_EXPORT_AS_FAILED, DXF_FEEDBACK_NONE, DXF_FEEDBACK_EXPORTED } from '../ui/messages.js';
 import { buildDxfFeedback } from '../io/dxfFeedback.js';
 
 // onProjectSwap: 프로젝트를 갈아 끼운 직후(view.fit()과 같은 자리) 부른다 — 첫 방 자동 fit 래치를
@@ -78,6 +78,19 @@ export function createProjectActions({ store, ui, view, toast = () => {}, restor
       } catch (e) {
         console.warn('dxf export:', e?.message ?? e);
         toast(DXF_EXPORT_FAILED);
+      }
+    },
+    // 아키스케치용(2026-10-13 · 계획 16 Task B): 같은 내보내기에 프로필만 'archisketch' — 레이어 wall_층고·door·window·column, 방·치수·기구 없음.
+    // 실패 토스트는 제 이름의 문구다(최종 리뷰 F-2 — 정규화 문구를 같이 쓰면 "정규화 DXF를…"이 떴다).
+    exportDxfArchisketch: async () => {
+      try {
+        const { buildDxf } = await import('../io/dxfExport.js');
+        const { text, uncutPasses } = buildDxf(store.get(), { profile: 'archisketch' });
+        downloadText(filenameFor(store.get()).replace(/\.json$/, '-archisketch.dxf'), text, 'application/dxf');
+        toast(DXF_EXPORTED_AS(uncutPasses));
+      } catch (e) {
+        console.warn('dxf export (archisketch):', e?.message ?? e);
+        toast(DXF_EXPORT_AS_FAILED);
       }
     },
     // 교정 기록(2026-10-12 · 계획 12 Task 10): 가져온 직후 스냅숏(meta.dxfImport)과 지금 층의 차이 + 가져오기 선택을 JSON으로.

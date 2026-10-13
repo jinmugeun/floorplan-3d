@@ -21,6 +21,9 @@ export const DXF_ERRORS = { 'not-dxf': DXF_NOT_DXF, binary: DXF_BINARY, dwg: DXF
 // DXF_OPEN_ENDS·DXF_OPEN_ENDS_VIEW 둘은 배너(§18.10)가 먼저 올려 두었으므로 여기서 다시 내보내지 않는다.
 export const DXF_MANY_SHEETS = '도면 좌표 범위가 너무 넓습니다 — 가장 큰 도면 한 장만 가져옵니다';
 export const DXF_UNITS_GUESS = '도면에 단위가 없어 mm로 봅니다. 다르면 위에서 바꿔 주세요';
+// 단위 변환 알림(2026-10-13 · 계획 16 Task D): $INSUNITS가 mm가 아니면 워커가 mm로 바꿔 읽는다(toProject.INSUNITS_SCALE) — 머리줄에만 보여 조용했다.
+// 아키스케치는 mm가 아니면 거절한다("CAD에서 도면의 단위를 mm로 변환 후 다시 시도하세요"); 우리는 바꿔 읽고 **알린다**(코퍼스 43도면 중 해당 0 — 공개 40은 단위 없음).
+export const DXF_UNITS_CONVERTED = unit => `도면 단위가 ${unit}라 mm로 바꿔 읽습니다(INSUNITS) — 틀리면 위에서 바꿔 주세요`;
 export const DXF_LAYERS_GUESSED = '벽 레이어를 찾지 못해 도형으로 추정했습니다. 체크를 확인해 주세요';
 // 2026-10-02: 한 파일에 도면이 여러 벌일 때(신상중: 같은 건물의 두 안) 고르는 칸의 알림과 항목.
 export const DXF_MANY_PLANS = n => `이 파일에 도면이 ${n}개 있습니다. 가져올 도면을 골라 주세요`;
@@ -66,6 +69,9 @@ export const DXF_BADGE_HATCH = '해치(벽 채움)';
 // 이름이 아니라 내용으로 판정한 레이어(layerGuess.refineByContent) — 사람이 확인할 줄이다.
 export const DXF_BADGE_GUESSED = '도형으로 추정';
 export const DXF_BADGE_COLOR = '색으로 판정';
+// 벽 레이어 이름의 높이 꼬리(2026-10-13 · 계획 16 Task A · classify.layerHeight): 층고 칸에 미리 넣었음을 알리고 벽 행에 배지를 단다.
+export const DXF_HEIGHT_FROM_LAYER = (h, layer) => `벽 레이어 이름의 높이 ${h} mm를 층고로 씁니다(${layer}) — 다르면 위에서 바꿔 주세요`;
+export const DXF_BADGE_HEIGHT = h => `높이 ${h}`;
 
 // 시작 화면의 네 번째 동작 카드(§18.7). 문구는 §18.7이 글자로 정했다.
 export const DXF_CARD_TITLE = 'DXF 도면 가져오기';
@@ -77,6 +83,12 @@ export const DXF_CARD_DESC = '캐드 도면(.dxf)에서 벽을 자동으로 뽑�
 export const DXF_EXPORT_MENU = '정규화 DXF 내보내기';
 export const DXF_EXPORTED = '정규화 DXF를 내보냈습니다 — CAD에서 고친 뒤 다시 가져오세요';
 export const DXF_EXPORT_FAILED = '정규화 DXF를 내보내지 못했습니다. 작업을 저장한 뒤 페이지를 새로 고쳐 다시 시도해 주세요';
+// 아키스케치용 내보내기(2026-10-13 · 계획 16 Task B · dxfExportProfile.js 'archisketch'): 오늘의집 3D(아키스케치) CAD 업로드 규격의 레이어 넷으로.
+// lost = 벽을 끊지 못해 빠진 통로 수(buildDxf.uncutPasses — 아키스케치 파일에는 블록도 틈도 없다 · 사전 검토 9).
+export const DXF_EXPORT_AS_MENU = '아키스케치용 DXF 내보내기';
+export const DXF_EXPORTED_AS = lost => `아키스케치용 DXF를 내보냈습니다 — 레이어 wall_층고 · door · window · column${lost ? ` · 벽을 끊지 못한 통로 ${lost}개는 빠졌습니다` : ''}`;
+// 실패(2026-10-13 · 최종 리뷰 F-2 · B-m1): 예전에는 정규화 실패 문구를 같이 써서 "정규화 DXF를…"이라는 틀린 이름이 떴다. 원인·조치는 정규화와 같다.
+export const DXF_EXPORT_AS_FAILED = '아키스케치용 DXF를 내보내지 못했습니다. 작업을 저장한 뒤 페이지를 새로 고쳐 다시 시도해 주세요';
 // 교정 기록 내보내기(2026-10-12 · 계획 12 Task 10 — io/dxfFeedback.js): 더보기 메뉴 · DXF로 가져온 프로젝트가 아닐 때 · 내보낸 뒤의 수.
 // 알림은 합계(changes)를 먼저, 그다음 **0이 아닌 범주만**(2026-10-12 · 최종 리뷰 X-7 · M10-1): 예전 알림은 범주 일곱만 늘 적어, 새 방·크기·추가만
 // 바뀐 기록이 "벽 지움 0 · 그림 0 · …" 0만 늘어놓았고, 지운 기둥을 "문·창 지움"으로 셌다. 지운 것은 문·창(개구부)과 기둥(columnsDeleted)을 가른다.

@@ -6,7 +6,7 @@
 import { decodeDxf, DxfError } from './decode.js';
 import { parseDxf, headerNum } from './parse.js';
 import { explode, scaleExplode } from './explode.js';
-import { layerStats, defaultChecked, roleLayers } from './classify.js';
+import { layerStats, defaultChecked, roleLayers, heightHint } from './classify.js';
 import { planRegions } from './regions.js';
 import { extractWalls } from './walls.js';
 import { buildProject, unitScale, drawingTitle, INSUNITS_SCALE } from './toProject.js';
@@ -83,6 +83,7 @@ function doParse(buf, fileName, rawRoles = null) {
   post({ type: 'parsed', summary: {
     ver, codepage, encoding, insunits, unitScale: u.scale, unitsGuessed: u.guessed,
     layers: rows, checked: [...checked],
+    layerHeight: heightHint(rows, checked),   // 벽 레이어 이름 꼬리의 층고 후보(2026-10-13 · 계획 16 Task A · 파싱 시점 기본 체크 기준 — 검토 창은 지금 체크로 다시 계산한다)
     // 좌표가 이미 mm라 배율을 곱하지 않는다.
     regions: regions.map(r => ({ size: [Math.round(r.x1 - r.x0), Math.round(r.y1 - r.y0)], lenM: Math.round(r.len / 1000), wallM: Math.round(r.wallLen / 1000), hint: r.hint })),
     blocks: doc.counts.blocks, blocksUsed: doc.counts.blocksUsed, entities: doc.counts.entities,
