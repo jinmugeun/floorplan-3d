@@ -1,7 +1,7 @@
 // §18.1의 INSERT 전개. 문서 객체는 parse.js가 내는 모양 그대로 손으로 만든다
 // ({ blocks: Map, entities: [] }) — 파서를 다시 통과시키지 않아야 이 파일의 실패가 전개의 실패다.
 import { test, expect } from 'vitest';
-import { explode, mat, matMul, apply, scaleOf, rotOf, mirrored, bulgeToArc, arcSteps } from '../src/io/dxf/explode.js';
+import { explode, scaleExplode, mat, matMul, apply, scaleOf, rotOf, mirrored, bulgeToArc, arcSteps } from '../src/io/dxf/explode.js';
 
 const block = (name, entities, base = [0, 0]) => [name, { name, base, layer: '0', flags: 0, start: 0, end: 0, inserts: new Set(), entities }];
 const line = (layer, x, y, x2, y2) => ({ type: 'LINE', layer, x, y, x2, y2 });
@@ -204,6 +204,19 @@ test('거울 부모 아래 INSERT의 rot은 합성 행렬의 각이다', () => {
   const plain = explode(nested({ xscale: 1, yscale: 1, a0: 20 })).inserts.find(i => i.name === 'IN');
   expect(plain.mirrored).toBe(false);
   expect(plain.rot).toBeCloseTo(50, 6);
+});
+
+// 2026-10-13 · 계획 14 Task E 리뷰 m-1: 정규화 DXF의 기구 INSERT는 삽입점 높이(코드 30)에 아이템 z를 쓴다. 전개는 **그 INSERT 자신의** z만 싣고
+// (부모 높이·배율과 합성하지 않는다 — 읽는 곳은 최상위 EQ- 기구뿐), 단위 배율(scaleExplode)은 길이처럼 곱한다. 없으면 0.
+test('INSERT는 자신의 삽입점 높이(30)를 z로 단다 — 중첩은 합성하지 않고, 단위 배율은 곱한다', () => {
+  const doc = {
+    blocks: new Map([block('OUT', [insert('IN', '0', 0, 0, { z: 50 })]), block('IN', [line('0', 0, 0, 100.5, 0)])]),
+    entities: [insert('OUT', 'EQUIP', 10, 20, { z: 1200, xscale: 2, yscale: 2 }), insert('IN', 'EQUIP', 0, 0)],
+  };
+  const ex = explode(doc);
+  expect(ex.inserts.map(i => [i.name, i.z])).toEqual([['OUT', 1200], ['IN', 50], ['IN', 0]]);
+  expect(scaleExplode(ex, 1000).inserts.map(i => i.z)).toEqual([1200000, 50000, 0]);
+  expect(scaleExplode(ex, 1)).toBe(ex);
 });
 // 2026-10-02: 레이어 판정이 선의 실제 색을 본다(청록 = 창호). 색은 엔티티에 적힌 값(1~255)만 옮기고,
 // ByLayer(256·없음)·ByBlock(0)은 비워 둔다 — 그때의 실제 색은 레이어 색이다(classify.layerStats).

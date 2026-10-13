@@ -56,6 +56,10 @@
 //  - 기둥 접촉 깎기(equipTrim.js · 2026-10-13 계획 14 Task A): equipTrim 50 = 바닥 기구가 기둥 상자에 든 깊이(x·y 중 작은 쪽)가 이 이하이면 그 축의
 //    기둥 쪽 변만 깎는다. 도면이 기둥 면에 딱 붙여 그린 기구가 기둥 띠 안으로 4~47 mm 들어온다 — 사동중 기둥–기구 8쌍 중 7쌍(4·7·7·15·18·18·47 ·
 //    계획 13 Task 3 리뷰 실측)과 내곡 To청소대A 20; 50 넘으면 진짜 겹침이라 두고 본다(남은 한 쌍 — 사동 기둥을 감싼 5,000×1,467 카운터 264 mm).
+//  - 정규화 DXF 기구의 영역 여유(equipment.js · 2026-10-13 계획 14 Task E 리뷰 I-1): equipRegionPad 1000 = `EQ-` 기구만 도면 상자(벽 선 덩어리의 상자 —
+//    여유 없음)를 이만큼 넓혀 후보로 본다. 바깥 벽 면에 단 환기캡·벽부형 환기팬(중심이 벽 면 밖 75~250 mm)과 벽 바로 밖 기구가 왕복에서 조용히
+//    사라졌다(리뷰 프로브: 내보냄 12 → 다시 11). 1 m = 벽걸이 기구의 가장 큰 깊이(≈ 700) + 벽 부착 간격(WALL_GAP 300). 정규화 DXF는 도면이 하나라
+//    다른 도면의 기구가 들어올 일이 없고(신상중 A·B 위험은 원 도면 쪽 — 거기엔 `EQ-` 이름이 0개), 이보다 먼 기구는 안내 §5에 적었다.
 export const DXF_PARAMS = Object.freeze({
   minSeg: 150, openFaceMin: 700, angTol: 0.75, offTol: 6, faceGap: 20,
   tMin: 90, cavityMin: 150, bandGap: 520, bandMax: 700, bandTol: 60, bandBreak: 1000, runJoin: 5, jogTol: 20, spanEdge: 10, spanOverlap: 0.25,
@@ -68,5 +72,5 @@ export const DXF_PARAMS = Object.freeze({
   doorLeaf: Object.freeze([700, 1300]), slideOffset: 200, slideArrowLen: Object.freeze([400, 600]),
   railMin: 600, railSnap: 150, railPair: 300,
   dividerMinArea: 2_000_000,
-  equipMin: 150, equipMax: 8000, equipClash: 0.5, equipTrim: 50,
+  equipMin: 150, equipMax: 8000, equipClash: 0.5, equipTrim: 50, equipRegionPad: 1000,
 });

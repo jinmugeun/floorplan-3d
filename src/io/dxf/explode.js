@@ -107,8 +107,10 @@ export function explode(doc, { arcSteps: steps = 12, maxDepth = 8, onProgress = 
           const mm = matMul(m, local);
           // rot은 **합성 행렬**에서 읽는다(M-4): 거울은 각을 더하지 않고 φ − θ로 보내므로
           // (e.a0 + rotOf(m))은 거울 부모 아래에서 어긋난다(규칙 ④의 ARC 각과 같은 이유다).
+          // z(2026-10-13 · 계획 14 Task E 리뷰 m-1): **이 INSERT 자신의** 삽입점 높이(코드 30)만 싣는다 — 부모 블록의 높이·배율·OCS(돌출 방향)는
+          // 합성하지 않는다. 정규화 DXF의 기구 INSERT(EQ- · 최상위)가 아이템 z를 여기에 쓰고 equipName.eqPlacement만 읽는다(다른 판정은 2D뿐이다).
           const id = out.inserts.length;
-          out.inserts.push({ name: e.name, pos: apply(m, [e.x ?? 0, e.y ?? 0]), rot: rotOf(mm), scale: [sx * scaleOf(m), sy * scaleOf(m)], layer, depth, mirrored: mirrored(mm), block: blockName, parent: ins });
+          out.inserts.push({ name: e.name, pos: apply(m, [e.x ?? 0, e.y ?? 0]), z: Number(e.z) || 0, rot: rotOf(mm), scale: [sx * scaleOf(m), sy * scaleOf(m)], layer, depth, mirrored: mirrored(mm), block: blockName, parent: ins });
           const b = doc.blocks?.get(e.name);
           if (!b) { bump(out.skipped, `missing-block:${e.name}`); break; }
           if (depth >= maxDepth) { bump(out.skipped, 'maxDepth'); break; }   // 규칙 ⑤(실측 최대 깊이 4)
@@ -171,7 +173,7 @@ export function scaleExplode(ex, k) {
     arcs: ex.arcs.map(a => ({ ...a, c: p(a.c), r: a.r * k })),
     polyArcs: ex.polyArcs.map(a => ({ ...a, c: p(a.c), r: a.r * k })),
     circles: ex.circles.map(c => ({ ...c, c: p(c.c), r: c.r * k })),
-    inserts: ex.inserts.map(i => ({ ...i, pos: p(i.pos) })),
+    inserts: ex.inserts.map(i => ({ ...i, pos: p(i.pos), z: (i.z ?? 0) * k })),      // 삽입점 높이도 길이다(2026-10-13 · Task E 리뷰 m-1)
     texts: ex.texts.map(t => ({ ...t, p: p(t.p), h: t.h * k })),
     dims: ex.dims.map(d => (d.p1 && d.p2 ? { ...d, p1: p(d.p1), p2: p(d.p2) } : d)),
   };

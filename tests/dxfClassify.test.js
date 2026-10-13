@@ -154,10 +154,12 @@ test('DXF_PARAMS는 벽 띠 스윕의 표와 글자 그대로 같고 동결되�
     equipMin: 150, equipMax: 8000, equipClash: 0.5,
     // 2026-10-13 기둥 접촉 깎기(계획 14 Task A — params.js 주석)
     equipTrim: 50,
+    // 2026-10-13 정규화 DXF 기구(EQ-)의 영역 여유(계획 14 Task E 리뷰 I-1 — params.js 주석)
+    equipRegionPad: 1000,
   });
   expect(Object.isFrozen(DXF_PARAMS)).toBe(true);
   expect(Object.isFrozen(DXF_PARAMS.doorLeaf) && Object.isFrozen(DXF_PARAMS.slideArrowLen)).toBe(true);   // 범위 배열도 얼어 있다
-  expect(Object.keys(DXF_PARAMS)).toHaveLength(51);
+  expect(Object.keys(DXF_PARAMS)).toHaveLength(52);
 });
 
 // ── 2026-10-02 다른 사무소 도면 둘(신상중 · 내곡중)에서 드러난 판정 오류 ──────────────────────────
