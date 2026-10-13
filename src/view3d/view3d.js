@@ -16,6 +16,8 @@ import { createBodyDrag } from './bodyDrag.js';
 import { createOrthoView } from './orthoView.js';
 import { cullLabels, createCameraWatch, labelRefreshKind, LABEL_DEBOUNCE_MS } from './labels3d.js';
 import { labelDensity } from '../ui/prefs.js';
+import { createRebuildGate, shaderPrewarm } from './rebuildGate.js';
+import { warmShaders } from './shaderWarm.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -32,7 +34,12 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-12, 30, -18); sun.castShadow = true; scene.add(sun);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xdfe4e9 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.005; ground.receiveShadow = true; scene.add(ground);
 
-  let group = null, mode = 'iso', raf = 0, alive = true;
+  let group = null, mode = 'iso', raf = 0, alive = true, cullFirst = false;
+  // 2D를 보는 동안은 store가 바뀌어도 짓지도 그리지도 않고(서명도 안 잰다) 3D로 돌아올 때 한 번 짓는다 + 유휴 셰이더 예열 — 시작 뒤 한 번 예열 장면(shaderWarm.js), 처음 보이는 리빌드 뒤 한 번 실제 장면
+  // (2026-10-13 · 계획 13 Task 3 리뷰 P3-1: 2D 가져오기 클릭에 숨은 3D 리빌드 178 ms + 셰이더 링크가 얹혔다 · 사전 검토 I-4 — rebuildGate.js).
+  // 보류했던 리빌드 뒤 첫 프레임은 라벨을 먼저 잰다(cullFirst): 라벨 컬링은 120 ms 디바운스라 그 사이 첫 프레임에 라벨이 전부 겹쳐 보였다(전에는 숨은 컬링이 해 두었다).
+  const gate = createRebuildGate({ isVisible: () => alive && ui.get().mode !== '2d', signature: () => sceneSignature(store.get()), rebuild, render: () => { cullFirst = true; requestRender(); },
+    warmup: () => alive && warmShaders(renderer, scene, ov.camera() ?? camera, store.get().view), prewarm: shaderPrewarm(renderer, scene, () => ov.camera() ?? camera) });
   const fp = new PointerLockControls(camera, renderer.domElement);
   // 브라우저가 Esc로 포인터 락을 풀면 ISO로 돌아간다. setMode가 먼저 mode를 바꾼 경우(1/2/3 키)는 여기서 아무것도 하지 않는다.
   fp.addEventListener('unlock', () => { if (!alive || mode !== 'fp') return; setMode('iso'); onExitFp(); });
@@ -153,9 +160,10 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   }
   // 하단 바 "화면 맞추기"(키 0)의 3D 쪽 동작. 모드는 바꾸지 않는다.
   function fit() { if (mode === 'fp') return; resize(); frameScene(); }
-  // 렌더샷: 화면과 다른 해상도로 한 장 렌더해 dataURL을 돌려준다.
+  // 렌더샷: 화면과 다른 해상도로 한 장 렌더해 dataURL을 돌려준다. 2D에서 불러도(렌더샷·시방서 입면) API가 gate.fresh로 감싸 보류한 리빌드를 먼저 한다(계획 14 Task B).
   // setSize(w, h, false)는 캔버스 CSS 크기를 건드리지 않으므로 화면이 흔들리지 않는다.
   function renderImage({ width = 1920, height = 1080, preset = null } = {}) {
+    if (!gate.isVisible()) { prepFrame(); cullNow(); }   // 2D에서 찍으면 화면 프레임이 하던 컷어웨이·라벨 컬링을 지금 한다(전에는 숨은 프레임이 해 두었다 — 같은 그림)
     const prev = new THREE.Vector2(); renderer.getSize(prev); const prevRatio = renderer.getPixelRatio();
     let cam = ov.camera() ?? camera, shotAt = null;
     if (preset) {
@@ -234,33 +242,31 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     for (const m of group.children) m.visible = soloMeshVisible(m, room, mode);
   }
   function frame(t) {
+    if (cullFirst) { cullFirst = false; cullNow(); }   // raf를 비우기 전이다: cullNow의 requestRender가 프레임을 하나 더 걸지 않게. 이때는 setMode가 카메라·크기를 이미 잡았다
     raf = 0; if (!alive) return;
     if (mode === 'fp') {
       fpCtl.step(t); showAllWalls(); renderer.render(scene, ov.camera() ?? camera);
       if (fpMoved(camera)) scheduleLabelCull();   // 1인칭에도 'change'가 없다: 걸음이 멈춘 뒤 한 번 잰다
       requestRender(); return;
     }
-    controls.update();
-    // 2D 투영은 정면·평면 도면이다: 궤도 카메라 기준의 컷어웨이로 벽을 지우면 도면이 비어 보인다.
-    if (ov.isActive()) showAllWalls();
-    else applyCutaway();
-    applySolo(); renderer.render(scene, ov.camera() ?? camera);
+    prepFrame(); renderer.render(scene, ov.camera() ?? camera);
   }
-  function requestRender() { if (!raf) raf = requestAnimationFrame(frame); }
+  // 그리기 전 씬 상태(컷어웨이·단일 공간). 2D 투영은 정면·평면 도면이다: 궤도 카메라 기준의 컷어웨이로 벽을 지우면 도면이 비어 보인다.
+  // 2D에서 찍는 렌더샷도 먼저 부른다(계획 14 Task B): 숨긴 동안은 프레임이 돌지 않아 컷어웨이·라벨이 지난 상태로 남는다.
+  function prepFrame() { controls.update(); if (ov.isActive()) showAllWalls(); else applyCutaway(); applySolo(); }
+  function requestRender() { if (!raf && gate.isVisible()) raf = requestAnimationFrame(frame); } // 숨겨진 캔버스는 그리지 않는다: 2D 동안의 프레임이 셰이더 링크를 클릭에 얹었다(계획 14 Task B)
   controls.addEventListener('change', requestRender);
   // 3D 라벨 겹침 억제(§15.12 · 감사 §11): 매 프레임 76개를 투영하면 궤도가 무거워지므로
   // 카메라가 멈춘 뒤 120 ms에 한 번만 잰다. 씬을 다시 짓거나 창이 바뀔 때도 다시 잰다.
   let labelTimer = 0, lastDensity = labelDensity();
   const fpMoved = createCameraWatch();   // 1인칭 렌더 루프는 움직인 프레임에만 디바운스를 건다
-  function scheduleLabelCull() {
-    clearTimeout(labelTimer);
-    labelTimer = setTimeout(() => {
-      labelTimer = 0;
-      const g = group?.children.find(m => m.name === 'labels');
-      if (!g || !g.children.length) return;
-      cullLabels(g, ov.camera() ?? camera, { width: container.clientWidth || 1, height: container.clientHeight || 1, density: labelDensity() });
-      requestRender();
-    }, LABEL_DEBOUNCE_MS);
+  function scheduleLabelCull() { clearTimeout(labelTimer); labelTimer = setTimeout(cullNow, LABEL_DEBOUNCE_MS); }
+  function cullNow() {
+    clearTimeout(labelTimer); labelTimer = 0;
+    const g = group?.children.find(m => m.name === 'labels');
+    if (!g || !g.children.length) return;
+    cullLabels(g, ov.camera() ?? camera, { width: container.clientWidth || 1, height: container.clientHeight || 1, density: labelDensity() });
+    requestRender();
   }
   controls.addEventListener('change', scheduleLabelCull);
   let lastPreset = null, lastSun = null, lastPerf = null;
@@ -278,20 +284,16 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     if (pm !== lastPerf) { lastPerf = pm; applyPerfMode(pm, { renderer, sun, dpr: devicePixelRatio }); requestRender(); }
   }
   // 기하·표시 모드가 실제로 바뀐 경우에만 씬을 다시 만든다(슬라이더 드래그 같은 { record: false } 연속 dispatch로 재빌드하지 않게).
-  let lastSig = null;
-  const unsub = store.subscribe(() => {
-    const sig = sceneSignature(store.get());
-    if (sig !== lastSig) { lastSig = sig; rebuild(); }
-    applyViewSettings(); requestRender();
-  });
+  // 서명 비교와 "2D를 보는 동안은 보류만" 규칙은 문(rebuildGate.js)이 갖는다. 숨김이면 requestRender도 버려진다.
+  const unsub = store.subscribe(() => { gate.onStoreChange(); applyViewSettings(); requestRender(); });
   const unsubUi = ui.subscribe(() => {
-    reattachPicker(); // 붙일지 뗄지는 한 곳(reattachPicker)에서만 판단한다
+    gate.onVisible(); reattachPicker(); // 2D → 평면/3D/1인칭(ui.set({ mode }))이면 보류한 리빌드를 먼저 한 번(숨김·깨끗하면 no-op). 기즈모를 붙일지 뗄지는 한 곳(reattachPicker)에서만 판단한다
     requestRender();
   });
   const ro = new ResizeObserver(() => { resize(); requestRender(); }); ro.observe(container);
-  rebuild(); lastSig = sceneSignature(store.get()); resize(); setMode('iso'); applyViewSettings();
-  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage, getCameraInfo, setTarget, requestRender,
+  gate.onStoreChange(); resize(); setMode('iso'); applyViewSettings();   // 앱은 2D로 시작한다: 첫 빌드도 3D가 처음 보일 때로 미룬다
+  return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage: gate.fresh(renderImage), ensureFresh: gate.ensureFresh, getCameraInfo, setTarget, requestRender,
     // 라벨 밀도는 kvp라 sceneSignature에 없다(§17.10). '끔' 진입·이탈만 다시 짓고 나머지는 다시 센다(I-2).
-    refreshLabels() { const d = labelDensity(), kind = labelRefreshKind(lastDensity, d); lastDensity = d; if (kind === 'rebuild') rebuild(); else scheduleLabelCull(); requestRender(); },
-    setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: () => renderer.domElement.toDataURL('image/png'), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+    refreshLabels() { const d = labelDensity(), kind = labelRefreshKind(lastDensity, d); lastDensity = d; if (kind === 'rebuild') gate.invalidate(); else scheduleLabelCull(); requestRender(); },
+    setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: gate.fresh(() => renderer.domElement.toDataURL('image/png')), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
 }
