@@ -2,7 +2,7 @@
 // 앱 좌표는 y만 뒤집는다(toApp — 원점 0 · 배율 1). INSERT 점(pos)은 일부러 멀리 둔다 — 실파일처럼 자리는 전개 도형에서만 읽는다.
 import { test, expect } from 'vitest';
 import { equipItems } from '../src/io/dxf/equipment.js';
-import { insertBoxes, topOwner } from '../src/io/dxf/insertBoxes.js';
+import { insertBoxes, topOwner, groupOwner } from '../src/io/dxf/insertBoxes.js';
 import { DXF_PARAMS } from '../src/io/dxf/params.js';
 import { makeWall } from '../src/geom/walls.js';
 import { createItem, createFloor, createEmptyProject, normalizeProject, migrate } from '../src/state/schema.js';
@@ -449,4 +449,63 @@ test('equipItems: 기둥에 닿은 바닥 기구를 깎고 stats.trimmed로 센�
   ]);
   expect(r.items.every(i => i.dxfBlock && i.dxfProduct)).toBe(true);
   expect(DXF_PARAMS.equipTrim).toBe(50);
+});
+
+// ── 복합 블록 전개(insertBoxes.groupOwner · 2026-10-13 계획 14 Task F) ─────────────────────────────
+// 사동 `1f plan-1`(건물 블록 — 어휘 자식 8: 샤워기 4 · 세면대 2 · 변기 2) · 내곡 `afadfasdfasfd` ×2(영유아거치대 · 세면대 평면) · 신상 A `zw$CEA1`(곡물받침대 ×2)은
+// 그룹이라 세우지 않거나(제외 composite) 하나의 엉뚱한 상자(안쪽 글자 → 12칸 사물함 1400×900)로 섰다. 깊이 1 자식 중 어휘 자식이 ≥ 2이고 부모가 어휘가 아니면
+// 그 어휘 자식만 제 전개 도형으로 세우고 부모는 세우지 않는다. 자리·회전은 실제 전개(explode — 내장 INSERT의 pos·rot은 이미 월드)로 확인한다.
+const rectBlock = (w, d, more = []) => ({ base: [0, 0], entities: [...[[0, 0], [w, 0], [w, d], [0, d]].map((p, i, a) => ({ type: 'LINE', layer: '0', x: p[0], y: p[1], x2: a[(i + 1) % 4][0], y2: a[(i + 1) % 4][1] })), ...more] });
+const sub = (name, x, y) => ({ type: 'INSERT', name, layer: '0', x, y, xscale: 1, yscale: 1, a0: 0 });
+const groupDoc = (kids, inserts) => ({
+  entities: inserts.map(([x, xscale, a0]) => ({ type: 'INSERT', name: '화장실묶음', layer: '급식기구', x, y: 0, xscale, yscale: 1, a0 })),
+  blocks: new Map([['화장실묶음', rectBlock(4000, 2000, kids)], ['변기', rectBlock(580, 758)], ['손세정대 500-370', rectBlock(500, 370)], ['X1', rectBlock(300, 300)], ['의자', rectBlock(450, 450)],
+    ['식탁6인', rectBlock(1800, 900, [sub('의자', 0, -300), sub('의자', 900, -300)])]]),
+});
+const KIDS = [sub('변기', 200, 200), sub('변기', 1200, 200), sub('손세정대 500-370', 2500, 1500), sub('X1', 3500, 200)];
+
+test('groupOwner: 어휘 깊이 1 자식 ≥ 2이고 부모가 어휘가 아니면 그 자식(과 자손)이 제 주인 — 아니면 topOwner 그대로', () => {
+  const vocab = n => ['변기', '세면대', '식탁6인', '의자'].includes(n);
+  const I = (name, parent) => ({ name, ...(parent != null ? { parent } : {}) });
+  const ins0 = [I('G'), I('변기', 0), I('세면대', 0), I('X', 0), I('Y', 1), I('변기', 4), I('H'), I('변기', 6), I('식탁6인'), I('의자', 8), I('의자', 8)];
+  const { owner, groups } = groupOwner(ins0, vocab);
+  expect(owner).toEqual([0, 1, 2, 0, 1, 1, 6, 6, 8, 8, 8]);   // 깊이 2의 변기(5)는 세지 않고 1을 따른다 · H는 어휘 자식 1 · 식탁6인은 부모가 어휘
+  expect([...groups]).toEqual([[0, [1, 2]]]);
+  expect(groupOwner(ins0, () => false).owner).toEqual(topOwner(ins0));
+  expect(topOwner(ins0, new Set([3]))).toEqual([0, 0, 0, 3, 0, 0, 6, 6, 8, 8, 8]);
+});
+
+test('복합 블록(실제 전개): 어휘 자식 3 → 세 아이템이 제 전개 도형 중심에 · 그룹과 어휘 아닌 자식은 서지 않는다 · expanded 1', () => {
+  const r = run(explode(groupDoc(KIDS, [[10000, 1, 0]])));
+  expect(r.items.map(i => [i.dxfBlock, i.productId, i.pos, i.size])).toEqual([
+    ['변기', 'toilet', [10490, -579], [580, 758, 800]],
+    ['변기', 'toilet', [11490, -579], [580, 758, 800]],
+    ['손세정대 500-370', 'washbasin', [12750, -1685], [500, 370, 850]],
+  ]);
+  expect(r.stats).toMatchObject({ placed: 3, product: 3, expanded: 1 });
+  expect(r.stats.skipped.composite).toBe(0);
+});
+
+test('복합 블록: 어휘 자식이 하나뿐이면 지금처럼 그룹 하나(전개 상자) · 부모가 어휘(식탁6인 + 의자 2)면 전개하지 않는다', () => {
+  const r = run(explode(groupDoc([KIDS[0], KIDS[3]], [[10000, 1, 0]])));
+  expect(r.items.map(i => [i.dxfBlock, i.productId, i.pos, i.size.slice(0, 2)])).toEqual([['화장실묶음', 'equip-generic', [12000, -1000], [4000, 2000]]]);
+  expect(r.stats.expanded).toBe(0);
+  const doc = groupDoc([], []);
+  doc.entities = [{ type: 'INSERT', name: '식탁6인', layer: '급식기구', x: 0, y: 0, xscale: 1, yscale: 1, a0: 0 }];
+  const t = run(explode(doc));
+  expect(t.items.map(i => [i.dxfBlock, i.productId])).toEqual([['식탁6인', 'dining-6']]);
+  expect(t.stats.expanded).toBe(0);
+});
+
+test('복합 블록(실제 전개): 회전·거울 그룹의 자식 자리 = 부모 행렬을 거친 제 도형 중심 · 축 아닌 거울 자식의 rot = −rotOf(합성 행렬)', () => {
+  const at = [[20000, -1, 30], [40000, 1, 90]];
+  const r = run(explode(groupDoc(KIDS, at)));
+  const centre = ([x, s, a], kid) => toApp(apply(mat(x, 0, s, 1, a), kid)).map(v => Math.round(v) || 0);
+  const local = [[490, 579], [1490, 579], [2750, 1685]];      // 자식 삽입점 + 제 도형 중심(블록 좌표)
+  expect(r.items.map(i => i.pos)).toEqual(at.flatMap(g => local.map(c => centre(g, c))));
+  expect(r.items.map(i => i.rot)).toEqual([150, 150, 150, 0, 0, 0]);   // 30° + x 거울 → 합성 x축 210° → 앱 150 · 90°는 축 정렬(월드 상자)
+  expect(r.items.map(i => i.size.slice(0, 2))).toEqual([[580, 758], [580, 758], [500, 370], [758, 580], [758, 580], [370, 500]]);
+  expect(r.stats.expanded).toBe(2);
+  // 거울이면 삽입점에서 본 자식이 반대쪽이다(거울을 무시하면 x가 20000보다 컸을 것이다)
+  expect(r.items[0].pos[0]).toBeLessThan(20000);
 });

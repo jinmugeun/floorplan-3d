@@ -47,11 +47,12 @@ const structural = it => ['door', 'window', 'opening', 'column'].includes(it.kin
 const canon = v => { const ids = new Map(); return JSON.stringify(v, (k, x) => (typeof x === 'string' && /^[a-z]+_[0-9a-z]+$/.test(x) ? (ids.has(x) || ids.set(x, `#${ids.size}`), ids.get(x)) : x)); };
 // stats.equipment의 꼴: 일곱 키(spec) + colliding(2026-10-12 · 최종 리뷰 F-3 — 앱 배너와 같은 collidingIds 수) · skipped는 equipItems의 이유별 표 그대로
 // (이유 이름은 equipment.js 몫이라 여기서 못 박지 않는다). trimmed(2026-10-13 · 계획 14 Task A) = 기둥에 ≤ equipTrim 들어가 그쪽 변을 깎은 기구 수.
-const KEYS = ['placed', 'product', 'generic', 'anonymous', 'clash', 'overlap', 'trimmed', 'colliding', 'skipped'];
+// expanded(2026-10-13 · 계획 14 Task F) = 묶음 대신 어휘 자식을 세운 복합 블록 수.
+const KEYS = ['placed', 'product', 'generic', 'anonymous', 'clash', 'overlap', 'trimmed', 'expanded', 'colliding', 'skipped'];
 const expectZero = e => {
   expect(Object.keys(e)).toEqual(KEYS);
   expect(Object.keys(e.skipped).length).toBeGreaterThan(0);
-  expect([...KEYS.slice(0, 8).map(k => e[k]), ...Object.values(e.skipped)].every(v => v === 0)).toBe(true);
+  expect([...KEYS.slice(0, -1).map(k => e[k]), ...Object.values(e.skipped)].every(v => v === 0)).toBe(true);
 };
 
 test('기구는 개구부·기둥 뒤에 붙고, 켜든 끄든 벽·방·개구부·기둥·나머지 통계는 글자 그대로 같다', () => {

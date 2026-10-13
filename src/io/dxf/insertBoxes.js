@@ -12,10 +12,28 @@
 // 이 파일도 워커의 import 사슬이다: DOM·ui를 건드리지 않는다.
 
 // INSERT 번호 → 최상위 조상 INSERT 번호(자기가 최상위면 자기). 전개 순서상 부모가 자식보다 앞이라 한 번 훑으면 된다.
-export function topOwner(ins = []) {
+// roots(번호 Set)에 든 인서트는 부모가 있어도 제 주인이고 그 자손은 그것을 따른다(아래 groupOwner — 복합 블록의 내장 기구).
+export function topOwner(ins = [], roots = null) {
   const top = [];
-  ins.forEach((it, k) => { top[k] = it.parent != null && it.parent >= 0 ? top[it.parent] ?? -1 : k; });
+  ins.forEach((it, k) => { top[k] = it.parent != null && it.parent >= 0 && !roots?.has(k) ? top[it.parent] ?? -1 : k; });
   return top;
+}
+
+// 복합 블록 전개(2026-10-13 · 계획 14 Task F · 사전 검토 p14-preflight.md I-7): 최상위 인서트의 **깊이 1** 자식 중 어휘 자식(vocab(이름) — 부르는 쪽이
+// 정한다: 익명 아님 · 제외 아님 · 어휘에 맞음)이 GROUP_MIN 이상이고 부모 이름은 어휘가 아니면, 그 어휘 자식을 주인으로 올린다(자손 도형은 그 자식 몫).
+// 왜: 사동 `1f plan-1`(건물 블록 — 샤워기 4 · 세면대 2 · 변기 2) · 내곡 `afadfasdfasfd` ×2(영유아거치대 · 세면대 평면) · 신상 A `zw$CEA1`(곡물받침대 ×2)은
+// 기구를 품은 묶음이라, 최상위만 보면 통째로 빠지거나(제외 composite) 하나의 엉뚱한 상자(안쪽 글자 → 12칸 사물함 1400×900)가 됐다. 내장 INSERT의 pos·rot은
+// explode가 이미 부모 행렬을 거친 월드 값이라(explode.js INSERT) 주인 배열만 바꾸면 상자·자리·회전이 제대로 나온다.
+// 어휘 자식만 올린다: 깊이 1 자식 전부면 사동이 +2(`1P-T211` 일반 상자)다. 부모가 어휘면 그대로 하나다(식탁6인 + 의자, 세정대 + 수전 — 쪼개지 않는다).
+// 공개 코퍼스 40장에는 이런 그룹이 없다(2026-10-13 진단 scratch p14f-diag.mjs).
+// → { owner(topOwner 꼴), groups: Map(부모 번호 → [올린 자식 번호…]) }. 부르는 쪽(equipment.js)은 groups의 부모를 후보에서 뺀다.
+const GROUP_MIN = 2;
+export function groupOwner(ins = [], vocab = () => false) {
+  const top = k => !(ins[k]?.parent != null && ins[k].parent >= 0);
+  const kids = new Map();
+  ins.forEach((it, k) => { const p = it.parent; if (p != null && p >= 0 && top(p) && vocab(it.name)) (kids.get(p) ?? kids.set(p, []).get(p)).push(k); });
+  const groups = new Map([...kids].filter(([p, ks]) => ks.length >= GROUP_MIN && !vocab(ins[p].name)));
+  return { owner: topOwner(ins, new Set([...groups.values()].flat())), groups };
 }
 
 // ARC의 양 끝점(explode가 월드 각도로 a0 → a1 반시계로 맞춰 두었다).

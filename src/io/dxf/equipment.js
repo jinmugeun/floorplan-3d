@@ -17,7 +17,7 @@ import { blockKind, OPEN_BLOCK } from './blockOpenings.js';
 import { classifyLayer } from './classify.js';
 import { DXF_PARAMS } from './params.js';
 import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous, isJunkName } from './equipVocab.js';
-import { topOwner, insertBoxes, insertParts, arcEnds } from './insertBoxes.js';
+import { groupOwner, insertBoxes, insertParts, arcEnds } from './insertBoxes.js';
 import { trimToColumns } from './equipTrim.js';
 
 const GEN = 'equip-generic';
@@ -40,7 +40,7 @@ const HOOD = { productId: 'hood-box', height: 600, attach: 'ceiling', z: 0 };
 const look = (tbl, key) => (tbl instanceof Map ? tbl.get(key) : tbl && Object.prototype.hasOwnProperty.call(tbl, key) ? tbl[key] : undefined);
 const r0 = v => Math.round(v) || 0;     // -0을 접는다(toEqual이 -0과 +0을 가른다 — explode.js 머리 주석)
 const emptyStats = () => ({
-  placed: 0, product: 0, generic: 0, anonymous: 0, named: 0, namedProduct: 0, wallMounted: 0, ceiling: 0, offAxis: 0, clash: 0, overlap: 0, overlapPairs: 0, trimmed: 0,
+  placed: 0, product: 0, generic: 0, anonymous: 0, named: 0, namedProduct: 0, wallMounted: 0, ceiling: 0, offAxis: 0, clash: 0, overlap: 0, overlapPairs: 0, trimmed: 0, expanded: 0,
   skipped: { opening: 0, fixture: 0, symbol: 0, frame: 0, composite: 0, layer: 0, wallPiece: 0, big: 0, small: 0, thin: 0, dup: 0 },
 });
 
@@ -143,7 +143,8 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
   const stats = emptyStats(), items = [];
   const ins = ex?.inserts ?? [];
   if (!ins.length) return { items, stats };
-  const owner = topOwner(ins), boxes = insertBoxes(ex, owner);
+  // 복합 블록(2026-10-13 · 계획 14 Task F · insertBoxes.groupOwner): 어휘 자식 ≥ 2를 품은 최상위 묶음은 그 자식들이 후보이고 묶음은 아니다.
+  const { owner, groups } = groupOwner(ins, n => !skipReason(n) && !!matchEquip(n)), boxes = insertBoxes(ex, owner);
   const o0 = toApp([0, 0]), o1 = toApp([1e6, 0]), sc = Math.hypot(o1[0] - o0[0], o1[1] - o0[1]) / 1e6 || 1;
   const inRoi = c => !roi || (c[0] >= roi.x0 && c[0] <= roi.x1 && c[1] >= roi.y0 && c[1] <= roi.y1);
   const roleOf = layer => look(layerRoles, layer) ?? look(roles?.layers, layer) ?? classifyLayer(layer);
@@ -151,12 +152,13 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
   //    리뷰 M-1: 이름 규칙만 보면 roles를 넘기지 않은 부르는 쪽에서 표가 문이라 한 블록이 문과 기구 둘 다로 섰다).
   const cand = [];
   ins.forEach((it, k) => {
-    const g = owner[k] === k ? boxes.get(k) : null;
+    const g = owner[k] === k && !groups.has(k) ? boxes.get(k) : null;
     if (!g || !inRoi([(g.box[0] + g.box[2]) / 2, (g.box[1] + g.box[3]) / 2])) return;
     const kind = look(roles?.blocks, it.name)?.kind ?? null;
     if (kind ? HOLES.has(kind) : blockKind(it.name)) return;
     cand.push({ k, it, g, kind });
   });
+  stats.expanded = new Set(cand.map(x => x.it.parent).filter(p => groups.has(p))).size;   // 영역 안에 자식을 올린 묶음 수
   const parts = insertParts(ex, cand.map(x => x.k), owner);
   const kidNames = new Map(cand.map(x => [x.k, []]));
   ins.forEach(it => { if (it.parent != null) kidNames.get(it.parent)?.push(it.name); });
