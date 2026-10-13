@@ -10,13 +10,20 @@
     "test:watch": "vitest",
     "dxf:score": "node tools/dxf-corpus/score.mjs",
     "dxf:e2e": "node tools/dxf-corpus/e2e.mjs",
-    "dxf:public": "node tools/dxf-corpus/public.mjs"
+    "dxf:public": "node tools/dxf-corpus/public.mjs",
+    "assets:pack": "node tools/assets/pack.mjs",
+    "assets:check": "node tools/assets/check.mjs"
   },
   "dependencies": {
     "three": "0.169.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
     "jsdom": "25.0.1",
+    "meshoptimizer": "1.3.0",
+    "sharp": "0.35.5",
     "vite": "5.4.8",
     "vitest": "2.1.2"
   }
