@@ -19,6 +19,7 @@ import { DXF_PARAMS } from './params.js';
 import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous, isJunkName } from './equipVocab.js';
 import { groupOwner, insertBoxes, insertParts, arcEnds } from './insertBoxes.js';
 import { trimToColumns } from './equipTrim.js';
+import { eqPlacement, isEqBlock, eqWalls } from './equipName.js';
 
 const GEN = 'equip-generic';
 const AXIS_TOL = 2;        // rot mod 90이 이 안(°)이면 축 정렬 — 월드 상자를 쓴다(Task 1: 축 아닌 14개 중 5개가 3° 안 · 사동 소쿠리 운반차 272.61°는 축 아님)
@@ -155,7 +156,7 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     const g = owner[k] === k && !groups.has(k) ? boxes.get(k) : null;
     if (!g || !inRoi([(g.box[0] + g.box[2]) / 2, (g.box[1] + g.box[3]) / 2])) return;
     const kind = look(roles?.blocks, it.name)?.kind ?? null;
-    if (kind ? HOLES.has(kind) : blockKind(it.name)) return;
+    if (!isEqBlock(it.name) && (kind ? HOLES.has(kind) : blockKind(it.name))) return;
     cand.push({ k, it, g, kind });
   });
   stats.expanded = new Set(cand.map(x => x.it.parent).filter(p => groups.has(p))).size;   // 영역 안에 자식을 올린 묶음 수
@@ -168,7 +169,29 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
   const solid = (walls ?? []).filter(w => !w.virtual);
   const skip = why => { stats.skipped[why]++; };
   let hoods = 0;
+  // ⑤ 벽 자리·천장 z·후드 번호·통계 — 도면 블록(②~④)과 정규화 DXF 기구 `EQ-…`(2026-10-13 계획 14 Task E · equipName.js — ②~④의 제외·크기·어휘 없이 그대로 · 나란한 벽에만)의 같은 길.
+  const place = (patch, v, anon, f, ws = solid) => { const { size, pos, rot } = patch, pid = patch.dxfProduct, product = productById(pid);
+    const floorCover = patch.attach === 'floor' ? coverage(patch, bands, cols) : 0;
+    const thin = patch.attach === 'floor' && Math.min(size[0], size[1]) <= THIN && floorCover >= P.equipClash;
+    if (patch.attach === 'wall' || thin) {
+      // 벽을 못 찾으면 바닥: 벽걸이 어휘는 높이(z)를 지키고(기둥에 건 워터릴), 벽 판넬(thin)은 z 0 + 겹침으로 센다(리뷰 M-5 — 떠 있는 상자가 통계에 안 보였다).
+      const seat = wallSeat(ws, pos, rot, size);
+      patch = seat ? { ...patch, z: v?.attach === 'wall' ? v.z : WALL_Z, ...seat } : { ...patch, attach: 'floor', z: v?.attach === 'wall' ? v.z : 0 };
+    } else if (patch.attach === 'ceiling') patch.z = Math.max(0, r0(height - size[2]));
+    // 후드 번호 1..n(놓는 차례 — 사전 검토 m-1: 번호가 모두 1이면 라벨이 전부 ①이다).
+    if (product.equip?.type === 'hood') patch.props = { ...product.equip, no: Math.min(99, ++hoods) };
+    const item = createItem(product, patch);
+    items.push(item);
+    stats.placed++;
+    if (pid === GEN) stats.generic++; else stats.product++;
+    if (anon) stats.anonymous++; else { stats.named++; if (pid !== GEN) stats.namedProduct++; }
+    if (item.attach === 'wall') stats.wallMounted++;
+    if (item.attach === 'ceiling') stats.ceiling++;
+    if (f) stats.offAxis++;
+    if (item.attach === 'floor' && floorCover >= P.equipClash) stats.clash++;
+  };
   for (const { k, it, g, kind } of cand) {
+    const eq = eqPlacement(it, parts.get(k)?.segs, { toApp, sc }); if (eq) { place(eq.patch, eq.v, false, null, eqWalls(solid, eq.patch.rot)); continue; }
     // ② 제외: 역할표 기호 → 제외 어휘(역할표 equip보다 이긴다 — 사전 검토 m-9: sinsang-A 표가 육가·그레이팅을 equip으로 적었다) → 크기 → 벽 조각.
     if (kind && NOT_EQUIP.has(kind)) { skip('symbol'); continue; }
     const why = skipReason(it.name);
@@ -208,7 +231,7 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     }
     size = [r0(size[0]), r0(size[1]), r0(nd?.[2] || v?.height || DEFAULT_H)];
     const pos = toApp(c).map(r0), rot = f ? normDeg(-f.r) : 0;
-    const pid = v?.productId ?? GEN, product = productById(pid);
+    const pid = v?.productId ?? GEN;
     // 이름: 이름 있는 블록은 도면 이름 정리본. 익명 블록(zw$…·*U…)은 이름을 주지 않는다 — 제품 이름 그대로라 라벨이 서지 않는다(2026-10-12 · Task 5:
     // 이름 ≠ 제품명인 아이템에 2D·3D 라벨을 단다 — 사동·신상 A 익명 73개가 "zw$5B59" 라벨이 될 뻔했다). 원 블록 이름은 모든 기구 아이템의
     // `dxfBlock`에 남긴다(도면과 대조 · 교정 기록 — normalizeItem은 모르는 칸을 그대로 둔다).
@@ -217,25 +240,7 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     // 쓰레기 이름("1"·"66666"·"ccc" — 공개 도면 라벨 803 중 87, 계획 14 Task D ②)은 익명과 같이 이름을 주지 않는다(제품 이름 → 라벨 없음).
     // 매칭·통계는 그대로 이름 있는 블록으로 센다(어휘에는 안 맞으니 일반 상자) — equip 수가 바뀌지 않게.
     const nm = cleanName(it.name) || it.name;
-    let patch = { ...(anon || isJunkName(nm) ? {} : { name: nm }), dxfBlock: it.name, dxfProduct: pid, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 };
-    const floorCover = patch.attach === 'floor' ? coverage(patch, bands, cols) : 0;
-    const thin = patch.attach === 'floor' && Math.min(size[0], size[1]) <= THIN && floorCover >= P.equipClash;
-    if (patch.attach === 'wall' || thin) {
-      // 벽을 못 찾으면 바닥: 벽걸이 어휘는 높이(z)를 지키고(기둥에 건 워터릴), 벽 판넬(thin)은 z 0 + 겹침으로 센다(리뷰 M-5 — 떠 있는 상자가 통계에 안 보였다).
-      const seat = wallSeat(solid, pos, rot, size);
-      patch = seat ? { ...patch, z: v?.attach === 'wall' ? v.z : WALL_Z, ...seat } : { ...patch, attach: 'floor', z: v?.attach === 'wall' ? v.z : 0 };
-    } else if (patch.attach === 'ceiling') patch.z = Math.max(0, r0(height - size[2]));
-    // 후드 번호 1..n(놓는 차례 — 사전 검토 m-1: 번호가 모두 1이면 라벨이 전부 ①이다).
-    if (product.equip?.type === 'hood') patch.props = { ...product.equip, no: Math.min(99, ++hoods) };
-    const item = createItem(product, patch);
-    items.push(item);
-    stats.placed++;
-    if (pid === GEN) stats.generic++; else stats.product++;
-    if (anon) stats.anonymous++; else { stats.named++; if (pid !== GEN) stats.namedProduct++; }
-    if (item.attach === 'wall') stats.wallMounted++;
-    if (item.attach === 'ceiling') stats.ceiling++;
-    if (f) stats.offAxis++;
-    if (item.attach === 'floor' && floorCover >= P.equipClash) stats.clash++;
+    place({ ...(anon || isJunkName(nm) ? {} : { name: nm }), dxfBlock: it.name, dxfProduct: pid, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 }, v, anon, f);
   }
   // ⑤ 기둥에 ≤ equipTrim 들어간 바닥 기구는 그쪽 변을 깎는다(2026-10-13 · 계획 14 Task A · equipTrim.js) — 자리는 그대로, 크기만. 겹침 셈(⑥)과
   //    toProject의 colliding(검토 창 "충돌 n건" = 가져온 직후 배너)이 깎은 뒤의 상자를 보게 여기서 돈다. clash(벽 띠·기둥 덮임 비율)는 그린 상자 그대로다.

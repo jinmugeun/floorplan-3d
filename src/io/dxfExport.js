@@ -20,6 +20,8 @@
 // 2026-10-12 실파일 왕복(가져오기 → 내보내기 → 다시 가져오기 · 리뷰 수정 뒤): 사동중 벽 94 → 93 · 방·실명 14/14 · 문 17 · 창 30 · 통로 5 · 면적 14/14,
 // 신상중 B 벽 77/77 끝점까지 · 통로 17/17, 신상중 A 실명 11/11, 내곡중 벽 116 → 113 · 방 22/22 · 실명 18/18(두꺼운 벽 무리 — 보고서).
 // 두 번째 왕복에서 기둥 크기는 바뀌지 않는다(마감선 오라클 · liningOracle).
+//  - 기구(EQUIP · dxfExportEquip.js · 2026-10-13 계획 14 Task E): 기구 하나 = `EQ-이름-WxDxH@제품` 블록 INSERT — 다시 들여오면 그대로 선다.
+//    opts.equipment === false면 예전처럼 빼고 쓴다.
 // 이 파일은 DOM을 모른다.
 import { dxfDocument, CENTER_LTYPE, PASS_LAYER, num } from './dxfExportTemplate.js';
 import { roomArea } from '../geom/rooms.js';
@@ -28,6 +30,7 @@ import { rectify } from './dxfExportJoints.js';
 import { refDimensions } from './dxfExportDims.js';
 import { DXF_PARAMS } from './dxf/params.js';
 import { findColumns, findPilasters, growLinings } from './dxf/columns.js';
+import { equipExport } from './dxfExportEquip.js';
 
 const D = p => [p[0], -p[1]];                        // 앱 → DXF(y 위)
 const NAME_H = 300, AREA_H = 250;                    // 실명·면적 글자 높이(mm) — roomLabels가 200~600만 실명으로 본다
@@ -180,9 +183,9 @@ function nameLines(name) {
 // project → DXF 텍스트. floor: 층 번호(기본 = 지금 층).
 export const exportDxf = (project, opts = {}) => buildDxf(project, opts).text;
 
-// → { text, uncutPasses }. uncutPasses: 가져오기가 틈을 그 자리·폭으로 읽지 못해 벽을 끊지 않은(블록만 있는) 통로 수. 옛 skippedPasses(다시
-// 들여오면 사라지는 통로 수)는 모든 통로가 PASS 블록으로 돌아온 뒤로 늘 0이라 지웠다(2026-10-12 · 최종 리뷰 X-6 · N3-3).
-export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } = {}) {
+// → { text, uncutPasses, equipment }. uncutPasses: 가져오기가 틈을 그 자리·폭으로 읽지 못해 벽을 끊지 않은(블록만 있는) 통로 수. 옛 skippedPasses(다시
+// 들여오면 사라지는 통로 수)는 모든 통로가 PASS 블록으로 돌아온 뒤로 늘 0이라 지웠다(2026-10-12 · 최종 리뷰 X-6 · N3-3). equipment: 내보낸 기구 INSERT 수.
+export function buildDxf(project, { floor: index = project?.activeFloor ?? 0, equipment = true } = {}) {
   const floor = project?.floors?.[index] ?? project?.floors?.[0] ?? { walls: [], rooms: [], items: [] };
   // 거의 축에 나란한 벽은 정확히 맞춘다(rectify — 1 mm 안팎의 기울기가 다시 들여올 때 T자 접점을 갈라놓았다).
   const walls = rectify((floor.walls ?? []).map(w => ({ id: w.id, a: D(w.a), b: D(w.b), t: Math.max(1, Number(w.thickness) || 200), virtual: !!w.virtual, axisShift: w.axisShift })));
@@ -255,5 +258,6 @@ export function buildDxf(project, { floor: index = project?.activeFloor ?? 0 } =
   if (!any) box.splice(0, 4, 0, 0, 0, 0);
   // ⑤ 기준선 치수(dxfExportDims.js) — 다시 들여온 방의 도면 기준 넓이가 같게.
   const dims = any ? refDimensions(walls.map(w => ({ ...w, a: D(w.a), b: D(w.b) })), box) : { blocks: [], entities: [] };
-  return { text: dxfDocument({ blocks: [...blocks.values(), ...dims.blocks], entities: [...entities, ...dims.entities], box }), uncutPasses: skipped.length };
+  const eq = equipment ? equipExport(floor) : { blocks: [], entities: [], count: 0 };     // ⑥ 기구(EQUIP · dxfExportEquip.js)
+  return { text: dxfDocument({ blocks: [...blocks.values(), ...eq.blocks, ...dims.blocks], entities: [...entities, ...eq.entities, ...dims.entities], box }), uncutPasses: skipped.length, equipment: eq.count };
 }

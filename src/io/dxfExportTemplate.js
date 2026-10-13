@@ -19,11 +19,13 @@ export const num = v => { const r = Math.round((Number(v) || 0) * 1000) / 1000; 
 //  청록 레이어는 내용으로 창호가 된다(layerGuess.refineByContent ①).
 // WALL-2: 나란히 붙은 이웃 벽(띠 사이 틈 ≤ bandGap)의 둘째 벽 레이어 — 가져오기는 **레이어가 겹치지 않는** 두 선 사이 틈(cavityMin 150 이상)에서만
 // 두 벽으로 가른다(bands.groupOffsets). 한 레이어에 다 그리면 붙은 두 벽이 한 띠(두꺼운 벽 하나)가 된다(2026-10-12 내곡중 250 | 150 틈 | 380).
+// EQUIP(2026-10-13 · 계획 14 Task E): 기구 블록 `EQ-…`의 INSERT(dxfExportEquip.js) → 기구('equip' 키 — 벽·개구부 판정 밖). 주황(ACI 30) — 청록이 아니다.
 export const PASS_LAYER = '개구부';
 export const WALL_LAYERS = Object.freeze(['WALL', 'WALL-2']);
 export const EXPORT_LAYERS = Object.freeze([
   { name: 'WALL', color: 7 }, { name: 'WALL-2', color: 7 }, { name: 'COLUMN', color: 8 }, { name: 'OPENING', color: 3 }, { name: PASS_LAYER, color: 1 },
   { name: 'DIVIDER', color: 9 }, { name: 'ROOM', color: 5 }, { name: 'ROOM-TEXT', color: 2 }, { name: 'DIM', color: 6 }, { name: 'TITLE', color: 7 },
+  { name: 'EQUIP', color: 30 },
 ]);
 // 벽 중심선의 선 종류(mm 도면 눈금 · 600 선 100 틈 100 점 100 틈). 다시 들여올 때 선 종류는 보지 않는다.
 export const CENTER_LTYPE = 'CENTER';
@@ -98,7 +100,7 @@ export function dxfDocument({ layers = EXPORT_LAYERS, blocks = [], entities = []
   table(body, 'DIMSTYLE', [th => {
     body.pairs([[0, 'DIMSTYLE'], [105, dimH], [330, th], [100, 'AcDbSymbolTableRecord'], [100, 'AcDbDimStyleTableRecord'], [2, 'Standard'], [70, 0]]);
   }], () => { dimH = h(); return [[100, 'AcDbDimStyleTable'], [71, 1], [340, dimH]]; });
-  // 블록 레코드: *Model_Space · *Paper_Space · 개구부 블록마다 하나. 70 단위(0) · 280 분해 가능 · 281 배율 고정 아님(AC1021).
+  // 블록 레코드: *Model_Space · *Paper_Space · 개구부·기구(EQ-)·치수 블록마다 하나. 70 단위(0) · 280 분해 가능 · 281 배율 고정 아님(AC1021).
   const names = ['*Model_Space', '*Paper_Space', ...blocks.map(b => b.name)];
   const brec = new Map();
   table(body, 'BLOCK_RECORD', names.map(name => th => {

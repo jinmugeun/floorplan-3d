@@ -22,7 +22,11 @@ import { matchEquip, sizeInName, skipReason } from '../src/io/dxf/equipVocab.js'
 import { importSnapshot } from '../src/io/dxfFeedback.js';
 import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
 import { ITEM_RANGE } from '../src/state/schema.js';
-import { productById } from '../src/products/catalog.js';
+import { productById, PRODUCTS } from '../src/products/catalog.js';
+import { equipExport, isExportEquip, EQUIP_TEXT_H } from '../src/io/dxfExportEquip.js';
+import { eqBlockName, parseEqBlock, eqPlacement, eqWalls, EQ_LAYER } from '../src/io/dxf/equipName.js';
+import { blockKindByName } from '../src/io/dxf/blockOpenings.js';
+import { placeOnWall, wallAxis } from '../src/geom/items.js';
 
 let handle;
 beforeAll(async () => {
@@ -92,6 +96,24 @@ function synthetic() {
   return normalizeProject({ ...createEmptyProject('합성 평면'), areaMode: 'center', floors: [{ ...createFloor('1F'), height: 3500, walls, rooms, items }] });
 }
 
+// 기구 픽스처(2026-10-13 · 계획 14 Task E): 합성 평면 + 기구 다섯 — 도면의 일반 상자(운반차) · 90° 돈 세정대 · 사람이 놓은 벽걸이 상부장(서쪽 벽 면,
+// z 1500) · 천장 후드(z = 층고 3500 − 600) · 좌우 뒤집은 냉장고. 층고 3500 = 가져오기 기본 층고(DXF_PARAMS.height)라 천장 z를 맞댈 수 있다.
+function equipFixture() {
+  const p = synthetic(), f = p.floors[0];
+  const west = f.walls.find(w => !w.virtual && Math.abs(w.a[0] + 4000) < 1 && Math.abs(w.b[0] + 4000) < 1);
+  const size = productById('cabinet-upper').size, t = Math.abs(-1500 - west.a[1]) / wallAxis(west).len;
+  const seat = [1, -1].map(side => ({ side, ...placeOnWall(west, t, side, size) })).find(q => q.pos[0] > -4000);
+  const it = (id, patch) => createItem(productById(id), patch);
+  f.items.push(
+    it('equip-generic', { pos: [2000, 1000], size: [1200, 600, 900], name: '운반차', dxfBlock: '운반차', dxfProduct: 'equip-generic' }),
+    it('sink-double', { pos: [-2500, -1000], rot: 90, size: [1500, 750, 850], name: '세정대 2조 1500-750', dxfBlock: '세정대 2조 1500-750', dxfProduct: 'sink-double' }),
+    it('cabinet-upper', { pos: seat.pos, rot: seat.rot, wallId: west.id, t, side: seat.side }),
+    it('hood-box', { pos: [-2000, 1500], z: DXF_PARAMS.height - 600 }),
+    it('fridge-2door', { pos: [2500, -1500], flipH: true }),
+  );
+  return p;
+}
+
 // DXF 텍스트 → (코드, 값) 쌍(코드 줄은 짝수 번째).
 const pairs = txt => { const L = txt.split('\n'), out = []; for (let i = 0; i + 1 < L.length; i += 2) out.push([L[i].trim(), L[i + 1]]); return out; };
 // 종류 type인 엔티티마다 { 코드: 첫 값 }.
@@ -114,8 +136,8 @@ test('머리는 AC1021(UTF-8) · 단위 mm · 섹션 차례 · EOF — 우리 �
   expect(dec.txt).toContain('사무실');
 });
 
-test('핸들은 모두 고유하고 $HANDSEED보다 작으며, 주인(330)은 있는 핸들이다', () => {
-  const ps = pairs(exportDxf(synthetic()));
+test('핸들은 모두 고유하고 $HANDSEED보다 작으며, 주인(330)은 있는 핸들이다(기구 블록 포함)', () => {
+  const ps = pairs(exportDxf(equipFixture()));
   const handles = ps.filter(([c]) => c === '5' || c === '105').map(([, v]) => v);
   const seedAt = ps.findIndex(([c, v]) => c === '9' && v === '$HANDSEED');
   const seed = parseInt(ps[seedAt + 1][1], 16);
@@ -127,7 +149,7 @@ test('핸들은 모두 고유하고 $HANDSEED보다 작으며, 주인(330)은 �
 });
 
 test('엔티티가 쓰는 레이어는 모두 LAYER 표에 있고, 레이어 이름이 가져오기의 역할을 정한다', () => {
-  const ps = pairs(exportDxf(synthetic()));
+  const ps = pairs(exportDxf(equipFixture()));
   const table = new Set(), used = new Set();
   let inLayer = false, section = null;
   ps.forEach(([c, v], i) => {
@@ -141,8 +163,10 @@ test('엔티티가 쓰는 레이어는 모두 LAYER 표에 있고, 레이어 이
   expect(EXPORT_LAYERS.map(l => l.name).every(n => table.has(n))).toBe(true);
   // 역할(io/dxf/classify.js): 벽·기둥은 벽, 문자는 문자, 통로 표시는 개구부, 치수는 치수, 구획선은 난간(구획선으로만 다시 긋는다),
   // 나머지는 기타(기본 체크 밖). DIVIDER → rail은 2026-10-12 최종 리뷰 X-1(왕복에서 난간 구획선이 사라져 발코니가 다시 열렸다).
-  expect(['WALL', 'WALL-2', 'COLUMN', 'ROOM-TEXT', 'TITLE', PASS_LAYER, 'DIM', 'OPENING', 'ROOM', 'DIVIDER'].map(classifyLayer))
-    .toEqual(['wall', 'wall', 'wall', 'text', 'text', 'opening', 'dim', 'other', 'other', 'rail']);
+  // EQUIP(2026-10-13 · 계획 14 Task E)은 기구 — 벽·개구부 판정 밖이고 기본 체크도 아니다(classify 'equip' 키).
+  expect(['WALL', 'WALL-2', 'COLUMN', 'ROOM-TEXT', 'TITLE', PASS_LAYER, 'DIM', 'OPENING', 'ROOM', 'DIVIDER', EQ_LAYER].map(classifyLayer))
+    .toEqual(['wall', 'wall', 'wall', 'text', 'text', 'opening', 'dim', 'other', 'other', 'rail', 'equip']);
+  expect(EXPORT_LAYERS.some(l => l.name === EQ_LAYER && l.color !== 4)).toBe(true);     // 청록(4)이면 내용으로 창호가 될 수 있다(layerGuess)
 });
 
 // 2026-10-12 · 최종 리뷰 X-1: 내보내기는 구획선(virtual)을 DIVIDER에 쓰는데 가져오기가 그 레이어를 '기타'로 버려, 난간으로 닫은 발코니가
@@ -209,9 +233,10 @@ test('입력 도면 안내는 내보내기와 맞는다 — 중심선 조건 · 
 
 // 2026-10-12 · 계획 13 최종 리뷰 F-4: 안내가 기구 배치와 반대로 "기구·가구를 빼 주세요"라 했고(검토 창이 링크하고 설계 사무소에 보내는 페이지다),
 // 정규화 DXF에 기구가 빠진다는 말 · 교정 기록에 기구가 든다는 말 · 기구의 한계가 없었다. 기구 문장을 코드 값으로 고정한다.
-test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 남기기 · 이름 관례 · 끄는 체크 · 정규화 DXF에 없음 · 교정 기록 · 한계', () => {
+test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 남기기 · 이름 관례 · 끄는 체크 · 정규화 DXF의 EQUIP 블록 · 교정 기록 · 한계', () => {
   const html = readFileSync(fileURLToPath(new URL('../public/dxf-guide.html', import.meta.url)), 'utf8');
   const card = cls => html.match(new RegExp(`<div class="card ${cls}">(.*?)</div>`, 's'))?.[1] ?? '';
+  const row = name => html.match(new RegExp(`<tr><td><code>${name}</code></td>(.*?)</tr>`, 's'))?.[1] ?? '';
   // §1: 기구는 남길 것(블록 그대로 · 품명 + W-D) — 안내의 예시 이름이 실제로 제품 + 치수로 읽힌다. 빼 달라는 카드에는 기구가 없다.
   const EXAMPLE = '세정대 2조 1500-750';
   expect(card('keep')).toContain(`<code>${EXAMPLE}</code>`);
@@ -222,11 +247,17 @@ test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 �
   expect(html).toContain(DXF_EQUIPMENT_OPT);                                     // 검토 창의 체크 이름 그대로
   // 바닥 기호는 세우지 않는다(제외 어휘).
   for (const w of ['육가', '그레이팅', '점자블럭']) { expect(html).toContain(w); expect(skipReason(w)).toBe('fixture'); }
-  // §3: 정규화 DXF에는 기구가 들어가지 않는다(dxfExport는 벽·개구부·기둥만 쓴다).
-  expect(html).toContain('정규화 DXF에는 기구가 들어가지 않습니다');
+  // §3: 정규화 DXF에는 기구도 들어간다(2026-10-13 · 계획 14 Task E — 계획 13까지는 "들어가지 않습니다"). EQUIP 줄의 예시 블록 이름이 내보내기 그대로다.
+  expect(html).toContain('정규화 DXF에는 기구도 들어갑니다');
+  expect(html).not.toContain('정규화 DXF에는 기구가 들어가지 않습니다');
   const p = normalizeProject({ ...createEmptyProject('기구'), floors: [{ ...createFloor('1F'), height: 3000, walls: rectWalls([0, 0], [4000, 3000], 200, 3000), rooms: [],
-    items: [createItem(productById('sink-double'), { pos: [2000, 1500], name: EXAMPLE, dxfBlock: EXAMPLE, dxfProduct: 'sink-double' })] }] });
-  expect(exportDxf(p)).not.toContain('세정대');
+    items: [createItem(productById('sink-double'), { pos: [2000, 1500], size: [1500, 750, 850], name: EXAMPLE, dxfBlock: EXAMPLE, dxfProduct: 'sink-double' })] }] });
+  const block = eqBlockName(EXAMPLE, [1500, 750, 850], 'sink-double');
+  expect(block).toBe('EQ-세정대_2조_1500-750-1500x750x850@sink-double');
+  expect(exportDxf(p)).toContain(`\n${block}\n`);
+  expect(row(EQ_LAYER)).toContain(`<code>${block}</code>`);
+  expect(html).toContain('<code>EQ-이름-폭x깊이x높이@제품</code>');
+  expect(html).toContain('다시 가져온 기구는 도면에서 가져온 기구로 셉니다');
   // §4: 교정 기록에는 기구와 원 블록 이름(dxfBlock)이 든다.
   expect(html).toContain('기구(제품·자리·크기와 원 블록 이름)');
   expect(importSnapshot(p.floors[0]).items[0]).toMatchObject({ dxfBlock: EXAMPLE, kind: 'product' });
@@ -365,4 +396,118 @@ test('면적 글자는 표시 방식과 상관없이 벽 중심선 넓이다 —
   expect(label(net)).toEqual(['24.00㎡', '24.00㎡']);
   const A = digest({ project: net }), r = importText(exportDxf(net)), B = digest(r, r.back);
   for (const [n, v] of A.areas) expect(Math.abs(B.areas.get(n) - v)).toBeLessThanOrEqual(0.05);
+});
+
+// ── 기구(2026-10-13 · 계획 14 Task E): 정규화 DXF에 기구를 EQUIP 레이어의 `EQ-이름-WxDxH@제품` 블록 INSERT로 쓰고, 다시 들여오면 그대로 선다.
+// 계획 13까지는 기구를 빼고 써서 CAD 왕복 고리가 기구에서 끊겼다(안내 §3). 형식의 정본은 src/io/dxf/equipName.js다.
+
+test('기구는 EQUIP 레이어의 EQ- 블록 INSERT다 — 자리(y 뒤집기) · 회전(−rot) · 거울(배율 −1) · 전체 이름이 같으면 블록 하나', () => {
+  const p = equipFixture(), f = p.floors[0];
+  // 같은 이름·크기 하나 더(블록을 나눠 쓴다) + 같은 이름·다른 크기(블록이 따로 — 사전 검토 I-6: 이름만으로 나누면 둘째가 첫 크기로 돌아온다)
+  f.items.push(createItem(productById('equip-generic'), { pos: [3000, 1000], size: [1200, 600, 900], name: '운반차' }),
+    createItem(productById('equip-generic'), { pos: [3000, -500], size: [1000, 600, 900], name: '운반차' }));
+  const ps = pairs(exportDxf(p)), eqItems = f.items.filter(isExportEquip);
+  expect(eqItems).toHaveLength(7);                                           // 문·창·통로 여섯과 기둥 하나는 기구가 아니다
+  const ins = ents(ps, 'INSERT').filter(r => r[8] === EQ_LAYER);
+  expect(ins.map(r => r[2])).toEqual(['EQ-운반차-1200x600x900@equip-generic', 'EQ-세정대_2조_1500-750-1500x750x850@sink-double',
+    'EQ-상부장-900x350x700@cabinet-upper', 'EQ-천장형_배기_후드(박스형)-1600x1200x600@hood-box', 'EQ-2도어_냉장고-900x750x1800@fridge-2door',
+    'EQ-운반차-1200x600x900@equip-generic', 'EQ-운반차-1000x600x900@equip-generic']);
+  eqItems.forEach((it, i) => {
+    const r = ins[i];
+    expect(+r[10]).toBeCloseTo(it.pos[0], 3);
+    expect(+r[20]).toBeCloseTo(-it.pos[1], 3);
+    expect(+r[50]).toBeCloseTo((360 - it.rot) % 360, 3);                     // 앱 rot 90(세정대) → DXF 270 · 상부장은 벽 방향
+    expect([+r[41], +r[42]]).toEqual([it.flipH ? -1 : 1, 1]);                // 좌우 뒤집은 냉장고만 x 배율 −1
+  });
+  expect(+ins[1][50]).toBe(270);
+  expect(ents(ps, 'INSERT').filter(r => r[8] === 'OPENING')).toHaveLength(6);   // 문·창·통로 블록은 그대로
+  // 블록: 전체 이름마다 하나(6종) · 도형 = 원점이 가운데인 W × D 닫힌 사각형(레이어 0 — INSERT의 EQUIP을 물려받는다) + 가운데 이름 MTEXT(높이 150 < 실명 200)
+  const eq = equipExport(f);
+  expect([eq.count, eq.blocks.length]).toEqual([7, 6]);
+  expect(eq.blocks.map(b => b.name)).toEqual([...new Set(ins.map(r => r[2]))]);
+  const sink = eq.blocks.find(b => b.name.startsWith('EQ-세정대'));
+  const [poly, text] = sink.entities, val = (e, c) => e.body.filter(([k]) => k === c).map(([, v]) => +v);
+  expect([poly.type, poly.layer, val(poly, 70)[0], val(poly, 10), val(poly, 20)]).toEqual(['LWPOLYLINE', '0', 1, [-750, 750, 750, -750], [-375, -375, 375, 375]]);
+  expect([text.type, text.layer, val(text, 40)[0], val(text, 71)[0], text.body.find(([k]) => k === 1)[1]]).toEqual(['MTEXT', '0', EQUIP_TEXT_H, 5, '세정대 2조 1500-750']);
+  expect(EQUIP_TEXT_H).toBeLessThan(200);
+  // BLOCK_RECORD(이름은 6번째 쌍)와 BLOCK 정의(7번째 쌍)가 블록마다 하나씩 있다(dxfDocument — 핸들·$HANDSEED는 위 핸들 테스트가 본다).
+  const named = (type, k) => ps.flatMap(([c, v], i) => (c === '0' && v === type ? [ps[i + k][1]] : [])).filter(v => v.startsWith('EQ-'));
+  expect(named('BLOCK_RECORD', 5)).toEqual(eq.blocks.map(b => b.name));
+  expect(named('BLOCK', 6)).toEqual(eq.blocks.map(b => b.name));
+  // 끄면 예전처럼 기구 없이 쓴다.
+  const off = buildDxf(p, { equipment: false });
+  expect([off.equipment, off.text.includes('EQ-'), buildDxf(p).equipment]).toEqual([0, false, 7]);
+});
+
+test('EQ- 블록 이름은 오른쪽부터 읽는다 — 금지 글자·공백 치환 · 본체의 - 숫자 @ · 창·문 이름 꼴은 끊는다', () => {
+  expect(parseEqBlock('EQ-세정대_2조_1500-750-1500x750x850@sink-double')).toMatchObject({ name: '세정대 2조 1500-750', size: [1500, 750, 850], productId: 'sink-double' });
+  // 블록 이름에 쓸 수 없는 글자(< > / \ " : ; ? * | , = `)와 공백: `*`·`×`는 x, 나머지는 _ (사동 이름 `600*600` — 사전 검토 I-6). 크기는 mm 정수.
+  const n = eqBlockName('선반 600*600 <A/B>; "x", =`|?\\', [600.4, 600, 1800.6], 'shelf-steel-4');
+  expect(n).toBe('EQ-선반_600x600_A_B_x-600x600x1801@shelf-steel-4');
+  expect(n).not.toMatch(/[<>/\\":;?*|,=`\s]/);
+  expect(parseEqBlock(n)).toMatchObject({ name: '선반 600x600 A B x', size: [600, 600, 1801], productId: 'shelf-steel-4' });
+  // 본체에 `@`·`-WxDxH` 꼴이 있어도 오른쪽 꼬리만 크기·제품이다.
+  expect(parseEqBlock(eqBlockName('랙@2-100x200x300', [10, 20, 30], 'equip-generic'))).toMatchObject({ name: '랙@2-100x200x300', size: [10, 20, 30], productId: 'equip-generic' });
+  // 형식이 아니면 null — 실도면의 `EQ-` 이름(44장에 0개)·보통 블록은 어휘 경로 그대로다.
+  for (const x of ['EQ-1', 'EQ-세정대', 'EQ-a-100x200@b', '세정대 2조 1500-750', '']) expect(parseEqBlock(x)).toBeNull();
+  // 앞머리가 아닌 창·문 이름 꼴('유리문'·'미서기창')은 다시 들여올 때 문·창으로도 서므로 끊는다 — 끊지 않으면 문이다.
+  expect(blockKindByName('EQ-유리문_쇼케이스-1200x600x1800@equip-generic')).toBe('door');
+  const glass = eqBlockName('유리문 쇼케이스', [1200, 600, 1800], 'equip-generic'), sash = eqBlockName('미서기창 선반', [900, 300, 600], 'equip-generic');
+  expect([glass, blockKindByName(glass), blockKindByName(sash)]).toEqual(['EQ-유_리문_쇼케이스-1200x600x1800@equip-generic', null, null]);
+  // 카탈로그 제품은 하나도 끊기지 않고, 다시 읽으면 제품·이름(정리 전 제품명 그대로 — `650×650`의 ×)·크기·부착·z가 제품 값이다.
+  // 어휘가 다른 제품을 가리키는 이름('벽걸이 후드' → 어휘 '후드' = 천장 후드 · '인덕션 3구' → 레인지)은 제품의 부착·z를 쓴다.
+  for (const pr of PRODUCTS.filter(isExportEquip)) {
+    const name = eqBlockName(pr.name, pr.size, pr.id), got = eqPlacement({ name, pos: [0, 0], rot: 0, scale: [1, 1] }, []);
+    expect(blockKindByName(name)).toBeNull();
+    const z = got.patch.attach === 'wall' ? got.v.z : got.patch.z;           // 벽 z는 equipment.js가 벽 자리와 함께 v.z로 준다 · 천장 z는 층고 − 높이
+    expect([pr.id, got.pid, got.patch.name, got.patch.size, got.patch.attach, z])
+      .toEqual([pr.id, pr.id, pr.name, pr.size.map(Math.round), pr.attach, ['wall', 'floorLay'].includes(pr.attach) ? pr.zDefault : 0]);
+  }
+});
+
+test('EQ- 인서트 → 아이템 자리: 회전·거울은 배율 부호로 되돌리고, 부착·z는 이름 어휘가 그 제품(또는 일반 상자)일 때만 어휘다', () => {
+  const rect = (c, w, d, deg) => {
+    const a = deg * Math.PI / 180, u = [Math.cos(a), Math.sin(a)], v = [-u[1], u[0]];
+    const P = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [c[0] + u[0] * w / 2 * i + v[0] * d / 2 * j, c[1] + u[1] * w / 2 * i + v[1] * d / 2 * j]);
+    return P.map((p, i) => ({ a: p, b: P[(i + 1) % 4] }));
+  };
+  // DXF rot 270(앱 rot 90) · x 배율 −1: explode의 rot은 180을 더한 90이다 — 사각형은 인서트 축으로 재서 W·D가 바뀌지 않는다.
+  const got = eqPlacement({ name: 'EQ-2도어_냉장고-900x750x1800@fridge-2door', pos: [100, 200], rot: 90, scale: [-1, 1] }, rect([100, 200], 900, 750, 270), { toApp: p => [p[0], -p[1]] });
+  expect(got.patch).toMatchObject({ name: '2도어 냉장고', pos: [100, -200], rot: 90, size: [900, 750, 1800], flipH: true, flipV: false, attach: 'floor', dxfProduct: 'fridge-2door', dxfBlock: 'EQ-2도어_냉장고-900x750x1800@fridge-2door' });
+  // 일반 상자 + 어휘 벽(워터릴 — 처음 가져올 때처럼 벽 z 1000) · 위생 묶음(maxLong 초과 → 바닥) · 모르는 제품 id → 일반 상자.
+  const one = (name, w = 600, d = 300) => eqPlacement({ name, pos: [0, 0], rot: 0, scale: [1, 1] }, rect([0, 0], w, d, 0));
+  expect(one('EQ-워터릴-600x300x550@equip-generic').v).toMatchObject({ attach: 'wall', z: 1000 });
+  expect(one('EQ-세면기_묶음-2600x1500x200@equip-generic', 2600, 1500).v).toMatchObject({ attach: 'floor', z: 0 });
+  expect(one('EQ-무엇-600x300x500@no-such-product')).toMatchObject({ pid: 'equip-generic', patch: { dxfProduct: 'equip-generic', name: '무엇' } });
+  expect(one('EQ-벽걸이_후드-900x500x600@hood-wall').v).toMatchObject({ attach: 'wall', z: 1500 });
+  expect(one('EQ-1')).toBeNull();
+  // 다시 앉을 벽은 기구 방향과 나란한 것뿐이다(eqWalls) — 구석의 벽걸이 기구를 직각 벽이 가로채지 않게(2026-10-13 실측: 사동 에어커튼 90° · 95 mm).
+  const H = makeWall({ a: [0, 0], b: [4000, 0], thickness: 200, height: 3000 }), V = makeWall({ a: [4000, 0], b: [4000, 3000], thickness: 200, height: 3000 });
+  expect([eqWalls([H, V], 270), eqWalls([H, V], 180.5), eqWalls([H, V], 45)]).toEqual([[V], [H], []]);
+});
+
+test('기구 왕복: 수·중심(≤ 10 mm)·크기·이름·제품·부착·z·회전·거울이 그대로 돌아오고, 기구 선은 벽·방·개구부를 바꾸지 않는다', () => {
+  const P0 = equipFixture(), A = P0.floors[0].items.filter(isExportEquip);
+  const r1 = importText(exportDxf(P0));
+  const got = r => r.project.floors[0].items.filter(i => String(i.dxfBlock ?? '').startsWith('EQ-'));
+  const same = (A, B, back) => {
+    expect(B).toHaveLength(A.length);
+    for (const a of A) {
+      const b = B.find(x => x.productId === a.productId && near(back(x.pos), a.pos, 10));
+      expect([a.name, Boolean(b)]).toEqual([a.name, true]);
+      expect([b.name, b.size, b.attach, Math.round(b.z), b.rot, b.flipH, b.flipV, b.dxfProduct]).toEqual([a.name, a.size, a.attach, Math.round(a.z), a.rot, a.flipH, a.flipV, a.productId]);
+    }
+  };
+  same(A, got(r1), r1.back);
+  expect(r1.stats.equipment).toMatchObject({ placed: 5, generic: 1, anonymous: 0 });
+  expect(['floor', 'wall', 'ceiling'].map(a => got(r1).filter(i => i.attach === a).length)).toEqual([3, 1, 1]);
+  // 벽 부착은 다시 들여온 벽에 앉는다(wallId).
+  expect(got(r1).find(i => i.productId === 'cabinet-upper').wallId).toBeTruthy();
+  // 기구 선(EQUIP 레이어)은 벽 판정에 끼지 않는다 — 기구를 빼고 내보낸 것과 벽·방·개구부·기둥이 같다.
+  const r0 = importText(exportDxf(P0, { equipment: false })), W0 = digest(r0, r0.back), W1 = digest(r1, r1.back);
+  sameWalls(W0, W1, 0.5);
+  expect([W1.rooms, W1.opens.map(o => o.id).sort(), W1.columns.length]).toEqual([W0.rooms, W0.opens.map(o => o.id).sort(), W0.columns.length]);
+  // 두 번째 왕복도 같다(고정점 — r2.back은 r1의 앱 좌표로 되돌린다).
+  const r2 = importText(exportDxf(r1.project));
+  same(got(r1), got(r2), r2.back);
 });
