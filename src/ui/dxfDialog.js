@@ -9,9 +9,10 @@ import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { buildImportMeta } from '../io/dxfFeedback.js';
 import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
-import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_MANY_SHEETS, DXF_UNITS_GUESS, DXF_LAYERS_GUESSED, DXF_TRACE_SKIPPED, DXF_MANY_PLANS, DXF_REGION, DXF_REGION_LABEL, DXF_RECONCILED,
+import { dxfNotes } from './dxfNotes.js';
+import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_TRACE_SKIPPED, DXF_REGION, DXF_REGION_LABEL,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
-  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT } from './messages.js';
+  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_EQUIPMENT_OPT } from './messages.js';
 
 const UNITS = [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4], ['ft', 304.8]];
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
@@ -107,17 +108,8 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     g.innerHTML = summary ? `${esc(DXF_GUIDE_LINE(summary.segs, checked.size))} · <a href="${DXF_GUIDE_HREF}" target="_blank" rel="noopener">${esc(DXF_GUIDE_LINK)}</a>` : '';
   };
   const renderLayers = () => { q('layers').innerHTML = summary ? layerListHtml(summary.layers, checked) : ''; syncPreset(); };
-  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정.
-  const notes = () => {
-    const n = summary?.regions?.length ?? 0;
-    const guessed = summary?.layers?.some(r => r.guessed) || last?.stats?.guessed;
-    const st = last?.stats ?? {}, fixed = (st.dividers || st.annexes) && DXF_RECONCILED(st.dividers ?? 0, st.annexes ?? 0);
-    const byNames = st.nameDividers > 0 && DXF_NAME_DIVIDED(st.nameDividers);
-    const byRails = st.railDividers > 0 && DXF_RAIL_DIVIDED(st.railDividers);       // 2026-10-12 최종 리뷰 X-4: 늘 켜진 난간 구획선도 알린다
-    // 2026-10-12 계획 13 Task 3 · 충돌 수는 앱 배너와 같은 colliding(최종 리뷰 F-3) · 기둥 면에 맞춰 줄인 수(trimmed — 2026-10-13 최종 리뷰 X-3)
-    const eq = st.equipment, equip = eq?.placed > 0 && DXF_EQUIPMENT(eq.placed, eq.product, eq.generic, eq.colliding ?? 0, eq.clash, eq.trimmed);
-    notice([n > 1 && DXF_MANY_PLANS(n), guessed && DXF_LAYERS_GUESSED, summary?.manySheets && DXF_MANY_SHEETS, summary?.unitsGuessed && DXF_UNITS_GUESS, fixed, byRails, byNames, equip].filter(Boolean).join(' / ') || null);
-  };
+  // 알림은 한 줄에 모은다: 도면이 여러 벌 · 벽 레이어를 내용으로 골랐다 · 좌표 범위 · 단위 추정 …(조립과 순서는 dxfNotes.js — 2026-10-13 계획 16).
+  const notes = () => notice(dxfNotes({ summary, stats: last?.stats ?? {} }));
   const regionIdx = () => Number(q('region').value) || 0;
   const km = mm => (mm / 1000).toFixed(1);
   const setHead = () => {
