@@ -53,7 +53,7 @@ export const ATTACH_LABELS = { floor: '바닥에 서있는 제품', floorLay: '�
 const BASE_PRICES = {
   'door-swing-900': 180000, 'door-swing-1000': 190000, 'door-double-1800': 360000, 'door-slide-1500': 420000, 'door-pocket-900': 390000, 'door-slide-900': 300000,
   'window-slide-1200': 260000, 'window-slide-1800': 380000, 'window-fix-600': 140000,
-  'fridge-2door': 1290000, 'fridge-kimchi': 980000, 'range-gas-6': 1850000, 'range-induction': 890000,
+  'fridge-2door': 1290000, 'fridge-kimchi': 980000, 'range-gas-6': 1850000, 'range-gas-3': 1400000, 'range-induction': 890000,
   'oven-built': 1250000, dishwasher: 760000, 'washer-drum': 890000, dryer: 1090000, 'aircon-stand': 1450000,
   'tv-55': 890000, 'hood-wall': 320000,
   'bed-single': 290000, 'bed-super-single': 340000, 'bed-queen': 450000, 'bed-king': 520000, 'mattress-queen': 390000,
@@ -99,6 +99,8 @@ const BASE_PRODUCTS = [
   P('fridge-2door', '2도어 냉장고', 'AP-RF20', '가전', '주방가전', [900, 750, 1800], 'floor', 'fridge', { color: '#dfe3e8', price: 1290000, tags: '냉장고 주방' }),
   P('fridge-kimchi', '김치냉장고', 'AP-RFK', '가전', '주방가전', [700, 750, 1300], 'floor', 'fridge', { color: '#dfe3e8', tags: '냉장고 김치' }),
   P('range-gas-6', '업소용 6구 레인지', 'AP-RG06', '가전', '주방가전', [1200, 750, 850], 'floor', 'range', { color: '#b9c0c7', tags: '레인지 가스 화구 조리' }),
+  // 가스 테이블렌지 3구(2026-10-15 · 계획 15b): S2B 식별번호 24441916(화신주방산업 HTR-1500J · 규격 1500×750×800 · 단가 1,400,000)의 사진으로 만든 첫 생성 모델.
+  P('range-gas-3', '가스 테이블렌지 3구', 'AP-RG03', '가전', '주방가전', [1500, 750, 800], 'floor', 'range', { color: '#b9c0c7', tags: '레인지 가스 화구 조리 테이블 3구', asset: 'range-gas-3' }),
   P('range-induction', '인덕션 3구', 'AP-IN03', '가전', '주방가전', [750, 520, 60], 'floorLay', 'range', { zDefault: 850, color: '#3a4351', tags: '인덕션 쿡탑 조리' }),
   P('oven-built', '빌트인 오븐', 'AP-OV60', '가전', '주방가전', [600, 600, 600], 'floor', 'box', { zDefault: 850, color: '#b9c0c7', tags: '오븐 주방' }),
   P('dishwasher', '식기세척기', 'AP-DW60', '가전', '주방가전', [600, 600, 850], 'floor', 'box', { tags: '식기세척기 주방' }),
@@ -146,7 +148,7 @@ const BASE_PRODUCTS = [
   P('mirror-wall', '벽거울', 'VN-MR', '화장대/거울', '거울', [600, 30, 900], 'wall', 'box', { zDefault: 900, color: '#cfe4ea', tags: '거울 벽거울' }),
   // 주방싱크/욕실
   P('sink-double', '2조 싱크대', 'KS-SK2', '주방싱크/욕실', '싱크', [1800, 750, 850], 'floor', 'sink', { color: '#c6ccd2', tags: '싱크 싱크대 개수대' }),
-  P('sink-single', '1조 싱크대', 'KS-SK1', '주방싱크/욕실', '싱크', [1200, 750, 850], 'floor', 'sink', { color: '#c6ccd2', tags: '싱크 싱크대 개수대' }),
+  P('sink-single', '1조 싱크대', 'KS-SK1', '주방싱크/욕실', '싱크', [1200, 750, 850], 'floor', 'sink', { color: '#c6ccd2', tags: '싱크 싱크대 개수대', asset: 'sink-single' }),   // 생성 모델(S2B 23907341 · 1조 세정대 1200×750×850 · 계획 15b)
   P('washbasin', '세면대', 'BT-WB', '주방싱크/욕실', '위생도구', [600, 500, 850], 'wall', 'sink', { zDefault: 800, color: '#f1f4f6', tags: '세면대 욕실' }),
   P('toilet', '변기', 'BT-TL', '주방싱크/욕실', '위생도구', [400, 700, 800], 'floor', 'box', { color: '#f1f4f6', tags: '변기 욕실' }),
   P('bathtub', '욕조', 'BT-BT', '주방싱크/욕실', '위생도구', [1600, 800, 600], 'floor', 'box', { color: '#f1f4f6', tags: '욕조 욕실' }),

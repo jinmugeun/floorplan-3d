@@ -17,12 +17,12 @@ import { createOrthoView } from './orthoView.js';
 import { cullLabels, createCameraWatch, labelRefreshKind, LABEL_DEBOUNCE_MS } from './labels3d.js';
 import { labelDensity } from '../ui/prefs.js';
 import { createRebuildGate, shaderPrewarm } from './rebuildGate.js';
-import { warmShaders } from './shaderWarm.js'; import { enableAssets, onAssetsReady } from './itemAssets.js';
+import { warmShaders } from './shaderWarm.js'; import { enableAssets, onAssetsReady, setEnvMap } from './itemAssets.js'; import { createEnvMap } from './envMap.js';
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true;
-  container.appendChild(renderer.domElement); enableAssets();   // 실사 에셋은 3D가 있을 때만 받는다(계획 15 Task B — 그 전에는 requestAsset이 no-op)
+  container.appendChild(renderer.domElement); enableAssets(); let envMap = null; try { envMap = createEnvMap(renderer); setEnvMap(envMap); } catch (e) { console.warn(`환경 맵 생략: ${e?.message ?? e}`); }   // 실사 에셋은 3D가 있을 때만 받는다(계획 15 Task B — 그 전에는 requestAsset이 no-op) · 환경 맵은 에셋 재질만(envMap.js · 계획 15b — 금속 생성 모델이 검게 보이지 않게)
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef1f4);
   const persp = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
   const ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, -500, 1000);
@@ -295,5 +295,5 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   return { renderer, scene, controls, setMode, getMode: () => mode, setProjection, applyCameraPreset, applySun, getCamera: () => camera, zoomBy, fit, renderImage: gate.fresh(renderImage), ensureFresh: gate.ensureFresh, getCameraInfo, setTarget, requestRender,
     // 라벨 밀도는 kvp라 sceneSignature에 없다(§17.10). '끔' 진입·이탈만 다시 짓고 나머지는 다시 센다(I-2).
     refreshLabels() { const d = labelDensity(), kind = labelRefreshKind(lastDensity, d); lastDensity = d; if (kind === 'rebuild') gate.invalidate(); else scheduleLabelCull(); requestRender(); },
-    setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: gate.fresh(() => renderer.domElement.toDataURL('image/png')), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); offAssets(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } renderer.dispose(); renderer.domElement.remove(); } };
+    setOrthoView: ov.setOrthoView, clearOrthoView: ov.clearOrthoView, setGizmoMode: m => picker.setGizmoMode(m), getGizmoMode: () => picker.getGizmoMode(), capture: gate.fresh(() => renderer.domElement.toDataURL('image/png')), destroy() { alive = false; clearTimeout(labelTimer); if (raf) { cancelAnimationFrame(raf); raf = 0; } unsub(); unsubUi(); offAssets(); picker.destroy(); bodyDrag?.destroy(); facePicker.destroy(); ro.disconnect(); controls.dispose(); fpCtl.exit(); fp.dispose(); if (group) { scene.remove(group); disposeGroup(group); group = null; } setEnvMap(null); envMap?.dispose(); renderer.dispose(); renderer.domElement.remove(); } };
 }

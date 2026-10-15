@@ -2,7 +2,7 @@
 // 로더는 __setLoader로 바꿔 끼운다: 단위 테스트는 GLB도 네트워크도 건드리지 않는다.
 import { test, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { assetUrl, enableAssets, templateOf, requestAsset, onAssetsReady, assetsVersion, fitClone, __setLoader, __reset } from '../src/view3d/itemAssets.js';
+import { assetUrl, enableAssets, templateOf, requestAsset, onAssetsReady, assetsVersion, fitClone, setEnvMap, __setLoader, __reset } from '../src/view3d/itemAssets.js';
 
 const box = (w, h, d, y0 = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial()); m.position.y = y0 + h / 2; const g = new THREE.Group(); g.add(m); return g; };
 const flush = () => new Promise(r => setTimeout(r, 0));
@@ -97,4 +97,22 @@ test('메시 없는 장면은 실패로 친다 — 템플릿 null · 버전 한 
     expect(unhandled).not.toHaveBeenCalled();
     off();
   } finally { process.off('unhandledRejection', unhandled); }
+});
+test('setEnvMap은 받은 템플릿과 앞으로 받을 템플릿의 재질(배열 포함)에 envMap을 걸고, null이면 떼며, __reset이 지운다(계획 15b — 금속 생성 모델)', async () => {
+  __reset(); enableAssets();
+  const multi = () => { const g = box(1, 1, 1); g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial()])); return g; };
+  __setLoader(() => Promise.resolve(multi()));
+  requestAsset({ id: 'a', asset: 'a' }); await flush(); await flush();
+  const mats = t => { const out = []; t.traverse(o => { if (o.material) out.push(...[].concat(o.material)); }); return out; };
+  expect(mats(templateOf('a')).map(m => m.envMap)).toEqual([null, null, null]);
+  const tex = { isTexture: true, dispose() {} };
+  setEnvMap(tex);                                                              // 이미 받은 템플릿
+  expect(mats(templateOf('a')).map(m => m.envMap)).toEqual([tex, tex, tex]);
+  requestAsset({ id: 'b', asset: 'b' }); await flush(); await flush();         // 앞으로 받는 템플릿
+  expect(mats(templateOf('b')).every(m => m.envMap === tex && m.envMapIntensity === 1)).toBe(true);
+  setEnvMap(null);
+  expect(mats(templateOf('a')).every(m => m.envMap === null)).toBe(true);
+  setEnvMap(tex); __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(1, 1, 1)));
+  requestAsset({ id: 'c', asset: 'c' }); await flush(); await flush();
+  expect(mats(templateOf('c'))[0].envMap).toBeNull();
 });

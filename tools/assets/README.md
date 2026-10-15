@@ -21,7 +21,7 @@
 
 - 파일 `public/models/<제품 id>.glb` 하나(바이너리 glTF 2.0) · 단위 m · 원점 = 바닥 중심(y = 0) · +Y 위 · **정면 +Z**(등받이·헤드보드가 −Z — 2D 심벌·조합 형상과 같다).
 - 축: x = 너비 w · y = 높이 h · z = 깊이 d(카탈로그 size `[w, d, h]` mm).
-- 포장은 **균일 배율**: 가장 큰 축을 카탈로그 size에 맞추고 나머지 축의 fit(맞춘 길이 / 카탈로그 길이)이 **0.85 이상**이어야 통과. 런타임은 아이템 size에 축별로 늘려 맞춘다.
+- 포장은 **균일 배율**: 가장 큰 축을 카탈로그 size에 맞추고 나머지 축의 fit(맞춘 길이 / 카탈로그 길이)이 **0.85 이상**(생성 모델은 **0.75 이상** — 2026-10-15 계획 15b: 사진 한 장 복원의 비율 오차 15~20 %)이어야 통과. 런타임은 아이템 size에 축별로 늘려 맞춘다.
 - 예산: ≤ 1.5 MB · 삼각형 ≤ 10,000 · 텍스처 ≤ 1024² · 확장은 meshopt · 양자화 · WebP 등 허용 목록만(Draco·KTX2 입력은 받지 않는다).
 
 ## 2. 생성 트랙 — 어디서 돌리나
@@ -146,7 +146,7 @@ npm run assets:comfy -- --server … --workflow … --images … --products <목
 1. (`--pack`을 안 줬다면) 포장:
    `npm run assets:pack -- tools/assets/incoming/<id>.glb --product <id> --front +z --source-kind generated --author "ComfyUI TRELLIS.2/Pixal3D 생성" --license "자체 생성물"`
    (사진 출처 URL을 남기려면 `--source-url <URL>`을 더한다. 정면이 틀렸을 때도 생성은 다시 하지 않고 이 명령을 `--front`만 바꿔 다시 돌린다.)
-2. `npm run assets:check` — 종료 0이어야 한다. fit이 걸리면(0.85 미만) 사진 비율·구도를 바꿔 다시 생성하거나 그 제품은 상자로 둔다(특히 얇은 제품: 인덕션 · TV · 매트리스 · 벽거울 · 형광등).
+2. `npm run assets:check` — 종료 0이어야 한다. fit이 걸리면(시드 0.85 · 생성 0.75 미만) 사진 비율·구도를 바꿔 다시 생성하거나 그 제품은 상자로 둔다(특히 얇은 제품: 인덕션 · TV · 매트리스 · 벽거울 · 형광등).
 3. 카탈로그에 `asset: '<id>'`를 단다(`src/products/catalog.js` · `catalogExtra.js` — 값 = 제품 id). 앱은 asset이 있는 제품만 모델을 받으므로 **검수 시트보다 먼저** 단다.
 4. `npm run build` → `npm run assets:snapshot -- --only <id,…>` → `tools/assets/snapshots/<id>.png`.
 5. 검수(사람이 시트를 본다): 정면이 +Z인가(평면도에서 정면이 아래 · 좌측도에서 오른쪽) · 구멍 · 뒤집힌 면 · 비율 · 질감 번짐 · 천장 제품은 윗면이 천장에 닿는가.
@@ -208,3 +208,12 @@ washer-drum,dryer,aircon-stand,tv-55,bed-single,bed-super-single,bed-queen,bed-k
 | `출력에 접두사 3d/<id>의 GLB가 없다` | 저장 노드가 GLB가 아닌 형식으로 썼거나 다른 노드의 접두사를 바꿨다 — 오류 문구의 "찾은 것"과 저장 노드 설정(GLB)을 본다 |
 | `assets:check`의 `fit` | 사진의 비율 · 구도가 카탈로그 size와 다르다 — 정면 사진으로 다시, 또는 상자로 둔다 |
 | 시트에서 정면이 뒤 | 다시 생성하지 말고 `assets:pack`을 `--front -z`로(7절 1번) — 일괄 전체가 그렇다면 `assets:comfy`에 `--front -z` |
+
+## 11. 2026-10-15 첫 실행 기록(계획 15b)
+
+- 서버: 사용자 GPU 서버의 컨테이너 gpu-comfy(RTX 5070 Ti 16 GB · ComfyUI 0.40.0 · http://192.168.11.65:8188). 모델 7개는 `C:\comfy\ComfyUI\models`.
+- 워크플로: 템플릿을 화면에서 열어 4절 값으로 바꾼 뒤 `app.graphToPrompt().output`으로 뽑은 `comfy-workflow.api.json`(Pixal3D) · `comfy-workflow-trellis2.api.json`(TRELLIS.2). **안 쓰는 쪽 UNETLoader와 스위치 노드를 지운 57노드 버전** — 둘 다 두면 16 GB에서 첫 실행이 OOM(KSampler)이었다.
+- 비교(시드 렌더 입력): TRELLIS.2 채택 — 의자 fit [0.85, 1, 0.96] · 식탁 [0.98, 1, 0.97]. Pixal3D는 기울고 비율이 깨졌다([0.42~0.83]).
+- 실사진(S2B) 5종: 가스레인지·세정대 좋음, 바닥 그림자가 있는 사진은 넓은 바닥판이 붙고, 합성 사진(두 대 + 열린 문)은 덩어리가 갈라진다 — 제품 하나 · 바닥 그림자 없음 · 콜라주 아님을 고른다.
+- 생성 모델은 metallic 1 + MR 텍스처라 **환경 맵이 없으면 검게** 보인다 — 앱은 에셋 재질에만 RoomEnvironment PMREM을 건다(`src/view3d/envMap.js`).
+- 첫 배포: `range-gas-3`(가스 테이블렌지 3구 · S2B 24441916) · `sink-single`(1조 세정대 · S2B 23907341). 원본 GLB·비교 렌더는 `tools/assets/incoming/s2b-trellis2/`(커밋 안 함)와 `.superpowers/sdd/scratch/p15-gen/compare/`.
