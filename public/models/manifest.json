@@ -226,6 +226,51 @@
       "sha256": "dd4f4cc63ddbee61572213eed061b407cf6a5875870810889154224703023f40",
       "packedAt": "2026-10-13T09:22:43.190Z"
     },
+    "range-gas-3": {
+      "id": "range-gas-3",
+      "bytes": 624392,
+      "tris": 7901,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1500,
+        750,
+        800
+      ],
+      "fit": [
+        0.8257,
+        1,
+        0.8512
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/01/24/202601246554971_1769236508956.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI TRELLIS.2 생성(S2B 24441916 사진)"
+      },
+      "sha256": "730c9eef8070a908932a94d4b75bcd9445f101f797cc40bb5dd4315c57229fc0",
+      "packedAt": "2026-10-15T03:10:50.426Z"
+    },
     "side-table": {
       "id": "side-table",
       "bytes": 275296,
@@ -270,6 +315,51 @@
       },
       "sha256": "181d2a6986f9325918a190bfeb60f6f50fe3d06bbb9fe524d430a0eadad3c06c",
       "packedAt": "2026-10-13T09:22:41.671Z"
+    },
+    "sink-single": {
+      "id": "sink-single",
+      "bytes": 387508,
+      "tris": 7807,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1200,
+        750,
+        850
+      ],
+      "fit": [
+        1,
+        0.7992,
+        0.812
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/20/202608209273322_1787210564264.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI TRELLIS.2 생성(S2B 23907341 사진)"
+      },
+      "sha256": "643bb17cde6949b82c3c47e508b26a89f34a167cab6c1bfacacb921079e4c9bc",
+      "packedAt": "2026-10-15T03:10:50.947Z"
     },
     "sofa-3": {
       "id": "sofa-3",

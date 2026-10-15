@@ -378,8 +378,11 @@ describe('view3d 배선', () => {
   // 계획 15 Task B · 사전 검토 I-3 · I-12: 에셋 도착은 서명 밖의 사유다 — 문을 강제로 열고(invalidate) 그리기를 따로 요청한다
   // (보이는 동안 invalidate는 짓기만 하고, 재빌드 뒤 그리기는 라벨이 있을 때만 걸렸다 → 라벨 없는 장면에서 모델이 카메라를 움직일 때까지 안 나왔다).
   test('에셋: 렌더러를 만들 때 켜고, 도착하면 문을 강제로 열고 그리기를 요청하며, destroy가 구독을 푼다', () => {
-    expect(v3).toMatch(/import \{ enableAssets, onAssetsReady \} from '\.\/itemAssets\.js';/);
+    expect(v3).toMatch(/import \{ enableAssets, onAssetsReady, setEnvMap \} from '\.\/itemAssets\.js'; import \{ createEnvMap \} from '\.\/envMap\.js';/);
     expect(v3).toMatch(/container\.appendChild\(renderer\.domElement\); enableAssets\(\);/);
+    // 환경 맵(계획 15b): 렌더러 바로 뒤에 한 번 만들어 에셋 재질에 걸고(실패해도 3D는 뜬다), destroy가 떼고 버린다.
+    expect(v3).toMatch(/enableAssets\(\); let envMap = null; try \{ envMap = createEnvMap\(renderer\); setEnvMap\(envMap\); \} catch/);
+    expect(v3).toMatch(/destroy\(\) \{[^\n]*setEnvMap\(null\); envMap\?\.dispose\(\); renderer\.dispose\(\);/);
     expect(v3).toMatch(/const offAssets = onAssetsReady\(\(\) => \{ gate\.invalidate\(\); requestRender\(\); \}\);/);
     expect(v3).toMatch(/destroy\(\) \{[^\n]*\boffAssets\(\);/);
   });

@@ -38,7 +38,12 @@ test('checkManifestEntry: 예산 안이면 ok, 넘거나 fit이 0.85 미만이�
   expect(checkManifestEntry(bad).problems).toEqual(expect.arrayContaining(['bytes', 'tris', 'texture', 'fit', 'extension:KHR_materials_pbrSpecularGlossiness']));
   for (const fit of [[], [NaN, 1, 1], undefined]) expect(checkManifestEntry({ ...ok, fit }).problems, String(fit)).toContain('fit');
   for (const t of [{ format: 'image/webp' }, { w: 512, h: 512, format: 'image/png' }]) expect(checkManifestEntry({ ...ok, textures: [t] }).problems, t.format).toContain('texture');
-  expect(ASSET_BUDGET).toEqual({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85 });
+  expect(ASSET_BUDGET).toEqual({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85, fitMinGenerated: 0.75 });
+  // 생성 모델(계획 15b)은 하한 0.75 — 시드는 0.85 그대로.
+  const gen = { ...ok, fit: [1, 0.8, 0.78], source: { kind: 'generated', url: null, license: '자체 생성물', author: 'ComfyUI TRELLIS.2 생성' } };
+  expect(checkManifestEntry(gen)).toEqual({ ok: true, problems: [] });
+  expect(checkManifestEntry({ ...gen, fit: [1, 0.74, 1] }).problems).toContain('fit');
+  expect(checkManifestEntry({ ...ok, fit: [1, 0.8, 0.78] }).problems).toContain('fit');
 });
 
 // 검수 시트 격자(2026-10-13 · 계획 15 Task D): snapshot.mjs가 제품마다 여섯 장(투영 앞·뒤·좌·위 + 원근 앞·뒤 비스듬히)을 한 장으로 붙일 때 쓴다.
