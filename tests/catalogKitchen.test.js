@@ -147,4 +147,41 @@ describe('기존 id → 엑셀 제품 대응', () => {
       expect(productById(kitchenFit(p.id, [p.size[0] * 1.2, p.size[1], p.size[2]])).equip.heat, `${p.id} 폭 1.2배`).toBe(p.equip.heat);
     }
   });
+
+  test('kitchenFit(id, 크기, 도면 이름): 이름의 N조·N구·N도어·N단·N찬을 지킨다 — 크기가 딱 맞는 다른 조 수로 바뀌지 않는다', () => {
+    const one = LEGACY_TO_KITCHEN['sink-single'], two = LEGACY_TO_KITCHEN['sink-double'], sink = [1500, 750, 850];
+    expect(productById(kitchenFit(two, sink)).name).toMatch(/2조/);                                  // 이름 없이는 크기가 딱 맞는 2조 자신
+    expect(productById(kitchenFit(two, sink, '세정대 1조 1500-750')).name).toMatch(/1조/);
+    expect(productById(kitchenFit(one, sink, '세정대 1조 1500-750')).name).toMatch(/1조/);
+    expect(productById(kitchenFit(one, sink)).name).toMatch(/1조/);                                  // 이름 없이는 1조 1500
+    expect(productById(kitchenFit(one, sink, '세정대 2조 1500-750')).name).toMatch(/2조/);
+    expect(productById(kitchenFit(two, sink, '세정대 2조 1500-750')).name).toMatch(/2조/);
+    expect(productById(kitchenFit(one, sink, '세정대 2 조 1500-750')).name).toMatch(/2조/);           // 띄어 써도 같다
+    expect(productById(kitchenFit(one, [750, 1500, 850], '세정대 2조')).name).toMatch(/2조/);         // 돌린 크기도
+    const fridge = LEGACY_TO_KITCHEN['fridge-2door'];
+    expect(productById(kitchenFit(fridge, [1260, 800, 1910], '냉장고 4도어 1100L 1260-850')).name).toMatch(/4도어/);
+    expect(productById(kitchenFit(fridge, [1600, 800, 1910])).name).toMatch(/6도어/);                // 폭 1600은 6도어(1900)에 더 가깝다
+    expect(productById(kitchenFit(fridge, [1600, 800, 1910], '냉장고 4도어 1600-800')).name).toMatch(/4도어/);
+    const ind = LEGACY_TO_KITCHEN['range-induction'];
+    expect(productById(kitchenFit(ind, [1500, 750, 970])).name).toMatch(/2구/);                      // 같은 크기 낮은 2구가 앞 행
+    const ind3 = productById(kitchenFit(ind, [1500, 750, 970], '렌지 인덕션 3구 1500x750'));
+    expect(ind3.name).toMatch(/3구/);
+    expect(ind3.equip.heat).toBe('electric');
+    const gas = productById(kitchenFit(LEGACY_TO_KITCHEN['range-gas-3'], [1500, 750, 800], '가스렌지 2구'));
+    expect(gas.name).toMatch(/2구/);                                                                // 열원은 그대로 — 가스 2구
+    expect(gas.equip.heat).toBe('gas');
+  });
+
+  test('kitchenFit: 이름의 선택 수를 다 가진 후보가 없거나(9조) 선택 수가 없으면 이름을 무시한다 — 이름 없는 호출과 같다', () => {
+    const one = LEGACY_TO_KITCHEN['sink-single'], two = LEGACY_TO_KITCHEN['sink-double'];
+    const fridge = LEGACY_TO_KITCHEN['fridge-2door'], ind = LEGACY_TO_KITCHEN['range-induction'];
+    for (const [id, s, name] of [
+      [one, [1500, 750, 850], '세정대 9조 1500-750'], [two, [1500, 750, 850], '세정대 9조'], [two, [1500, 750, 850], '세정대 1500-750'],
+      [two, [1500, 750, 850], '세정대 1조 2조'], [fridge, [1260, 800, 1910], '냉장고 3도어 1260-800'], [fridge, [1600, 800, 1910], '냉장고 1100L'],
+      [ind, [1500, 750, 970], '인덕션렌지 1500x750'], [ind, [1500, 750, 970], '렌지 3찬'], [one, [1500, 750, 850], ''], [one, [1500, 750, 850], null],
+    ]) expect(kitchenFit(id, s, name), `${id} ${name}`).toBe(kitchenFit(id, s));
+    expect(kitchenFit('equip-generic', [1000, 600, 850], '세정대 1조')).toBe('equip-generic');
+    expect(kitchenFit(two, null, '세정대 1조')).toBe(two);
+    for (const p of KITCHEN_PRODUCTS) expect(kitchenFit(p.id, p.size, p.name), p.id).toBe(p.id);   // 자기 크기·자기 이름이면 자기 자신
+  });
 });
