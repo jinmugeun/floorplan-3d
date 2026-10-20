@@ -54,19 +54,23 @@ describe('설비 기본값', () => {
   });
 });
 
-describe('환기 설비 카탈로그', () => {
-  test('카테고리 환기 설비가 하위 5개와 함께 있고 제품은 17개다', () => {
-    const cat = CATEGORIES.find(c => c.name === '환기 설비');
-    expect(cat.subs).toEqual(['후드', '조리기구', '디퓨저', '팬', '환기캡']);
-    const list = PRODUCTS.filter(p => p.category === '환기 설비');
-    expect(list).toHaveLength(17);
-    expect(EQUIP_PRODUCT_IDS).toHaveLength(17);
-    expect(new Set(list.map(p => p.id))).toEqual(new Set(EQUIP_PRODUCT_IDS));
-    expect(productsIn('환기 설비', '후드')).toHaveLength(2);
-    expect(productsIn('환기 설비', '조리기구')).toHaveLength(7);
-    expect(productsIn('환기 설비', '디퓨저')).toHaveLength(3);
-    expect(productsIn('환기 설비', '팬')).toHaveLength(3);
-    expect(productsIn('환기 설비', '환기캡')).toHaveLength(2);
+// 2026-10-20 · 계획 17 Task 3: '환기 설비' 카테고리는 없어졌다 — 후드는 엑셀 '상업용주방후드'(칩 '후드·환기'), 조리기구는 엑셀 조리 칩,
+// 디퓨저·팬·환기캡은 남는 기존 제품으로 '후드·환기' 칩의 끝 하위 셋이다. 옛 후드·조리기구 9종은 숨김 단종(옛 프로젝트의 풍량 그대로).
+describe('설비 카탈로그', () => {
+  test('후드·환기 칩: 엑셀 후드 + 디퓨저 3 · 팬 3 · 환기캡 2 — 설비 id 목록은 kind equipment 전부다', () => {
+    const cat = CATEGORIES.find(c => c.name === '후드·환기');
+    expect(cat.subs).toContain('상업용주방후드');
+    expect(cat.subs.slice(-3)).toEqual(['디퓨저', '팬', '환기캡']);
+    expect(productsIn('후드·환기', '상업용주방후드').length).toBeGreaterThanOrEqual(20);
+    expect(productsIn('후드·환기', '상업용주방후드').every(p => p.equip?.type === 'hood')).toBe(true);
+    expect(productsIn('후드·환기', '디퓨저')).toHaveLength(3);
+    expect(productsIn('후드·환기', '팬')).toHaveLength(3);
+    expect(productsIn('후드·환기', '환기캡')).toHaveLength(2);
+    expect(new Set(EQUIP_PRODUCT_IDS)).toEqual(new Set(PRODUCTS.filter(p => p.kind === 'equipment').map(p => p.id)));
+    for (const id of ['hood-box', 'hood-box-filter', 'range-gas-high', 'ricecooker-gas', 'soup-kettle', 'wok-kettle', 'griddle-electric', 'steamer-combi', 'dishwasher-conveyor']) {
+      expect(EQUIP_PRODUCT_IDS, id).toContain(id);
+      expect(productById(id).hidden, id).toBe(true);
+    }
   });
 
   test('설비 제품은 kind가 equipment이고 equip 씨앗·심벌·단가를 갖는다', () => {
@@ -75,7 +79,8 @@ describe('환기 설비 카탈로그', () => {
       expect(p.kind, id).toBe('equipment');
       expect(EQUIP_TYPES, id).toContain(p.equip.type);
       expect(SYMBOL_NAMES, id).toContain(p.symbol);
-      expect(p.price, id).toBeGreaterThan(0);
+      expect(p.price, id).toBeGreaterThanOrEqual(0);
+      if (!id.startsWith('k-')) expect(p.price, id).toBeGreaterThan(0);   // 기존 설비는 정적 단가 · 엑셀은 단가 0인 행도 있다
     }
     expect(productById('hood-box-filter').equip).toMatchObject({ type: 'hood', filter: true, faceVelocity: 0.7 });
     expect(productById('ventcap-150').attach).toBe('wall');

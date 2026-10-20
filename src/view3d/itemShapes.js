@@ -28,6 +28,13 @@ export const ITEM_MATERIALS = {
   '환기 설비': { color: '#c6ccd2', roughness: 0.35, metalness: 0.55 },
   // 2026-10-12 · 계획 13 Task 2: DXF 기구 블록의 일반 상자(equip-generic) — 계획의 회색 #cfd4da 그대로(급식 기구는 대개 스테인리스라 약간의 금속도).
   '도면 기구': { color: '#cfd4da', roughness: 0.6, metalness: 0.2 },
+  // 2026-10-20 · 계획 17 Task 3: 엑셀 칩 9개 + 건축 요소. 엑셀 제품은 3D에서 스테인리스 형상(view3d/shapes)으로 서서 이 표를 거의 쓰지 않지만,
+  // 남는 기존 제품(문·창·기둥 → 건축 요소 · 디퓨저·팬·환기캡 → 후드·환기)이 카테고리 색을 읽는다(형상 없는 심벌의 조합 형상·상자).
+  '조리': { color: '#c6ccd2', roughness: 0.35, metalness: 0.5 }, '세척·소독': { color: '#c6ccd2', roughness: 0.35, metalness: 0.5 },
+  '냉장·냉동': { color: '#c6ccd2', roughness: 0.35, metalness: 0.5 }, '싱크·조리대': { color: '#c6ccd2', roughness: 0.3, metalness: 0.5 },
+  '배식': { color: '#c6ccd2', roughness: 0.35, metalness: 0.5 }, '후드·환기': { color: '#c6ccd2', roughness: 0.35, metalness: 0.55 },
+  '운반·보관': { color: '#c6ccd2', roughness: 0.4, metalness: 0.45 }, '가구·사무': { color: '#d8c9b4', roughness: 0.7, metalness: 0 },
+  '위생·기타': { color: '#c6ccd2', roughness: 0.4, metalness: 0.45 }, '건축 요소': { color: '#b6bdc4', roughness: 0.9, metalness: 0 },
 };
 export const ITEM_MATERIAL_DEFAULT = { color: ITEM_BASE_COLOR, roughness: 0.8, metalness: 0 };
 
