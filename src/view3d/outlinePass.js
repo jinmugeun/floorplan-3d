@@ -5,6 +5,7 @@
 // 감싸 두면 화면 프레임·1인칭·2D 투영·렌더샷(renderImage)이 같은 renderer.render(scene, cam) 줄 그대로 윤곽선을 탄다.
 // 감싼 함수는 화면(렌더 타깃 null)에 장면(Scene)을 그릴 때만 합성한다 — 다른 타깃·compile·shaderWarm은 원래 함수 그대로.
 // ②에서 빼는 것: 스프라이트(라벨)·점(labelDots)·선(충돌 상자·밑동 윤곽·기즈모 선)·투명 재질(유리·반투명 벽)·보이지 않는 재질·기즈모 뿌리.
+// ④ 겹침(Task 6 리뷰 Fix 1): 라벨·점·기즈모는 ①에서 빼고 ③ 합성 뒤 화면에 한 번 더 그린다 — ①에 그리면 ③이 라벨 뒤 모서리 선을 라벨 판·글자 위에 긋는다.
 import * as THREE from 'three';
 import { perfSettings } from './perfMode.js';
 
@@ -21,6 +22,18 @@ export function skipInNormalPass(o) {
   if (!m) return false;
   const list = Array.isArray(m) ? m : [m];
   return list.some(x => x.transparent || x.visible === false);
+}
+
+// ④ 겹침인가: 라벨 Sprite · 접힌 점 Points · 기즈모 뿌리 — 모두 depthTest false라 깊이 버퍼 없이 합성 위에 그려도 그림이 같다.
+export const isOverlay = o => !!(o.isSprite || o.isPoints || o.isTransformControlsRoot);
+
+// 보이는 겹침 뿌리(over — 그 아래는 훑지 않는다: 기즈모 손잡이 메시)와 그 밖의 보이는 메시·선(rest)을 한 번에 모은다.
+// 겹침은 메시 아래에 달리지 않는다(라벨·점은 층 그룹의 labels 그룹, 기즈모 뿌리는 scene 바로 아래) — rest를 숨겨도 겹침이 함께 숨지 않는다.
+function splitOverlay(o, over, rest) {
+  if (!o.visible) return;
+  if (isOverlay(o)) { over.push(o); return; }
+  if (o.isMesh || o.isLine) rest.push(o);
+  for (const c of o.children) splitOverlay(c, over, rest);
 }
 
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
@@ -53,7 +66,7 @@ export function installOutline(renderer, { enabled = () => true } = {}) {
   });
   const quadScene = new THREE.Scene(); quadScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), quadMat));
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const hidden = [];
+  const hidden = [], over = [], rest = [];
 
   function targets(w, h) {
     if (rtColor && rtColor.width === w && rtColor.height === h) return;
@@ -69,6 +82,8 @@ export function installOutline(renderer, { enabled = () => true } = {}) {
     renderer.getDrawingBufferSize(size);
     const w = Math.max(1, Math.floor(size.x)), h = Math.max(1, Math.floor(size.y));
     targets(w, h);
+    splitOverlay(scene, over, rest);
+    for (const o of over) o.visible = false;                         // ①·②에는 겹침이 없다(④가 그린다)
     renderer.setRenderTarget(rtColor); raw(scene, camera);
     // ② 법선·깊이: 그림자 맵은 ①이 이미 갱신했다 — 다시 그리지 않는다
     const auto = renderer.shadowMap.autoUpdate, bg = scene.background, ov = scene.overrideMaterial;
@@ -86,6 +101,19 @@ export function installOutline(renderer, { enabled = () => true } = {}) {
     u.tColor.value = rtColor.texture; u.tNormal.value = rtNormal.texture; u.tDepth.value = rtNormal.depthTexture;
     u.nres.value.set(rtNormal.width, rtNormal.height); u.near.value = camera.near; u.far.value = camera.far; u.ortho.value = camera.isOrthographicCamera ? 1 : 0;
     renderer.setRenderTarget(null); raw(quadScene, quadCam);
+    // ④ 겹침: 라벨·점·기즈모만 보이게 하고 화면에 덧그린다 — 지우지 않고(autoClear false), 배경 없이(색 배경은 autoClear와 상관없이 지운다),
+    // 그림자 맵은 다시 그리지 않는다. 조명은 그대로 두어 프로그램 키(조명 수)가 예열·이전과 같다.
+    if (over.length) {
+      const ac = renderer.autoClear, bg4 = scene.background, auto4 = renderer.shadowMap.autoUpdate;
+      for (const o of rest) o.visible = false;
+      for (const o of over) o.visible = true;
+      renderer.autoClear = false; scene.background = null; renderer.shadowMap.autoUpdate = false;
+      raw(scene, camera);
+      renderer.autoClear = ac; scene.background = bg4; renderer.shadowMap.autoUpdate = auto4;
+      for (const o of rest) o.visible = true;
+    }
+    for (const o of over) o.visible = true;
+    over.length = 0; rest.length = 0;
   };
   renderer.dispose = () => { dispose(); rawDispose(); };
   function dispose() { rtColor?.dispose(); rtNormal?.dispose(); rtNormal?.depthTexture?.dispose(); rtColor = rtNormal = null; normalMat.dispose(); quadMat.dispose(); }
