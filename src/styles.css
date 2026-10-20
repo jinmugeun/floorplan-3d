@@ -295,6 +295,6 @@ button.primary, .primary { background: var(--accent); color: var(--on-accent); b
 .dxf-progress .bar { flex: 1; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
 .dxf-progress .bar i { display: block; height: 100%; background: #1f5fd0; width: 0; }
 .dxf-col canvas { width: 100%; height: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; }
-/* 라이브러리 '전체' 묶음 그리드 · 속성 패널 제품 안내(2026-10-20 · 계획 17 Task 4). #panel h3 · #panel button 규칙보다 세게 하려고 #panel을 붙인다 */
+/* 라이브러리 '전체' 묶음 그리드 · 속성 패널 제품 안내(2026-10-20 · 계획 17 Task 4). #panel .lib-group h3(1,1,1)는 #panel h3(1,0,1)보다 세다. #panel button.lib-more(1,1,1)는 #panel button:not(.primary)(1,1,1)와 비기고 순서로만 이기므로 그 규칙(28행)보다 뒤에 있어야 한다 */
 .lib-group { margin-bottom: 10px; } #panel .lib-group h3 { margin: 6px 0 4px; font-size: 12px; } #panel .lib-group h3 .muted { font-weight: normal; font-size: 11px; }
 #panel button.lib-more { margin-top: 4px; width: 100%; justify-content: center; font-size: 11px; padding: 4px; } .product-note { margin: 6px 0 4px; }

@@ -3,7 +3,7 @@ import { symbolSvg } from '../products/symbols.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
 import { chipsHtml, wasChipFocused, refocusChip } from './libraryChips.js';
-import { LIB_TAB_KITCHEN, LIB_MORE } from './messages.js';
+import { LIB_TAB_KITCHEN, LIB_MORE, LIB_MORE_LABEL } from './messages.js';
 
 const key = id => `fav:${id}`;
 // 즐겨찾기는 프로젝트 파일이 아니라 브라우저에 남긴다(계정이 없으므로). 저장이 막힌 브라우저에서도 죽지 않는다.
@@ -39,8 +39,7 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     if (st.q.trim()) return sortProducts(searchProducts(st.q), st.sort);       // 검색은 항상 전체 검색(명세 LB-03)
     if (st.tab === 'fav') return sortProducts(favProducts(), st.sort);
     if (st.tab === 'placed') { const m = placedCounts(); return sortProducts(PRODUCTS.filter(p => m.has(p.id)), st.sort); }
-    // §15.8: 필터가 없으면 "전체" 그리드다(타일은 카테고리 순, 그 안에서 현재 정렬 기준).
-    if (!st.category) return CATEGORIES.flatMap(c => sortProducts(productsIn(c.name), st.sort));
+    // 칩이 없는 '전체'(§15.8)는 여기 오지 않는다 — renderList가 groupedHtml()로 먼저 그린다(계획 17 Task 4).
     return sortProducts(productsIn(st.category, st.sub), st.sort);
   }
   function tileHtml(p, count) {
@@ -76,7 +75,7 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
       const more = list.length - GRID_PER_CHIP;
       return `<div class="lib-group"><h3>${esc(c.name)} <span class="muted">${list.length}</span></h3>
         <div class="tiles">${list.slice(0, GRID_PER_CHIP).map(p => tileHtml(p)).join('')}</div>
-        ${more > 0 ? `<button type="button" class="lib-more" data-more="${esc(c.name)}">${esc(LIB_MORE(more))}</button>` : ''}</div>`;
+        ${more > 0 ? `<button type="button" class="lib-more" data-more="${esc(c.name)}" aria-label="${esc(LIB_MORE_LABEL(c.name, more))}">${esc(LIB_MORE(more))}</button>` : ''}</div>`;
     }).join('');
   }
   function renderList() {
@@ -110,7 +109,15 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
       return;
     }
     const more = ev.target.closest('[data-more]');
-    if (more) { st.category = more.dataset.more; st.sub = null; render(); return; }
+    // [더 보기]도 목록을 통째로 새로 그린다: 키보드로 눌렀으면 새로 켜진 칩으로 포커스를 옮기고, 깊은 묶음에서
+    // 눌러 #panel이 아래로 내려가 있어도 칩 행이 다시 보이게 한다(계획 17 Task 4 리뷰 I-1·I-2).
+    if (more) {
+      const had = document.activeElement === more;
+      st.category = more.dataset.more; st.sub = null; render();
+      try { part('chips').scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }
+      refocusChip(part('chips'), st.category, had);
+      return;
+    }
     const sub = ev.target.closest('[data-sub]');
     if (sub) { st.sub = sub.dataset.sub || null; render(); return; }
     const tile = ev.target.closest('.tile');

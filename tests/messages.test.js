@@ -8,6 +8,7 @@ import { TEMPLATE_REPLACE_WARN, TEMPLATE_FILTER_RESET, CONFIRM_TEMPLATE_DELETE, 
 import { FIRST_ROOM_HINT, WALL_ITEM_SLIDE_HINT } from '../src/ui/messages.js';
 import { DUCT_DRAWN, DUCT_NO_SYSTEM } from '../src/ui/messages.js';
 import { DRAW_CHAIN_HINT, TYPED_DIM_HINT, DRAW_DIR_HINT } from '../src/ui/messages.js';
+import { LIB_MORE, LIB_MORE_LABEL } from '../src/ui/messages.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -257,4 +258,10 @@ test('DXF 알림·진행 문구는 §18.6이 적은 글자 그대로다', async 
     .toEqual(['파일 읽는 중', '도면 해석 중 (블록 1009개)', '벽 찾는 중', '방 만드는 중']);
   expect(m.DXF_PHASE_STEP).toEqual({ decode: 1, parse: 2, explode: 2, walls: 3, rooms: 4, trace: 4 });
   expect([m.DXF_BADGE_OFF, m.DXF_BADGE_HATCH]).toEqual(['꺼진 레이어', '해치(벽 채움)']);
+});
+
+// 계획 17 Task 4 리뷰: [더 보기] 버튼은 보이는 글자에 칩 이름이 없다 — 접근성 이름에는 칩 이름을 앞에 붙인다.
+test('라이브러리 [더 보기] 글자와 접근성 이름', () => {
+  expect(LIB_MORE(143)).toBe('더 보기 (143)');
+  expect(LIB_MORE_LABEL('세척·소독', 143)).toBe('세척·소독 더 보기 (143)');
 });

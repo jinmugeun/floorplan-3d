@@ -238,6 +238,7 @@ export const PATH_FP_HINT = '1인칭 위치를 먼저 찍거나 [Esc]로 취소�
 // 제품 라이브러리·속성 패널(2026-10-20 · 계획 17 Task 4). 탭 이름은 카탈로그가 식별번호 엑셀 급식기구로 바뀌어 '오늘의집 제품'에서 바뀌었다.
 export const LIB_TAB_KITCHEN = '급식기구';
 export const LIB_MORE = n => `더 보기 (${n})`;
+export const LIB_MORE_LABEL = (cat, n) => `${cat} ${LIB_MORE(n)}`;   // 버튼의 접근성 이름: 보이는 글자에는 칩 이름이 없다(리뷰)
 export const PRODUCT_LEGACY_NOTE = '단종 제품 — 엑셀 제품으로 바꿔 주세요';
 export const PRODUCT_DRAWN_NOTE = '도면에서 가져온 기구 — 제품을 고르면 견적에 듭니다';
 export const PRODUCT_REPLACE = '제품 교체';
