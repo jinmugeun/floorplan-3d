@@ -251,8 +251,10 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
   // dispatch **앞에서** 센다(최종 리뷰 I-3c): 자리를 못 얻은 벽 제품은 keep에서 떨어지므로,
   // 실제로 놓이는 것이 하나도 없는지는 이 계산을 지나야 알 수 있다(made만 보면 알 수 없다 —
   // 포화된 방에 [기존 제품 유지하고 추가]를 하면 made는 1개인데 keep은 0개다). seatCopies는
-  // ctx.items를 복사해 쓰므로 여기서 불러도 상태를 건드리지 않는다.
-  const seated = seatCopies(made.map(m => structuredClone(m)), { walls: f.walls, items: f.items.filter(i => !kill.has(i.id)) });
+  // ctx.items를 복사해 쓰므로 여기서 불러도 상태를 건드리지 않는다. 벽은 그 방 벽만 준다(계획 17 최종 리뷰 I-2): 층 전체 벽을 주면 T자 끝에서
+  // 이웃 방 칸막이가 더 가까워 손소독기가 방 밖에 앉았다(신상중 13개 방 중 4개 · 1개는 빠짐). 붙여넣기·복제·배열 경로는 그대로 층 전체 벽이다.
+  const own = f.walls.filter(w => room.wallIds.includes(w.id));
+  const seated = seatCopies(made.map(m => structuredClone(m)), { walls: own, items: f.items.filter(i => !kill.has(i.id)) });
   const keep = seated.filter((s, i) => !(made[i].attach === 'wall' && made[i].wallId && !s.wallId));
   // 지울 것도 놓을 것도 없고 방 타입도 그대로면 dispatch하지 않는다: 모든 제품이 자리가 없어
   // 건너뛰어진 [기존 제품 유지하고 추가]는 토스트가 "0개 배치"를 말하면서 되돌림 단계 하나를

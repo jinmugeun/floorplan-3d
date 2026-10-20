@@ -9,6 +9,7 @@ import { itemCorners, nearestWallPlacement } from '../src/geom/items.js';
 import { collidingIds, obbOverlap } from '../src/geom/collide.js';
 import { ROOM_TEMPLATES, templateById, placeTemplate, applyRoomTemplate, filterTemplates, itemsInRoom } from '../src/templates/roomTemplates.js';
 import { LEGACY_TO_KITCHEN } from '../src/products/catalogKitchen.js';
+import { buildSinsangProject } from '../src/samples/sinsang.js';
 // 2026-10-20 · 계획 17 Task 9: '가열조리 기본'의 벽걸이 손소독기(엑셀 k-23288396) — 템플릿에 남은 유일한 벽 부착 제품(벽걸이 후드는 천장 후드가 됐다).
 const SANITIZER = 'k-23288396';
 
@@ -313,6 +314,42 @@ describe('템플릿 배치', () => {
     expect(itemsInRoom(f, left).map(i => i.id)).not.toContain(tvId);   // 왼쪽 방 것이 아니다
     applyRoomTemplate(store, left.id, 'cook-basic');
     expect(activeFloor(store.get()).items.some(i => i.id === tvId)).toBe(true);
+  });
+
+  // 2026-10-20 · 계획 17 최종 리뷰 I-2(M9-a): placeTemplate은 손소독기를 그 방 벽에 붙이지만, 자리 다툼을 푸는 seatCopies가 층 전체 벽에서
+  // 가장 가까운 벽(끝 300 mm 너머까지)을 다시 골라 T자 끝의 이웃 방 칸막이로 옮겨 앉혔다. 템플릿 경로는 그 방 벽에서만 다시 고른다.
+  test('T자로 나뉜 북쪽 벽의 이음매 근처 손소독기는 이웃 방 칸막이가 아니라 그 방 벽에 앉는다', () => {
+    const store = createStore(createEmptyProject());
+    addWalls(store, [...rectWalls([0.5, -3999.75], [6000.5, 4000.25], 200),
+      makeWall({ a: [0.5, 0.25], b: [6000.5, 0.25], thickness: 200 }), makeWall({ a: [3000.5, -3999.75], b: [3000.5, 0.25], thickness: 200 })]);
+    const f0 = activeFloor(store.get());
+    expect(f0.rooms).toHaveLength(3);
+    const south = f0.rooms.find(r => pointInPolygon([3000.5, 2000.25], r.points));
+    expect(south.wallIds.length).toBeGreaterThanOrEqual(5);                 // 북쪽 벽이 칸막이 T자에서 두 조각으로 나뉜다
+    const r = applyRoomTemplate(store, south.id, 'cook-basic');
+    const san = activeFloor(store.get()).items.filter(i => r.placed.includes(i.id) && i.productId === SANITIZER);
+    expect(san).toHaveLength(1);
+    expect([south.wallIds.includes(san[0].wallId), pointInPolygon(san[0].pos, south.points)]).toEqual([true, true]);
+  });
+
+  // 빠져도 되는 방은 템플릿 최소 면적(8 m²)보다 작은 방뿐이다 — 이름 없는 2.0 m² 방은 손소독기 자리의 벽(2000)을 1800 창이 차지해 그 방 벽에
+  // 빈 t가 없다(freeT null · 고치기 전에도 같은 방이 빠졌다).
+  test('신상중 샘플 13개 방에 가열조리 기본을 적용하면 벽 제품은 모두 그 방 벽에 앉고 중심이 방 안이다', () => {
+    const rooms = activeFloor(buildSinsangProject()).rooms, t = templateById('cook-basic');
+    expect(rooms).toHaveLength(13);
+    const bad = [];
+    let seated = 0;
+    for (const { id } of rooms) {
+      const store = createStore(buildSinsangProject());
+      const room = activeFloor(store.get()).rooms.find(x => x.id === id);
+      const r = applyRoomTemplate(store, id, t.id);
+      const wall = activeFloor(store.get()).items.filter(i => r.placed.includes(i.id) && i.attach === 'wall');
+      if (!wall.length && room.area >= t.minArea) bad.push(`${room.name || id}: 빠짐`);
+      for (const it of wall) if (!room.wallIds.includes(it.wallId) || !pointInPolygon(it.pos, room.points)) bad.push(`${room.name || id}: 방 밖`);
+      seated += wall.length;
+    }
+    expect(bad).toEqual([]);
+    expect(seated).toBe(12);
   });
 });
 
