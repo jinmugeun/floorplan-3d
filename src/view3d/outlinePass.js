@@ -60,7 +60,9 @@ export function installOutline(renderer, { enabled = () => true } = {}) {
   const batch = createNormalBatch(), w = { over: [], lights: [], cand: [], vis: [], sig: [], odd: false };
   const hidden = [], kids = [];
   let shot = [], shotScene = null;   // 마지막으로 ①을 끝낸 프레임의 그림자 서명(그때 그림자 맵이 이 상태로 그려졌다)
-  renderer.domElement?.addEventListener?.('webglcontextrestored', () => { shotScene = null; });   // 컨텍스트를 되찾으면 그림자 맵이 비어 있다 — 다시 그린다
+  // 컨텍스트를 되찾으면 그림자 맵이 비어 있다 — 다시 그린다. dispose가 뗀다(계획 17 최종 리뷰 M-15).
+  const el = renderer.domElement, RESTORED = 'webglcontextrestored', onRestored = () => { shotScene = null; };
+  el?.addEventListener(RESTORED, onRestored);
 
   function targets(w, h) {
     if (rtColor && rtColor.width === w && rtColor.height === h) return;
@@ -88,6 +90,10 @@ export function installOutline(renderer, { enabled = () => true } = {}) {
     try {
       for (const o of over) o.visible = false;                       // ①·②에는 겹침이 없다(④가 그린다)
       scene.matrixWorldAutoUpdate = false;
+      // 불변식(계획 17 최종 리뷰 M-11): 그림자 맵은 서명(normalBatch casterSig·lightSig + shadowMap.enabled/type)의 입력이 바뀔 때만 다시 그린다.
+      // 일부러 서명에 넣지 않은 것: 클리핑 평면 · displacement(map) · wireframe · 지오메트리를 바꾸지 않은 제자리 정점 편집(position.version만 본다 —
+      // index·drawRange·다른 속성을 고치거나 needsUpdate 없이 고친 것은 못 본다). 지금 앱에는 이런 caster가 없다(리뷰 M-11 점검).
+      // 앞으로 이것을 쓰는 caster를 만들면 서명에 더하거나 shotScene = null로 다시 그리게 할 것.
       if (scene === shotScene && sameList(w.sig, shot)) sm.autoUpdate = false;   // 그림자 맵이 이미 이 상태다
       renderer.setRenderTarget(rtColor); raw(scene, camera);
       [shot, w.sig] = [w.sig, shot]; shotScene = scene;              // ①을 끝냈다 = 그림자 맵이 이 서명대로다(던지면 기록하지 않아 다음 프레임이 다시 그린다)
@@ -148,6 +154,6 @@ export function installOutline(renderer, { enabled = () => true } = {}) {
     };
   }
   renderer.dispose = () => { dispose(); rawDispose(); };
-  function dispose() { rtColor?.dispose(); rtNormal?.dispose(); rtNormal?.depthTexture?.dispose(); rtWarm?.dispose(); rtColor = rtNormal = rtWarm = null; normalMat.dispose(); quadMat.dispose(); batch.dispose(); }
+  function dispose() { el?.removeEventListener(RESTORED, onRestored); rtColor?.dispose(); rtNormal?.dispose(); rtNormal?.depthTexture?.dispose(); rtWarm?.dispose(); rtColor = rtNormal = rtWarm = null; normalMat.dispose(); quadMat.dispose(); batch.dispose(); }
   return { dispose, raw };
 }

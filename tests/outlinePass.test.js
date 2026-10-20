@@ -179,6 +179,19 @@ describe('renderer.render 감싸기', () => {
     r.domElement.dispatchEvent(new Event('webglcontextrestored'));
     expect(shadowed()).toBe(true); expect(shadowed()).toBe(false);
   });
+  test('dispose는 컨텍스트 복구 리스너를 뗀다 — 붙인 것과 같은 함수(계획 17 최종 리뷰 M-15)', () => {
+    for (const viaRenderer of [false, true]) {
+      const r = fakeRenderer(); r.domElement = new EventTarget();
+      const add = vi.spyOn(r.domElement, 'addEventListener'), remove = vi.spyOn(r.domElement, 'removeEventListener');
+      const o = installOutline(r, { enabled: () => true });
+      expect(add.mock.calls.map(c => c[0])).toEqual(['webglcontextrestored']);
+      expect(remove).not.toHaveBeenCalled();
+      if (viaRenderer) r.dispose(); else o.dispose();
+      expect(remove.mock.calls).toEqual([['webglcontextrestored', add.mock.calls[0][1]]]);
+    }
+    const bare = fakeRenderer();                                        // domElement 없는 렌더러(가짜)도 던지지 않는다
+    expect(() => installOutline(bare, { enabled: () => true }).dispose()).not.toThrow();
+  });
   test('겹칠 것이 없으면 정확히 3번(④ 없음) — 숨긴 라벨은 겹침이 아니고 숨긴 채로 남는다', () => {
     const r = fakeRenderer();
     installOutline(r, { enabled: () => true });

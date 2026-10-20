@@ -27,7 +27,8 @@ export function warmFloor() {
   const walls = rectWalls([0, 0], [4000, 3000], 200, 2400);
   const w = walls[0];
   const on = (id, t, patch = {}) => createItem(productById(id), { wallId: w.id, t, ...patch });
-  const kitchen = shape => KITCHEN_PRODUCTS.find(p => p.shape === shape);
+  // 엑셀에서 그 형상이 사라져도 예열이 createItem(undefined)로 던지지 않게 일반 상자로(계획 17 최종 리뷰 M-15).
+  const kitchen = shape => KITCHEN_PRODUCTS.find(p => p.shape === shape) ?? productById('equip-generic');
   const items = [
     on('door-swing-900', 0.25),
     on('window-slide-1200', 0.7),

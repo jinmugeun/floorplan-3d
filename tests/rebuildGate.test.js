@@ -13,6 +13,7 @@ import { setLabelCanvasFactory, clearLabelCache } from '../src/view3d/labels3d.j
 import { enableAssets, requestAsset, onAssetsReady, __setLoader, __reset } from '../src/view3d/itemAssets.js';
 import { buildSampleProject } from '../src/samples/gangdang.js';
 import { productById } from '../src/products/catalog.js';
+import { KITCHEN_PRODUCTS } from '../src/products/catalogKitchen.js';
 import { DEFAULT_VIEW, activeFloor } from '../src/state/schema.js';
 
 // 에셋 로더 대역(계획 15 Task B): GLB·네트워크 없이 작은 상자 하나를 돌려준다. 도착 알림은 setTimeout 0으로 모이므로 몇 틱 기다린다.
@@ -320,6 +321,19 @@ describe('예열 장면', () => {
       buildFloorGroup(warmFloor(), DEFAULT_VIEW); await settle();
       expect(loader).toHaveBeenCalledTimes(1);
     } finally { if (prev === undefined) delete fridge.asset; else fridge.asset = prev; __reset(); }
+  });
+
+  // 계획 17 최종 리뷰 M-15: 예열 층의 스테인리스 형상(오븐·배식대)은 엑셀 제품에서 찾는다 — 엑셀이 바뀌어 그 형상이 없으면 일반 상자로 짓는다
+  // (예전에는 createItem(undefined)가 던져 예열이 통째로 빠졌다). 카탈로그는 이 테스트 동안만 줄이고 되돌린다.
+  test('엑셀에서 오븐·배식대 형상이 사라져도 예열 층은 던지지 않고 일반 상자로 대신한다', () => {
+    const all = KITCHEN_PRODUCTS.slice(), gone = new Set(['oven', 'counter']);
+    expect(all.filter(p => gone.has(p.shape)).length).toBeGreaterThan(0);
+    KITCHEN_PRODUCTS.length = 0; KITCHEN_PRODUCTS.push(...all.filter(p => !gone.has(p.shape)));
+    try {
+      expect(() => warmGroup(DEFAULT_VIEW)).not.toThrow();
+      expect(warmFloor().items.filter(i => i.productId === 'equip-generic')).toHaveLength(2);
+    } finally { KITCHEN_PRODUCTS.length = 0; KITCHEN_PRODUCTS.push(...all); }
+    expect(warmFloor().items.filter(i => i.productId === 'equip-generic')).toHaveLength(0);
   });
 });
 
