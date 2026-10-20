@@ -9,11 +9,11 @@ import { traceBackground } from '../io/dxf/trace.js';
 import { layerListHtml, wallOnly, allOn } from './dxfLayerList.js';
 import { drawDxfPreview } from './dxfPreview.js';
 import { buildImportMeta } from '../io/dxfFeedback.js';
-import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, DXF_HEIGHT_RANGE } from './prefs.js';
+import { dxfHeight, setDxfHeight, dxfTrace, setDxfTrace, dxfKitchenWalls, setDxfKitchenWalls, DXF_HEIGHT_RANGE } from './prefs.js';
 import { dxfNotes, UNITS, unitName } from './dxfNotes.js';   // 단위 이름 표는 알림과 한 곳(2026-10-13 · 계획 16 Task D)
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_TRACE_SKIPPED, DXF_REGION, DXF_REGION_LABEL,
   DXF_HEAD, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_PHASE_STEP,
-  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_EQUIPMENT_OPT } from './messages.js';
+  DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_GUIDE_HREF, DXF_NAME_DIVIDERS, DXF_EQUIPMENT_OPT, DXF_KITCHEN_WALLS } from './messages.js';
 
 const DEBOUNCE = 250;   // 체크가 바뀌면 이만큼 기다렸다 재추출 한 번(실측 재추출 ≈ 0.4 s)
 // §18.6이 글자로 정한 `기본 두께` 범위(층고 쪽 정본은 io/dxf/params.js HEIGHT_RANGE — prefs.js DXF_HEIGHT_RANGE가 재수출 · 2026-10-13 계획 16 · 최종 리뷰 F-6).
@@ -55,6 +55,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
         <label><input type="checkbox" name="nameDividers"> ${esc(DXF_NAME_DIVIDERS)}</label>
         <label><input type="checkbox" name="openings" checked> 문·창 배치</label>
         <label><input type="checkbox" name="equipment" checked> ${esc(DXF_EQUIPMENT_OPT)}</label>
+        <label><input type="checkbox" name="kitchenWalls"${dxfKitchenWalls() ? ' checked' : ''}> ${esc(DXF_KITCHEN_WALLS)}</label>
         <label><input type="checkbox" name="trace"${dxfTrace() ? ' checked' : ''}> 원 도면을 배경으로 남기기</label>
         <p class="dxf-nums" name="nums"></p>
         <p class="warn" name="warn" hidden></p>
@@ -157,6 +158,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     dividerByNames: q('nameDividers').checked,     // 기본 꺼짐(사용자 결정 2026-10-02 · 계획 12 Task 6)
     openings: q('openings').checked,
     equipment: q('equipment').checked,             // 기본 켬(2026-10-12 · 계획 13 Task 3) — 끄면 계획 12까지와 같은 결과
+    kitchenWalls: q('kitchenWalls').checked,       // 기본 켬(2026-10-20 · 계획 17 Task 8) — 벽 안쪽 흰 타일(바닥은 새 방 기본값)
     trace: q('trace').checked,
   });
   const runExtract = () => {
@@ -247,7 +249,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
         else toast(DXF_TRACE_SKIPPED);
       }
       if (!(autoHeight && height === hint()?.height)) setDxfHeight(height);   // 레이어 꼬리에서 온 층고는 설정에 남기지 않는다(계획 16 Task A — 판정은 가져오는 값으로)
-      setDxfTrace(traceOn);
+      setDxfTrace(traceOn); setDxfKitchenWalls(q('kitchenWalls').checked);
       const ok = await onImported({ project, stats });
       if (ok !== false) close();
     } catch (e) {
@@ -283,7 +285,7 @@ export function openDxfDialog({ file = null, workerFactory, traceWorkerFactory, 
     checked = q('preset').checked ? wallOnly(summary?.layers ?? []) : allOn(summary?.layers ?? []);
     renderLayers(); schedule();
   });
-  for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'equipment', 'trace']) q(n).addEventListener('change', schedule);
+  for (const n of ['height', 'thickness', 'units', 'openFaces', 'autoNames', 'nameDividers', 'openings', 'equipment', 'kitchenWalls', 'trace']) q(n).addEventListener('change', schedule);
   q('height').addEventListener('input', () => { autoHeight = false; notes(); });   // 2026-10-13 · 사람이 층고를 만졌다 — 힌트를 놓고 알림도 곧바로 지운다(사전 검토 9-2)
   q('units').addEventListener('change', notes);   // 2026-10-13 · 사람이 단위를 골랐다 — 단위 변환 알림을 추출 답을 기다리지 않고 곧바로 맞춘다(계획 16 Task D)
   q('region').addEventListener('change', () => { setHead(); schedule(); });

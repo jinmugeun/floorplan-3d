@@ -93,6 +93,20 @@ test('기둥에 ≤ equipTrim 들어간 기구는 깎여 colliding에 들지 않
   expect(floorOf(deep).items.find(i => i.dxfBlock).size).toEqual([700, 600, 850]);
 });
 
+// 2026-10-20 · 계획 17 Task 8: kitchenWalls = 벽 안쪽(방 쪽 면) 흰 타일. 옛 호출자(점수판 도구·테스트)는 기본 꺼짐이라 그대로이고,
+// 켜도 벽 선·방·아이템은 글자 그대로 같다(마감 지정만 붙는다). 구획선은 벽이 아니라 마감이 없다.
+test('kitchenWalls: 켜면 구획선 아닌 벽마다 matIn = 흰 타일 300 · 끄면(기본) 그대로 · 벽 선·방·아이템은 같다', () => {
+  const off = build(), on = build({ kitchenWalls: true });
+  expect(floorOf(off).walls.every(w => w.matIn === null)).toBe(true);
+  const solid = floorOf(on).walls.filter(w => !w.virtual);
+  expect(solid.length).toBeGreaterThan(0);
+  expect(solid.every(w => w.matIn?.id === 'tile-white-300')).toBe(true);
+  expect(floorOf(on).walls.filter(w => w.virtual).every(w => w.matIn === null)).toBe(true);
+  const strip = f => f.walls.map(({ matIn, ...w }) => w);
+  expect(canon(strip(floorOf(on)))).toBe(canon(strip(floorOf(off))));
+  expect(canon([floorOf(on).rooms, floorOf(on).items])).toBe(canon([floorOf(off).rooms, floorOf(off).items]));
+});
+
 // 2026-10-12 · 계획 13 최종 리뷰 F-1(컨트롤러 결정): 가져온 기구는 맞춘 제품 id를 dxfProduct에 남기고, 견적은 제품을 바꾸기 전까지 0원으로 센다 —
 // 기구를 켜든 끄든 견적 합계가 같다(사동 실측: 켬 145.87 M원 → 14.25 M원 = 끔).
 test('가져온 기구는 dxfProduct = productId를 남기고, 기구를 켜든 끄든 견적 합계가 같다', () => {
@@ -170,6 +184,10 @@ test('워커 extract: equipment는 기본 켬(세정대 하나가 제품으로 �
     expect(parsed.type).toBe('parsed');
     const base = { layers: parsed.summary.checked, trace: false };
     const on = handle({ type: 'extract', opts: base }), off = handle({ type: 'extract', opts: { ...base, equipment: false } });
+    // 계획 17 Task 8: 워커의 kitchenWalls는 기본 켬(검토 창이 넘기지 않아도) — false면 마감이 없다.
+    expect(on.project.floors[0].walls.every(w => w.virtual || w.matIn?.id === 'tile-white-300')).toBe(true);
+    const bare = handle({ type: 'extract', opts: { ...base, kitchenWalls: false } });
+    expect(bare.project.floors[0].walls.every(w => w.matIn === null)).toBe(true);
     expect([on.type, off.type]).toEqual(['extracted', 'extracted']);
     expect(on.stats).toMatchObject({ walls: 4, rooms: 1, equipment: { placed: 1, product: 1, generic: 0, clash: 0 } });
     expectZero(off.stats.equipment);

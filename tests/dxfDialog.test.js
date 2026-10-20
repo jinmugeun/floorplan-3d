@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { openDxfDialog, DXF_THICKNESS_RANGE } from '../src/ui/dxfDialog.js';
 import { DXF_ERRORS, DXF_IMPORT_FAILED, DXF_LAYERS_GUESSED, DXF_STEP_READ, DXF_STEP_PARSE, DXF_STEP_WALLS, DXF_STEP_ROOMS, DXF_NUMS, DXF_OPEN_END_COUNT, DXF_UNMATCHED, DXF_TRACE_SKIPPED } from '../src/ui/messages.js';
-import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE, dxfHeight } from '../src/ui/prefs.js';
+import { DXF_HEIGHT_KEY, DXF_TRACE_KEY, DXF_HEIGHT_RANGE, DXF_KITCHEN_WALLS_KEY, dxfHeight } from '../src/ui/prefs.js';
 import { layerListHtml, layerRowHtml, aciColor, wallOnly, allOn } from '../src/ui/dxfLayerList.js';
 import { previewTransform, boundsOf, drawDxfPreview, PREVIEW_COLORS, OPEN_END_R } from '../src/ui/dxfPreview.js';
 import { createDxfActions } from '../src/app/dxfActions.js';
@@ -14,7 +14,7 @@ import { createStore } from '../src/state/store.js';
 import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject } from '../src/state/schema.js';
 import { DXF_BADGE_OFF, DXF_BADGE_HATCH, DXF_BADGE_GUESSED, DXF_BADGE_COLOR, DXF_MANY_PLANS, DXF_REGION, DXF_RECONCILED, DXF_GUIDE_LINE, DXF_GUIDE_LINK, DXF_NAME_DIVIDERS, DXF_NAME_DIVIDED, DXF_RAIL_DIVIDED,
-  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT, DXF_UNITS_CONVERTED, DXF_UNITS_GUESS, DXF_MANY_SHEETS } from '../src/ui/messages.js';
+  DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_HEIGHT_FROM_LAYER, DXF_BADGE_HEIGHT, DXF_UNITS_CONVERTED, DXF_UNITS_GUESS, DXF_MANY_SHEETS, DXF_KITCHEN_WALLS } from '../src/ui/messages.js';
 import { dxfNotes } from '../src/ui/dxfNotes.js';
 
 const row = (name, role, segs, extra = {}) => ({ name, role, keyRole: role, segs, arcs: 0, circles: 0, texts: 0, dims: 0, inserts: 0, lenM: 1, medianSeg: 900, color: 3, off: false, frozen: false, ...extra });
@@ -698,6 +698,45 @@ test('"도면의 기구를 제품으로 배치" 칸은 기본 켬이고, 끄면 
   await flush();
   expect(q('notice').hidden).toBe(true);                    // 0개면 알리지 않는다
   expect(q('import').disabled).toBe(false);
+});
+
+// 2026-10-20 · 계획 17 Task 8: 급식실 마감(벽 안쪽 흰 타일)은 **옵션, 기본 켬**(이 앱의 DXF는 급식실 배치도다 — 학교 전체 도면이면 끈다).
+// 바닥은 이 칸과 무관하게 새 방 기본값(칩 에폭시 — 계획 17 Task 7)이다. 끄고 켜면 kitchenWalls로 다시 추출하고, 가져올 때 선택을 기억한다.
+test('"벽 흰 타일(급식실 마감)" 칸은 기본 켬이고 끄면 kitchenWalls: false로 다시 추출하며, 가져온 선택을 기억한다', async () => {
+  const onImported = vi.fn(async () => true);
+  const { w, q } = open({ file: fileOf(), onImported });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  const lastOpts = () => w.posted.filter(m => m.type === 'extract').at(-1).opts;
+  expect(q('kitchenWalls').checked).toBe(true);
+  expect(q('kitchenWalls').closest('label').textContent.trim()).toBe(DXF_KITCHEN_WALLS);
+  expect(DXF_KITCHEN_WALLS).toBe('벽 흰 타일(급식실 마감)');
+  expect(lastOpts().kitchenWalls).toBe(true);
+  w.emit(EXTRACTED);
+  await flush();
+  q('kitchenWalls').click();
+  expect(q('import').disabled).toBe(true);                  // 최신 결과가 올 때까지 잠긴다
+  vi.advanceTimersByTime(250);
+  await flush();
+  expect(lastOpts().kitchenWalls).toBe(false);
+  w.emit(EXTRACTED);
+  await flush();
+  q('import').click();
+  await flush();
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(onImported.mock.calls[0][0].project.meta.dxfImport.options.kitchenWalls).toBe(false);   // 교정 기록에도 남는다
+  expect(localStorage.getItem(DXF_KITCHEN_WALLS_KEY)).toBe('0');
+});
+
+test('기억한 선택이 끔이면 "벽 흰 타일" 칸이 꺼진 채 열리고 첫 추출도 끈 값이다', async () => {
+  localStorage.setItem(DXF_KITCHEN_WALLS_KEY, '0');
+  const { w, q } = open({ file: fileOf() });
+  await flush();
+  w.emit({ type: 'parsed', summary: SUMMARY });
+  await flush();
+  expect(q('kitchenWalls').checked).toBe(false);
+  expect(w.posted.filter(m => m.type === 'extract').at(-1).opts.kitchenWalls).toBe(false);
 });
 
 // 2026-10-13 · 최종 리뷰 X-3(M-A2): 기둥 면 깎기(계획 14 Task A · stats.equipment.trimmed — 사동 7 · 내곡 1)가 통계에만 있어 '손세정대 500-370'이

@@ -44,6 +44,14 @@ export function dxfTrace() {
 export function setDxfTrace(on) {
   try { localStorage.setItem(DXF_TRACE_KEY, on ? '1' : '0'); } catch { /* 저장 불가 */ }
 }
+// 급식실 마감 칸(2026-10-20 · 계획 17 Task 8)의 마지막 선택. 기본 켬 — 이 앱의 DXF는 급식실 배치도다. 프로젝트 파일에는 남지 않는다(위 둘과 같은 자리).
+export const DXF_KITCHEN_WALLS_KEY = 'kvp.dxfKitchenWalls';
+export function dxfKitchenWalls() {
+  try { return localStorage.getItem(DXF_KITCHEN_WALLS_KEY) !== '0'; } catch { return true; }   // 기본 켜짐
+}
+export function setDxfKitchenWalls(on) {
+  try { localStorage.setItem(DXF_KITCHEN_WALLS_KEY, on ? '1' : '0'); } catch { /* 저장 불가 */ }
+}
 
 // 층고는 도면에 없다(§18.8). 3500은 강당중 조리실의 실적값이고, 사람이 고친 값을 기억한다. 예외: 벽 레이어 이름의 높이 꼬리(`WALL_2800`)는
 // 검토 창이 층고 칸에 미리 넣지만 여기에는 남기지 않는다(2026-10-13 · 계획 16 Task A — 다음 도면의 기본값이 이 도면의 층고가 되면 안 된다).
