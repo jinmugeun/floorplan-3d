@@ -21,7 +21,7 @@ export const SUB_CHIP = {
   온수제조기: '위생·기타', 살균수제조장치: '위생·기타', 일반용음식물쓰레기처리기: '위생·기타', 음식물쓰레기처리통: '위생·기타', 식료품절단기: '위생·기타', 음식물슬라이싱기: '위생·기타',
   청소기: '위생·기타', 건습식진공청소기: '위생·기타', 호스릴: '위생·기타', DB관리시스템소프트웨어: '위생·기타', '': '위생·기타',
 };
-// 세부품명 → 형상(이름 규칙보다 먼저 — 단 NAME_WINS의 형상은 이름이 이긴다).
+// 세부품명 → 형상(이름 규칙보다 먼저 — 단 NAME_WINS의 형상은 이름이 이긴다 · 세부품명이 rack이면 언제나 세부품명).
 export const SUB_SHAPE = {
   상업용조리대: 'worktable', 주방기기용받침대: 'worktable',
   상업용싱크대: 'sink', 세면기: 'sink', 실험실용싱크대: 'sink', 음식쓰레기처리대: 'sink',
@@ -65,6 +65,9 @@ export function parseSpec(spec) {
 // 숫자 칸(단가·kW·가스): 'LNG:48\nLPG:57' → 48 · 빈칸·글자뿐 → 0.
 export function numOf(v) { const m = /(\d+(?:\.\d+)?)/.exec(String(v ?? '')); return m ? Number(m[1]) : 0; }
 
+// 급배수 칸(O/P/Q 냉수·온수·배수)은 배관 규격('15A' · '20 A' · '50A')일 때만 배관이다 — 냉수 칸의 메모('김흥수이사' · '고급형' · '(디판)')는 배관이 아니다.
+export const isPipe = v => /^\d+(?:\.\d+)?\s*A$/i.test(String(v ?? '').trim());
+
 // 이 행을 제품에서 뺄 이유(없으면 null). row = { kind, sub, name, spec }.
 export function skipReason(row) {
   if (!['기구', '가구'].includes(String(row.kind ?? '').trim())) return '종류';
@@ -77,6 +80,7 @@ export function skipReason(row) {
 export function shapeOf(sub, name, size) {
   if (isThin(size)) return 'panel';
   const byName = shapeByName(name), bySub = SUB_SHAPE[normSub(sub)];
+  if (bySub === 'rack') return bySub; // '다단식 운반차'는 바퀴 달린 선반이다(이름의 '운반차'(cart)보다 세부품명이 이긴다 · 바퀴는 shapeOpts가 '운반'으로 켠다).
   if (byName && NAME_WINS.has(byName)) return byName;
   return bySub ?? byName ?? 'machine';
 }

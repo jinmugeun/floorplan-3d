@@ -1,6 +1,6 @@
 // 계획 17 Task 2: 엑셀 급식기구 규칙(kitchenRules.js)·이름 규칙(shapeNames.js)·생성 데이터(kitchenData.js).
 import { describe, test, expect } from 'vitest';
-import { parseSpec, numOf, skipReason, shapeOf, expandRow, normSub, SUB_CHIP, SUB_SHAPE, SHAPE_SYMBOL, KITCHEN_CHIPS, APPLIANCE_KIND, WALL_Z } from '../src/products/kitchenRules.js';
+import { parseSpec, numOf, isPipe, skipReason, shapeOf, expandRow, normSub, SUB_CHIP, SUB_SHAPE, SHAPE_SYMBOL, KITCHEN_CHIPS, APPLIANCE_KIND, WALL_Z } from '../src/products/kitchenRules.js';
 import { SHAPE_FAMILIES, shapeByName, shapeOpts, isThin, genericSpec } from '../src/products/shapeNames.js';
 import data from '../src/products/kitchenData.js';
 import { SYMBOL_NAMES } from '../src/products/catalog.js';
@@ -31,6 +31,11 @@ test('숫자 칸(numOf)', () => {
   expect(numOf('42')).toBe(42);
 });
 
+describe('급배수 칸은 배관 규격일 때만 배관(isPipe)', () => {
+  test.each(['15A', '20 A', '32A', '50A', '75a', ' 15A '])('배관: %s', v => { expect(isPipe(v)).toBe(true); });
+  test.each(['', null, undefined, '김흥수이사', '고급형', '(디판)', '일반', '한세트', 'A', '15'])('배관 아님: %s', v => { expect(isPipe(v)).toBe(false); });
+});
+
 test('제외 사유(skipReason)', () => {
   const ok = { kind: '기구', sub: '상업용싱크대', name: '2조 세정대', spec: '1500×750×850mm' };
   expect(skipReason(ok)).toBeNull();
@@ -56,6 +61,8 @@ describe('형상 고르기', () => {
     ['상업용식기세척기', '식기세척기 전기(도어형)', [650, 700, 1350], 'dishwasher'],
     ['', '식품탈수기', [600, 600, 800], 'machine'],
     ['상업용주방후드', '이중급배기후드(국솥)', [1800, 1500, 600], 'hood'],
+    ['주방기구소독기', '수저카트리지(소독기)', [650, 300, 825], 'cabinet'],
+    ['다단식운반차', '다단식 운반차', [800, 500, 800], 'rack'],
   ])('%s · %s → %s', (sub, name, size, shape) => { expect(shapeOf(sub, name, size)).toBe(shape); });
 
   test('이름 규칙: 손소독기는 벽부착, 야채세척기는 기계, 운반카는 운반차', () => {
@@ -63,6 +70,7 @@ describe('형상 고르기', () => {
     expect(shapeByName('초음파야채세척기')).toBe('machine');
     expect(shapeByName('양념운반카')).toBe('cart');
     expect(shapeByName('무엇인지 모를 기구')).toBeNull();
+    expect(shapeByName('수저카트리지(소독기)')).not.toBe('cart');
     expect(isThin([1200, 45, 1160])).toBe(true);
     expect(isThin([600, 530, 30])).toBe(true);
     expect(isThin([600, 600, 600])).toBe(false);
@@ -84,6 +92,7 @@ describe('형상 고르기', () => {
     ['worktable', '이동식 작업대', [900, 750, 850], {}, {}],
     ['worktable', '고정식작업대(하부찬장형)', [1200, 750, 800], {}, { splash: true, cabinet: true }],
     ['cart', '소쿠리 운반차(돌리)', [630, 630, 730], { round: true }, { round: true }],
+    ['rack', '다단식 운반차', [800, 500, 800], {}, { tiers: 2, casters: true }],
   ])('옵션 %s · %s', (shape, name, size, flags, opts) => { expect(shapeOpts(shape, name, size, flags)).toEqual(opts); });
 
   test('도면 기구(equip-generic)의 형상은 이름 규칙 → 얇으면 판 → 기계', () => {
@@ -153,5 +162,13 @@ describe('생성 데이터(kitchenData.js)', () => {
     expect(products.filter(p => p.equip?.type === 'hood').length).toBe(28);
     expect(products.filter(p => p.equip?.type === 'appliance').length).toBe(100);
     expect(products.filter(p => p.attach === 'wall').length).toBe(6);
+  });
+  test('식탁·의자·판에는 급수가 없다(냉수 칸의 메모는 배관이 아니다 · 발판소독기만 배수 50A)', () => {
+    const memo = ['24397194', '24397200', '24987398', '24987393', '25040984', '25040985', '23089100'];
+    for (const p of products.filter(q => memo.includes(q.extra.kid))) expect(p.extra.util.water).toEqual([false, false, false]);
+    for (const p of products.filter(q => ['table', 'chair', 'panel'].includes(q.shape))) {
+      const [cold, hot, drain] = p.extra.util.water;
+      expect([p.name, cold || hot || (drain && !/발판소독기/.test(p.name))]).toEqual([p.name, false]);
+    }
   });
 });
