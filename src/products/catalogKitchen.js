@@ -1,10 +1,9 @@
 // 엑셀 급식기구 카탈로그(계획 17 Task 3). 원자료(kitchenData.js — tools/products/excel-to-catalog.mjs가 만든다)를 규칙(kitchenRules.js)으로
 // 펼쳐 제품이 된다. 앱 시작 때 한 번(495행 · 수 ms). 카탈로그(catalog.js)가 [남는 기존 제품 · 이것 · 숨김 단종]으로 합친다.
-// 기존 제품 → 엑셀 제품 대응(LEGACY_TO_KITCHEN · kitchenFor · kitchenFit)도 여기 있다: 템플릿·샘플·DXF 어휘가 "옛 id 대신 어느 엑셀 제품인가"를 묻는다.
+// 기존 제품 → 엑셀 제품 대응(LEGACY_TO_KITCHEN · kitchenFor)도 여기 있다: 템플릿·샘플·DXF 어휘가 "옛 id 대신 어느 엑셀 제품인가"를 묻는다.
 // 대응 규칙(이름 없는 kitchenFor · LEGACY_TO_KITCHEN): 후보 = 세부품명이 맞고(이름 정규식이 있으면 이름도) → 크기가 가장 가까운 것. 도면 이름이 있으면 아래 kitchenFor 주석.
 // 거리 = Σ|ln(a/b)|(정렬한 긴 변·짧은 변·높이) — 비율이라 큰 기구와 작은 기구에 공평하고, 회전된 아이템 크기에도 같다.
-// 같은 거리면 원자료 순서(엑셀 행 순서)의 앞이 이긴다 — 결과가 실행마다 같다. kitchenFit은 같은 열원 안에서만 고르고, 같은 거리면 원래 제품이 이긴다.
-// kitchenFit에 도면 이름을 주면 이름의 N조·N구·N도어·N단·N찬을 가진 후보 안에서 고른다(그런 후보가 있을 때만).
+// 같은 거리면 원자료 순서(엑셀 행 순서)의 앞이 이긴다 — 결과가 실행마다 같다.
 // DXF 기구(계획 17 Task 8 Fix 1~4)는 kitchenFor(어휘의 기존 id, 크기, 도면 이름)로 고른다 — 이름이 있으면 정규식 대신 이름 낱말(열원·시리즈·선택 수·제품 낱말),
 // 제품 낱말 거르기가 쓰이지 않았으면 대표 제품 형상, 같은 거리면 표의 정규식에 맞는 후보(kitchenFor 주석).
 import data from './kitchenData.js';
@@ -37,9 +36,9 @@ export const LEGACY_SUBS = {
 // 바닥 발자국은 방향과 무관하게 잰다: DXF·샘플 아이템은 회전된 채 [750, 1500, 850]처럼 크기를 든다(Task 8·9 계약 — 정렬한 [긴 변, 짧은 변, 높이]끼리).
 const footprint = s => [Math.max(s[0], s[1]), Math.min(s[0], s[1]), s[2]];
 const sizeGap = (a, b) => { const x = footprint(a), y = footprint(b); return [0, 1, 2].reduce((s, i) => s + Math.abs(Math.log(Math.max(1, x[i]) / Math.max(1, y[i]))), 0); };
-// 후보 중 크기 최근접(같으면 앞). 후보가 없으면 null. start가 있으면 그것과 그 거리에서 시작해 더 가까운 것만 바꾼다(같으면 start).
-function nearest(list, sizeMm, start = null) {
-  let best = start, gap = start ? sizeGap(start.size, sizeMm) : Infinity;
+// 후보 중 크기 최근접(같으면 앞). 후보가 없으면 null.
+function nearest(list, sizeMm) {
+  let best = null, gap = Infinity;
   for (const p of list) { const g = sizeGap(p.size, sizeMm); if (g < gap) { best = p; gap = g; } }
   return best;
 }
@@ -54,7 +53,6 @@ const validSize = s => Array.isArray(s) && s.length === 3 && s.every(v => Number
 // 단위 뒤에 한글 음절이 붙으면 다른 낱말이라 아니다('조리대' · '구이' · '단열' · '찬장'). 도면 이름과 후보 이름에 같은 규칙을 쓰고 낱말 집합으로 비교한다.
 const OPTION_RE = /(?<!\d)([1-9]) ?(조|구|도어|단|찬)(?![가-힣])/g;
 const optionTokens = name => new Set([...String(name ?? '').matchAll(OPTION_RE)].map(m => `${m[1]}${m[2]}`));
-export const __optionTokens = optionTokens;   // 테스트 전용
 const optionsById = new Map(KITCHEN_PRODUCTS.map(p => [p.id, optionTokens(p.name)]));
 
 // 도면 이름의 낱말(2026-10-20 · 계획 17 Task 8 Fix 2). 열원: 전기·인덕션 → electric, 가스 → gas(둘 다 있으면 모른다 — null).
@@ -102,19 +100,3 @@ export function kitchenFor(legacyId, sizeMm, name = '') {
 
 // 대표 대응(기존 제품 자기 크기 기준) — DXF 어휘·방 템플릿이 쓴다. 표의 모든 id가 풀려야 한다(tests/catalogKitchen.test.js).
 export const LEGACY_TO_KITCHEN = Object.fromEntries(Object.keys(LEGACY_SUBS).map(id => [id, kitchenFor(id, legacyById.get(id)?.size)]).filter(([, v]) => v));
-
-// 엑셀 제품 id + 아이템 크기 → 같은 세부품명·같은 형상(열원 equip.heat가 있으면 같은 열원 — 가스는 가스로 남는다) 안에서
-// 크기가 가장 가까운 엑셀 제품 id(폭 1260 냉장고에 2도어가 아니라 4도어). 같은 거리면 원래 제품이 이긴다(자기 크기면 자기 자신).
-// 도면 이름(name — DXF 블록 이름 '세정대 1조 1500-750')에 선택 수가 있고 그것을 모두 가진 후보가 있으면 그 후보만 본다:
-// 폭 1500의 1조는 크기가 딱 맞는 2조 세정대가 되지 않는다. 그런 후보가 없으면(9조) 이름을 무시한다. 이름 없는 호출은 전과 같다.
-// 엑셀 제품이 아니거나(문·창·기둥·도면 기구·숨김 단종) 크기가 잘못됐으면(세 개의 유한한 양수가 아님 — null · 길이 2 · NaN · ∞ · 문자열) 그대로 돌려준다.
-export function kitchenFit(productId, sizeMm, name = '') {
-  const p = byId.get(productId);
-  if (!p || !validSize(sizeMm)) return productId;
-  const heat = p.equip?.heat;
-  const same = KITCHEN_PRODUCTS.filter(x => x.sub === p.sub && x.shape === p.shape && (!heat || x.equip?.heat === heat));
-  const want = [...optionTokens(name)];
-  const named = want.length ? same.filter(x => want.every(t => optionsById.get(x.id).has(t))) : [];
-  const list = named.length ? named : same;
-  return nearest(list, sizeMm, list.includes(p) ? p : null)?.id ?? productId;   // 원래 제품이 이름에 안 맞으면 동점 우선도 없다 · 못 고르면 그대로
-}

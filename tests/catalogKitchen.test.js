@@ -1,7 +1,7 @@
 // 엑셀 급식기구 카탈로그(계획 17 Task 3): 원자료 → 제품 펼치기 · 칩 · 기존 id → 엑셀 제품 대응.
 import { describe, test, expect } from 'vitest';
 import data from '../src/products/kitchenData.js';
-import { KITCHEN_PRODUCTS, KITCHEN_PRICES, KITCHEN_CATEGORIES, LEGACY_SUBS, LEGACY_TO_KITCHEN, kitchenFor, kitchenFit, __optionTokens } from '../src/products/catalogKitchen.js';
+import { KITCHEN_PRODUCTS, KITCHEN_PRICES, KITCHEN_CATEGORIES, LEGACY_SUBS, LEGACY_TO_KITCHEN, kitchenFor } from '../src/products/catalogKitchen.js';
 import { KITCHEN_CHIPS } from '../src/products/kitchenRules.js';
 import { SHAPE_FAMILIES } from '../src/products/shapeNames.js';
 import { productById, SYMBOL_NAMES } from '../src/products/catalog.js';
@@ -73,15 +73,6 @@ describe('기존 id → 엑셀 제품 대응', () => {
     expect(kitchenFor('없음', [100, 100, 100])).toBeNull();
   });
 
-  test('kitchenFit: 엑셀 제품이면 같은 세부품명·형상 안에서 아이템 크기 최근접(폭 1260 냉장고는 4도어), 아니면 그대로', () => {
-    const two = LEGACY_TO_KITCHEN['fridge-2door'];
-    expect(productById(kitchenFit(two, [1260, 800, 1910])).name).toMatch(/4도어/);
-    expect(kitchenFit(two, productById(two).size)).toBe(two);
-    expect(kitchenFit('equip-generic', [1000, 600, 850])).toBe('equip-generic');
-    expect(kitchenFit('sink-double', [1500, 750, 850])).toBe('sink-double');
-    expect(kitchenFit(two, null)).toBe(two);
-  });
-
   test('뜻이 맞는 대응 — 전기 콤비스티머는 전기 오븐, 드럼세탁기는 드럼 세탁기, 건조기는 건조기', () => {
     const steamer = productById(LEGACY_TO_KITCHEN['steamer-combi']);
     expect(steamer.equip.heat).toBe('electric');
@@ -102,111 +93,33 @@ describe('기존 id → 엑셀 제품 대응', () => {
     for (const id of Object.keys(LEGACY_SUBS)) expect(kitchenFor(id, [1800, 750]), id).toBe(LEGACY_TO_KITCHEN[id]);
   });
 
-  test('방향과 무관하다 — [w, d, h]와 [d, w, h]가 같은 제품으로 풀린다(kitchenFor · kitchenFit)', () => {
+  test('방향과 무관하다 — [w, d, h]와 [d, w, h]가 같은 제품으로 풀린다(kitchenFor)', () => {
     for (const s of [[1260, 800, 1910], [1500, 750, 850], [1000, 900, 1800], [650, 700, 1350]]) {
       const r = [s[1], s[0], s[2]];
       for (const id of Object.keys(LEGACY_SUBS)) expect(kitchenFor(id, r), `${id} ${s}`).toBe(kitchenFor(id, s));
     }
-    const two = LEGACY_TO_KITCHEN['fridge-2door'];
-    expect(productById(kitchenFit(two, [800, 1260, 1910])).name).toMatch(/4도어/);
-    for (const p of KITCHEN_PRODUCTS) expect(kitchenFit(p.id, [p.size[1], p.size[0], p.size[2]]), p.id).toBe(kitchenFit(p.id, p.size));
   });
 
-  test('같은 거리면 원래 제품(kitchenFit), 그다음 원자료(엑셀 행) 순서의 앞이 이긴다', () => {
+  test('같은 거리면 원자료(엑셀 행) 순서의 앞이 이긴다', () => {
     const ids = KITCHEN_PRODUCTS.map(p => p.id);
-    // 가스 회전식 국솥 k-24975705(앞)와 k-25449419(뒤)는 세부품명·형상·크기(1580×1040×870)가 같다 — 뒤의 것도 자기 자신으로 남는다.
-    expect(productById('k-25449419').size).toEqual(productById('k-24975705').size);
-    expect(ids.indexOf('k-24975705')).toBeLessThan(ids.indexOf('k-25449419'));
-    expect(kitchenFit('k-25449419', [1580, 1040, 870])).toBe('k-25449419');
-    expect(kitchenFit('k-25449419', [1040, 1580, 870])).toBe('k-25449419');
-    // 다른 국솥 k-25962976(1590×1040×860)에서 그 크기를 주면 두 동점 중 앞(k-24975705)이 이긴다.
-    expect(kitchenFit('k-25962976', [1580, 1040, 870])).toBe('k-24975705');
-    expect(kitchenFit('k-25962976', [1040, 1580, 870])).toBe('k-24975705');
     // 식기세척기 전기(도어형) k-24157686(앞)과 k-22161686(뒤)은 크기(650×700×1350)가 같다 — kitchenFor도 앞을 고른다.
     expect(productById('k-22161686').size).toEqual(productById('k-24157686').size);
     expect(ids.indexOf('k-24157686')).toBeLessThan(ids.indexOf('k-22161686'));
     expect(kitchenFor('dishwasher', [650, 700, 1350])).toBe('k-24157686');
   });
 
-  test('kitchenFit: 자기 크기면 자기 자신 — 같은 크기의 앞선 전기 오븐·낮은 인덕션렌지로 바뀌지 않는다', () => {
-    for (const id of ['k-24960268', 'k-24960271', 'k-25170358']) {
-      expect(productById(id).equip.heat, id).toBe('gas');
-      expect(kitchenFit(id, productById(id).size), id).toBe(id);
-    }
-    const high3 = KITCHEN_PRODUCTS.find(p => p.name === '높은 인덕션렌지 3구');
-    expect(high3).toBeTruthy();
-    expect(kitchenFit(high3.id, high3.size)).toBe(high3.id);
-    for (const p of KITCHEN_PRODUCTS) expect(kitchenFit(p.id, p.size), p.id).toBe(p.id);
-  });
-
-  test('kitchenFit: 열원(equip.heat)이 있으면 같은 열원 안에서만 고른다 — 가스는 가스, 전기는 전기', () => {
-    const heated = KITCHEN_PRODUCTS.filter(p => p.equip?.heat);
-    expect(heated.length).toBeGreaterThan(0);
-    for (const p of heated) {
-      expect(productById(kitchenFit(p.id, p.size)).equip.heat, p.id).toBe(p.equip.heat);
-      expect(productById(kitchenFit(p.id, [p.size[0] * 1.2, p.size[1], p.size[2]])).equip.heat, `${p.id} 폭 1.2배`).toBe(p.equip.heat);
-    }
-  });
-
-  test('kitchenFit(id, 크기, 도면 이름): 이름의 N조·N구·N도어·N단·N찬을 지킨다 — 크기가 딱 맞는 다른 조 수로 바뀌지 않는다', () => {
-    const one = LEGACY_TO_KITCHEN['sink-single'], two = LEGACY_TO_KITCHEN['sink-double'], sink = [1500, 750, 850];
-    expect(productById(kitchenFit(two, sink)).name).toMatch(/2조/);                                  // 이름 없이는 크기가 딱 맞는 2조 자신
-    expect(productById(kitchenFit(two, sink, '세정대 1조 1500-750')).name).toMatch(/1조/);
-    expect(productById(kitchenFit(one, sink, '세정대 1조 1500-750')).name).toMatch(/1조/);
-    expect(productById(kitchenFit(one, sink)).name).toMatch(/1조/);                                  // 이름 없이는 1조 1500
-    expect(productById(kitchenFit(one, sink, '세정대 2조 1500-750')).name).toMatch(/2조/);
-    expect(productById(kitchenFit(two, sink, '세정대 2조 1500-750')).name).toMatch(/2조/);
-    expect(productById(kitchenFit(one, sink, '세정대 2 조 1500-750')).name).toMatch(/2조/);           // 띄어 써도 같다
-    expect(productById(kitchenFit(one, [750, 1500, 850], '세정대 2조')).name).toMatch(/2조/);         // 돌린 크기도
-    const fridge = LEGACY_TO_KITCHEN['fridge-2door'];
-    expect(productById(kitchenFit(fridge, [1260, 800, 1910], '냉장고 4도어 1100L 1260-850')).name).toMatch(/4도어/);
-    expect(productById(kitchenFit(fridge, [1600, 800, 1910])).name).toMatch(/6도어/);                // 폭 1600은 6도어(1900)에 더 가깝다
-    expect(productById(kitchenFit(fridge, [1600, 800, 1910], '냉장고 4도어 1600-800')).name).toMatch(/4도어/);
-    const ind = LEGACY_TO_KITCHEN['range-induction'];
-    expect(productById(kitchenFit(ind, [1500, 750, 970])).name).toMatch(/2구/);                      // 같은 크기 낮은 2구가 앞 행
-    const ind3 = productById(kitchenFit(ind, [1500, 750, 970], '렌지 인덕션 3구 1500x750'));
-    expect(ind3.name).toMatch(/3구/);
-    expect(ind3.equip.heat).toBe('electric');
-    const gas = productById(kitchenFit(LEGACY_TO_KITCHEN['range-gas-3'], [1500, 750, 800], '가스렌지 2구'));
-    expect(gas.name).toMatch(/2구/);                                                                // 열원은 그대로 — 가스 2구
-    expect(gas.equip.heat).toBe('gas');
-  });
-
-  test('kitchenFit: 이름의 선택 수를 다 가진 후보가 없거나(9조) 선택 수가 없으면 이름을 무시한다 — 이름 없는 호출과 같다', () => {
-    const one = LEGACY_TO_KITCHEN['sink-single'], two = LEGACY_TO_KITCHEN['sink-double'];
-    const fridge = LEGACY_TO_KITCHEN['fridge-2door'], ind = LEGACY_TO_KITCHEN['range-induction'];
-    for (const [id, s, name] of [
-      [one, [1500, 750, 850], '세정대 9조 1500-750'], [two, [1500, 750, 850], '세정대 9조'], [two, [1500, 750, 850], '세정대 1500-750'],
-      [two, [1500, 750, 850], '세정대 1조 2조'], [fridge, [1260, 800, 1910], '냉장고 3도어 1260-800'], [fridge, [1600, 800, 1910], '냉장고 1100L'],
-      [ind, [1500, 750, 970], '인덕션렌지 1500x750'], [ind, [1500, 750, 970], '렌지 3찬'], [one, [1500, 750, 850], ''], [one, [1500, 750, 850], null],
-    ]) expect(kitchenFit(id, s, name), `${id} ${name}`).toBe(kitchenFit(id, s));
-    expect(kitchenFit('equip-generic', [1000, 600, 850], '세정대 1조')).toBe('equip-generic');
-    expect(kitchenFit(two, null, '세정대 1조')).toBe(two);
-    for (const p of KITCHEN_PRODUCTS) expect(kitchenFit(p.id, p.size, p.name), p.id).toBe(p.id);   // 자기 크기·자기 이름이면 자기 자신
-  });
-
-  test('kitchenFit: 크기가 잘못됐으면(세 개의 유한한 양수가 아니면) 이름이 있든 없든 id 그대로 — 던지지 않는다', () => {
-    const one = LEGACY_TO_KITCHEN['sink-single'], two = LEGACY_TO_KITCHEN['sink-double'];
-    for (const [id, s, name] of [
-      [two, [1500, 750], '세정대 1조'], [two, [1500, NaN, 850], '세정대 1조'], [two, [Infinity, 750, 850], '세정대 1조'], [two, [], '세정대 1조'],
-      [one, [1500, 750], '세정대 2조'], [one, [1500, NaN, 850], '세정대 2조'], [one, [Infinity, 750, 850], '세정대 2조'], [one, [], '세정대 2조'],
-      [two, '1500x750x850', ''], [two, '1500x750x850', '세정대 1조'], [one, '1500x750x850', undefined],
-      [two, [1500, 0, 850], '세정대 1조'], [two, [1500, -750, 850], ''], [two, [1500, 750, 850, 1], '세정대 1조'], [two, undefined, '세정대 1조'],
-    ]) {
-      const label = `${id} ${String(s)} ${name}`;
-      expect(() => kitchenFit(id, s, name), label).not.toThrow();
-      expect(kitchenFit(id, s, name), label).toBe(id);
-    }
-    for (const s of [[1500, 750], [1500, NaN, 850], [Infinity, 750, 850], [], '1500x750x850']) expect(kitchenFit(two, s), String(s)).toBe(two);
-  });
-
-  test('선택 수 낱말: 한 자리 숫자(앞에 숫자 없음) + 띄어쓰기 한 칸까지 + 단위, 단위 뒤에 한글 음절이 붙으면 아니다', () => {
-    const tokens = name => [...__optionTokens(name)];
-    for (const [name, want] of [
-      ['세정대 1조 1500-750', ['1조']], ['세정대 2 조', ['2조']], ['냉장고 4도어 1100L 1260-850', ['4도어']], ['보냉고 4도어(앞뒤양문형)', ['4도어']],
-      ['가스 3단 취반기', ['3단']], ['반찬 배식대(5찬)', ['5찬']], ['렌지 인덕션 3구 1500x750', ['3구']],
-    ]) expect(tokens(name), name).toEqual(want);
-    for (const name of ['1500 조리대', '구이기 900', '단열 캐비닛', '찬장 1200', '세정대 1500 조', '세정대 12조', '', null]) expect(tokens(name), String(name)).toEqual([]);
+  // 선택 수 낱말(OPTION_RE): 한 자리 숫자(앞에 숫자 없음) + 띄어쓰기 한 칸까지 + 단위, 단위 뒤에 한글 음절이 붙으면 아니다. kitchenFor의 이름 경로가 쓴다
+  // (계획 17 최종 리뷰 M-1 — 시험 전용 __optionTokens와 앱이 쓰지 않던 kitchenFit을 지우고 같은 경우를 kitchenFor로 지킨다).
+  test('선택 수 낱말: 조리대·단열·1500 조·12조는 선택 수가 아니고, 띄어 쓴 2 조는 2조다 — kitchenFor 이름 경로', () => {
+    const name = (id, s, n) => productById(kitchenFor(id, s, n)).name, sink = [1500, 750, 850], fridge = [1600, 800, 1910];
+    expect(name('sink-double', sink, '세정대 1조 조리대측 1500-750')).toMatch(/1조/);
+    expect(name('sink-double', sink, '세정대 1조 1500 조리대측')).toMatch(/1조/);           // 전: '1500조'가 섞여 이름 전체가 무시됐다
+    expect(name('sink-single', sink, '세정대 2 조')).toMatch(/2조/);                         // 띄어 써도 같다
+    for (const n of ['세정대 1500 조', '세정대 12조', '세정대 1500 조리대측']) for (const id of ['sink-single', 'sink-double'])
+      expect(kitchenFor(id, sink, n), `${id} ${n}`).toBe(kitchenFor(id, sink, '세정대'));
+    expect(name('fridge-2door', fridge, '냉장고 4도어 1600 단열')).toMatch(/4도어/);          // 전: '1600단' → 6도어
+    expect(kitchenFor('fridge-2door', fridge, '냉장고 1600 단열')).toBe(kitchenFor('fridge-2door', fridge, '냉장고'));
+    expect(name('ricecooker-gas', [708, 706, 1330], '가스 2단 취반기')).toMatch(/2단/);
   });
 
   // 2026-10-20 · 계획 17 Task 8 Fix 1·2: DXF 기구는 어휘의 기존 id(legacy) + 기구 크기 + 도면 이름으로 kitchenFor를 부른다(같은 세부품명 전체에서 고르던
@@ -296,13 +209,5 @@ describe('기존 id → 엑셀 제품 대응', () => {
     for (const [id, s, n] of [['sink-double', [1500, 750, 850], '세정대 9조'], ['sink-single', [1200, 750, 850], '전기 세정대'], ['hood-box', [1500, 1300, 600], '이동식 후드']])
       expect(kitchenFor(id, s, n), n).toBe(kitchenFor(id, s, '도면 이름'));
     expect(kitchenFor('sofa-3', [2100, 900, 800], '고정식')).toBeNull();
-  });
-
-  test('kitchenFit: 이름에 조리대·단열 같은 낱말이 같이 있어도 진짜 선택 수가 이긴다', () => {
-    const two = LEGACY_TO_KITCHEN['sink-double'], sink = [1500, 750, 850];
-    expect(productById(kitchenFit(two, sink, '세정대 1조 조리대측 1500-750')).name).toMatch(/1조/);
-    expect(productById(kitchenFit(two, sink, '세정대 1조 1500 조리대측')).name).toMatch(/1조/);       // 전: '1500조'가 섞여 이름 전체가 무시됐다
-    const fridge = LEGACY_TO_KITCHEN['fridge-2door'];
-    expect(productById(kitchenFit(fridge, [1600, 800, 1910], '냉장고 4도어 1600 단열')).name).toMatch(/4도어/);   // 전: '1600단' → 6도어
   });
 });
