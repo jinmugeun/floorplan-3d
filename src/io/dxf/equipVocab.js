@@ -11,7 +11,7 @@ import { LEGACY_TO_KITCHEN } from '../../products/catalogKitchen.js';
 // 2026-10-20 · 계획 17 Task 8: 표는 기존(숨김 단종) 제품 id로 적고 엑셀 급식기구를 가리킨다(LEGACY_TO_KITCHEN — 같은 세부품명 안 크기 최근접 대표).
 // 엑셀에 짝이 없는 것(TV·거울·변기·에어컨·벤치)은 숨김 제품 그대로다 — 점수판 equipProd(제품으로 맞춘 수)가 줄지 않게. 실제로 서는 제품은
 // equipment.js가 기구 크기·도면 이름으로 다시 고른다: 엑셀을 가리키는 칸은 기존 id를 legacy로 함께 들고(Fix 1), kitchenFor(legacy, 크기, 이름)가
-// 그 어휘의 제품 갈래(세부품명 · 이름 정규식 · 열원 · 고정식/이동식 · 선택 수) 안에서 고른다. 짝 없는 칸·일반 상자 칸은 legacy가 없다.
+// 그 어휘의 세부품명 안에서 고른다(이름 있으면 열원·고정식/이동식·선택 수·제품 낱말 · 없으면 표의 정규식 — Fix 2). 짝 없는 칸·일반 상자 칸은 legacy가 없다.
 export const kitchenOr = id => LEGACY_TO_KITCHEN[id] ?? id;
 const K = id => (LEGACY_TO_KITCHEN[id] ? { productId: LEGACY_TO_KITCHEN[id], legacy: id } : { productId: id });
 const GEN = 'equip-generic';

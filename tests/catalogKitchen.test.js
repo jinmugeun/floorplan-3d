@@ -209,8 +209,8 @@ describe('기존 id → 엑셀 제품 대응', () => {
     for (const name of ['1500 조리대', '구이기 900', '단열 캐비닛', '찬장 1200', '세정대 1500 조', '세정대 12조', '', null]) expect(tokens(name), String(name)).toEqual([]);
   });
 
-  // 2026-10-20 · 계획 17 Task 8 Fix 1: DXF 기구는 어휘의 기존 id(legacy) + 기구 크기 + 도면 이름으로 kitchenFor를 부른다(같은 세부품명 전체에서 고르던
-  // kitchenFit은 고정식작업대 → 이동식·보조배식대, 세탁 건조기 → 세탁기, 취반기(전기) → 가스로 갔다). 이름 없는 호출은 예전과 글자 그대로 같아야 한다.
+  // 2026-10-20 · 계획 17 Task 8 Fix 1·2: DXF 기구는 어휘의 기존 id(legacy) + 기구 크기 + 도면 이름으로 kitchenFor를 부른다(같은 세부품명 전체에서 고르던
+  // kitchenFit은 고정식작업대 → 이동식·보조배식대, 세탁 건조기 → 세탁기, 취반기(전기) → 가스로 갔다). 이름 없는 호출(익명 블록·대표 대응)은 예전과 글자 그대로다.
   test('kitchenFor(id, 크기)는 이름 없이 예전 규칙 그대로다 — 세부품명 → 이름 정규식(없으면 물러섬) → 크기 최근접 · LEGACY_TO_KITCHEN 불변', () => {
     const fp = s => [Math.max(s[0], s[1]), Math.min(s[0], s[1]), s[2]];
     const gap = (a, b) => { const x = fp(a), y = fp(b); return [0, 1, 2].reduce((t, i) => t + Math.abs(Math.log(Math.max(1, x[i]) / Math.max(1, y[i]))), 0); };
@@ -225,40 +225,55 @@ describe('기존 id → 엑셀 제품 대응', () => {
       expect(LEGACY_TO_KITCHEN[id], id).toBe(before(id, legacySize(id)));
       for (const s of [legacySize(id), [1260, 800, 1910], [1500, 750, 850], [700, 600, 850], [570, 600, 1460], [1500, 1800, 600], [450, 540, 809]]) {
         expect(kitchenFor(id, s), `${id} ${s}`).toBe(before(id, s));
-        for (const name of ['', null, undefined, '세정대 1500-750', '워터릴']) expect(kitchenFor(id, s, name), `${id} ${s} ${name}`).toBe(before(id, s));
+        for (const name of ['', null, undefined, '   ']) expect(kitchenFor(id, s, name), `${id} ${s} ${name}`).toBe(before(id, s));
       }
     }
   });
 
-  test('kitchenFor(id, 크기, 도면 이름): 열원 낱말 → 선택 수 → 이름 정규식 → 고정식/이동식 — 각 거르기는 후보가 남을 때만', () => {
+  // Fix 2(2026-10-20 · 컨트롤러 결정): 표의 이름 정규식 상당수(/1조/ · /2조/ · /2도어/ …)는 갈래가 아니라 크기 대표다 — 이름이 있으면 쓰지 않는다.
+  // 대신 이름의 낱말로 거른다: 열원 → 고정식/이동식 → 선택 수 → 제품 낱말(담금·컵·건조기·세탁기·작업대·배식대·선반·손세정 — 이름에 있는 것을 모두 가진 후보).
+  test('kitchenFor(id, 크기, 도면 이름): 정규식 없이 열원 → 고정식/이동식 → 선택 수 → 제품 낱말 — 각 거르기는 후보가 남을 때만', () => {
     const name = (id, s, n) => productById(kitchenFor(id, s, n));
-    // 열원: 전기·인덕션 → electric, 가스 → gas(이름 정규식 /가스/·/전기/보다 먼저 — 남는 후보가 없으면 그 정규식은 건너뛴다).
+    // 열원: 전기·인덕션 → electric, 가스 → gas(열원이 있는 후보 안에서).
     const rice = name('ricecooker-gas', [570, 600, 1460], '취반기(전기) 150인용 570x600x1460');
     expect(rice.equip.heat).toBe('electric');
-    expect(name('ricecooker-gas', [570, 600, 1460]).equip.heat).toBe('gas');                        // 이름 없이는 대표(가스) 쪽
+    expect(name('ricecooker-gas', [570, 600, 1460]).equip.heat).toBe('gas');                        // 이름 없이는 대표(가스) 정규식
     const ind = name('range-gas-6', [1500, 750, 850], '렌지 인덕션 3구 1500x750');
     expect([ind.equip.heat, /3구/.test(ind.name)]).toEqual(['electric', true]);
     expect(name('range-gas-6', [1500, 750, 850], '가스렌지 2구 1500').equip.heat).toBe('gas');
-    expect(name('steamer-combi', [1270, 920, 1965], '오븐(가스) 40단').equip.heat).toBe('gas');      // 정규식 /전기/를 열원이 이긴다
+    expect(name('steamer-combi', [1270, 920, 1965], '오븐(가스) 40단').equip.heat).toBe('gas');
     expect(name('soup-kettle', [1520, 1120, 850], '회전국솥 300인(전기) 1520-1120-850').equip.heat).toBe('electric');
-    expect(kitchenFor('worktable-1800', [1500, 750, 850], '전기 작업대')).toBe(kitchenFor('worktable-1800', [1500, 750, 850]));   // 열원 없는 후보 — 건너뜀
-    // 이름 정규식: 작업대는 작업대(보조배식대 아님) · 건조기는 건조기 · 후드 대표는 배기후드.
-    expect(name('worktable-1800', [700, 600, 850], '고정식작업대 700-600').name).toMatch(/작업대/);
-    expect(name('worktable-1800', [700, 600, 850]).name).not.toMatch(/보조배식대/);
-    expect(name('dryer', [700, 830, 1000], '세탁 건조기 700-830').name).toMatch(/건조기/);
-    expect(name('hood-box', [1500, 1800, 600], '').name).toMatch(/^배기후드/);
+    expect(kitchenFor('worktable-1800', [1500, 750, 850], '전기 작업대')).toBe(kitchenFor('worktable-1800', [1500, 750, 850], '작업대'));   // 열원 없는 후보 — 건너뜀
     // 고정식/이동식: 이름에 있으면 후보 이름에도 있어야 한다.
     const fixed = name('worktable-1800', [1500, 750, 850], '고정식작업대 1500-750');
     expect([/고정식/.test(fixed.name), /이동식/.test(fixed.name)]).toEqual([true, false]);
     expect(name('worktable-1800', [1500, 750, 850]).name).toMatch(/이동식/);                        // 이름 없이는 크기가 딱 맞는 이동식
     expect(name('worktable-1800', [1200, 750, 850], '이동식작업대1200-750').name).toMatch(/이동식/);
-    // 선택 수: 이름의 4도어가 대표 정규식(/2도어/)을 이긴다 — 폭 1260 냉장고가 2도어로 서지 않게(Fix 1 결정: 선택 수를 정규식 앞에 둔다).
+    // 선택 수: 이름의 조·도어 수.
     expect(name('fridge-2door', [1260, 850, 1800], '냉장고 4도어 1100L 1260-850').name).toMatch(/4도어/);
     expect(name('sink-single', [1500, 750, 850], '세정대 2조 1500-750').name).toMatch(/2조/);
     expect(name('sink-double', [1200, 750, 850], '세정대 2조 1200-750').name).toMatch(/2조/);
-    // 남는 후보가 없는 낱말은 무시한다(9조 · 전기 세정대 · 이동식 후드).
+    // 이름이 있으면 크기 대표 정규식을 쓰지 않는다: 양문 1260 냉장고는 4도어 1260 · 보존식 소형은 소형냉장고(이름 없이는 /2도어/ 대표 갈래).
+    const wide = name('fridge-2door', [1260, 800, 1800], '보냉고 양문1260-800');
+    expect([/4도어/.test(wide.name), wide.size[0]]).toEqual([true, 1260]);
+    expect(name('fridge-2door', [1260, 800, 1800]).name).toMatch(/2도어/);
+    const small = name('fridge-2door', [605, 570, 954], '냉장고 보존식(1식) 605-570-954');
+    expect(small.name).toMatch(/소형냉장고/);
+    expect(small.name).not.toMatch(/2도어/);
+    // 제품 낱말: 이름에 있는 낱말을 모두 가진 후보.
+    expect(name('worktable-1800', [700, 600, 850], '고정식작업대 700-600').name).toMatch(/작업대/);
+    expect(name('worktable-1800', [700, 600, 850]).name).not.toMatch(/보조배식대/);
+    expect(name('dryer', [700, 830, 1000], '세탁 건조기 700-830').name).toMatch(/건조기/);
+    expect(name('dryer', [700, 830, 1890], '세탁기 건조기 직렬').name).toMatch(/세탁기\/건조기/);   // 낱말 둘 다
+    expect(name('washer-drum', [450, 540, 809], '세탁기 삶기 450-540-809').name).toMatch(/세탁기/);
+    expect(name('sink-double', [1500, 750, 850], '수류담금세척기 TR1500S').name).toMatch(/담금/);
+    expect(name('dishwasher', [600, 570, 1500], '컵자동세척기').name).toMatch(/컵/);
+    const multi = name('washbasin', [1800, 550, 1450], '멀티손세정대3구 1800-550-1450');
+    expect([/손세정/.test(multi.name), multi.size[0]]).toEqual([true, 1800]);
+    expect(name('hood-box', [1500, 1800, 600], '').name).toMatch(/^배기후드/);                     // 이름 없는 익명 후드는 대표 정규식
+    // 남는 후보가 없는 낱말은 무시한다(9조 · 전기 세정대 · 이동식 후드) — 거를 낱말이 없는 이름과 같다.
     for (const [id, s, n] of [['sink-double', [1500, 750, 850], '세정대 9조'], ['sink-single', [1200, 750, 850], '전기 세정대'], ['hood-box', [1500, 1300, 600], '이동식 후드']])
-      expect(kitchenFor(id, s, n), n).toBe(kitchenFor(id, s));
+      expect(kitchenFor(id, s, n), n).toBe(kitchenFor(id, s, '도면 이름'));
     expect(kitchenFor('sofa-3', [2100, 900, 800], '고정식')).toBeNull();
   });
 

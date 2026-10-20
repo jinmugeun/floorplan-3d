@@ -4,7 +4,7 @@
 // 대응 규칙: 후보 = 세부품명이 맞고(이름 정규식이 있으면 이름도) → 크기가 가장 가까운 것. 거리 = Σ|ln(a/b)|(정렬한 긴 변·짧은 변·높이) — 비율이라 큰 기구와 작은 기구에 공평하고, 회전된 아이템 크기에도 같다.
 // 같은 거리면 원자료 순서(엑셀 행 순서)의 앞이 이긴다 — 결과가 실행마다 같다. kitchenFit은 같은 열원 안에서만 고르고, 같은 거리면 원래 제품이 이긴다.
 // kitchenFit에 도면 이름을 주면 이름의 N조·N구·N도어·N단·N찬을 가진 후보 안에서 고른다(그런 후보가 있을 때만).
-// DXF 기구(계획 17 Task 8 Fix 1)는 kitchenFor(어휘의 기존 id, 크기, 도면 이름)로 고른다 — 그 어휘의 제품 갈래(정규식 · 열원 · 고정식/이동식) 안이다.
+// DXF 기구(계획 17 Task 8 Fix 1·2)는 kitchenFor(어휘의 기존 id, 크기, 도면 이름)로 고른다 — 이름이 있으면 정규식 대신 이름 낱말(열원·시리즈·선택 수·제품 낱말).
 import data from './kitchenData.js';
 import { expandRow, KITCHEN_CHIPS } from './kitchenRules.js';
 import { LEGACY_PRODUCTS } from './catalogLegacy.js';
@@ -55,27 +55,33 @@ const optionTokens = name => new Set([...String(name ?? '').matchAll(OPTION_RE)]
 export const __optionTokens = optionTokens;   // 테스트 전용
 const optionsById = new Map(KITCHEN_PRODUCTS.map(p => [p.id, optionTokens(p.name)]));
 
-// 도면 이름의 열원 낱말: 전기·인덕션 → electric, 가스 → gas. 둘 다 있으면 모른다(null). 시리즈 낱말: 이름에 있으면 후보 이름에도 있어야 한다.
-const heatWord = name => { const s = String(name ?? ''), e = /전기|인덕션/.test(s), g = /가스/.test(s); return e === g ? null : e ? 'electric' : 'gas'; };
+// 도면 이름의 낱말(2026-10-20 · 계획 17 Task 8 Fix 2). 열원: 전기·인덕션 → electric, 가스 → gas(둘 다 있으면 모른다 — null).
+// 시리즈: 이름에 있으면 후보 이름에도 있어야 한다. 제품 낱말: 이름에 있는 것을 **모두** 가진 후보만(세탁기 건조기 → '세탁기/건조기 직렬설치').
+const heatWord = name => { const e = /전기|인덕션/.test(name), g = /가스/.test(name); return e === g ? null : e ? 'electric' : 'gas'; };
 const SERIES = ['고정식', '이동식'];
+const PRODUCT_WORDS = ['담금', '컵', '건조기', '세탁기', '작업대', '배식대', '선반', '손세정'];
 
 // 기존 id + 크기(+ 도면 이름) → 엑셀 제품 id | null(대응 표에 없는 id — 침대·소파·조명 등). 표에 있는 id는 언제나 풀린다:
-// 크기가 잘못됐으면(null · 길이 2 · NaN · 0) 기존 제품 자기 크기로 고른다.
-// 후보는 표의 세부품명 → (이름) 열원 낱말 → (이름) 선택 수 → 표의 이름 정규식 → (이름) 고정식/이동식 차례로 거른다. 각 거르기는 후보가 하나라도 남을
-// 때만 쓴다: '취반기(전기)'는 전기 취반기만 남아 정규식 /가스/를 건너뛴다. 선택 수가 정규식보다 앞이다 — '냉장고 4도어 1260'이 대표 정규식 /2도어/에
-// 묶여 2도어(폭 640)로 서지 않게(2026-10-20 · 계획 17 Task 8 Fix 1 — DXF 기구가 어휘의 기존 id로 부른다). 이름이 없거나 이 낱말이 없으면 예전
-// (세부품명 → 정규식 → 최근접) 그대로라 LEGACY_TO_KITCHEN이 바뀌지 않는다(tests/catalogKitchen.test.js가 예전 규칙과 맞댄다).
+// 크기가 잘못됐으면(null · 길이 2 · NaN · 0) 기존 제품 자기 크기로 고른다. 후보는 표의 세부품명이고, 크기가 가장 가까운 것(같으면 원자료 순서의 앞)이 이긴다.
+//  - 이름이 없으면(익명 블록 · 대표 대응) 표의 이름 정규식으로 거른다(맞는 후보가 없으면 물러섬) — 예전 그대로라 LEGACY_TO_KITCHEN이 바뀌지 않는다
+//    (tests/catalogKitchen.test.js가 예전 규칙과 맞댄다).
+//  - 이름이 있으면(DXF 블록 이름) 정규식을 쓰지 않는다: 표의 정규식 상당수(/1조/ · /2조/ · /2도어/ · /도어형/)는 갈래가 아니라 크기 대표라
+//    양문 1260 냉장고가 2도어 640으로, 담금세척기가 2조 세정대로, 컵자동세척기가 도어형 세척기로 섰다(Fix 1 실측). 대신 이름의 낱말로 열원 →
+//    고정식/이동식 → 선택 수 → 제품 낱말 차례로 거른다. 각 거르기는 후보가 하나라도 남을 때만 쓴다(취반기(전기) → 전기 취반기 · 9조 → 무시).
 export function kitchenFor(legacyId, sizeMm, name = '') {
   const rule = LEGACY_SUBS[legacyId];
   if (!rule) return null;
-  const [subs, re] = rule;
+  const [subs, re] = rule, text = String(name ?? '').trim();
   let list = KITCHEN_PRODUCTS.filter(p => subs.includes(p.sub));
   const keep = ok => { const n = list.filter(ok); if (n.length) list = n; };
-  const heat = heatWord(name), want = [...optionTokens(name)], text = String(name ?? '');
-  if (heat) keep(p => p.equip?.heat === heat);
-  if (want.length) keep(p => want.every(t => optionsById.get(p.id).has(t)));
-  if (re) keep(p => re.test(p.name));
-  for (const w of SERIES) if (text.includes(w)) keep(p => p.name.includes(w));
+  if (!text) { if (re) keep(p => re.test(p.name)); }
+  else {
+    const heat = heatWord(text), want = [...optionTokens(text)], words = PRODUCT_WORDS.filter(w => text.includes(w));
+    if (heat) keep(p => p.equip?.heat === heat);
+    for (const w of SERIES) if (text.includes(w)) keep(p => p.name.includes(w));
+    if (want.length) keep(p => want.every(t => optionsById.get(p.id).has(t)));
+    if (words.length) keep(p => words.every(w => p.name.includes(w)));
+  }
   const own = legacyById.get(legacyId)?.size;
   const size = validSize(sizeMm) ? sizeMm : validSize(own) ? own : [900, 600, 850];
   return nearest(list, size)?.id ?? null;

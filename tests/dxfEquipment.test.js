@@ -148,6 +148,21 @@ test('기구 제품은 어휘의 제품 갈래 안 — 이름의 조 수·고정
   expect(hood.productId).toBe(KF('hood-box', [1500, 1800, 600]));
 });
 
+// Fix 2(2026-10-20 · 컨트롤러 결정): 이름 있는 블록은 표의 크기 대표 정규식(/2도어/ · /2조/ · /도어형/ · /손세정대/)을 쓰지 않고 이름의 제품 낱말로 거른다.
+// Fix 1에서 정규식이 정확한 제품을 빼던 경우들 — 양문 1260 냉장고 → 2도어 640 · 보존식 소형 → 보냉고 2도어 · 담금 → 2조 · 컵자동세척기 → 도어형 · 멀티 3구 → 480.
+test('이름 있는 블록은 크기 대표 정규식 없이 — 양문 1260은 4도어 1260 · 보존식은 소형냉장고 · 담금 · 컵 · 멀티 손세정 3인용', () => {
+  const at = (name, b) => productById(only(run(one(name, b))).productId);
+  const wide = at('보냉고 양문1260-800', [0, 0, 1260, 800]);
+  expect([/4도어/.test(wide.name), wide.size[0]]).toEqual([true, 1260]);
+  const keep = at('냉장고 보존식(1식) 605-570-954', [0, 0, 605, 570]);
+  expect(keep.name).toMatch(/소형냉장고/);
+  expect(keep.name).not.toMatch(/2도어/);
+  expect(at('수류담금세척기 TR1500S', [0, 0, 1500, 750]).name).toMatch(/담금/);
+  expect(at('컵자동세척기', [0, 0, 600, 570]).name).toMatch(/컵/);                       // 어휘 갈래(상업용식기세척기)에 컵자동세척기가 있다
+  const multi = at('멀티손세정대3구 1800-550-1450', [0, 0, 1800, 550]);
+  expect([/손세정/.test(multi.name), multi.size[0]]).toEqual([true, 1800]);
+});
+
 test('90° 회전 블록 — 축 정렬이면 rot 0 · 월드 상자 방향(w/d가 바뀐다)', () => {
   expect(only(run(one('고정식작업대 1500-750', [0, 0, 750, 1500], { rot: 90 })))).toMatchObject({ size: [750, 1500, 850], rot: 0 });
   expect(only(run(one('고정식작업대 1500-750', [0, 0, 1500, 750], { rot: 181.5 })))).toMatchObject({ size: [1500, 750, 850], rot: 0 });   // ±2° 안은 축 정렬
