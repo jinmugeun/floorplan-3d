@@ -12,6 +12,8 @@ function setup() {
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
   return store;
 }
+// 제품 물량만의 합. 새 방은 바닥 마감재가 기본으로 들어가(계획 17 Task 7) total에 바닥 면적 금액이 더해진다.
+const productsTotal = rows => rows.products.reduce((t, r) => t + r.total, 0);
 
 describe('아이템 스키마와 액션', () => {
   test('normalizeItem은 빠진 값을 채우고 범위를 자른다', () => {
@@ -331,11 +333,11 @@ describe('복사본은 사용자의 것 — dxfProduct 해제(계획 14 Task D)'
     const { estimateRows } = await import('../src/io/estimate.js');
     const s = setup();
     const a = drawn(s);
-    expect(estimateRows(activeFloor(s.get())).total).toBe(0);
+    expect(productsTotal(estimateRows(activeFloor(s.get())))).toBe(0);
     const ids = pasteItems(s, itemsOf(s.get(), [a]).map(i => structuredClone(i)), { delta: [2000, 0] });
     expectUserCopies(s, ids);
     expect(one(s, a).dxfProduct).toBe(sink.id);                              // 원본은 가져온 그대로
-    expect(estimateRows(activeFloor(s.get())).total).toBe(sink.price);       // 사본 하나만 값이 붙는다
+    expect(productsTotal(estimateRows(activeFloor(s.get())))).toBe(sink.price);       // 사본 하나만 값이 붙는다
   });
 
   test('복제(duplicateItems · 상대이동 복사)와 배열 복사(직선·원형·회전·경로) 사본도 dxfProduct가 없다', async () => {
@@ -350,7 +352,7 @@ describe('복사본은 사용자의 것 — dxfProduct 해제(계획 14 Task D)'
     expectUserCopies(s, arrayCopy(s, [a], 'path', { points: [[500, 2000], [3500, 2000]], count: 2 }));
     expect(one(s, a).dxfProduct).toBe(sink.id);
     const f = activeFloor(s.get());
-    expect(estimateRows(f).total).toBe(sink.price * (f.items.length - 1));    // 원본 하나만 0원
+    expect(productsTotal(estimateRows(f))).toBe(sink.price * (f.items.length - 1));    // 원본 하나만 0원
   });
 
   test('층 복사(addFloor copy all)는 도면을 통째로 옮기는 것이라 dxfProduct를 지킨다', async () => {

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { createStore } from '../src/state/store.js';
-import { createEmptyProject, createItem } from '../src/state/schema.js';
+import { createEmptyProject, createItem, activeFloor } from '../src/state/schema.js';
+import { applyMaterial } from '../src/state/materialOps.js';
 import { addWalls, addItem } from '../src/state/floorOps.js';
 import { rectWalls } from '../src/geom/walls.js';
 import { productById } from '../src/products/catalog.js';
@@ -10,6 +11,7 @@ import { openEstimateDialog } from '../src/ui/estimateDialog.js';
 function setup() {
   const store = createStore(createEmptyProject());
   addWalls(store, rectWalls([0, 0], [4000, 3000], 200));
+  applyMaterial(store, { kind: 'floor', id: activeFloor(store.get()).rooms[0].id }, null);   // 새 방 바닥 기본값(계획 17)을 걷는다 — 표·합계는 제품만 본다
   addItem(store, createItem(productById('sofa-3'), { pos: [2000, 1500] }));
   const dlg = openEstimateDialog({ store });
   return { store, dlg, root: document.querySelector('.modal.estimate') };

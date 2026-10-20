@@ -118,9 +118,9 @@ describe('materialRows: 방 행 — 바닥 / 천장', () => {
     v.value = '18.75';
     expect(applyMaterialField(store, roomSel, v)).toBe(true);
     expect(assignmentOf(floor(), { kind: 'ceiling', id: roomSel.id }).offset[1]).toBeCloseTo(18.75);
-    // 바닥에는 새 형식이 들어가지 않았다(§17.4(1): 조회는 레거시 floorMaterial로 떨어질 뿐이다).
-    expect(floor().rooms.find(r => r.id === roomSel.id).floorMat).toBeNull();
-    expect(assignmentOf(floor(), { kind: 'floor', id: roomSel.id }).id).toBe('wood-oak');
+    // 바닥에는 천장 값이 섞이지 않았다 — 새 방 기본값(칩 에폭시 · 계획 17 Task 7)이 오프셋 0 그대로다.
+    expect(floor().rooms.find(r => r.id === roomSel.id).floorMat).toEqual({ id: 'epoxy-chip-gray', offset: [0, 0], angle: 0 });
+    expect(assignmentOf(floor(), { kind: 'floor', id: roomSel.id }).id).toBe('epoxy-chip-gray');
   });
 });
 

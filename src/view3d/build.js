@@ -6,13 +6,16 @@ import { add, mul, eq } from '../geom/vec.js';
 import { openingsOnWall, wallPieces, clipRectByOpenings } from '../geom/openings.js';
 import { wallAxis, RAD } from '../geom/items.js';
 import { buildItems } from './items3d.js';
-import { assetsVersion } from './itemAssets.js';
+import { assetsVersion, envMapNow, assetsChanged } from './itemAssets.js';
 import { buildDucts } from './ducts3d.js';
 import { buildLabels } from './labels3d.js';
-import { applyAssignment } from '../materials/texture.js';
+import { applyAssignment, onPhotoReady } from '../materials/texture.js';
+import { materialById } from '../materials/catalog.js';
 // 무늬를 바를지는 **명시 지정**만 본다(리뷰 I-1): 레거시 문자열 필드는 아직 고르지 않은 면이고,
 // 견적서(io/estimate.js)도 같은 조회로 물량을 센다 — 3D와 견적이 같은 면을 다르게 말하지 않는다.
 import { explicitMat } from '../state/materialOps.js';
+// 사진 마감재 도착 → 에셋 도착과 같은 길(버전 + onAssetsReady → view3d 리빌드). 도착 전에 지은 바닥은 바탕색이었다(계획 17 Task 7).
+onPhotoReady(() => assetsChanged());
 
 const M = v => v / 1000;
 export const toThree = p => new THREE.Vector3(M(p[0]), M(p[2] ?? 0), M(p[1]));
@@ -34,6 +37,9 @@ function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize
   m.userData.perMesh = true;
   // 마감재 지정이 있으면 무늬 텍스처를 붙인다(렌더 우선순위 region > mat > color).
   if (assignment && (faceSize || worldUv)) applyAssignment(m, assignment, faceSize, { display, worldUv });
+  // 광택 마감(카탈로그 gloss — 칩 에폭시·흰 타일): 약한 환경 반사. 무광 면은 지금 밝기 그대로다(scene.environment를 쓰지 않는 원칙 — envMap.js 머리).
+  const gm = assignment && display !== 'white' ? materialById(assignment.id) : null;
+  if (gm?.gloss) { if (!gm.photo) m.roughness = 0.35; m.envMap = envMapNow(); m.envMapIntensity = gm.gloss; }
   return m;
 }
 const lineMaterial = color => { const m = new THREE.LineBasicMaterial({ color }); m.userData.perMesh = true; return m; };
@@ -259,7 +265,7 @@ export function disposeGroup(g) {
     // 실사 에셋 메시(userData.shared)도 같다: 지오메트리는 itemAssets 캐시의 템플릿과 같은 제품 아이템 전부가 나눠 쓴다(재질은 perMesh가 아니라 남는다).
     if (o.geometry && !o.isSprite && !o.userData.shared) o.geometry.dispose();
     if (o.material?.userData?.perMesh) {
-      if (o.material.map?.userData?.clone) o.material.map.dispose(); // 캐시 원본은 남긴다
+      for (const k of ['map', 'normalMap', 'roughnessMap']) if (o.material[k]?.userData?.clone) o.material[k].dispose(); // 복제본만 — 캐시 원본(무늬·사진)은 남긴다
       o.material.dispose();
     }
   });

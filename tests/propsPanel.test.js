@@ -160,6 +160,7 @@ test('wall panel shows centreline length, an editable length, the wall area and 
 test('room panel edits seats, floor/ceiling colours, and 공간 높이 맞추기 drives the wall heights', () => {
   const store = createStore(createEmptyProject()); const ui = createUiState();
   addWalls(store, rectWalls([0, 0], [4000.5, 3000.25], 200)); // 소수 좌표
+  applyMaterial(store, { kind: 'floor', id: activeFloor(store.get()).rooms[0].id }, null);   // 색 선택기는 마감재가 없을 때만 뜬다 — 새 방 기본 바닥(계획 17)을 걷는다
   const el = document.createElement('div'); createPropsPanel(el, store, ui);
   const room = activeFloor(store.get()).rooms[0];
   ui.set({ selection: { type: 'room', id: room.id } });
@@ -572,10 +573,12 @@ test('방 패널: 바닥·천장 행은 {kind:"floor"|"ceiling", id}로 지정�
   expect(el.textContent).toContain('천장 재질');
   applyMaterial(store, { kind: 'ceiling', id: roomId }, { id: 'paint-ivory', offset: [0, 0], angle: 0 });
   expect(el.querySelector('input[name="ceilingColor"]')).toBeNull();
-  expect(el.querySelector('input[name="floorColor"]')).not.toBeNull();
+  expect(el.querySelector('input[name="floorColor"]')).toBeNull();     // 새 방은 바닥 마감재(칩 에폭시)가 기본이라 색 선택기가 없다(계획 17)
   expect(assignmentOf(activeFloor(store.get()), { kind: 'ceiling', id: roomId }).id).toBe('paint-ivory');
-  // §17.4(1): 바닥에는 새 형식이 들어가지 않았다 — 조회는 레거시 floorMaterial('wood-oak')로 떨어진다.
-  expect(activeFloor(store.get()).rooms.find(r => r.id === roomId).floorMat).toBeNull();
+  expect(activeFloor(store.get()).rooms.find(r => r.id === roomId).floorMat).toEqual({ id: 'epoxy-chip-gray', offset: [0, 0], angle: 0 });
+  // 바닥을 걷으면 색 선택기가 돌아오고 조회는 레거시 floorMaterial('wood-oak')로 떨어진다(§17.4(1)).
+  applyMaterial(store, { kind: 'floor', id: roomId }, null);
+  expect(el.querySelector('input[name="floorColor"]')).not.toBeNull();
   expect(assignmentOf(activeFloor(store.get()), { kind: 'floor', id: roomId }).id).toBe('wood-oak');
 });
 

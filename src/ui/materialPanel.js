@@ -31,11 +31,30 @@ export function placedMaterials(floor) {
 }
 
 export const SWATCH_PX = 96;
+// 사진 마감재(계획 17 Task 7)의 견본: 무늬(바탕색 speckle)를 먼저 그리고, 사진(색 맵)이 오면 그 위에 덮는다. 이미지는 폴더당 한 번 받는다.
+// 오기 전에 그린 캔버스는 기다리는 목록에 두었다가 도착 때 한꺼번에 덮는다(패널을 다시 그리지 않는다). Image가 없는 환경(node)은 무늬만.
+const swatchPhotos = new Map();   // photo 폴더 → { img, ready, waiting: Set<canvas> }
+function swatchPhoto(material, canvas) {
+  if (typeof Image === 'undefined') return null;
+  let e = swatchPhotos.get(material.photo);
+  if (!e) {
+    e = { img: new Image(), ready: false, waiting: new Set() };
+    swatchPhotos.set(material.photo, e);
+    e.img.onload = () => { e.ready = true; for (const c of e.waiting) c.getContext('2d')?.drawImage(e.img, 0, 0, SWATCH_PX, SWATCH_PX); e.waiting.clear(); };
+    e.img.onerror = () => e.waiting.clear();
+    e.img.src = `textures/${material.photo}/color.webp`;
+  }
+  if (!e.ready) e.waiting.add(canvas);
+  return e;
+}
 export function drawSwatch(canvas, material) {
   canvas.width = SWATCH_PX; canvas.height = SWATCH_PX;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;                                        // jsdom 등 2D 컨텍스트가 없는 환경
   drawPattern(ctx, material, SWATCH_PX);
+  if (!material?.photo) return;
+  const e = swatchPhoto(material, canvas);
+  if (e?.ready) ctx.drawImage(e.img, 0, 0, SWATCH_PX, SWATCH_PX);
 }
 
 // 타일 크기 덮어쓰기(§13.3). 범위는 normalizeAssignment가 자르는 값과 같은 곳에서 온다.

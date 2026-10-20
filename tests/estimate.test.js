@@ -23,6 +23,7 @@ const mat = id => ({ id, offset: [0, 0], angle: 0 });
 describe('견적서 계산', () => {
   test('같은 제품은 수량으로 묶이고 금액이 단가 × 수량이다', () => {
     const a = setup();
+    applyMaterial(a.store, { kind: 'floor', id: a.floor().rooms[0].id }, null);   // 새 방 바닥 기본값(계획 17 Task 7)을 걷는다 — 이 테스트는 제품 합만 본다
     addItem(a.store, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
     addItem(a.store, createItem(productById('chair-dining'), { pos: [1500, 1000] }));
     addItem(a.store, createItem(productById('dining-4'), { pos: [2000.5, 1500.25] }));
@@ -100,13 +101,26 @@ describe('견적서 계산', () => {
     const f = a.floor();
     expect(f.walls[0].material).toBe('paint-white');
     expect(f.rooms[0].floorMaterial).toBe('wood-oak');
-    expect(estimateRows(f).materials).toEqual([]);
-    expect(estimateRows(f).total).toBe(0);
+    // 명시 지정은 새 방의 바닥 기본값(칩 에폭시 · 계획 17 Task 7) 하나뿐이다 — 걷으면 물량이 0이다.
+    expect(estimateRows(f).materials.map(r => r.id)).toEqual(['epoxy-chip-gray']);
+    applyMaterial(a.store, { kind: 'floor', id: f.rooms[0].id }, null);
+    expect(estimateRows(a.floor()).materials).toEqual([]);
+    expect(estimateRows(a.floor()).total).toBe(0);
     applyMaterial(a.store, { kind: 'floor', id: f.rooms[0].id }, mat('wood-oak'));
     const rows = estimateRows(a.floor()).materials;
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe('wood-oak');
     expect(rows[0].areaM2).toBeCloseTo(Math.round(a.floor().rooms[0].area * 100) / 100, 2);
+  });
+
+  // 계획 17 Task 7: 새 방은 바닥이 칩 에폭시(45,000원/m²)로 명시 지정된다 — 견적서 마감재 칸에 바로 잡힌다.
+  test('새 방의 바닥 기본값은 칩 에폭시로 견적에 잡힌다(리터럴)', () => {
+    const a = setup();
+    const rows = estimateRows(a.floor());
+    // 안쪽 넓이 = (4000.5 − 200) × (3000.25 − 200) / 1e6 = 10.6428 → round2 10.64 · 10.64 × 45000 = 478,800
+    expect(rows.materials).toHaveLength(1);
+    expect(rows.materials[0]).toMatchObject({ id: 'epoxy-chip-gray', name: '그레이 칩 에폭시', areaM2: 10.64, unitPrice: 45000, total: 478800 });
+    expect(rows.total).toBe(478800);
   });
 
   test('빈 층은 빈 견적이 된다', () => {

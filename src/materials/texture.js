@@ -12,6 +12,32 @@ const defaultCanvas = () => (typeof document === 'undefined' ? null : document.c
 const cache = new Map();
 export function clearTextureCache() { for (const t of cache.values()) t?.dispose?.(); cache.clear(); }
 
+// 사진 마감재(계획 17 Task 7): 카탈로그 항목의 photo = public/textures/<photo>/ 폴더. 색·법선·거칠기 3장을 종류당 한 번 받아 캐시한다.
+// three r169: 로드가 끝나기 전에 clone한 텍스처는 영영 올라가지 않는다 — 도착 전에는 null을 돌려(쓰는 쪽은 바탕색) 붙이지 않게 하고,
+// 도착하면 onPhotoReady 구독자(build.js → itemAssets.assetsChanged → view3d 리빌드)에게 알린다. node(document 없음)는 늘 null이고
+// 캐시에도 넣지 않는다(뒤에 가짜 document를 깐 테스트가 받을 수 있게). 실패는 한 번 경고하고 그 종류는 다시 받지 않는다(바탕색으로 남는다).
+const photos = new Map(), photoSubs = new Set();
+export const PHOTO_MAPS = ['map', 'normalMap', 'roughnessMap'];
+export const PHOTO_TINT = [0.72, 0.72, 0.71];   // 선형 색 곱 — 시안(scratch/look/proto.html floorPhoto)에서 사진 그대로는 바닥이 떠 보였다
+export const onPhotoReady = cb => { photoSubs.add(cb); return () => { photoSubs.delete(cb); }; };
+export function photoTextures(material) {
+  const dir = material?.photo;
+  if (!dir) return null;
+  if (photos.has(dir)) return photos.get(dir).maps;
+  if (typeof document === 'undefined') return null;
+  const entry = { maps: null };
+  photos.set(dir, entry);
+  const loader = new THREE.TextureLoader();
+  Promise.all(['color', 'normal', 'rough'].map(k => loader.loadAsync(`textures/${dir}/${k}.webp`))).then(([map, normalMap, roughnessMap]) => {
+    for (const t of [map, normalMap, roughnessMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; }
+    map.colorSpace = THREE.SRGBColorSpace;
+    entry.maps = { map, normalMap, roughnessMap };
+    for (const cb of photoSubs) cb(dir);
+  }).catch(e => console.warn(`사진 마감재 생략(${dir}): ${e?.message ?? e}`));
+  return null;
+}
+export function __resetPhotos() { photos.clear(); }   // 테스트용 — 구독(build.js의 모듈 구독)은 남긴다
+
 // 타일 크기 덮어쓰기(§13.3): 마감재 배정이 쓸 수 있는 scale을 들고 있으면 재질의 기본 scale 대신 쓴다.
 // 값 검사는 normalizeAssignment가 이미 했지만, 정규화를 지나지 않은 객체(미리보기·테스트)로도 불린다.
 // 여기서 100~2000 mm 범위를 다시 자르지 않는다(정규화가 이미 했다) — 양수인지만 본다.
@@ -61,10 +87,12 @@ export function faceRepeat(material, faceSizeMm, { worldUv = false, scale = null
 export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false } = {}) {
   if (!threeMaterial) return threeMaterial;
   threeMaterial.map = null;
+  if ('normalMap' in threeMaterial) { threeMaterial.normalMap = null; threeMaterial.roughnessMap = null; }   // 사진 갈래가 붙였던 것(재사용 재질)
   if (!assignment || display === 'white') return threeMaterial;
   const m = materialById(assignment.id);
   if (!m) return threeMaterial;
   const sc = assignScale(assignment, m);          // 배정의 scale이 있으면 그것이 무늬 한 칸의 크기다
+  if (m.photo) return applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv);
   // 재질의 기본 크기와 같은 scale은 캐시 키에 넣지 않는다: 같은 그림을 두 장 들고 있지 않게(M-5).
   const own = Array.isArray(m.scale) && sc[0] === Number(m.scale[0]) && sc[1] === Number(m.scale[1]);
   const tex = materialTexture(assignment.id, { makeCanvas, scale: assignment?.scale && !own ? sc : null });
@@ -85,5 +113,29 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   threeMaterial.map = t;
   threeMaterial.color.set('#ffffff');             // 무늬 색이 그대로 보이게 바탕을 흰색으로
   threeMaterial.needsUpdate = true;               // perMesh 표시는 재질을 만든 쪽(build.js)이 찍는다
+  return threeMaterial;
+}
+
+// applyAssignment의 사진 갈래. 반복·오프셋·각도 규칙은 무늬 갈래와 같다(같은 faceRepeat · 원점 기준 회전 · offset mm ÷ 한 장 mm).
+// 사진이 아직 안 왔으면 바탕색만 칠한다 — 도착 알림이 장면을 다시 짓는다(photoTextures 머리).
+function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv) {
+  const maps = photoTextures(m);
+  if (!maps) { threeMaterial.color.set(m.base); return threeMaterial; }
+  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sc });
+  const shifted = i => Number(assignment.offset?.[i]) || 0;
+  for (const key of PHOTO_MAPS) {
+    const t = maps[key].clone();                  // 도착한 뒤의 복제라 올라간다(r169)
+    t.repeat.set(rx, ry);
+    t.offset.set(shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000));
+    t.center.set(0, 0);
+    t.rotation = ((Number(assignment.angle) || 0) * Math.PI) / 180;
+    t.userData.clone = true;                      // disposeGroup이 복제본만 정리한다
+    t.needsUpdate = true;
+    threeMaterial[key] = t;
+  }
+  threeMaterial.normalScale?.set(0.5, 0.5);
+  threeMaterial.roughness = 0.9;
+  threeMaterial.color.setRGB(...PHOTO_TINT);      // 선형 값 — 시안의 THREE.Color(0.72, 0.72, 0.71)과 같다
+  threeMaterial.needsUpdate = true;
   return threeMaterial;
 }

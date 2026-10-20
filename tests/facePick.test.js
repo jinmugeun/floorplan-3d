@@ -319,7 +319,7 @@ describe('면 피커와 실물 그룹·다른 피커', () => {
     a.click();
     expect(a.ui.get().selection).toBeNull();               // 덕트는 선택되지 않는다
     expect(a.ui.get().matPick).not.toBeNull();              // 적용 모드는 계속된다
-    expect(a.floor().rooms[0].floorMat).toBeNull();         // 바닥 마감재도 바뀌지 않는다(재질을 바르지 않았다)
+    expect(a.floor().rooms[0].floorMat).toEqual({ id: 'epoxy-chip-gray', offset: [0, 0], angle: 0 });   // 바닥 마감재도 바뀌지 않는다(새 방 기본값 그대로 — brick-red를 바르지 않았다)
   });
 
   test('덕트 우클릭은 ductMenuItems를 열고 선택을 그 구간으로 맞춘다', () => {

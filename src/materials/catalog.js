@@ -29,7 +29,7 @@ export const MATERIALS = [
   M('wood-ash', '애쉬 강마루', 'WD-03', '마루/잔디', '#e2d4bd', '#c3b096', 'plank', [1200, 190], 52000),
   M('grass-lawn', '인조 잔디', 'WD-04', '마루/잔디', '#5f8a4a', '#476b36', 'carpet', [500, 500], 38000),
   // 타일
-  M('tile-white-300', '화이트 타일 300', 'TL-01', '타일', '#f4f5f6', '#cfd4d8', 'tile', [300, 300], 42000),
+  { ...M('tile-white-300', '화이트 타일 300', 'TL-01', '타일', '#f4f5f6', '#cfd4d8', 'tile', [300, 300], 42000), gloss: 0.3 },   // 급식실 벽 기본(계획 17) — 약한 광택
   M('tile-gray-600', '그레이 포세린 600', 'TL-02', '타일', '#c8cccf', '#a8adb2', 'tile', [600, 600], 58000),
   M('tile-mosaic-100', '모자이크 타일 100', 'TL-03', '타일', '#dfe9ec', '#9fc3cc', 'tile', [100, 100], 66000),
   M('tile-hex-black', '블랙 헥사 타일', 'TL-04', '타일', '#3a3f45', '#6f767e', 'tile', [200, 200], 70000),
@@ -53,6 +53,9 @@ export const MATERIALS = [
   M('terrazzo-black', '블랙 테라조', 'TZ-02', '테라조', '#3c3f43', '#d6d9dc', 'speckle', [800, 800], 96000),
   M('terrazzo-pink', '핑크 테라조', 'TZ-03', '테라조', '#eddcd8', '#b98a86', 'speckle', [800, 800], 104000),
   M('terrazzo-green', '그린 테라조', 'TZ-04', '테라조', '#dfe7de', '#7f9a82', 'speckle', [800, 800], 110000),
+  // 사진 마감재(계획 17 Task 7): photo = public/textures/<photo>/{color,normal,rough}.webp(ambientCG Granite002A · CC0). base는 사진 평균색이라
+  // 2D·견본·사진이 오기 전 3D가 이 색으로 칠한다. 단가는 임시 값(급식실 에폭시 칩 바닥 — 사용자가 바꿀 값).
+  { ...M('epoxy-chip-gray', '그레이 칩 에폭시', 'TZ-05', '테라조', '#a7a7a3', '#6f6f6c', 'speckle', [1200, 1200], 45000), photo: 'granite-gray', gloss: 0.25 },
   // 카페트
   M('carpet-gray', '그레이 카페트', 'CP-01', '카페트', '#a8acb0', '#8f9397', 'carpet', [500, 500], 32000),
   M('carpet-navy', '네이비 카페트', 'CP-02', '카페트', '#3b4a63', '#2e3b50', 'carpet', [500, 500], 36000),

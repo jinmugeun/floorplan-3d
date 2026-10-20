@@ -144,6 +144,7 @@ describe('시방서 HTML', () => {
     // 바닥 레거시는 **새 형식을 바르지 않은** 방으로 본다: detectRooms가 만든 방이 floorMaterial을 갖는다.
     const bare = createStore(createEmptyProject('레거시 도면'));
     addWalls(bare, rectWalls([0, 0], [4000.5, 3000.25], 200));
+    applyMaterial(bare, { kind: 'floor', id: activeFloor(bare.get()).rooms[0].id }, null);   // 새 방 바닥 기본값(계획 17)을 걷어 레거시 도면을 흉내 낸다
     const bareRooms = specHtml({ project: bare.get(), images: {}, options: {} }).split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
     expect(bareRooms).toContain('오크 원목마루');            // floorMaterial 'wood-oak'
     expect(bareRooms).not.toContain('<td>-</td>');
@@ -168,6 +169,7 @@ describe('시방서 HTML', () => {
     // 별칭 경로('wood' → wood-oak)도 유도값이다(§17.4(1)의 LEGACY_MATERIAL).
     const bare = createStore(createEmptyProject('레거시 도면'));
     addWalls(bare, rectWalls([0, 0], [4000.5, 3000.25], 200));
+    applyMaterial(bare, { kind: 'floor', id: activeFloor(bare.get()).rooms[0].id }, null);   // 새 방 바닥 기본값(계획 17)을 걷어 레거시 도면을 흉내 낸다
     const bareRooms = specHtml({ project: bare.get(), images: {}, options: {} }).split('<h2>공간 목록</h2>')[1].split('<h2>')[0];
     expect(bareRooms).toContain('<td>오크 원목마루 (기본값)</td>');
     // 감사 §38은 그대로다: 꼬리를 붙여도 빈 칸(-)은 0개다.
