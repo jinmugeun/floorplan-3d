@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { perfSettings } from './perfMode.js';
 
 // normalScale: ② 법선·깊이 타깃의 해상도 배율. 성능 게이트(계획 17 Task 10)를 넘으면 0.5로 낮춘다 — 선이 조금 굵어지는 대신 ②의 화소가 1/4.
-export const OUTLINE = { color: [0.017, 0.019, 0.022], normal: [0.35, 0.7], depth: [0.025, 0.06], strength: 0.6, normalScale: 1 };
+export const OUTLINE = { color: [0.017, 0.019, 0.022], normal: [0.35, 0.7], depth: [0.025, 0.06], strength: 0.6, normalScale: 0.5 };
 
 // 보기 설정 → 윤곽선을 그릴지. 보기 옵션 '윤곽선'(v3.itemEdges — 키 이름은 옛 '제품 윤곽선' 그대로)과 성능 모드(edges)를 따른다.
 export const outlineEnabled = view => (view?.v3?.itemEdges !== false) && perfSettings(view?.perfMode).edges;
