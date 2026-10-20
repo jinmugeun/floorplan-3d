@@ -107,7 +107,7 @@ export function buildItems(floor, view = {}) {
   const g = new THREE.Group();
   g.name = 'items';
   const v3 = view.v3 ?? {};
-  const edges = v3.itemEdges !== false && perfSettings(view.perfMode).edges;   // 성능 우선은 플래그를 그대로 두고 렌더에서만 생략(§13.4)
+  // 윤곽선은 화면 후처리(outlinePass.js)가 긋는다: 제품마다 EdgesGeometry를 만들지 않는다(계획 17 Task 6). v3.itemEdges·성능 모드는 outlineEnabled가 읽는다.
   const assets = v3.assets !== false && perfSettings(view.perfMode).assets;    // 토글이 끄면 상자 · 성능 모드도 모델 유지(perfMode.js · 최종 리뷰) — 옛 프로젝트(키 없음)는 켬
   // 충돌은 2D·배너·속성 패널과 같은 캐시에서 읽는다(2026-10-12 · 계획 13 Task 5 · 사전 검토 I-5): 예전에는 재빌드마다
   // collidingIds를 다시 돌려, 가져온 기구 330개에서 재빌드 한 번에 50~65 ms가 더해졌다. 스토어가 불변 스냅숏이라
@@ -115,7 +115,7 @@ export function buildItems(floor, view = {}) {
   const bad = v3.collision === false ? null : memoCollisions(floor.items ?? []);
   for (const item of floor.items ?? []) {
     if (!itemVisible3(item, v3)) continue;
-    const obj = itemMesh(item, { edges, assets });
+    const obj = itemMesh(item, { assets });
     if (!obj) continue;
     if (bad?.has(item.id)) paintItem(obj, COLLIDE_COLOR);
     g.add(obj);

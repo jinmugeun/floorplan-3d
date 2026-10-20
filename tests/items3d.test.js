@@ -113,10 +113,9 @@ describe('3D 아이템', () => {
     expect(lines(itemMesh(mk('dining-4', { pos: [0, 0] }), { edges: true }))).toBe(5);
     expect(lines(itemMesh(mk('dining-4', { pos: [0, 0] })))).toBe(0);
     expect(lines(itemMesh(mk('cabinet-lower', { pos: [0, 0] }), { edges: true }))).toBe(1);
-    const g = buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: {} });
-    expect(lines(g)).toBe(5);                                    // 기본값은 켜짐
-    const off = buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: { itemEdges: false } });
-    expect(lines(off)).toBe(0);
+    // buildItems는 선 객체를 만들지 않는다(윤곽선은 화면 후처리 — 계획 17 Task 6)
+    expect(lines(buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: {} }))).toBe(0);
+    expect(lines(buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: { itemEdges: false } }))).toBe(0);
   });
 
   // 2D는 (translate → rotate → scale)로 반전을 아이템 로컬 축에 먹인다(items2d.drawItem).
@@ -156,15 +155,13 @@ describe('3D 아이템', () => {
   });
 });
 
-// §13.4: 성능 우선에서는 제품 윤곽선을 만들지 않는다(v3.itemEdges 값은 그대로 둔다).
-test('성능 우선 모드는 제품 윤곽선을 붙이지 않는다', () => {
+// 계획 17 Task 6: 윤곽선은 화면 후처리(outlinePass)라 buildItems는 어느 모드에서도 선 객체를 만들지 않는다 — 켜고 끄기는 outlineEnabled(view).
+test('buildItems는 표시·성능 모드 모두 선 객체(itemEdge)를 만들지 않는다', () => {
   const items = [mk('sofa-3', { pos: [1000.5, 1000.25] })];
   const edgeCount = g => { let n = 0; g.traverse(o => { if (o.name === 'itemEdge') n += 1; }); return n; };
-  const on = buildItems(floor(items), { v3: { itemEdges: true } });
-  expect(edgeCount(on)).toBeGreaterThan(0);
+  expect(edgeCount(buildItems(floor(items), { v3: { itemEdges: true } }))).toBe(0);
   const off = buildItems(floor(items), { v3: { itemEdges: true }, perfMode: 'performance' });
   expect(edgeCount(off)).toBe(0);
-  // 아이템 자체는 그대로 있다(형상만 남는다).
   expect(off.children).toHaveLength(1);
 });
 
