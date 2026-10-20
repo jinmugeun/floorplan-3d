@@ -265,7 +265,7 @@ export function disposeGroup(g) {
     // 실사 에셋 메시(userData.shared)도 같다: 지오메트리는 itemAssets 캐시의 템플릿과 같은 제품 아이템 전부가 나눠 쓴다(재질은 perMesh가 아니라 남는다).
     if (o.geometry && !o.isSprite && !o.userData.shared) o.geometry.dispose();
     if (o.material?.userData?.perMesh) {
-      for (const k of ['map', 'normalMap', 'roughnessMap']) if (o.material[k]?.userData?.clone) o.material[k].dispose(); // 복제본만 — 캐시 원본(무늬·사진)은 남긴다
+      for (const k of ['map', 'normalMap', 'roughnessMap']) if (o.material[k]?.userData?.clone) o.material[k].dispose(); // 면마다의 복제본(clone)만 — 캐시 원본과 사진 공유 복제본(photoShared · texture.js)은 남긴다
       o.material.dispose();
     }
   });

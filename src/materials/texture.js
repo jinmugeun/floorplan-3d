@@ -32,11 +32,46 @@ export function photoTextures(material) {
     for (const t of [map, normalMap, roughnessMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; }
     map.colorSpace = THREE.SRGBColorSpace;
     entry.maps = { map, normalMap, roughnessMap };
-    for (const cb of photoSubs) cb(dir);
+    notifyPhoto(dir);
   }).catch(e => console.warn(`사진 마감재 생략(${dir}): ${e?.message ?? e}`));
   return null;
 }
-export function __resetPhotos() { photos.clear(); }   // 테스트용 — 구독(build.js의 모듈 구독)은 남긴다
+// 구독자마다 따로 감싼다(리뷰 Fix 1-4): 하나가 던져도 나머지는 알림을 받고, 받기 실패 경고("생략")로 새지 않는다. 경고는 구독자당 한 번.
+const warnedSubs = new WeakSet();
+function notifyPhoto(dir) {
+  for (const cb of photoSubs) {
+    try { cb(dir); } catch (e) {
+      if (!warnedSubs.has(cb)) { warnedSubs.add(cb); console.warn(`사진 마감재 도착 알림 오류(${dir}) — 이 구독자만 건너뜀: ${e?.message ?? e}`); }
+    }
+  }
+}
+// 배치별 공유 복제본(리뷰 Fix 1-1): three 0.169의 Texture.copy()는 needsUpdate = true로 **공유 source.version**을 올린다 —
+// 면마다 새로 복제하면 리빌드마다 1024² 사진 3장을 GPU에 다시 올리고 밉맵을 다시 만든다. 같은 (폴더 · 반복 · 오프셋 · 각도)는
+// 같은 복제본 3장을 나눠 쓰고(반복·오프셋·각도는 uniform이라 GPU 텍스처는 원본과 하나다), disposeGroup은 이것을 버리지 않는다
+// (userData.photoShared — clone 표시가 없다). 배치 종류만큼 JS 객체가 남는다(GPU 메모리는 늘지 않는다).
+const photoClones = new Map();   // 키 → { map, normalMap, roughnessMap }
+function sharedPhotoMaps(dir, maps, rx, ry, ox, oy, rot) {
+  const key = `${dir}|${rx}|${ry}|${ox}|${oy}|${rot}`;
+  let set = photoClones.get(key);
+  if (set) return set;
+  set = {};
+  for (const k of PHOTO_MAPS) {
+    const t = maps[k].clone();                    // 도착한 뒤의 복제라 올라간다(r169) · clone이 needsUpdate를 이미 켠다
+    t.repeat.set(rx, ry);
+    t.offset.set(ox, oy);
+    t.center.set(0, 0);                           // 원점 기준 회전(무늬 갈래와 같다)
+    t.rotation = rot;
+    t.userData.photoShared = true;
+    set[k] = t;
+  }
+  photoClones.set(key, set);
+  return set;
+}
+// 테스트용 — 사진 캐시와 공유 복제본을 비운다(복제본은 dispose). 구독(build.js의 모듈 구독)은 남긴다.
+export function __resetPhotos() {
+  for (const set of photoClones.values()) for (const k of PHOTO_MAPS) set[k].dispose();
+  photoClones.clear(); photos.clear();
+}
 
 // 타일 크기 덮어쓰기(§13.3): 마감재 배정이 쓸 수 있는 scale을 들고 있으면 재질의 기본 scale 대신 쓴다.
 // 값 검사는 normalizeAssignment가 이미 했지만, 정규화를 지나지 않은 객체(미리보기·테스트)로도 불린다.
@@ -123,16 +158,9 @@ function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv) {
   if (!maps) { threeMaterial.color.set(m.base); return threeMaterial; }
   const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sc });
   const shifted = i => Number(assignment.offset?.[i]) || 0;
-  for (const key of PHOTO_MAPS) {
-    const t = maps[key].clone();                  // 도착한 뒤의 복제라 올라간다(r169)
-    t.repeat.set(rx, ry);
-    t.offset.set(shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000));
-    t.center.set(0, 0);
-    t.rotation = ((Number(assignment.angle) || 0) * Math.PI) / 180;
-    t.userData.clone = true;                      // disposeGroup이 복제본만 정리한다
-    t.needsUpdate = true;
-    threeMaterial[key] = t;
-  }
+  const rot = ((Number(assignment.angle) || 0) * Math.PI) / 180;
+  const set = sharedPhotoMaps(m.photo, maps, rx, ry, shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000), rot);
+  for (const key of PHOTO_MAPS) threeMaterial[key] = set[key];   // 같은 배치는 같은 복제본 — 리빌드가 GPU 재업로드를 부르지 않는다
   threeMaterial.normalScale?.set(0.5, 0.5);
   threeMaterial.roughness = 0.9;
   threeMaterial.color.setRGB(...PHOTO_TINT);      // 선형 값 — 시안의 THREE.Color(0.72, 0.72, 0.71)과 같다

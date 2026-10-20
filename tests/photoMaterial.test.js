@@ -6,6 +6,7 @@ import { DEFAULT_FLOOR_MAT_ID, KITCHEN_WALL_MAT_ID, defaultFloorMat, kitchenWall
 import { materialById, MATERIAL_PATTERNS } from '../src/materials/catalog.js';
 import { photoTextures, onPhotoReady, applyAssignment, PHOTO_TINT, __resetPhotos } from '../src/materials/texture.js';
 import { buildFloorGroup, disposeGroup } from '../src/view3d/build.js';
+import { assetsVersion, onAssetsReady } from '../src/view3d/itemAssets.js';
 import { drawSwatch, SWATCH_PX } from '../src/ui/materialPanel.js';
 import { rectWalls, makeWall } from '../src/geom/walls.js';
 import { detectRooms } from '../src/geom/rooms.js';
@@ -72,6 +73,39 @@ describe('사진 텍스처(photoTextures)', () => {
     expect(maps.normalMap.colorSpace).not.toBe(THREE.SRGBColorSpace);   // 법선·거칠기는 색이 아니다
   });
 
+  // 리뷰 Fix 1-2: build.js의 모듈 구독(onPhotoReady → assetsChanged)이 끊기면 사진이 와도 장면이 바탕색으로 남는다.
+  test('사진 도착은 에셋 도착과 같은 길(assetsVersion · onAssetsReady)로 리빌드를 부른다', async () => {
+    await flush(); await flush();                                       // 앞 테스트가 남긴 settle 타이머를 비운다
+    fakeLoading();
+    const v0 = assetsVersion();
+    const seen = [];
+    const off = onAssetsReady(v => seen.push(v));
+    photoTextures(epoxy());
+    await flush(); await flush();                                       // 로드 약속 → 구독 → settle(setTimeout 0)
+    off();
+    expect(assetsVersion()).toBe(v0 + 1);
+    expect(seen).toEqual([v0 + 1]);
+  });
+
+  // 리뷰 Fix 1-4: 구독자 하나가 던져도 나머지는 알림을 받고, "사진 마감재 생략"(받기 실패) 경고로 오해되지 않는다.
+  test('던지는 구독자는 따로 한 번만 경고하고 다른 구독자·캐시를 막지 않는다', async () => {
+    fakeLoading();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bad = vi.fn(() => { throw new Error('구독자 고장'); });
+    const seen = [];
+    const offBad = onPhotoReady(bad), offOk = onPhotoReady(dir => seen.push(dir));
+    photoTextures(epoxy());
+    photoTextures({ ...epoxy(), photo: 'granite-gray-2' });              // 두 번째 도착에도 같은 구독자가 던진다
+    await flush();
+    offBad(); offOk();
+    expect(bad).toHaveBeenCalledTimes(2);
+    expect(seen).toEqual(['granite-gray', 'granite-gray-2']);
+    expect(photoTextures(epoxy())).not.toBeNull();                       // 도착한 사진은 그대로 캐시에 있다
+    expect(warn).toHaveBeenCalledTimes(1);                               // 구독자당 한 번
+    expect(String(warn.mock.calls[0][0])).toContain('구독자 고장');
+    expect(String(warn.mock.calls[0][0])).not.toContain('사진 마감재 생략');
+  });
+
   test('받기에 실패하면 한 번 경고하고 계속 null(바탕색)이다', async () => {
     globalThis.document = {};
     vi.spyOn(THREE.TextureLoader.prototype, 'loadAsync').mockRejectedValue(new Error('404'));
@@ -101,7 +135,8 @@ describe('applyAssignment — 사진 갈래', () => {
     for (const k of ['map', 'normalMap', 'roughnessMap']) {
       expect(m[k]).toBeTruthy();
       expect(m[k]).not.toBe(orig[k]);                                    // 원본이 아니라 복제
-      expect(m[k].userData.clone).toBe(true);
+      expect(m[k].userData.photoShared).toBe(true);                      // 공유 복제본(Fix 1-1) — 면마다 버리는 복제(clone)가 아니다
+      expect(m[k].userData.clone).toBeUndefined();
       expect(m[k].repeat.x).toBeCloseTo(1000 / 1200, 9);
       expect(m[k].offset.x).toBeCloseTo(0.5, 9);                         // 600 mm ÷ 1200 mm
       expect(m[k].rotation).toBeCloseTo(Math.PI / 2, 9);
@@ -120,18 +155,61 @@ describe('applyAssignment — 사진 갈래', () => {
     expect(m.color.getHex()).toBe(0xffffff);
   });
 
-  test('disposeGroup은 세 복제본만 버리고 캐시 원본은 남긴다', async () => {
+  // 리뷰 Fix 1-1: three 0.169의 Texture.copy()는 needsUpdate = true로 공유 source.version을 올린다 — 면마다 새로 복제하면
+  // 리빌드마다 1024² 사진 3장을 다시 올리고 밉맵을 다시 만든다. 같은 배치(반복·오프셋·각도)는 같은 복제본 3장을 나눠 쓴다.
+  test('같은 배치는 같은 복제본을 나눠 쓰고, 각도·오프셋이 다르면 다른 복제본이다', async () => {
+    fakeLoading();
+    photoTextures(epoxy()); await flush();
+    const a = new THREE.MeshStandardMaterial(), b = new THREE.MeshStandardMaterial();
+    applyAssignment(a, assign('epoxy-chip-gray', { offset: [600, 0], angle: 90 }), null, { worldUv: true });
+    applyAssignment(b, assign('epoxy-chip-gray', { offset: [600, 0], angle: 90 }), null, { worldUv: true });
+    const turned = new THREE.MeshStandardMaterial(), shifted = new THREE.MeshStandardMaterial();
+    applyAssignment(turned, assign('epoxy-chip-gray', { offset: [600, 0], angle: 0 }), null, { worldUv: true });
+    applyAssignment(shifted, assign('epoxy-chip-gray', { offset: [300, 0], angle: 90 }), null, { worldUv: true });
+    for (const k of ['map', 'normalMap', 'roughnessMap']) {
+      expect(b[k]).toBe(a[k]);
+      expect(turned[k]).not.toBe(a[k]);
+      expect(shifted[k]).not.toBe(a[k]);
+    }
+    expect(turned.map.rotation).toBe(0);
+    expect(shifted.map.offset.x).toBeCloseTo(0.25, 9);
+    expect(a.map.rotation).toBeCloseTo(Math.PI / 2, 9);                  // 다른 배치를 만들어도 먼저 것은 바뀌지 않는다
+    expect(a.map.offset.x).toBeCloseTo(0.5, 9);
+    // 리빌드(같은 배치를 다시 바름)는 공유 source의 버전을 올리지 않는다 — GPU 재업로드가 없다.
+    const ver = a.map.source.version;
+    applyAssignment(new THREE.MeshStandardMaterial(), assign('epoxy-chip-gray', { offset: [600, 0], angle: 90 }), null, { worldUv: true });
+    expect(a.map.source.version).toBe(ver);
+  });
+
+  test('disposeGroup은 공유 복제본도 캐시 원본도 버리지 않는다', async () => {
     fakeLoading();
     photoTextures(epoxy()); await flush();
     const orig = photoTextures(epoxy());
     const mat = new THREE.MeshStandardMaterial(); mat.userData.perMesh = true;
     applyAssignment(mat, assign('epoxy-chip-gray'), null, { worldUv: true });
     const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.BufferGeometry(), mat));
-    const clones = ['map', 'normalMap', 'roughnessMap'].map(k => vi.spyOn(mat[k], 'dispose'));
+    const shared = ['map', 'normalMap', 'roughnessMap'].map(k => vi.spyOn(mat[k], 'dispose'));
     const origs = ['map', 'normalMap', 'roughnessMap'].map(k => vi.spyOn(orig[k], 'dispose'));
+    const matDispose = vi.spyOn(mat, 'dispose');
     disposeGroup(g);
-    for (const s of clones) expect(s).toHaveBeenCalledTimes(1);
+    expect(matDispose).toHaveBeenCalledTimes(1);                         // 재질(perMesh)은 그대로 버린다
+    for (const s of shared) expect(s).not.toHaveBeenCalled();
     for (const s of origs) expect(s).not.toHaveBeenCalled();
+  });
+
+  test('__resetPhotos는 공유 복제본을 버리고 비운다(다음 배치는 새 복제본)', async () => {
+    fakeLoading();
+    photoTextures(epoxy()); await flush();
+    const a = new THREE.MeshStandardMaterial();
+    applyAssignment(a, assign('epoxy-chip-gray'), null, { worldUv: true });
+    const spies = ['map', 'normalMap', 'roughnessMap'].map(k => vi.spyOn(a[k], 'dispose'));
+    __resetPhotos();
+    for (const s of spies) expect(s).toHaveBeenCalledTimes(1);
+    photoTextures(epoxy()); await flush();
+    const b = new THREE.MeshStandardMaterial();
+    applyAssignment(b, assign('epoxy-chip-gray'), null, { worldUv: true });
+    expect(b.map).toBeTruthy();
+    expect(b.map).not.toBe(a.map);
   });
 });
 
@@ -177,6 +255,23 @@ describe('마감재 견본 — 사진', () => {
     expect(b.ctx.drawImage).toHaveBeenCalledTimes(1);
     const c = fakeCanvas(); drawSwatch(c, epoxy());                       // 도착 뒤에는 바로 덮는다
     expect(c.ctx.drawImage).toHaveBeenCalledTimes(1);
+  });
+  // 리뷰 Fix 1-3: 사진 받기가 실패한 폴더는 그 뒤 견본을 기다리는 목록에 쌓지 않는다(무늬만 · 다시 받지 않는다).
+  test('사진 받기가 실패하면 뒤의 견본은 무늬만 그리고 기다리는 목록에 들지 않는다', async () => {
+    const made = [];
+    globalThis.Image = class { constructor() { made.push(this); } set src(v) { this._src = v; queueMicrotask(() => this.onerror?.()); } get src() { return this._src; } };
+    const broken = { ...epoxy(), photo: 'missing-photo' };               // 앞 테스트가 받아 둔 폴더와 섞이지 않게
+    const a = fakeCanvas();
+    drawSwatch(a, broken);
+    await flush();                                                       // onerror
+    const b = fakeCanvas();
+    drawSwatch(b, broken);
+    expect(made).toHaveLength(1);                                        // 실패한 폴더는 다시 받지 않는다
+    expect(b.width).toBe(SWATCH_PX);
+    // 늦게 오는 load(실제로는 없다)를 흉내 내 대기 목록이 비어 있는지 본다 — 실패 뒤의 캔버스가 들어 있었다면 여기서 덮인다.
+    made[0].onload?.();
+    expect(a.ctx.drawImage).not.toHaveBeenCalled();
+    expect(b.ctx.drawImage).not.toHaveBeenCalled();
   });
   test('사진이 없는 재질과 Image가 없는 환경은 무늬만 그린다', () => {
     const a = fakeCanvas();
