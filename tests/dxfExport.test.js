@@ -19,7 +19,7 @@ import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
 import { DXF_PARAMS, HEIGHT_RANGE } from '../src/io/dxf/params.js';
 import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_EXPORT_AS_MENU } from '../src/ui/dxfMessages.js';
-import { matchEquip, sizeInName, skipReason } from '../src/io/dxf/equipVocab.js';
+import { matchEquip, sizeInName, skipReason, kitchenOr } from '../src/io/dxf/equipVocab.js';
 import { importSnapshot } from '../src/io/dxfFeedback.js';
 import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
 import { ITEM_RANGE } from '../src/state/schema.js';
@@ -257,7 +257,7 @@ test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 �
   const EXAMPLE = '세정대 2조 1500-750';
   expect(card('keep')).toContain(`<code>${EXAMPLE}</code>`);
   expect(card('keep')).toContain('기구 블록');
-  expect(matchEquip(EXAMPLE)).toMatchObject({ productId: 'sink-double' });
+  expect(matchEquip(EXAMPLE)).toMatchObject({ productId: kitchenOr('sink-double') });   // 어휘 → 엑셀 세정대(2026-10-20 · 계획 17 Task 8)
   expect(sizeInName(EXAMPLE)).toEqual([1500, 750]);
   expect(card('drop')).not.toMatch(/기구|급식/);
   expect(html).toContain(DXF_EQUIPMENT_OPT);                                     // 검토 창의 체크 이름 그대로

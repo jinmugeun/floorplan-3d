@@ -7,6 +7,11 @@ import { DXF_PARAMS } from '../src/io/dxf/params.js';
 import { makeWall } from '../src/geom/walls.js';
 import { createItem, createFloor, createEmptyProject, normalizeProject, migrate } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
+import { kitchenFit } from '../src/products/catalogKitchen.js';
+import { kitchenOr } from '../src/io/dxf/equipVocab.js';
+// 2026-10-20 · 계획 17 Task 8: 어휘가 가리키는 엑셀 대표(kitchenOr)를 기구 크기로 같은 세부품명·형상 안에서 다시 고른다(kitchenFit).
+// name = 아이템이 받는 도면 이름(정리본 — 익명 블록은 '') — equipment.js가 그 이름의 선택 수(N조·N도어…)를 kitchenFit에 넘긴다.
+const KF = (legacy, size, name = '') => kitchenFit(kitchenOr(legacy), size, name);
 import { setBlockTable } from '../src/io/dxf/blockOpenings.js';
 import { explode, mat, apply } from '../src/io/dxf/explode.js';
 import { buildImportMeta, buildDxfFeedback } from '../src/io/dxfFeedback.js';
@@ -61,7 +66,8 @@ test('원 + 중심 십자 블록의 상자는 가장 큰 원의 범위 — 다�
 
 test('이름 치수 블록 → 제품 · 자리(상자 중심) · 크기(이름) · 이름은 도면 그대로 · 코드는 제품 코드', () => {
   const it = only(run(one('다단식선반 1500-750', [1000, 1000, 2500, 1750])));
-  expect(it).toMatchObject({ productId: 'shelf-steel-4', code: 'ST-SH4', name: '다단식선반 1500-750', pos: [1750, -1375], size: [1500, 750, 1800], rot: 0, attach: 'floor', z: 0 });
+  const shelf = KF('shelf-steel-4', [1500, 750, 1800], '다단식선반 1500-750');
+  expect(it).toMatchObject({ productId: shelf, code: productById(shelf).code, name: '다단식선반 1500-750', pos: [1750, -1375], size: [1500, 750, 1800], rot: 0, attach: 'floor', z: 0 });
 });
 
 // 사전 검토 I-3: 이름의 W-D 순서는 블록 로컬 축과 21 %가 반대다 — 이름 치수를 상자에 맞춰(긴 변끼리) 넣는다.
@@ -75,7 +81,7 @@ test('이름 치수와 상자 긴 변이 20 % 넘게 다르면 상자 크기', (
 
 test('이름의 높이(세 번째 수)가 어휘 높이를 이긴다', () => {
   const it = only(run(one('취반기(전기)선경인케이 150인용 570x600x1460', [0, 0, 570, 698])));
-  expect(it).toMatchObject({ productId: 'ricecooker-gas', name: '취반기(전기) 150인용 570x600x1460', size: [570, 600, 1460], kind: 'equipment' });
+  expect(it).toMatchObject({ productId: KF('ricecooker-gas', [570, 600, 1460], '취반기(전기) 150인용 570x600x1460'), name: '취반기(전기) 150인용 570x600x1460', size: [570, 600, 1460], kind: 'equipment' });
 });
 
 // 2026-10-12 수정 wave(Task 5 라벨 규칙): 이름 ≠ 제품명이면 라벨이 선다 — 익명 블록은 제품 이름(라벨 없음), 원 블록 이름은 dxfBlock에.
@@ -101,7 +107,7 @@ test('dxfBlock은 저장·불러오기 왕복(normalizeProject → JSON → migr
   const floor = { ...createFloor('1F'), items: r.items };
   const project = normalizeProject({ ...createEmptyProject(), floors: [floor] });
   const back = migrate(JSON.parse(JSON.stringify(project)));
-  expect(back.floors[0].items.map(i => [i.name, i.dxfBlock])).toEqual([['천장형 배기 후드(박스형)', 'zw$E75B'], ['워터릴', '워터릴']]);
+  expect(back.floors[0].items.map(i => [i.name, i.dxfBlock])).toEqual([[productById(KF('hood-box', [1500, 1800, 600])).name, 'zw$E75B'], ['워터릴', '워터릴']]);
   const withMeta = { ...back, meta: { dxfImport: buildImportMeta({ project: back, fileName: 'a.dxf', opts: { layers: [] } }) } };
   const edited = { ...withMeta, floors: [{ ...withMeta.floors[0], items: withMeta.floors[0].items.slice(1) }] };
   const fb = buildDxfFeedback(edited);
@@ -110,7 +116,7 @@ test('dxfBlock은 저장·불러오기 왕복(normalizeProject → JSON → migr
 });
 
 test('냉장고 4도어는 제외가 아니다(숫자 뒤의 도어 = 문짝 수)', () => {
-  expect(only(run(one('냉장고 4도어 1100L 1260-850', [0, 0, 1260, 1073])))).toMatchObject({ productId: 'fridge-2door', size: [1260, 850, 1800] });
+  expect(only(run(one('냉장고 4도어 1100L 1260-850', [0, 0, 1260, 1073])))).toMatchObject({ productId: KF('fridge-2door', [1260, 850, 1800], '냉장고 4도어 1100L 1260-850'), size: [1260, 850, 1800] });
 });
 
 test('90° 회전 블록 — 축 정렬이면 rot 0 · 월드 상자 방향(w/d가 바뀐다)', () => {
@@ -152,14 +158,16 @@ test('거울 식탁(실제 전개): 길이 방향은 거울이어도 블록 로�
   const rect = [[0, -263], [1200, -263], [1200, 1063], [0, 1063]];   // 식탁 1200(로컬 x) + 의자 → 1200×1326
   const block = { base: [0, 0], entities: rect.map((p, i) => ({ type: 'LINE', layer: '0', x: p[0], y: p[1], x2: rect[(i + 1) % 4][0], y2: rect[(i + 1) % 4][1] })) };
   const doc = { entities: [{ type: 'INSERT', name: '식탁4인', layer: '급식기구', x: 0, y: 0, xscale: -1, yscale: 1, a0: 90 }, { type: 'INSERT', name: '식탁4인', layer: '급식기구', x: 5000, y: 0, xscale: 1, yscale: -1, a0: 0 }], blocks: new Map([['식탁4인', block]]) };
-  expect(run(explode(doc)).items.map(i => i.size)).toEqual([[800, 1200, 750], [1200, 800, 750]]);
+  const t4 = productById(kitchenOr('dining-4')).size;
+  expect(run(explode(doc)).items.map(i => i.size)).toEqual([[t4[1], t4[0], 750], [t4[0], t4[1], 750]]);
 });
 
 // Task 1 §3: 식탁 상자는 의자를 품는다(6인 1800×1326 · 4인 1200×1326 — 4인은 상자 긴 변이 의자 방향). 크기는 카탈로그, 방향은 블록 로컬 x(= 식탁 길이).
 test('식탁은 카탈로그 크기 — 방향은 블록 로컬 x', () => {
-  expect(only(run(one('식탁4인', [0, 0, 1200, 1326]))).size).toEqual([1200, 800, 750]);
-  expect(only(run(one('식탁4인', [0, 0, 1326, 1200], { rot: 90 }))).size).toEqual([800, 1200, 750]);
-  expect(only(run(one('식탁6인', [0, 0, 1800, 1326], { rot: 180 }))).size).toEqual([1800, 900, 750]);
+  const t4 = productById(kitchenOr('dining-4')).size, t6 = productById(kitchenOr('dining-6')).size;   // 엑셀 식탁(4인용 · 6인용)
+  expect(only(run(one('식탁4인', [0, 0, 1200, 1326]))).size).toEqual([t4[0], t4[1], 750]);
+  expect(only(run(one('식탁4인', [0, 0, 1326, 1200], { rot: 90 }))).size).toEqual([t4[1], t4[0], 750]);
+  expect(only(run(one('식탁6인', [0, 0, 1800, 1326], { rot: 180 }))).size).toEqual([t6[0], t6[1], 750]);
 });
 
 test('제외 어휘 · 개구부 이름은 서지 않는다', () => {
@@ -265,7 +273,8 @@ test('아이템끼리 겹침(바닥 · AABB)은 overlap으로 센다 — 맞닿�
 test('후드 → hood-box(천장 · z = 층고 − 높이 · 풍량은 카탈로그 규칙) · 번호 1..n', () => {
   const r = run(exOf([ins('후드1500-1300'), ins('후드 1500-1000')], [...box(0, 0, 0, 1300, 1500), ...box(1, 5000, 0, 6500, 1000)]), { height: 3000 });
   const [a, b] = r.items;
-  expect(a).toMatchObject({ productId: 'hood-box', code: 'VH-BX', kind: 'equipment', name: '후드1500-1300', size: [1300, 1500, 600], attach: 'ceiling', z: 2400 });
+  const H = KF('hood-box', [1300, 1500, 600], '후드1500-1300');
+  expect(a).toMatchObject({ productId: H, code: productById(H).code, kind: 'equipment', name: '후드1500-1300', size: [1300, 1500, 600], attach: 'ceiling', z: 2400 });
   expect(a.props).toMatchObject({ type: 'hood', no: 1, cmh: Math.round(1.3 * 1.5 * 0.5 * 3600) });
   expect(b.props.no).toBe(2);
   expect(r.stats).toMatchObject({ product: 2, clash: 0 });
@@ -277,8 +286,9 @@ test('익명 X-상자(사각형 + 대각선 둘, 짧은 변 ≥ 600) → hood-bo
   const bars = (k, x0, y0, x1, y1) => [...box(k, x0, y0, x1, y1), seg([x0 + 100, y0], [x0 + 100, y1], k), seg([x0 + 200, y0], [x0 + 200, y1], k)];
   const ex = exOf([ins('zw$E75B', { layer: '후드' }), ins('zw$AAAA'), ins('zw$BBBB')], [...xbox(0, 0, 0, 1500, 1800), ...bars(1, 5000, 0, 6500, 1800), ...xbox(2, 9000, 0, 9500, 500)]);
   const r = run(ex, { height: 3500 });
-  expect(r.items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$E75B', 'hood-box'], ['zw$AAAA', 'equip-generic'], ['zw$BBBB', 'equip-generic']]);
-  expect(r.items[0]).toMatchObject({ name: '천장형 배기 후드(박스형)', size: [1500, 1800, 600], attach: 'ceiling', z: 2900 });
+  const H = KF('hood-box', [1500, 1800, 600]);
+  expect(r.items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$E75B', H], ['zw$AAAA', 'equip-generic'], ['zw$BBBB', 'equip-generic']]);
+  expect(r.items[0]).toMatchObject({ name: productById(H).name, size: [1500, 1800, 600], attach: 'ceiling', z: 2900 });
   expect(r.stats).toMatchObject({ anonymous: 3, product: 1 });
 });
 
@@ -290,12 +300,13 @@ test('X-상자 후드는 레이어 역할이 equip일 때만 — 벽 레이어�
   const ex = exOf([ins('zw$1111', { layer: '벽' }), ins('zw$2222', { layer: '0' }), ins('zw$3333', { layer: 'TOILET DIVIDER' }), ins('zw$4444', { layer: '후드' })],
     [...xbox(0, 0, 0, 1500, 1800, '벽'), ...xbox(1, 5000, 0, 6500, 1800, '0'), ...xbox(2, 9000, 0, 10500, 1800, 'TOILET DIVIDER'), ...xbox(3, 13000, 0, 14500, 1800, '후드')]);
   const r = run(ex);
-  expect(r.items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$1111', 'equip-generic'], ['zw$4444', 'hood-box']]);
+  const H = KF('hood-box', [1500, 1800, 600]);
+  expect(r.items.map(i => [i.dxfBlock, i.productId])).toEqual([['zw$1111', 'equip-generic'], ['zw$4444', H]]);
   expect(r.stats.skipped.layer).toBe(2);                                  // 레이어 0 · DIVIDER의 X-상자는 기호
-  expect(r.items.filter(i => i.productId === 'hood-box')).toHaveLength(1);
+  expect(r.items.filter(i => i.productId === H)).toHaveLength(1);
   // 역할표 equip이면(사람·도구가 기구라고 했다) 어느 레이어든 후드다.
   const forced = run(ex, { roles: { blocks: new Map([['zw$1111', { kind: 'equip', width: null }], ['zw$2222', { kind: 'equip', width: null }]]) } });
-  expect(forced.items.filter(i => ['zw$1111', 'zw$2222'].includes(i.dxfBlock)).map(i => i.productId)).toEqual(['hood-box', 'hood-box']);
+  expect(forced.items.filter(i => ['zw$1111', 'zw$2222'].includes(i.dxfBlock)).map(i => i.productId)).toEqual([H, H]);
 });
 
 // 리뷰 I-1(Task 1 §7 "레이어 역할 opening → opening"): 공개 코퍼스의 DBLK@WINDOW(760×760 문)·WBLK(900×200 창)가 '도면 기구'로 섰다.
@@ -329,7 +340,10 @@ test('익명 블록: 기구·벽이 아닌 레이어 + 단서 없음 → 제외(
     [...box(0, 0, 0, 1600, 450), ...box(1, 3000, 0, 3580, 1200), ...box(3, 6000, 0, 6600, 550)],
     { texts: [{ p: [3200, 600], h: 100, text: '옷장', layer: 'AZ-LEAL', ins: 1 }, { p: [6300, 300], h: 100, text: '상부장', layer: '0', ins: 2 }] });
   const r = run(ex);
-  expect(r.items.map(i => [i.dxfBlock, i.productId, i.name])).toEqual([['zw$6F3E', 'locker-12', '12칸 사물함'], ['zw$8EEB', 'sink-single', '1조 싱크대']]);
+  const [locker, sink] = r.items;
+  expect(r.items.map(i => i.dxfBlock)).toEqual(['zw$6F3E', 'zw$8EEB']);
+  expect([locker.productId, sink.productId]).toEqual([KF('locker-12', locker.size), KF('sink-single', sink.size)]);
+  expect([locker.name, sink.name]).toEqual([productById(locker.productId).name, productById(sink.productId).name]);   // 익명 블록 — 제품 이름(라벨 없음)
   expect(r.stats.skipped.layer).toBe(1);
   // 레이어 역할을 넘기면 그것을 쓴다(검토 창의 역할 — 워커 rows)
   expect(run(ex, { layerRoles: new Map([['0', 'equip']]) }).items.map(i => i.dxfBlock)).toContain('zw$B4B3');
@@ -355,7 +369,7 @@ test('벽 레이어 위 큰 벽 조각 블록(선 ≥ 100 · 긴 변 > 4 m)은 w
 
 test('위생 기구 묶음(긴 변 > 1,200)은 그 제품이 아니라 도면 기구로', () => {
   const r = run(exOf([ins('To양변기F(w)', { layer: '건축' }), ins('To세면기A', { layer: '건축' })], [...box(0, 0, 0, 2623, 1509), ...box(1, 5000, 0, 5492, 550)]));
-  expect(r.items.map(i => [i.name, i.productId])).toEqual([['To양변기F(w)', 'equip-generic'], ['To세면기A', 'washbasin']]);
+  expect(r.items.map(i => [i.name, i.productId])).toEqual([['To양변기F(w)', 'equip-generic'], ['To세면기A', KF('washbasin', r.items[1].size, 'To세면기A')]]);
 });
 
 test('빈 입력', () => {
@@ -489,7 +503,7 @@ test('복합 블록(실제 전개): 어휘 자식 3 → 세 아이템이 제 전
   expect(r.items.map(i => [i.dxfBlock, i.productId, i.pos, i.size])).toEqual([
     ['변기', 'toilet', [10490, -579], [580, 758, 800]],
     ['변기', 'toilet', [11490, -579], [580, 758, 800]],
-    ['손세정대 500-370', 'washbasin', [12750, -1685], [500, 370, 850]],
+    ['손세정대 500-370', KF('washbasin', [500, 370, 850], '손세정대 500-370'), [12750, -1685], [500, 370, 850]],
   ]);
   expect(r.stats).toMatchObject({ placed: 3, product: 3, expanded: 1 });
   expect(r.stats.skipped.composite).toBe(0);
@@ -524,7 +538,7 @@ test('복합 블록(실제 전개): 내곡 묶음의 장애인화장실 대변�
   };
   const r = run(explode(doc));
   expect(r.items.map(i => [i.dxfBlock, i.productId, i.size.slice(0, 2)])).toEqual([
-    ['영유아거치대', 'equip-generic', [500, 400]], ['세면대 평면', 'washbasin', [600, 450]], ['장애인화장실 대변기_평면', 'toilet', [1089, 857]]]);
+    ['영유아거치대', 'equip-generic', [500, 400]], ['세면대 평면', KF('washbasin', r.items[1].size, '세면대 평면'), [600, 450]], ['장애인화장실 대변기_평면', 'toilet', [1089, 857]]]);
   expect(r.stats).toMatchObject({ placed: 3, expanded: 1 });
   expect(r.stats.skipped.composite).toBe(0);
 });
@@ -536,7 +550,7 @@ test('복합 블록: 어휘 자식이 하나뿐이면 지금처럼 그룹 하나
   const doc = groupDoc([], []);
   doc.entities = [{ type: 'INSERT', name: '식탁6인', layer: '급식기구', x: 0, y: 0, xscale: 1, yscale: 1, a0: 0 }];
   const t = run(explode(doc));
-  expect(t.items.map(i => [i.dxfBlock, i.productId])).toEqual([['식탁6인', 'dining-6']]);
+  expect(t.items.map(i => [i.dxfBlock, i.productId])).toEqual([['식탁6인', KF('dining-6', t.items[0].size, '식탁6인')]]);
   expect(t.stats.expanded).toBe(0);
 });
 

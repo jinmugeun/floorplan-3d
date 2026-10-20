@@ -3,6 +3,10 @@
 import { test, expect } from 'vitest';
 import { EQUIP_VOCAB, EQUIP_SKIP, matchEquip, isSkipped, skipReason, cleanName, sizeInName, isAnonymous, isJunkName } from '../src/io/dxf/equipVocab.js';
 import { productById } from '../src/products/catalog.js';
+import { kitchenOr } from '../src/io/dxf/equipVocab.js';
+import { LEGACY_TO_KITCHEN } from '../src/products/catalogKitchen.js';
+// 2026-10-20 · 계획 17 Task 8: 어휘는 기존 이름으로 적고 엑셀 급식기구를 가리킨다(짝이 없으면 숨김 단종 id 그대로).
+const K = kitchenOr;
 
 test('어휘표의 모든 제품 id가 카탈로그에 있다', () => {
   expect(EQUIP_VOCAB.length).toBeGreaterThanOrEqual(40);
@@ -14,20 +18,28 @@ test('어휘표의 모든 제품 id가 카탈로그에 있다', () => {
   expect(EQUIP_SKIP.length).toBeGreaterThanOrEqual(5);
 });
 
+test('어휘의 대상: 엑셀에 짝이 있으면 엑셀 급식기구(k-), 없으면 숨김 단종 id 그대로(계획 17 Task 8 — 점수판 equipProd가 줄지 않게)', () => {
+  expect(K('sink-double')).toBe(LEGACY_TO_KITCHEN['sink-double']);
+  expect(K('sink-double')).toMatch(/^k-/);
+  for (const id of ['tv-55', 'mirror-wall', 'toilet', 'aircon-stand', 'bench-1200']) expect(K(id), id).toBe(id);
+  const ids = new Set(EQUIP_VOCAB.map(v => v.productId));
+  for (const legacy of ['sink-double', 'sink-single', 'hood-box', 'fridge-2door', 'worktable-1800', 'shelf-steel-4', 'dining-6']) expect(ids.has(legacy), legacy).toBe(false);
+});
+
 test('대표 이름이 기대 제품으로 간다(앞 항목이 이긴다)', () => {
   const want = {
-    '세정대 2조 1500-750': 'sink-double', '세정대 1조 900-750': 'sink-single', '세정대 담금 1500-800': 'sink-double', '수류담금세척기 TR1500S': 'sink-double',
-    'TR1800S': 'sink-double', '개수대-600X600': 'sink-single', 'To청소대A(w)': 'sink-single',
-    '냉장고 4도어 1100L 1260-850': 'fridge-2door', '냉장고  6도어 1600L1900-850': 'fridge-2door', '보냉고 양문1260-800': 'fridge-2door',
-    '냉장고 김치 LG 750-801-1797 402L': 'fridge-kimchi', '보온고 양문1260-800': 'warmer-cabinet', '소독기 단문 1200-750': 'warmer-cabinet',
-    '후드1500-1300': 'hood-box', '후드 1500-1000': 'hood-box',
-    '취반기(전기)선경인케이 150인용 570x600x1460': 'ricecooker-gas', '회전국솥 선경인케이 300인(전기) 1520-1120-850': 'soup-kettle',
-    '그리들 1500x750x970 선경인케이': 'griddle-electric', '렌지 인덕션 3구 1500x750선경인케이': 'range-gas-6', '오븐디판40단 1270-920-1965': 'steamer-combi',
-    '다단식선반 1500-750': 'shelf-steel-4', '건조대이동식 1200-750': 'shelf-steel-4', '고정식작업대 1500-750': 'worktable-1800', '검수대1200': 'worktable-1800',
-    '수저식판배분대800-600': 'serve-counter', '식탁6인': 'dining-6', '식탁4인': 'dining-4', '회의용테이블3인': 'meeting-table-2400',
-    'xref-전체평면도$0$책상L형1812': 'desk-1400', '손세정대 500-370': 'washbasin', 'To세면기A': 'washbasin', 'To양변기F(w)': 'toilet',
-    '청소도구보관함 700-800': 'locker-12', '신발장소독620-450-1900': 'locker-12', '컵자동세척기': 'dishwasher',
-    '세탁 건조기 700-830LG트롬': 'dryer', '세탁기 삶기 450-540-809': 'washer-drum',
+    '세정대 2조 1500-750': K('sink-double'), '세정대 1조 900-750': K('sink-single'), '세정대 담금 1500-800': K('sink-double'), '수류담금세척기 TR1500S': K('sink-double'),
+    'TR1800S': K('sink-double'), '개수대-600X600': K('sink-single'), 'To청소대A(w)': K('sink-single'),
+    '냉장고 4도어 1100L 1260-850': K('fridge-2door'), '냉장고  6도어 1600L1900-850': K('fridge-2door'), '보냉고 양문1260-800': K('fridge-2door'),
+    '냉장고 김치 LG 750-801-1797 402L': K('fridge-kimchi'), '보온고 양문1260-800': K('warmer-cabinet'), '소독기 단문 1200-750': K('warmer-cabinet'),
+    '후드1500-1300': K('hood-box'), '후드 1500-1000': K('hood-box'),
+    '취반기(전기)선경인케이 150인용 570x600x1460': K('ricecooker-gas'), '회전국솥 선경인케이 300인(전기) 1520-1120-850': K('soup-kettle'),
+    '그리들 1500x750x970 선경인케이': K('griddle-electric'), '렌지 인덕션 3구 1500x750선경인케이': K('range-gas-6'), '오븐디판40단 1270-920-1965': K('steamer-combi'),
+    '다단식선반 1500-750': K('shelf-steel-4'), '건조대이동식 1200-750': K('shelf-steel-4'), '고정식작업대 1500-750': K('worktable-1800'), '검수대1200': K('worktable-1800'),
+    '수저식판배분대800-600': K('serve-counter'), '식탁6인': K('dining-6'), '식탁4인': K('dining-4'), '회의용테이블3인': K('meeting-table-2400'),
+    'xref-전체평면도$0$책상L형1812': K('desk-1400'), '손세정대 500-370': K('washbasin'), 'To세면기A': K('washbasin'), 'To양변기F(w)': 'toilet',
+    '청소도구보관함 700-800': K('locker-12'), '신발장소독620-450-1900': K('locker-12'), '컵자동세척기': K('dishwasher'),
+    '세탁 건조기 700-830LG트롬': K('dryer'), '세탁기 삶기 450-540-809': K('washer-drum'),
     '워터릴': 'equip-generic', '에어커튼 890-222': 'equip-generic', '온수기 560-400': 'equip-generic', '운반차 소쿠리670': 'equip-generic', 'To소변기H(w)': 'equip-generic',
   };
   const got = Object.fromEntries(Object.keys(want).map(n => [n, matchEquip(n)?.productId ?? null]));
@@ -35,11 +47,11 @@ test('대표 이름이 기대 제품으로 간다(앞 항목이 이긴다)', () 
 });
 
 test('부착면·높이·z: 어휘가 제품의 부착을 이긴다(손세정대는 바닥, 세면기는 벽)', () => {
-  expect(matchEquip('손세정대 500-370')).toMatchObject({ productId: 'washbasin', attach: 'floor', height: 850, z: 0 });
-  expect(matchEquip('To세면기A')).toMatchObject({ productId: 'washbasin', attach: 'wall', z: 800 });
+  expect(matchEquip('손세정대 500-370')).toMatchObject({ productId: K('washbasin'), attach: 'floor', height: 850, z: 0 });
+  expect(matchEquip('To세면기A')).toMatchObject({ productId: K('washbasin'), attach: 'wall', z: 800 });
   expect(matchEquip('워터릴')).toMatchObject({ attach: 'wall', height: 550, z: 1000 });
-  expect(matchEquip('후드1500-1300')).toMatchObject({ productId: 'hood-box', attach: 'ceiling', height: 600 });
-  expect(matchEquip('식탁6인')).toMatchObject({ productId: 'dining-6', size: 'product' });
+  expect(matchEquip('후드1500-1300')).toMatchObject({ productId: K('hood-box'), attach: 'ceiling', height: 600 });
+  expect(matchEquip('식탁6인')).toMatchObject({ productId: K('dining-6'), size: 'product' });
   expect(matchEquip('다단식선반 1500-750')).toMatchObject({ attach: 'floor', height: 1800, z: 0 });
 });
 

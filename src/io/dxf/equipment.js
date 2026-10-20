@@ -16,7 +16,8 @@ import { placeOnWall, wallAxis, itemAABB, pointInItem, normDeg } from '../../geo
 import { blockKind, OPEN_BLOCK } from './blockOpenings.js';
 import { classifyLayer } from './classify.js';
 import { DXF_PARAMS } from './params.js';
-import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous, isJunkName } from './equipVocab.js';
+import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous, isJunkName, kitchenOr } from './equipVocab.js';
+import { kitchenFit } from '../../products/catalogKitchen.js';
 import { groupOwner, insertBoxes, insertParts, arcEnds } from './insertBoxes.js';
 import { trimToColumns } from './equipTrim.js';
 import { eqPlacement, isEqBlock, eqWalls } from './equipName.js';
@@ -36,7 +37,7 @@ const DEFAULT_H = 850, WALL_Z = 900;
 const HOLES = new Set(['door', 'window', 'pocket', 'slide', 'pass']);
 const NOT_EQUIP = new Set(['symbol', 'other', 'column']);
 const NOTE_ROLES = new Set(['dim', 'text', 'grid', 'hatch']);   // 이름 있는 블록도 여기 있고 어휘에 없으면 기호다(사전 검토 m-8)
-const HOOD = { productId: 'hood-box', height: 600, attach: 'ceiling', z: 0 };
+const HOOD = { productId: kitchenOr('hood-box'), height: 600, attach: 'ceiling', z: 0 };   // 익명 X-상자 후드 — 엑셀 후드 대표(계획 17 Task 8)
 
 const look = (tbl, key) => (tbl instanceof Map ? tbl.get(key) : tbl && Object.prototype.hasOwnProperty.call(tbl, key) ? tbl[key] : undefined);
 const r0 = v => Math.round(v) || 0;     // -0을 접는다(toEqual이 -0과 +0을 가른다 — explode.js 머리 주석)
@@ -233,7 +234,11 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     }
     size = [r0(size[0]), r0(size[1]), r0(nd?.[2] || v?.height || DEFAULT_H)];
     const pos = toApp(c).map(r0), rot = f ? normDeg(-f.r) : 0;
-    const pid = v?.productId ?? GEN;
+    const nm = cleanName(it.name) || it.name, named = !anon && !isJunkName(nm);
+    // 엑셀 제품이면 같은 세부품명·형상 안에서 이 기구 크기에 가장 가까운 제품으로 다시 고른다(2026-10-20 · 계획 17 Task 8 — 어휘는 대표 하나만 안다).
+    // 아이템이 받는 도면 이름(익명·쓰레기 이름은 '')의 선택 수(N조·N도어…)가 있으면 그것을 가진 제품 안에서 — 폭 1500의 1조는 2조가 되지 않는다.
+    // 도면 기구·숨김 단종은 그대로다(kitchenFit). 정규화 DXF의 EQ- 블록(eqPlacement)은 이 줄을 지나지 않는다 — 사람이 고른 제품을 바꾸지 않는다.
+    const pid = kitchenFit(v?.productId ?? GEN, size, named ? nm : '');
     // 이름: 이름 있는 블록은 도면 이름 정리본. 익명 블록(zw$…·*U…)은 이름을 주지 않는다 — 제품 이름 그대로라 라벨이 서지 않는다(2026-10-12 · Task 5:
     // 이름 ≠ 제품명인 아이템에 2D·3D 라벨을 단다 — 사동·신상 A 익명 73개가 "zw$5B59" 라벨이 될 뻔했다). 원 블록 이름은 모든 기구 아이템의
     // `dxfBlock`에 남긴다(도면과 대조 · 교정 기록 — normalizeItem은 모르는 칸을 그대로 둔다).
@@ -242,8 +247,7 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     // 쓰레기 이름("1"·"66666"·"ccc" — 공개 도면 라벨 803 중 85: 803 → 718, 계획 14 Task D ② · 리뷰 m-3 뒤 · 2026-10-13 최종 리뷰 X-11)은 익명과 같이
     // 이름을 주지 않는다(제품 이름 → 라벨 없음).
     // 매칭·통계는 그대로 이름 있는 블록으로 센다(어휘에는 안 맞으니 일반 상자) — equip 수가 바뀌지 않게.
-    const nm = cleanName(it.name) || it.name;
-    place(pid, { ...(anon || isJunkName(nm) ? {} : { name: nm }), dxfBlock: it.name, dxfProduct: pid, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 }, v, anon, f);
+    place(pid, { ...(named ? { name: nm } : {}), dxfBlock: it.name, dxfProduct: pid, pos, rot, size, attach: v?.attach ?? 'floor', z: 0 }, v, anon, f);
   }
   // ⑤ 기둥에 ≤ equipTrim 들어간 바닥 기구는 그쪽 변을 깎는다(2026-10-13 · 계획 14 Task A · equipTrim.js) — 자리는 그대로, 크기만. 겹침 셈(⑥)과
   //    toProject의 colliding(검토 창 "충돌 n건" = 가져온 직후 배너)이 깎은 뒤의 상자를 보게 여기서 돈다. clash(벽 띠·기둥 덮임 비율)는 그린 상자 그대로다.

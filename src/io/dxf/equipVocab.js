@@ -7,6 +7,12 @@
 // 비교는 정규화(소문자 + 공백·밑줄 제거)한 이름의 **부분 문자열**이고 앞 항목이 이긴다(손세정대 → 세정대, 소변기 → 변기, 김치 → 냉장고 순서가 뜻이 있다).
 // keys에는 정규식도 둘 수 있다(원 이름에 맞춘다). z = 바닥에서 아랫면까지(mm) · size 'product' = 카탈로그 크기(식탁 — 상자가 의자를 품는다) ·
 // maxLong = 상자 긴 변이 이보다 크면 그 제품이 아니라 도면 기구다(내곡중 `To소변기A(w)` 3772×4382 · `To양변기F(w)` 2623×1509는 여럿을 그린 묶음 — 사전 검토 I-8).
+import { LEGACY_TO_KITCHEN } from '../../products/catalogKitchen.js';
+// 2026-10-20 · 계획 17 Task 8: 표는 기존(숨김 단종) 제품 id로 적고 엑셀 급식기구를 가리킨다(LEGACY_TO_KITCHEN — 같은 세부품명 안 크기 최근접 대표).
+// 엑셀에 짝이 없는 것(TV·거울·변기·에어컨·벤치)은 숨김 제품 그대로다 — 점수판 equipProd(제품으로 맞춘 수)가 줄지 않게. 실제로 서는 제품은
+// equipment.js가 기구 크기로 다시 고른다(kitchenFit — 폭 1260 냉장고가 2도어 대표로 서지 않게).
+export const kitchenOr = id => LEGACY_TO_KITCHEN[id] ?? id;
+const K = kitchenOr;
 const GEN = 'equip-generic';
 export const EQUIP_VOCAB = [
   // 벽 부착 — 벽(면)이 300 mm 안이면 벽에 붙이고 아니면 제자리(equipment.js). 어휘의 부착이 제품의 부착을 이긴다.
@@ -15,52 +21,52 @@ export const EQUIP_VOCAB = [
   { keys: ['배전함', '분전함', '스위치'], productId: GEN, height: 1000, attach: 'wall', z: 900 },               // 1 (+ 글자 1)
   { keys: ['에어커튼'], productId: GEN, height: 250, attach: 'wall', z: 2200 },                                 // 13
   { keys: ['소화기', '소화전'], productId: GEN, height: 700, attach: 'wall', z: 300 },
-  { keys: [/(^|[^a-z])tv([^a-z]|$)/i, '티비'], productId: 'tv-55', height: 720, attach: 'wall', z: 900 },
-  { keys: ['거울'], productId: 'mirror-wall', height: 900, attach: 'wall', z: 900 },
+  { keys: [/(^|[^a-z])tv([^a-z]|$)/i, '티비'], productId: K('tv-55'), height: 720, attach: 'wall', z: 900 },
+  { keys: ['거울'], productId: K('mirror-wall'), height: 900, attach: 'wall', z: 900 },
   { keys: ['샤워기', '수전'], productId: GEN, height: 300, attach: 'wall', z: 1500 },
   { keys: ['손소독기', '타올기', '영유아거치대', '공기살균기'], productId: GEN, height: 400, attach: 'wall', z: 1100 },   // 3 (+ 글자 3)
   // 살균수 제조기(450-255 — 깊이 255의 벽걸이): 바닥형으로 세우면 아래의 세정대·야채세척기와 95 %·79 % 겹쳤다(2026-10-12 측정 p13t2-measure.mjs).
   { keys: ['살균수'], productId: GEN, height: 600, attach: 'wall', z: 1200 },                                    // 2
-  { keys: ['상부장'], productId: 'cabinet-upper', height: 700, attach: 'wall', z: 1500 },
+  { keys: ['상부장'], productId: K('cabinet-upper'), height: 700, attach: 'wall', z: 1500 },
   { keys: ['소변기'], productId: GEN, height: 650, attach: 'wall', z: 400, maxLong: 1200 },                     // 2
-  { keys: ['세면기', '세면대'], productId: 'washbasin', height: 200, attach: 'wall', z: 800, maxLong: 1200 },    // 6
+  { keys: ['세면기', '세면대'], productId: K('washbasin'), height: 200, attach: 'wall', z: 800, maxLong: 1200 },    // 6
   // 천장 — 후드는 hood-box(환기 집계에 든다). 익명 X-상자도 이 칸으로 간다(equipment.js).
-  { keys: ['후드'], productId: 'hood-box', height: 600, attach: 'ceiling' },                                     // 8 + X-상자 11
+  { keys: ['후드'], productId: K('hood-box'), height: 600, attach: 'ceiling' },                                     // 8 + X-상자 11
   // 바닥 — 카탈로그 제품
-  { keys: ['식탁6인', '6인식탁'], productId: 'dining-6', height: 750, attach: 'floor', size: 'product' },          // 89 (21 %)
-  { keys: ['식탁4인', '4인식탁'], productId: 'dining-4', height: 750, attach: 'floor', size: 'product' },          // 7
+  { keys: ['식탁6인', '6인식탁'], productId: K('dining-6'), height: 750, attach: 'floor', size: 'product' },          // 89 (21 %)
+  { keys: ['식탁4인', '4인식탁'], productId: K('dining-4'), height: 750, attach: 'floor', size: 'product' },          // 7
   // 인원 없는 '식탁'은 카탈로그 크기를 강요하지 않는다(리뷰 M-8 — 네 도면 0건): 몇 인용인지 모르니 이름 치수 → 상자 순서 그대로다.
-  { keys: ['식탁'], productId: 'dining-6', height: 750, attach: 'floor' },
-  { keys: ['회의용테이블', '회의테이블', '회의탁자'], productId: 'meeting-table-2400', height: 750, attach: 'floor' },   // 1
-  { keys: ['책상'], productId: 'desk-1400', height: 750, attach: 'floor' },                                      // 2 (xref 책상L형 — 영양사실 L자 책상)
-  { keys: ['의자'], productId: 'chair-dining', height: 900, attach: 'floor' },
-  { keys: ['손세정대', '손세척대'], productId: 'washbasin', height: 850, attach: 'floor' },                       // 6 — 조리실 손세정대는 바닥에 서는 페달식
-  { keys: ['세정대1조', '개수대', '싱크대', '청소대'], productId: 'sink-single', height: 850, attach: 'floor' },   // 11
-  { keys: ['세정대', '싱크', '담금', 'tr1500s', 'tr1800s'], productId: 'sink-double', height: 850, attach: 'floor' },   // 10 (수류담금세척기 = 담금조)
-  { keys: ['컵자동세척기', '컵세척기'], productId: 'dishwasher', height: 1800, attach: 'floor' },                  // 4 (사전 검토 §3)
+  { keys: ['식탁'], productId: K('dining-6'), height: 750, attach: 'floor' },
+  { keys: ['회의용테이블', '회의테이블', '회의탁자'], productId: K('meeting-table-2400'), height: 750, attach: 'floor' },   // 1
+  { keys: ['책상'], productId: K('desk-1400'), height: 750, attach: 'floor' },                                      // 2 (xref 책상L형 — 영양사실 L자 책상)
+  { keys: ['의자'], productId: K('chair-dining'), height: 900, attach: 'floor' },
+  { keys: ['손세정대', '손세척대'], productId: K('washbasin'), height: 850, attach: 'floor' },                       // 6 — 조리실 손세정대는 바닥에 서는 페달식
+  { keys: ['세정대1조', '개수대', '싱크대', '청소대'], productId: K('sink-single'), height: 850, attach: 'floor' },   // 11
+  { keys: ['세정대', '싱크', '담금', 'tr1500s', 'tr1800s'], productId: K('sink-double'), height: 850, attach: 'floor' },   // 10 (수류담금세척기 = 담금조)
+  { keys: ['컵자동세척기', '컵세척기'], productId: K('dishwasher'), height: 1800, attach: 'floor' },                  // 4 (사전 검토 §3)
   { keys: ['야채자동세척기', '야채세척기'], productId: GEN, height: 850, attach: 'floor' },                         // 1
-  { keys: ['컨베이어'], productId: 'dishwasher-conveyor', height: 1500, attach: 'floor' },                         // 0 (세척 라인은 익명 *U266 · zw$22AD)
-  { keys: ['식기세척기', '세척기'], productId: 'dishwasher', height: 850, attach: 'floor' },
-  { keys: ['김치'], productId: 'fridge-kimchi', height: 1800, attach: 'floor' },                                 // 2
-  { keys: ['냉장고', '냉동고', '보냉고'], productId: 'fridge-2door', height: 1800, attach: 'floor' },              // 10
-  { keys: ['보온고', '온장고'], productId: 'warmer-cabinet', height: 1800, attach: 'floor' },                     // 2 (+ 글자 1)
-  { keys: ['신발장', '사물함', '옷장', '보관함'], productId: 'locker-12', height: 1800, attach: 'floor' },          // 6 (+ 글자 10)
-  { keys: ['소독기', '소독고', '살균고'], productId: 'warmer-cabinet', height: 1800, attach: 'floor' },            // 12 — 대용(같은 스테인리스 캐비닛 꼴)
-  { keys: ['취반기', '밥솥'], productId: 'ricecooker-gas', height: 900, attach: 'floor' },                         // 6
-  { keys: ['회전국솥', '국솥'], productId: 'soup-kettle', height: 850, attach: 'floor' },                          // 4
-  { keys: ['볶음솥'], productId: 'wok-kettle', height: 900, attach: 'floor' },
-  { keys: ['그리들', '부침'], productId: 'griddle-electric', height: 850, attach: 'floor' },                       // 2
-  { keys: ['렌지', '레인지', '인덕션'], productId: 'range-gas-6', height: 850, attach: 'floor' },                   // 2 — 대용(range-induction은 60 mm 쿡탑)
-  { keys: ['스티머', '오븐'], productId: 'steamer-combi', height: 1800, attach: 'floor' },                         // 2 — 대용(oven-built는 z 850 큐브)
-  { keys: ['다단식선반', '선반', '건조대'], productId: 'shelf-steel-4', height: 1800, attach: 'floor' },           // 20
-  { keys: ['캐비닛', '하부장'], productId: 'cabinet-lower', height: 850, attach: 'floor' },                        // 9 (+ 글자 2)
-  { keys: ['작업대', '검수대', '조리대'], productId: 'worktable-1800', height: 850, attach: 'floor' },              // 13
-  { keys: ['배식대', '배분대'], productId: 'serve-counter', height: 900, attach: 'floor' },                       // 3
-  { keys: ['건조기'], productId: 'dryer', height: 850, attach: 'floor' },                                         // 1 (세탁 건조기 — 건조대와 따로)
-  { keys: ['세탁기'], productId: 'washer-drum', height: 850, attach: 'floor' },                                   // 1
-  { keys: ['에어컨'], productId: 'aircon-stand', height: 1800, attach: 'floor' },
-  { keys: ['양변기', '대변기', '변기'], productId: 'toilet', height: 800, attach: 'floor', maxLong: 1200 },        // 5 — '소변기'가 앞에서 걸린다
-  { keys: ['벤치'], productId: 'bench-1200', height: 450, attach: 'floor' },
+  { keys: ['컨베이어'], productId: K('dishwasher-conveyor'), height: 1500, attach: 'floor' },                         // 0 (세척 라인은 익명 *U266 · zw$22AD)
+  { keys: ['식기세척기', '세척기'], productId: K('dishwasher'), height: 850, attach: 'floor' },
+  { keys: ['김치'], productId: K('fridge-kimchi'), height: 1800, attach: 'floor' },                                 // 2
+  { keys: ['냉장고', '냉동고', '보냉고'], productId: K('fridge-2door'), height: 1800, attach: 'floor' },              // 10
+  { keys: ['보온고', '온장고'], productId: K('warmer-cabinet'), height: 1800, attach: 'floor' },                     // 2 (+ 글자 1)
+  { keys: ['신발장', '사물함', '옷장', '보관함'], productId: K('locker-12'), height: 1800, attach: 'floor' },          // 6 (+ 글자 10)
+  { keys: ['소독기', '소독고', '살균고'], productId: K('warmer-cabinet'), height: 1800, attach: 'floor' },            // 12 — 대용(같은 스테인리스 캐비닛 꼴)
+  { keys: ['취반기', '밥솥'], productId: K('ricecooker-gas'), height: 900, attach: 'floor' },                         // 6
+  { keys: ['회전국솥', '국솥'], productId: K('soup-kettle'), height: 850, attach: 'floor' },                          // 4
+  { keys: ['볶음솥'], productId: K('wok-kettle'), height: 900, attach: 'floor' },
+  { keys: ['그리들', '부침'], productId: K('griddle-electric'), height: 850, attach: 'floor' },                       // 2
+  { keys: ['렌지', '레인지', '인덕션'], productId: K('range-gas-6'), height: 850, attach: 'floor' },                   // 2 — 대용(range-induction은 60 mm 쿡탑)
+  { keys: ['스티머', '오븐'], productId: K('steamer-combi'), height: 1800, attach: 'floor' },                         // 2 — 대용(oven-built는 z 850 큐브)
+  { keys: ['다단식선반', '선반', '건조대'], productId: K('shelf-steel-4'), height: 1800, attach: 'floor' },           // 20
+  { keys: ['캐비닛', '하부장'], productId: K('cabinet-lower'), height: 850, attach: 'floor' },                        // 9 (+ 글자 2)
+  { keys: ['작업대', '검수대', '조리대'], productId: K('worktable-1800'), height: 850, attach: 'floor' },              // 13
+  { keys: ['배식대', '배분대'], productId: K('serve-counter'), height: 900, attach: 'floor' },                       // 3
+  { keys: ['건조기'], productId: K('dryer'), height: 850, attach: 'floor' },                                         // 1 (세탁 건조기 — 건조대와 따로)
+  { keys: ['세탁기'], productId: K('washer-drum'), height: 850, attach: 'floor' },                                   // 1
+  { keys: ['에어컨'], productId: K('aircon-stand'), height: 1800, attach: 'floor' },
+  { keys: ['양변기', '대변기', '변기'], productId: K('toilet'), height: 800, attach: 'floor', maxLong: 1200 },        // 5 — '소변기'가 앞에서 걸린다
+  { keys: ['벤치'], productId: K('bench-1200'), height: 450, attach: 'floor' },
   // 바닥 — 카탈로그에 비슷한 것이 없는 기구(도면 기구 · 높이만 안다)
   { keys: ['운반차', '운반카', '회수차', '카트', '트롤리'], productId: GEN, height: 900, attach: 'floor' },         // 26 (6 %)
   { keys: ['실외기'], productId: GEN, height: 1000, attach: 'floor' },                                           // 3
