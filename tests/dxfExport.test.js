@@ -644,6 +644,28 @@ test("EQ- 왕복: 익명 블록이 고른 제품(이름 없는 kitchenFor)을 �
   expect(checked).toBeGreaterThan(1000);
 });
 
+// 2026-10-20 · 계획 17 최종 리뷰 I-1: main(계획 14~16)이 내보낸 정규화 DXF는 블록 제품이 옛 id다(`@washbasin`). 어휘의 productId가 엑셀 대표로 바뀌어
+// 어휘 legacy(옛 id)가 블록 제품과 같아도 어휘를 버렸다 — 바닥 페달식 손세정대가 옛 제품 부착(세면대 = 벽 z 800)으로 바뀌었다. main 결과를 그대로 적는다.
+test('EQ- 왕복(옛 id): main이 내보낸 `@washbasin` 손세정대·손세척대는 바닥 z 0 · maxLong 넘는 위생 묶음도 바닥 · 어휘와 제품이 같은 칸은 그대로', () => {
+  const rect = (w, d) => { const P = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]; return P.map((p, i) => ({ a: p, b: P[(i + 1) % 4] })); };
+  const one = name => { const s = parseEqBlock(name).size, g = eqPlacement({ name, pos: [0, 0], z: 0, rot: 0, scale: [1, 1] }, rect(s[0], s[1])); return [g.pid, g.patch.attach, g.patch.z]; };
+  expect(one('EQ-손세정대_500-370-500x370x850@washbasin')).toEqual(['washbasin', 'floor', 0]);
+  expect(one('EQ-손세척대-600x500x850@washbasin')).toEqual(['washbasin', 'floor', 0]);
+  expect(one('EQ-To세면기A(w)-2600x1500x200@washbasin')).toEqual(['washbasin', 'floor', 0]);
+  // main과 같던 칸(어휘 부착 = 옛 제품 부착)은 바뀌지 않는다.
+  expect(one('EQ-세면기-480x470x200@washbasin')).toEqual(['washbasin', 'wall', 0]);
+  expect(one('EQ-상부장-900x350x700@cabinet-upper')).toEqual(['cabinet-upper', 'wall', 0]);
+  expect(one('EQ-세정대_2조_1500-750-1500x750x850@sink-double')).toEqual(['sink-double', 'floor', 0]);
+  // 전체 왕복: 옛 프로젝트(main에서 가져온 손세정대 = washbasin · 바닥)를 서쪽 벽 면에 붙여 두고 내보내 다시 들이면 바닥 그대로다.
+  const p = synthetic(), f = p.floors[0];
+  for (const [y, name] of [[-2500, '손세정대 500-370'], [2200, '손세척대']]) {
+    const { pos, rot } = seatOn(f, -4000, y, [500, 370, 850], true);
+    f.items.push(createItem(productById('washbasin'), { pos, rot, size: [500, 370, 850], attach: 'floor', z: 0, name, dxfBlock: name, dxfProduct: 'washbasin' }));
+  }
+  const back = importText(exportDxf(p)).project.floors[0].items.filter(i => i.productId === 'washbasin');
+  expect(back.map(i => [i.name, i.attach, Math.round(i.z), i.wallId ?? null]).sort()).toEqual([['손세정대 500-370', 'floor', 0, null], ['손세척대', 'floor', 0, null]]);
+});
+
 // 2026-10-13 · 최종 리뷰 X-1(M-E5/N-2): 손으로 놓은 같은 제품 둘(폭 900 · 1000 냉장고)을 왕복하면 예전에는 둘 다 dxfBlock(크기가 든 EQ- 이름)을 얻어
 // itemOps.sameItemIds가 "가져온 기구"로 보고 블록끼리만 묶었다 — 메뉴가 "같은 이름 1개"로 꺼졌다(실측 네 도면 모두 n = 1).
 // 사람이 놓은 제품(`!`)은 왕복 뒤에도 사람이 놓은 아이템이다: dxfBlock 없음 → 같은 productId 전부 · 메뉴 "같은 제품 선택"이 켜진다.
