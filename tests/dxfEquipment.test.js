@@ -161,6 +161,21 @@ test('이름 있는 블록은 크기 대표 정규식 없이 — 양문 1260은 
   expect(at('컵자동세척기', [0, 0, 600, 570]).name).toMatch(/컵/);                       // 어휘 갈래(상업용식기세척기)에 컵자동세척기가 있다
   const multi = at('멀티손세정대3구 1800-550-1450', [0, 0, 1800, 550]);
   expect([/손세정/.test(multi.name), multi.size[0]]).toEqual([true, 1800]);
+  expect(at('세탁기 삶기 450-540-809', [0, 0, 450, 540]).name).toMatch(/삶기용 세탁기/);
+});
+
+// Fix 3(2026-10-20 · 컨트롤러 결정): 이름 있는 블록에 제품 낱말이 안 걸리면 대표 제품과 같은 형상만(운반차가 배식대·세정대를 이기지 않게),
+// 같은 거리면 표의 정규식에 맞는 후보(같은 크기 이중급배기후드보다 배기후드).
+test('이름 있는 블록: 배분대·개수대·청소대는 운반차가 아니고, 이름 있는 후드는 배기후드', () => {
+  const at = (name, b, o) => productById(only(run(one(name, b, o))).productId);
+  const serve = at('수저식판배분대800-600', [0, 0, 800, 600]);
+  expect([serve.shape === 'cart', /운반/.test(serve.name)]).toEqual([false, false]);
+  for (const n of ['개수대-600X600', 'To청소대A(w)']) {
+    const p = at(n, [0, 0, 600, 600], { layer: '급식기구' });
+    expect([p.shape, /회수차/.test(p.name)], n).toEqual(['sink', false]);
+  }
+  expect(at('후드1500-1300', [0, 0, 1500, 1300]).name).toMatch(/^배기후드/);
+  expect(at('후드1200-1200', [0, 0, 1200, 1200]).name).toMatch(/^배기후드/);
 });
 
 test('90° 회전 블록 — 축 정렬이면 rot 0 · 월드 상자 방향(w/d가 바뀐다)', () => {

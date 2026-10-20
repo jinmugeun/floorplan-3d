@@ -271,6 +271,20 @@ describe('기존 id → 엑셀 제품 대응', () => {
     const multi = name('washbasin', [1800, 550, 1450], '멀티손세정대3구 1800-550-1450');
     expect([/손세정/.test(multi.name), multi.size[0]]).toEqual([true, 1800]);
     expect(name('hood-box', [1500, 1800, 600], '').name).toMatch(/^배기후드/);                     // 이름 없는 익명 후드는 대표 정규식
+    // Fix 3: 제품 낱말이 하나도 안 걸리면 대표 제품(LEGACY_TO_KITCHEN)과 같은 형상만 — 배식대·싱크대 세부품명 안의 운반차(cart)가 이기지 않게.
+    const serve = name('serve-counter', [800, 600, 850], '수저식판배분대800-600');
+    expect([serve.shape, /운반/.test(serve.name)]).toEqual([productById(LEGACY_TO_KITCHEN['serve-counter']).shape, false]);
+    expect(KITCHEN_PRODUCTS.some(p => LEGACY_SUBS['serve-counter'][0].includes(p.sub) && p.shape === 'cart')).toBe(true);   // 운반차가 같은 세부품명에 있다
+    for (const n of ['개수대-600X600', 'To청소대A(w)']) {
+      const p = name('sink-single', [600, 600, 850], n);
+      expect([p.shape, /회수차/.test(p.name)], n).toEqual(['sink', false]);
+    }
+    expect(name('washer-drum', [450, 540, 809], '세탁기 삶기 450-540-809').name).toMatch(/삶기용/);   // 제품 낱말(세탁기)이 걸리면 형상 거르기 없음(삶기용은 machine)
+    // Fix 3: 같은 거리면 표의 정규식(/^배기후드/)에 맞는 후보가 이긴다 — 같은 크기의 이중급배기후드가 원자료 순서상 앞이다.
+    for (const [s, n] of [[[1500, 1300, 600], '후드1500-1300'], [[1200, 1200, 600], '후드1200-1200']]) {
+      expect(KITCHEN_PRODUCTS.some(p => /^이중급배기후드/.test(p.name) && p.size[0] === s[0] && p.size[1] === s[1]), n).toBe(true);
+      expect(name('hood-box', s, n).name, n).toMatch(/^배기후드/);
+    }
     // 남는 후보가 없는 낱말은 무시한다(9조 · 전기 세정대 · 이동식 후드) — 거를 낱말이 없는 이름과 같다.
     for (const [id, s, n] of [['sink-double', [1500, 750, 850], '세정대 9조'], ['sink-single', [1200, 750, 850], '전기 세정대'], ['hood-box', [1500, 1300, 600], '이동식 후드']])
       expect(kitchenFor(id, s, n), n).toBe(kitchenFor(id, s, '도면 이름'));
