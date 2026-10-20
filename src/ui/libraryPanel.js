@@ -110,11 +110,11 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     }
     const more = ev.target.closest('[data-more]');
     // [더 보기]도 목록을 통째로 새로 그린다: 키보드로 눌렀으면 새로 켜진 칩으로 포커스를 옮기고, 깊은 묶음에서
-    // 눌러 #panel이 아래로 내려가 있어도 칩 행이 다시 보이게 한다(계획 17 Task 4 리뷰 I-1·I-2).
+    // 눌러 #panel이 아래로 내려가 있어도 탭·칩 행이 다시 보이게 한다(계획 17 Task 4 리뷰 I-1·I-2).
     if (more) {
       const had = document.activeElement === more;
       st.category = more.dataset.more; st.sub = null; render();
-      try { part('chips').scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }
+      try { part('tabs').scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }   // 탭 바로 아래가 칩 행 — 둘 다 보인다
       refocusChip(part('chips'), st.category, had);
       return;
     }

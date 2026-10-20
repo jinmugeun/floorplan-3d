@@ -225,15 +225,17 @@ test('마우스로 누른 [더 보기]는(포커스 없이) 포커스를 훔치�
 });
 
 // 계획 17 Task 4 리뷰 I-2: #panel이 스크롤 상자라 깊은 묶음의 [더 보기]를 누르면 새 목록의 ~800 px 아래에
-// 떨어지고 칩 행은 화면 밖이었다. [더 보기] 뒤에는 칩 행을 다시 보이게 한다(칩은 누를 때 이미 보이므로 그대로).
-test('[더 보기]를 누르면 칩 행을 다시 보이게 스크롤한다 · 칩 클릭은 스크롤하지 않는다', () => {
+// 떨어지고 칩 행은 화면 밖이었다. [더 보기] 뒤에는 탭 행부터 다시 보이게 한다 — 탭 바로 아래가 칩 행이라
+// 둘 다 패널 위에 온다(Fix 2: 칩 행 기준이면 탭이 위로 가려졌다). 칩은 누를 때 이미 보이므로 그대로.
+test('[더 보기]를 누르면 탭 행(그 아래 칩 행)을 다시 보이게 스크롤한다 · 칩 클릭은 스크롤하지 않는다', () => {
   const { el } = setup();
   const calls = [];
-  el.querySelector('[data-part="chips"]').scrollIntoView = opts => calls.push(opts);   // jsdom은 스크롤을 그리지 않는다 — 부름만 본다
+  el.querySelector('[data-part="tabs"]').scrollIntoView = opts => calls.push(['tabs', opts]);   // jsdom은 스크롤을 그리지 않는다 — 부름만 본다
+  el.querySelector('[data-part="chips"]').scrollIntoView = opts => calls.push(['chips', opts]);
   click(el, chipSel); click(el, '[data-cat-all]');
   expect(calls).toEqual([]);
   click(el, '[data-more="세척·소독"]');
-  expect(calls).toEqual([{ block: 'nearest' }]);
+  expect(calls).toEqual([['tabs', { block: 'nearest' }]]);
 });
 
 test('칩을 누르면 필터, "전체"를 누르면 다시 전체다', () => {
