@@ -7,11 +7,11 @@ import { DXF_PARAMS } from '../src/io/dxf/params.js';
 import { makeWall } from '../src/geom/walls.js';
 import { createItem, createFloor, createEmptyProject, normalizeProject, migrate } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
-import { kitchenFit } from '../src/products/catalogKitchen.js';
+import { kitchenFor } from '../src/products/catalogKitchen.js';
 import { kitchenOr } from '../src/io/dxf/equipVocab.js';
-// 2026-10-20 · 계획 17 Task 8: 어휘가 가리키는 엑셀 대표(kitchenOr)를 기구 크기로 같은 세부품명·형상 안에서 다시 고른다(kitchenFit).
-// name = 아이템이 받는 도면 이름(정리본 — 익명 블록은 '') — equipment.js가 그 이름의 선택 수(N조·N도어…)를 kitchenFit에 넘긴다.
-const KF = (legacy, size, name = '') => kitchenFit(kitchenOr(legacy), size, name);
+// 2026-10-20 · 계획 17 Task 8(Fix 1): 어휘의 기존 id(legacy)로 엑셀 제품을 기구 크기·도면 이름에 맞춰 다시 고른다(kitchenFor — 그 어휘의 제품 갈래 안:
+// 세부품명 → 열원 낱말 → 선택 수 → 이름 정규식 → 고정식/이동식). name = 아이템이 받는 도면 이름(정리본 — 익명 블록은 '').
+const KF = (legacy, size, name = '') => kitchenFor(legacy, size, name);
 import { setBlockTable } from '../src/io/dxf/blockOpenings.js';
 import { explode, mat, apply } from '../src/io/dxf/explode.js';
 import { buildImportMeta, buildDxfFeedback } from '../src/io/dxfFeedback.js';
@@ -116,7 +116,36 @@ test('dxfBlock은 저장·불러오기 왕복(normalizeProject → JSON → migr
 });
 
 test('냉장고 4도어는 제외가 아니다(숫자 뒤의 도어 = 문짝 수)', () => {
-  expect(only(run(one('냉장고 4도어 1100L 1260-850', [0, 0, 1260, 1073])))).toMatchObject({ productId: KF('fridge-2door', [1260, 850, 1800], '냉장고 4도어 1100L 1260-850'), size: [1260, 850, 1800] });
+  const it = only(run(one('냉장고 4도어 1100L 1260-850', [0, 0, 1260, 1073])));
+  expect(it).toMatchObject({ productId: KF('fridge-2door', [1260, 850, 1800], '냉장고 4도어 1100L 1260-850'), size: [1260, 850, 1800] });
+  expect(productById(it.productId).name).toMatch(/4도어/);                    // 이름의 4도어가 대표 정규식(/2도어/)을 이긴다
+});
+
+// 2026-10-20 · 계획 17 Task 8 Fix 1(리뷰 2·3): 서는 제품은 어휘의 제품 갈래 안에서 고른다 — 같은 세부품명 전체(kitchenFit)에서 고르면 고정식작업대가
+// 이동식·보조배식대로, 세탁 건조기가 세탁기로, 익명 X-상자 후드가 이중급배기후드로, (전기)·인덕션이 가스로 섰다. 도면 이름이 결과를 바꾸는 경우를 함께 본다.
+test('기구 제품은 어휘의 제품 갈래 안 — 이름의 조 수·고정식/이동식·열원(전기·인덕션·가스)을 지키고, 익명 X-상자 후드는 배기후드', () => {
+  const at = (name, b, o) => { const it = only(run(one(name, b, o))); return { it, p: productById(it.productId) }; };
+  const sink = at('세정대 2조 1200-750', [0, 0, 1200, 750]).p;
+  expect(sink.name).toMatch(/2조/);
+  const fixed = at('고정식작업대 1500-750', [0, 0, 1500, 750]).p;
+  expect([/고정식/.test(fixed.name), /이동식/.test(fixed.name)]).toEqual([true, false]);
+  expect(productById(KF('worktable-1800', [1500, 750, 850])).name).toMatch(/이동식/);           // 이름이 없으면 크기가 딱 맞는 이동식 — 이름이 바꾼다
+  const small = at('고정식작업대 700-600', [0, 0, 700, 600]).p;
+  expect(small.name).toMatch(/작업대/);
+  expect(small.name).not.toMatch(/보조배식대/);
+  expect(at('이동식작업대1200-750', [0, 0, 1200, 750]).p.name).toMatch(/이동식/);
+  expect(at('세탁 건조기 700-830', [0, 0, 700, 830]).p.name).toMatch(/건조기/);
+  const rice = at('취반기(전기)선경인케이 150인용 570x600x1460', [0, 0, 570, 698]);
+  expect(rice.p.equip.heat).toBe('electric');
+  expect(productById(KF('ricecooker-gas', rice.it.size)).equip.heat).toBe('gas');              // 이름이 없으면 대표(가스) — 이름이 바꾼다
+  const range = at('렌지 인덕션 3구 1500x750선경인케이', [0, 0, 1500, 750]).p;
+  expect([range.equip.heat, /3구/.test(range.name)]).toEqual(['electric', true]);
+  expect(at('회전국솥 선경인케이 300인(전기) 1520-1120-850', [0, 0, 1520, 1120]).p.equip.heat).toBe('electric');
+  // 익명 X-상자(후드 레이어) — 이름이 없으니 어휘 대표 갈래(/^배기후드/) 안에서 크기 최근접.
+  const xbox = [...box(0, 0, 0, 1500, 1800), seg([0, 0], [1500, 1800], 0), seg([0, 1800], [1500, 0], 0)].map(s => ({ ...s, layer: '후드' }));
+  const hood = only(run(exOf([ins('zw$E75B', { layer: '후드' })], xbox)));
+  expect(productById(hood.productId).name).toMatch(/^배기후드/);
+  expect(hood.productId).toBe(KF('hood-box', [1500, 1800, 600]));
 });
 
 test('90° 회전 블록 — 축 정렬이면 rot 0 · 월드 상자 방향(w/d가 바뀐다)', () => {

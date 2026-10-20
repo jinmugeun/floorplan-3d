@@ -20,6 +20,7 @@ import { buildProject } from '../src/io/dxf/toProject.js';
 import { DXF_PARAMS, HEIGHT_RANGE } from '../src/io/dxf/params.js';
 import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_EXPORT_AS_MENU } from '../src/ui/dxfMessages.js';
 import { matchEquip, sizeInName, skipReason, kitchenOr } from '../src/io/dxf/equipVocab.js';
+import { kitchenFor } from '../src/products/catalogKitchen.js';
 import { importSnapshot } from '../src/io/dxfFeedback.js';
 import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
 import { ITEM_RANGE } from '../src/state/schema.js';
@@ -601,6 +602,28 @@ test('기구 왕복: 수·중심(≤ 10 mm)·크기·이름·제품·부착·z·
   // 두 번째 왕복도 같다(고정점 — r2.back은 r1의 앱 좌표로 되돌린다).
   const r2 = importText(exportDxf(r1.project));
   same(got(r1), got(r2), r2.back);
+});
+
+// 2026-10-20 · 계획 17 Task 8 Fix 1(리뷰 1): 어휘는 엑셀 대표를 가리키고 서는 제품은 크기·이름으로 다시 고르므로(kitchenFor) EQ- 블록의 제품이 어휘 대표와
+// 다를 수 있다. 그 어휘·크기·이름으로 가져오기가 고를 제품과 같으면 어휘(벽 부착·z)를 지킨다 — 예전 규칙(어휘 제품 = 블록 제품일 때만)으로는
+// 세면기(벽 z 800)·상부장(벽 z 1500)이 왕복 뒤 제품의 부착(바닥)으로 떨어졌다.
+test('EQ- 왕복: 크기로 다시 고른 벽걸이 어휘 기구(To세면기A 500×370 · 상부장 600×350)는 벽에 다시 앉고 제품·z·크기가 그대로다', () => {
+  const tag = name => ({ name, pos: [-741000.5, 338000.25], rot: 0, scale: [1, 1], layer: '급식기구', depth: 0, mirrored: false, block: '*Model_Space' });
+  const sq = (k, x0, y0, x1, y1) => [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]].map(([a, b, c, d]) => ({ a: [a, b], b: [c, d], layer: '급식기구', src: 'LINE', ins: k }));
+  // 9 × 6 m 방(중심선 · 두께 200 — 북쪽 벽 안쪽 면 y 5900)에 붙여 그린 두 블록.
+  const raw = [[0, 0, 9000, 0], [9000, 0, 9000, 6000], [9000, 6000, 0, 6000], [0, 6000, 0, 0]].map(([a, b, c, d]) => ({ a: [a, b], b: [c, d], thickness: 200 }));
+  const ex = { inserts: [tag('To세면기A'), tag('상부장')], segs: [...sq(0, 1000, 5530, 1500, 5900), ...sq(1, 3000, 5550, 3600, 5900)], arcs: [], polyArcs: [], circles: [], texts: [], dims: [], hatches: [] };
+  const first = buildProject(raw, { height: 3500, ex, layerRoles: new Map([['급식기구', 'equip']]) }).project;
+  const pick = p => ['To세면기A', '상부장'].map(n => p.floors[0].items.find(i => i.name === n));
+  const A = pick(first);
+  for (const a of A) expect([a.name, a.attach, Boolean(a.wallId), a.productId.startsWith('k-')]).toEqual([a.name, 'wall', true, true]);
+  expect(A.map(a => a.productId)).toEqual([kitchenFor('washbasin', A[0].size, 'To세면기A'), kitchenFor('cabinet-upper', A[1].size, '상부장')]);
+  expect(A[0].productId).not.toBe(kitchenOr('washbasin'));                 // 어휘 대표(480×470)가 아니라 크기가 맞는 손세정대 — 이 경우를 시험한다
+  const B = pick(importText(exportDxf(first)).project);
+  A.forEach((a, i) => {
+    expect(B[i], a.name).toBeTruthy();
+    expect([B[i].productId, B[i].attach, Boolean(B[i].wallId), Math.round(B[i].z), B[i].size]).toEqual([a.productId, 'wall', true, Math.round(a.z), a.size]);
+  });
 });
 
 // 2026-10-13 · 최종 리뷰 X-1(M-E5/N-2): 손으로 놓은 같은 제품 둘(폭 900 · 1000 냉장고)을 왕복하면 예전에는 둘 다 dxfBlock(크기가 든 EQ- 이름)을 얻어

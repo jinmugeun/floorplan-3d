@@ -24,6 +24,14 @@ test('어휘의 대상: 엑셀에 짝이 있으면 엑셀 급식기구(k-), 없�
   for (const id of ['tv-55', 'mirror-wall', 'toilet', 'aircon-stand', 'bench-1200']) expect(K(id), id).toBe(id);
   const ids = new Set(EQUIP_VOCAB.map(v => v.productId));
   for (const legacy of ['sink-double', 'sink-single', 'hood-box', 'fridge-2door', 'worktable-1800', 'shelf-steel-4', 'dining-6']) expect(ids.has(legacy), legacy).toBe(false);
+  // Fix 1(2026-10-20): 엑셀을 가리키는 칸은 기존 id를 legacy로 함께 든다 — equipment.js가 kitchenFor(legacy, 크기, 이름)로 그 갈래 안에서 다시 고른다.
+  // 일반 상자·짝 없는 숨김 id 칸은 legacy가 없다.
+  for (const v of EQUIP_VOCAB) {
+    if (v.productId.startsWith('k-')) expect(K(v.legacy), String(v.keys)).toBe(v.productId);
+    else expect(v.legacy, String(v.keys)).toBeUndefined();
+  }
+  expect(matchEquip('고정식작업대 1500-750')).toMatchObject({ productId: K('worktable-1800'), legacy: 'worktable-1800' });
+  expect(matchEquip('To양변기F(w)').legacy).toBeUndefined();
 });
 
 test('대표 이름이 기대 제품으로 간다(앞 항목이 이긴다)', () => {

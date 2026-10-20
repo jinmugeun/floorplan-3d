@@ -144,7 +144,7 @@ export function buildProject(raw, {
   // 한 파일의 두 도면이라 없으면 남의 기구가 건물 밖에 선다 · 사전 검토 C-1), layerRoles = 레이어 → 역할(검토 창 행 — 없으면 이름 규칙으로 떨어져
   // 내곡중 `건축` 레이어의 익명 기구 넷이 빠진다 · Task 2 측정 11 → 7). ex가 없으면(옛 호출자) 기구는 없다.
   ex = null, roi = null, layerRoles = null, equipment = true,
-  kitchenWalls = false,     // 급식실 마감(2026-10-20 · 계획 17 Task 8): 켜면 벽 안쪽 흰 타일 — 워커는 기본 켬, 옛 호출자(테스트·도구)는 꺼짐 그대로
+  kitchenWalls = false,     // 급식실 마감(2026-10-20 · 계획 17 Task 8): 켜면 벽 안쪽 흰 타일. 워커는 기본 켬이다(점수판 도구도 워커를 거쳐 켬 — 지표는 matIn을 안 본다). 직접 부르는 테스트는 꺼짐
 } = {}) {
   const { toApp, box, size } = makeToApp(raw, scale);
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.

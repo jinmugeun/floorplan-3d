@@ -11,11 +11,10 @@ import { importDxf } from '../src/io/dxf/client.js';
 import { collidingIds } from '../src/geom/collide.js';
 import { estimateRows } from '../src/io/estimate.js';
 import { DXF_FEEDBACK_EXPORTED } from '../src/ui/messages.js';
-import { kitchenFit } from '../src/products/catalogKitchen.js';
-import { kitchenOr } from '../src/io/dxf/equipVocab.js';
-// 2026-10-20 · 계획 17 Task 8: EX의 세 제품(세정대 1500×750 · 후드 1500×1300 · 작업대 700×600)이 서는 엑셀 제품. 세 번째 인자 = 아이템이 받는 도면 이름
-// (equipment.js가 그 이름의 선택 수 — '2조' — 를 kitchenFit에 넘긴다).
-const KF = (legacy, size, name = '') => kitchenFit(kitchenOr(legacy), size, name);
+import { kitchenFor } from '../src/products/catalogKitchen.js';
+// 2026-10-20 · 계획 17 Task 8(Fix 1): EX의 세 제품(세정대 1500×750 · 후드 1500×1300 · 작업대 700×600)이 서는 엑셀 제품. 첫 인자 = 어휘의 기존 id(legacy),
+// 세 번째 = 아이템이 받는 도면 이름(equipment.js가 kitchenFor에 넘긴다 — '2조' · '고정식').
+const KF = (legacy, size, name = '') => kitchenFor(legacy, size, name);
 const SINK = KF('sink-double', [1500, 750, 850], '세정대 2조 1500-750'), HOOD_ID = KF('hood-box', [1500, 1300, 600], '후드1500-1300'), WORK = KF('worktable-1800', [700, 600, 850], '고정식작업대 700-600');
 
 // DXF 좌표(y 위쪽)의 사각형 중심선 넷.

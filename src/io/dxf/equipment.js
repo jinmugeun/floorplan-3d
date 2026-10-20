@@ -17,7 +17,7 @@ import { blockKind, OPEN_BLOCK } from './blockOpenings.js';
 import { classifyLayer } from './classify.js';
 import { DXF_PARAMS } from './params.js';
 import { matchEquip, skipReason, cleanName, sizeInName, isAnonymous, isJunkName, kitchenOr } from './equipVocab.js';
-import { kitchenFit } from '../../products/catalogKitchen.js';
+import { kitchenFor } from '../../products/catalogKitchen.js';
 import { groupOwner, insertBoxes, insertParts, arcEnds } from './insertBoxes.js';
 import { trimToColumns } from './equipTrim.js';
 import { eqPlacement, isEqBlock, eqWalls } from './equipName.js';
@@ -37,7 +37,7 @@ const DEFAULT_H = 850, WALL_Z = 900;
 const HOLES = new Set(['door', 'window', 'pocket', 'slide', 'pass']);
 const NOT_EQUIP = new Set(['symbol', 'other', 'column']);
 const NOTE_ROLES = new Set(['dim', 'text', 'grid', 'hatch']);   // 이름 있는 블록도 여기 있고 어휘에 없으면 기호다(사전 검토 m-8)
-const HOOD = { productId: kitchenOr('hood-box'), height: 600, attach: 'ceiling', z: 0 };   // 익명 X-상자 후드 — 엑셀 후드 대표(계획 17 Task 8)
+const HOOD = { productId: kitchenOr('hood-box'), legacy: 'hood-box', height: 600, attach: 'ceiling', z: 0 };   // 익명 X-상자 후드 — 엑셀 후드 갈래(계획 17 Task 8)
 
 const look = (tbl, key) => (tbl instanceof Map ? tbl.get(key) : tbl && Object.prototype.hasOwnProperty.call(tbl, key) ? tbl[key] : undefined);
 const r0 = v => Math.round(v) || 0;     // -0을 접는다(toEqual이 -0과 +0을 가른다 — explode.js 머리 주석)
@@ -235,10 +235,11 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     size = [r0(size[0]), r0(size[1]), r0(nd?.[2] || v?.height || DEFAULT_H)];
     const pos = toApp(c).map(r0), rot = f ? normDeg(-f.r) : 0;
     const nm = cleanName(it.name) || it.name, named = !anon && !isJunkName(nm);
-    // 엑셀 제품이면 같은 세부품명·형상 안에서 이 기구 크기에 가장 가까운 제품으로 다시 고른다(2026-10-20 · 계획 17 Task 8 — 어휘는 대표 하나만 안다).
-    // 아이템이 받는 도면 이름(익명·쓰레기 이름은 '')의 선택 수(N조·N도어…)가 있으면 그것을 가진 제품 안에서 — 폭 1500의 1조는 2조가 되지 않는다.
-    // 도면 기구·숨김 단종은 그대로다(kitchenFit). 정규화 DXF의 EQ- 블록(eqPlacement)은 이 줄을 지나지 않는다 — 사람이 고른 제품을 바꾸지 않는다.
-    const pid = kitchenFit(v?.productId ?? GEN, size, named ? nm : '');
+    // 엑셀을 가리키는 어휘(legacy가 있는 칸)면 그 어휘의 제품 갈래 안에서 이 기구 크기·도면 이름에 맞는 제품으로 다시 고른다(2026-10-20 · 계획 17
+    // Task 8 Fix 1 — kitchenFor: 세부품명 → 열원 낱말 → 선택 수 → 이름 정규식 → 고정식/이동식 → 크기 최근접). 이름 = 아이템이 받는 이름(익명·쓰레기는 '').
+    // 세부품명 전체(kitchenFit)에서 고르면 고정식작업대가 이동식·보조배식대로, 취반기(전기)가 가스로 섰다. 일반 상자·짝 없는 숨김 id는 그대로다.
+    // 정규화 DXF의 EQ- 블록(eqPlacement)은 이 줄을 지나지 않는다 — 사람이 고른 제품을 바꾸지 않는다.
+    const pid0 = v?.productId ?? GEN, pid = v?.legacy ? (kitchenFor(v.legacy, size, named ? nm : '') ?? pid0) : pid0;
     // 이름: 이름 있는 블록은 도면 이름 정리본. 익명 블록(zw$…·*U…)은 이름을 주지 않는다 — 제품 이름 그대로라 라벨이 서지 않는다(2026-10-12 · Task 5:
     // 이름 ≠ 제품명인 아이템에 2D·3D 라벨을 단다 — 사동·신상 A 익명 73개가 "zw$5B59" 라벨이 될 뻔했다). 원 블록 이름은 모든 기구 아이템의
     // `dxfBlock`에 남긴다(도면과 대조 · 교정 기록 — normalizeItem은 모르는 칸을 그대로 둔다).
