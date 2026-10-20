@@ -5,7 +5,8 @@ import { createUiState } from '../src/state/uistate.js';
 import { createEmptyProject, createItem } from '../src/state/schema.js';
 import { addItem } from '../src/state/floorOps.js';
 import { productById, CATEGORIES, PRODUCTS, CATEGORY_COLORS, productsIn, sortProducts, fmtSize } from '../src/products/catalog.js';
-import { createLibraryPanel, isFav, toggleFav } from '../src/ui/libraryPanel.js';
+import { createLibraryPanel, isFav, toggleFav, GRID_PER_CHIP } from '../src/ui/libraryPanel.js';
+import { LIB_MORE } from '../src/ui/messages.js';
 
 // 2026-10-20 · 계획 17 Task 3: 카탈로그가 엑셀 급식기구로 바뀌어 고정 예시를 소파에서 '싱크·조리대 / 상업용싱크대'로 옮겼다.
 // 예시 id는 카탈로그에서 결정적으로 고른다(이름순 첫 세정대 · 첫 후드) — 엑셀이 바뀌어도 테스트가 따라온다.
@@ -33,7 +34,7 @@ beforeEach(() => { localStorage.clear(); document.activeElement?.blur?.(); });
 describe('라이브러리 패널', () => {
   test('탭 3개와 칩 10개를 보여주고 칩 → 하위(세부품명) → 타일로 들어간다', () => {
     const { el } = setup();
-    expect([...el.querySelectorAll('[data-tab]')].map(b => b.textContent)).toEqual(['오늘의집 제품', '즐겨찾기', '배치된 제품']);
+    expect([...el.querySelectorAll('[data-tab]')].map(b => b.textContent)).toEqual(['급식기구', '즐겨찾기', '배치된 제품']);   // 계획 17 Task 4
     expect(el.querySelectorAll('[data-cat]')).toHaveLength(10);   // 엑셀 9개 + 건축 요소(계획 17)
     click(el, chipSel);
     expect([...el.querySelectorAll('[data-sub]')].map(b => b.dataset.sub)).toEqual(['', ...CATEGORIES.find(c => c.name === CHIP).subs]);
@@ -168,15 +169,33 @@ describe('라이브러리 패널', () => {
 });
 
 // §15.8(감사 §26): 처음 열면 제품이 하나도 없었다(카테고리 목록 13줄만).
-test('처음 열면 전체 그리드와 칩 행이 함께 보인다', () => {
+// 계획 17 Task 4: 엑셀 ~500장을 한꺼번에 그리지 않는다 — 칩마다 제목 + 앞 GRID_PER_CHIP장 + [더 보기 (n)].
+test('처음 열면 칩별 묶음 그리드와 칩 행이 함께 보인다', () => {
   const { el } = setup();
   expect(el.querySelectorAll('.chips button[data-cat]')).toHaveLength(10);   // 엑셀 9개 + 건축 요소(계획 17)
   expect(el.querySelector('[data-cat-all]').classList.contains('on')).toBe(true);
+  expect([...el.querySelectorAll('.lib-group h3')].map(h => h.firstChild.textContent.trim())).toEqual(CATEGORIES.map(c => c.name));
+  expect(el.querySelector('section')).toBeNull();   // shell.showPanel이 '#panel section'을 전부 숨긴다(data-panel 없는 것까지) — 묶음은 div여야 보인다
   const tiles = [...el.querySelectorAll('.tile')];
-  expect(tiles.length).toBeGreaterThan(20);                 // 카탈로그 전체가 보인다
+  expect(tiles.length).toBeGreaterThan(20);
+  expect(tiles.length).toBeLessThanOrEqual(CATEGORIES.length * GRID_PER_CHIP);   // DOM 상한
+  expect(tiles.every(t => !productById(t.dataset.id).hidden)).toBe(true);        // 숨김 단종은 그리드에 없다
   // 타일은 카테고리 순이다: 첫 타일의 카테고리가 CATEGORIES의 첫 카테고리와 같다.
   expect(PRODUCTS.find(p => p.id === tiles[0].dataset.id).category).toBe(CATEGORIES[0].name);
   expect(el.querySelector('.cat-list')).toBeNull();          // 전폭 1열 목록은 사라졌다
+});
+
+test('[더 보기 (n)]은 그 칩으로 들어가 칩의 타일을 전부 보여 준다 · 12장 이하 칩에는 없다', () => {
+  const { el, panel } = setup();
+  const WASH = '세척·소독', all = productsIn(WASH);
+  expect(all.length).toBeGreaterThan(GRID_PER_CHIP);
+  const more = el.querySelector(`[data-more="${WASH}"]`);
+  expect(more.textContent).toBe(LIB_MORE(all.length - GRID_PER_CHIP));
+  expect(el.querySelector('[data-more="건축 요소"]')).toBeNull();               // 문 6 · 창 3 · 기둥 2 · 개구부 = 12장
+  more.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(panel.state.category).toBe(WASH);
+  expect(el.querySelectorAll('.tile')).toHaveLength(all.length);
+  expect(el.querySelector(`[data-cat="${WASH}"]`).classList.contains('on')).toBe(true);
 });
 
 test('칩을 누르면 필터, "전체"를 누르면 다시 전체다', () => {
