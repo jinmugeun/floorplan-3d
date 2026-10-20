@@ -80,7 +80,7 @@ const KEPT_BASE = [
 ];
 // 도면 기구(DXF 가져오기의 일반 상자)는 남기되 숨긴다 — 사람이 라이브러리에서 고를 물건이 아니다(가져온 기구가 서는 자리).
 const KEPT = [...KEPT_BASE, ...DRAWING_PRODUCTS.map(p => ({ ...p, hidden: true }))];
-export const KEPT_IDS = KEPT.map(p => p.id);
+export const KEPT_IDS = /* @__PURE__ */ KEPT.map(p => p.id);   // 테스트 전용 — 앱 번들에 남지 않게(계획 17 최종 리뷰 M-1)
 export const PRODUCTS = [...KEPT, ...KITCHEN_PRODUCTS, ...LEGACY_PRODUCTS];
 
 export const isListed = p => !!p && !p.hidden;
@@ -100,5 +100,5 @@ export function sortProducts(list, by = 'name') {
   return [...list].sort((a, b) => (by === 'size' ? vol(a) - vol(b) : a.name.localeCompare(b.name, 'ko')));
 }
 // 설비 제품 id 목록(샘플·테스트·풍량 집계가 "이것이 설비다"를 카탈로그에서 한 번에 읽는다) — 숨김 단종 설비도 든다(옛 프로젝트의 풍량).
-export const EQUIP_PRODUCT_IDS = PRODUCTS.filter(p => p.kind === 'equipment').map(p => p.id);
+export const EQUIP_PRODUCT_IDS = /* @__PURE__ */ PRODUCTS.filter(p => p.kind === 'equipment').map(p => p.id);
 export const fmtSize = size => `${Math.round(size[0])}×${Math.round(size[1])}×${Math.round(size[2])}`;

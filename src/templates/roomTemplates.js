@@ -127,6 +127,7 @@ export function itemsInRoom(floor, room) {
 }
 
 const FLOORISH = it => it.attach === 'floor' || it.attach === 'floorLay';
+const wallsOf = (floor, room) => floor.walls.filter(w => room.wallIds.includes(w.id));   // 그 방 벽(배치·자리 다툼 모두 — 리뷰 I-2)
 // 축 ax 위로 잰 회전 사각형의 반지름(지지함수).
 const halfExtent = (it, ax) => Math.max(...itemCorners(it).map(c => Math.abs(dot(sub(c, it.pos), ax))));
 
@@ -180,7 +181,7 @@ export function placeTemplate(floor, room, template, { avoid = [], stats = null 
   const bump = k => { if (stats) stats[k] = (stats[k] ?? 0) + 1; };
   // 벽을 찾는 거리에 상한을 둔다: 방 bbox 전체를 주면 몇 미터 떨어진 엉뚱한 벽에 조용히 붙는다.
   const reach = Math.min(Math.max(x1 - x0, y1 - y0), 5 * WALL_ATTACH_DIST);
-  const roomWalls = floor.walls.filter(w => room.wallIds.includes(w.id));
+  const roomWalls = wallsOf(floor, room);
   const taken = avoid.filter(FLOORISH);
   const overhead = avoid.filter(it => it.attach === 'ceiling');   // 천장 제품은 천장 제품끼리만 부딪친다
   const out = [];
@@ -253,8 +254,7 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
   // 포화된 방에 [기존 제품 유지하고 추가]를 하면 made는 1개인데 keep은 0개다). seatCopies는
   // ctx.items를 복사해 쓰므로 여기서 불러도 상태를 건드리지 않는다. 벽은 그 방 벽만 준다(계획 17 최종 리뷰 I-2): 층 전체 벽을 주면 T자 끝에서
   // 이웃 방 칸막이가 더 가까워 손소독기가 방 밖에 앉았다(신상중 13개 방 중 4개 · 1개는 빠짐). 붙여넣기·복제·배열 경로는 그대로 층 전체 벽이다.
-  const own = f.walls.filter(w => room.wallIds.includes(w.id));
-  const seated = seatCopies(made.map(m => structuredClone(m)), { walls: own, items: f.items.filter(i => !kill.has(i.id)) });
+  const seated = seatCopies(made.map(m => structuredClone(m)), { walls: wallsOf(f, room), items: f.items.filter(i => !kill.has(i.id)) });
   const keep = seated.filter((s, i) => !(made[i].attach === 'wall' && made[i].wallId && !s.wallId));
   // 지울 것도 놓을 것도 없고 방 타입도 그대로면 dispatch하지 않는다: 모든 제품이 자리가 없어
   // 건너뛰어진 [기존 제품 유지하고 추가]는 토스트가 "0개 배치"를 말하면서 되돌림 단계 하나를
