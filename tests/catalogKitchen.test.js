@@ -112,16 +112,39 @@ describe('기존 id → 엑셀 제품 대응', () => {
     for (const p of KITCHEN_PRODUCTS) expect(kitchenFit(p.id, [p.size[1], p.size[0], p.size[2]]), p.id).toBe(kitchenFit(p.id, p.size));
   });
 
-  test('같은 거리면 원자료(엑셀 행) 순서의 앞이 이긴다', () => {
+  test('같은 거리면 원래 제품(kitchenFit), 그다음 원자료(엑셀 행) 순서의 앞이 이긴다', () => {
     const ids = KITCHEN_PRODUCTS.map(p => p.id);
-    // 가스 회전식 국솥 k-24975705(앞)와 k-25449419(뒤)는 세부품명·형상·크기(1580×1040×870)가 같다.
+    // 가스 회전식 국솥 k-24975705(앞)와 k-25449419(뒤)는 세부품명·형상·크기(1580×1040×870)가 같다 — 뒤의 것도 자기 자신으로 남는다.
     expect(productById('k-25449419').size).toEqual(productById('k-24975705').size);
     expect(ids.indexOf('k-24975705')).toBeLessThan(ids.indexOf('k-25449419'));
-    expect(kitchenFit('k-25449419', [1580, 1040, 870])).toBe('k-24975705');
-    expect(kitchenFit('k-25449419', [1040, 1580, 870])).toBe('k-24975705');
+    expect(kitchenFit('k-25449419', [1580, 1040, 870])).toBe('k-25449419');
+    expect(kitchenFit('k-25449419', [1040, 1580, 870])).toBe('k-25449419');
+    // 다른 국솥 k-25962976(1590×1040×860)에서 그 크기를 주면 두 동점 중 앞(k-24975705)이 이긴다.
+    expect(kitchenFit('k-25962976', [1580, 1040, 870])).toBe('k-24975705');
+    expect(kitchenFit('k-25962976', [1040, 1580, 870])).toBe('k-24975705');
     // 식기세척기 전기(도어형) k-24157686(앞)과 k-22161686(뒤)은 크기(650×700×1350)가 같다 — kitchenFor도 앞을 고른다.
     expect(productById('k-22161686').size).toEqual(productById('k-24157686').size);
     expect(ids.indexOf('k-24157686')).toBeLessThan(ids.indexOf('k-22161686'));
     expect(kitchenFor('dishwasher', [650, 700, 1350])).toBe('k-24157686');
+  });
+
+  test('kitchenFit: 자기 크기면 자기 자신 — 같은 크기의 앞선 전기 오븐·낮은 인덕션렌지로 바뀌지 않는다', () => {
+    for (const id of ['k-24960268', 'k-24960271', 'k-25170358']) {
+      expect(productById(id).equip.heat, id).toBe('gas');
+      expect(kitchenFit(id, productById(id).size), id).toBe(id);
+    }
+    const high3 = KITCHEN_PRODUCTS.find(p => p.name === '높은 인덕션렌지 3구');
+    expect(high3).toBeTruthy();
+    expect(kitchenFit(high3.id, high3.size)).toBe(high3.id);
+    for (const p of KITCHEN_PRODUCTS) expect(kitchenFit(p.id, p.size), p.id).toBe(p.id);
+  });
+
+  test('kitchenFit: 열원(equip.heat)이 있으면 같은 열원 안에서만 고른다 — 가스는 가스, 전기는 전기', () => {
+    const heated = KITCHEN_PRODUCTS.filter(p => p.equip?.heat);
+    expect(heated.length).toBeGreaterThan(0);
+    for (const p of heated) {
+      expect(productById(kitchenFit(p.id, p.size)).equip.heat, p.id).toBe(p.equip.heat);
+      expect(productById(kitchenFit(p.id, [p.size[0] * 1.2, p.size[1], p.size[2]])).equip.heat, `${p.id} 폭 1.2배`).toBe(p.equip.heat);
+    }
   });
 });
