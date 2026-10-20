@@ -63,23 +63,25 @@ export function kitchenFor(legacyId, sizeMm) {
 // 대표 대응(기존 제품 자기 크기 기준) — DXF 어휘·방 템플릿이 쓴다. 표의 모든 id가 풀려야 한다(tests/catalogKitchen.test.js).
 export const LEGACY_TO_KITCHEN = Object.fromEntries(Object.keys(LEGACY_SUBS).map(id => [id, kitchenFor(id, legacyById.get(id)?.size)]).filter(([, v]) => v));
 
-// 이름의 선택 수 — N조·N구·N도어·N단·N찬('2 조'도 '2조'). 도면 이름과 후보 이름에 같은 규칙을 쓰고 낱말 단위로 비교한다('12조'는 '2조'가 아니다).
-const OPTION_RE = /(\d+)\s*(조|구|도어|단|찬)/g;
-const optionTokens = name => new Set([...String(name ?? '').matchAll(OPTION_RE)].map(m => `${Number(m[1])}${m[2]}`));
+// 이름의 선택 수 — N조·N구·N도어·N단·N찬. 숫자는 앞에 숫자가 없는 한 자리 1~9('12조' · '1500 조리대'는 아니다), 단위와 사이는 띄어쓰기 한 칸까지('2 조'도 '2조'),
+// 단위 뒤에 한글 음절이 붙으면 다른 낱말이라 아니다('조리대' · '구이' · '단열' · '찬장'). 도면 이름과 후보 이름에 같은 규칙을 쓰고 낱말 집합으로 비교한다.
+const OPTION_RE = /(?<!\d)([1-9]) ?(조|구|도어|단|찬)(?![가-힣])/g;
+const optionTokens = name => new Set([...String(name ?? '').matchAll(OPTION_RE)].map(m => `${m[1]}${m[2]}`));
+export const __optionTokens = optionTokens;   // 테스트 전용
 const optionsById = new Map(KITCHEN_PRODUCTS.map(p => [p.id, optionTokens(p.name)]));
 
 // 엑셀 제품 id + 아이템 크기 → 같은 세부품명·같은 형상(열원 equip.heat가 있으면 같은 열원 — 가스는 가스로 남는다) 안에서
 // 크기가 가장 가까운 엑셀 제품 id(폭 1260 냉장고에 2도어가 아니라 4도어). 같은 거리면 원래 제품이 이긴다(자기 크기면 자기 자신).
 // 도면 이름(name — DXF 블록 이름 '세정대 1조 1500-750')에 선택 수가 있고 그것을 모두 가진 후보가 있으면 그 후보만 본다:
 // 폭 1500의 1조는 크기가 딱 맞는 2조 세정대가 되지 않는다. 그런 후보가 없으면(9조) 이름을 무시한다. 이름 없는 호출은 전과 같다.
-// 엑셀 제품이 아니면 그대로 돌려준다(문·창·기둥·도면 기구·숨김 단종).
+// 엑셀 제품이 아니거나(문·창·기둥·도면 기구·숨김 단종) 크기가 잘못됐으면(세 개의 유한한 양수가 아님 — null · 길이 2 · NaN · ∞ · 문자열) 그대로 돌려준다.
 export function kitchenFit(productId, sizeMm, name = '') {
   const p = byId.get(productId);
-  if (!p || !sizeMm) return productId;
+  if (!p || !validSize(sizeMm)) return productId;
   const heat = p.equip?.heat;
   const same = KITCHEN_PRODUCTS.filter(x => x.sub === p.sub && x.shape === p.shape && (!heat || x.equip?.heat === heat));
   const want = [...optionTokens(name)];
   const named = want.length ? same.filter(x => want.every(t => optionsById.get(x.id).has(t))) : [];
   const list = named.length ? named : same;
-  return nearest(list, sizeMm, list.includes(p) ? p : null).id;   // 원래 제품이 이름에 안 맞으면 동점 우선도 없다
+  return nearest(list, sizeMm, list.includes(p) ? p : null)?.id ?? productId;   // 원래 제품이 이름에 안 맞으면 동점 우선도 없다 · 못 고르면 그대로
 }
