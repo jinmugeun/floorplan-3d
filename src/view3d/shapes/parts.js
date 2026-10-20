@@ -1,4 +1,4 @@
-// 스테인리스 형상의 공통 부품(계획 17 Task 4). 부품 = { geo, mat } — geo는 이미 아이템 로컬 좌표로 옮겨 둔 BufferGeometry다.
+// 스테인리스 형상의 공통 부품(계획 17 Task 5). 부품 = { geo, mat } — geo는 이미 아이템 로컬 좌표로 옮겨 둔 BufferGeometry다.
 // 좌표 규약(itemShapes와 같다): 단위 m · 원점 = 아이템 중심 · +x 너비 w · +y 높이 h · +z 깊이 d(정면 +z) · y는 −h/2..h/2.
 // 모든 부품은 아이템 바운딩 박스 안에 머문다(2D 심벌·충돌·간격 치수가 item.size를 쓴다). three만 쓰고 스토어·DOM을 읽지 않는다.
 // 앞면 층(z): 몸체 앞면 = hd − BODY_IN · 문짝·조작판 = hd − BODY_IN … hd − BODY_IN + PLATE(층 1은 PLATE만큼 더 앞) · 손잡이·노브 = … hd.

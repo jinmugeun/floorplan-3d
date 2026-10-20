@@ -2,7 +2,8 @@ import { describe, test, expect, vi, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { buildItems, itemMesh, itemVisible3, paintItem, COLLIDE_COLOR } from '../src/view3d/items3d.js';
 import { disposeGroup, sceneSignature } from '../src/view3d/build.js';
-import { enableAssets, requestAsset, templateOf, __setLoader, __reset } from '../src/view3d/itemAssets.js';
+import { enableAssets, requestAsset, templateOf, onAssetsReady, assetsVersion, __setLoader, __reset } from '../src/view3d/itemAssets.js';
+import { __notifyShapeTexturesReady } from '../src/view3d/shapes/materials.js';
 import { createItem, createEmptyProject } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
 import { KITCHEN_PRODUCTS } from '../src/products/catalogKitchen.js';
@@ -293,5 +294,30 @@ describe('엑셀 제품 · 도면 기구 형상', () => {
     const gd = vi.spyOn(geo, 'dispose'), md = vi.spyOn(mat, 'dispose');
     disposeGroup(g);
     expect(gd).not.toHaveBeenCalled(); expect(md).not.toHaveBeenCalled();
+  });
+  // 계획 17 Task 5 리뷰: 색 바꾼 아이템의 스테인리스(tintedSteel)는 아이템 전용이라 버리고, 병합 지오메트리는 캐시가 나눠 쓰니 남긴다.
+  test('색 바꾼 형상 아이템: disposeGroup이 아이템 전용 스테인리스 재질만 한 번 버리고 공유 지오메트리는 남긴다', () => {
+    const p = kp('worktable');
+    const g = buildItems(floor([createItem(p, { pos: [0, 0], color: '#ff0000' })]), { v3: {} });
+    const steel = g.children[0].getObjectByName('shape-steel');
+    expect(steel.material.userData.perMesh).toBe(true);
+    expect(steel.material.color.getHexString()).toBe('ff0000');
+    const md = vi.spyOn(steel.material, 'dispose'), gd = vi.spyOn(steel.geometry, 'dispose');
+    try {
+      disposeGroup(g);
+      expect(md).toHaveBeenCalledTimes(1); expect(gd).not.toHaveBeenCalled();
+    } finally { gd.mockRestore(); }
+  });
+  // items3d 모듈 배선: 헤어라인 텍스처 도착(onShapeTexturesReady)이 에셋 도착과 같은 길(assetsChanged → onAssetsReady)로 view3d에 닿는다.
+  test('헤어라인 텍스처가 도착하면 onAssetsReady가 한 틱 뒤 불리고 assetsVersion이 오른다', async () => {
+    __reset();
+    const seen = vi.fn(), off = onAssetsReady(seen), v0 = assetsVersion();
+    try {
+      __notifyShapeTexturesReady();
+      expect(seen).not.toHaveBeenCalled();                            // 알림은 다음 틱(assetsChanged의 묶음)
+      await new Promise(r => setTimeout(r, 0));
+      expect(seen).toHaveBeenCalledTimes(1);
+      expect(assetsVersion()).toBe(v0 + 1);
+    } finally { off(); }
   });
 });

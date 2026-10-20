@@ -3,7 +3,8 @@ import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
 import { FAMILY, SHAPE_FAMILIES, shapeParts, buildShape, shapeSpecFor, fitSpec, GENERIC_ID } from '../src/view3d/shapes/index.js';
 import { cachedShape, shapeKey, clearShapeCache, shapeCacheSize, SHAPE_CACHE_LIMIT, mergeParts, boxProjectUv } from '../src/view3d/shapes/merge.js';
-import { shapeMaterial, tintedSteel, SHAPE_MATERIALS, STEEL_BASE } from '../src/view3d/shapes/materials.js';
+import { shapeMaterial, tintedSteel, SHAPE_MATERIALS, STEEL_BASE, STEEL_TINT, __resetShapeMaterials } from '../src/view3d/shapes/materials.js';
+import { setEnvMap, envMapNow } from '../src/view3d/itemAssets.js';
 
 const SIZES = { small: [450, 400, 300], mid: [1200, 750, 850], big: [2400, 1100, 1950], thin: [1600, 15, 605], low: [900, 700, 150] };
 const OPTS = {
@@ -134,5 +135,43 @@ describe('공유 재질(materials.js)', () => {
     const t = tintedSteel('#00ff00');
     expect(t).not.toBe(shapeMaterial('steel'));
     expect(t.userData.perMesh).toBe(true);
+  });
+  // 계획 17 Task 5 리뷰: 환경 맵 배선(itemAssets.setEnvMap → onEnvMap 구독자 → applyEnv · 처음 만들 때 envMapNow)이 지워져도 잡는다.
+  const METAL = ['steel', 'dark', 'glass', 'accent'];
+  test('환경 맵: 이미 만든 금속 재질 4종에 setEnvMap이 걸고 null이면 뗀다(음식·채소는 안 건다)', () => {
+    const tex = { isTexture: true, dispose() {} };
+    __resetShapeMaterials(); setEnvMap(null);
+    try {
+      expect(shapeMaterial('steel').envMap).toBeNull();          // 환경 맵 없이 먼저 만든다
+      setEnvMap(tex);
+      for (const n of METAL) expect(shapeMaterial(n).envMap).toBe(tex);
+      for (const n of ['food', 'greens']) expect(shapeMaterial(n).envMap).toBeNull();
+      setEnvMap(null);
+      for (const n of METAL) expect(shapeMaterial(n).envMap).toBeNull();
+    } finally { setEnvMap(null); __resetShapeMaterials(); }
+  });
+  test('환경 맵: setEnvMap 뒤에 처음 만든 재질도 envMapNow로 받는다', () => {
+    const tex = { isTexture: true, dispose() {} };
+    __resetShapeMaterials(); setEnvMap(tex);
+    try {
+      expect(envMapNow()).toBe(tex);
+      for (const n of METAL) expect(shapeMaterial(n).envMap).toBe(tex);
+    } finally { setEnvMap(null); __resetShapeMaterials(); }
+  });
+  // 공유 스테인리스는 어두운 헤어라인 텍스처에 STEEL_TINT(≈1.3)를 곱해 밝기를 맞춘다 — 색 바꾼 복제도 같은 보정을 곱해야 고른 색보다 어둡지 않다.
+  test('색 바꾼 스테인리스: 텍스처가 붙으면 고른 색 × STEEL_TINT, 없으면 고른 색 그대로', () => {
+    const s = shapeMaterial('steel'), want = new THREE.Color('#808080');
+    expect(s.map).toBeNull();
+    expect(tintedSteel('#808080').color.getHexString()).toBe('808080');
+    const fakeMap = { isTexture: true };
+    s.map = fakeMap;
+    try {
+      const lit = tintedSteel('#808080');
+      expect(lit.map).toBe(fakeMap);
+      expect(lit.color.r).toBeCloseTo(want.r * STEEL_TINT[0], 6);
+      expect(lit.color.g).toBeCloseTo(want.g * STEEL_TINT[1], 6);
+      expect(lit.color.b).toBeCloseTo(want.b * STEEL_TINT[2], 6);
+      expect(lit.userData.perMesh).toBe(true);
+    } finally { s.map = null; }
   });
 });
