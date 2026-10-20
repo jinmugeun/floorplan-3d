@@ -332,20 +332,19 @@ describe('제품 행 묶음: productId · 이름 · 크기(계획 13 Task 5)', (
   });
 });
 
-// 리뷰 I-2(2026-10-12): 내장 강당중 샘플의 제품 행 수를 못 박는다. 옛 규칙(productId 하나)은 11행이었고 지금은 16행이다 —
-// 늘어난 5행은 모두 **후드**(kind 'equipment')다: 샘플 데이터(gangdang.json — 도면 M-106)가 후드마다 조리기구에 맞춘 크기를
-// 따로 적는다(hood-box 1000×1100 · 1200×1100 ×2 · 1600×1200 · 1700×1500 ×2 · 2000×1000 → 5행, hood-box-filter
-// 1700×1500 · 1800×1100 ×2 → 2행). 크기가 다른 후드는 다른 물건이므로 의도된 분할이다. 카탈로그 제품이 샘플에서 우연히
-// 다른 크기를 얻어 갈린 행은 없다(디퓨저·팬·환기캡·조리기구는 모두 제품 크기 그대로 한 행씩).
+// 리뷰 I-2(2026-10-12) · 계획 17 Task 9: 내장 강당중 샘플의 제품 행 수를 못 박는다 — 16행(후드 7행은 크기별 · 나머지는 제품마다 한 행).
+// 후드는 기술서(gangdang.json — 도면 M-106)가 조리기구에 맞춘 크기를 따로 적는다(1000×1100 · 1200×1100 ×2 · 1600×1200 · 1700×1500 ×3 · 1800×1100 ×2 · 2000×1000).
+// 계획 17에서 기존 후드 두 종이 크기 최근접 엑셀 후드로 바뀌었다(tools/products/remap-samples.mjs). 같은 1700×1500이라도 일반(배기)·필터(이중급배기) 후드는
+// 다른 제품이라 두 행이다.
 test('강당중 샘플은 16행(후드만 크기별)이고 수량 합은 아이템 수와 같다', () => {
   const floor = buildSampleProject().floors[0];
   const rows = estimateRows(floor);
   expect(rows.products).toHaveLength(16);
-  const byId = id => rows.products.filter(r => r.productId === id).map(r => `${r.size}×${r.qty}`);
-  expect(byId('hood-box')).toEqual(['1000×1100×600×1', '1200×1100×600×2', '1600×1200×600×1', '1700×1500×600×2', '2000×1000×600×1']);
-  expect(byId('hood-box-filter')).toEqual(['1700×1500×600×1', '1800×1100×600×2']);
+  const isHood = r => productById(r.productId)?.equip?.type === 'hood';
+  expect(rows.products.filter(isHood).map(r => `${r.size}×${r.qty}`).sort()).toEqual(
+    ['1000×1100×600×1', '1200×1100×600×2', '1600×1200×600×1', '1700×1500×600×1', '1700×1500×600×2', '1800×1100×600×2', '2000×1000×600×1']);
   // 후드 말고는 제품마다 한 행이다.
-  const others = rows.products.filter(r => !r.productId.startsWith('hood-box'));
+  const others = rows.products.filter(r => !isHood(r));
   expect(new Set(others.map(r => r.productId)).size).toBe(others.length);
   expect(rows.products.reduce((s, r) => s + r.qty, 0)).toBe(floor.items.filter(i => i.kind !== 'opening' && !i.hidden).length);
 });

@@ -2,6 +2,8 @@
 // 196석 안)를 우리 가져오기(점수판과 같은 길: 역할표 · 기구 배치 켬 · 이름 구획선 끔 · 배경 트레이스 없음)로 들여온 결과 그대로다 — 벽 62 · 방 13(실명 11) ·
 // 문 16 · 창 16 · 통로 9 · 기둥 14 · 기구 167(제품 115 · 일반 상자 52). 원 도면의 선·배경·가져오기 기록(meta.dxfImport)은 싣지 않는다(95 KB · gzip 10 KB).
 // 다시 뽑으려면 app/.superpowers/sdd/scratch/sinsang-sample.mjs(코퍼스 DXF 필요). 가져온 기구는 제품을 바꾸기 전까지 견적 0원이다(dxfProduct · 계획 13).
+// 계획 17 Task 9(2026-10-20): 기구 115개는 엑셀 급식기구로 재연결했고 방 바닥 칩 에폭시 · 벽 안쪽 흰 타일을 입혔다(tools/products/remap-samples.mjs) —
+// 다시 뽑으면 그 도구를 한 번 더 돌려 마감을 굽는다(기구는 이미 엑셀이라 0개).
 import spec from './sinsang.json';
 import { migrate } from '../state/schema.js';
 

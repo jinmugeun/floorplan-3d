@@ -6,21 +6,15 @@ import { BUILTIN_TEMPLATES, saveTemplate, listTemplates, deleteTemplate, renameT
 beforeEach(() => localStorage.clear());
 
 describe('프로젝트 템플릿', () => {
-  test('내장 템플릿 4개가 모두 열리는 프로젝트를 만든다', () => {
-    expect(BUILTIN_TEMPLATES.map(t => t.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-sinsang', 'builtin-studio']);
+  test('내장 템플릿 3개가 모두 열리는 프로젝트를 만든다(원룸 6평은 계획 17 — 조리실 전용 카탈로그에서 뺐다)', () => {
+    expect(BUILTIN_TEMPLATES.map(t => t.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-sinsang']);
     for (const t of BUILTIN_TEMPLATES) {
       const p = t.build();
       expect(p.version, t.id).toBe(1);
       expect(Array.isArray(p.floors), t.id).toBe(true);
       expect(p.floors.length, t.id).toBeGreaterThanOrEqual(1);
     }
-    const studio = templateProject('builtin-studio');
-    const f = activeFloor(studio);
-    expect(f.walls).toHaveLength(4);
-    expect(f.rooms).toHaveLength(1);
-    expect(f.rooms[0].area).toBeCloseTo(20, 1);       // 내부 4000 × 5000 = 20 m²(약 6평) — 이름과 맞는다
-    expect(f.items.length).toBeGreaterThanOrEqual(3);
-    expect(f.items.some(i => i.productId === 'bed-queen')).toBe(true);
+    expect(templateProject('builtin-studio')).toBeNull();
     expect(activeFloor(templateProject('builtin-gangdang')).rooms.length).toBeGreaterThan(5);
     expect(templateProject('없음')).toBeNull();
   });
@@ -81,7 +75,7 @@ describe('프로젝트 템플릿', () => {
   test('allTemplateCards는 내장 다음에 사용자 템플릿을 붙인다', () => {
     saveTemplate('내 것', createEmptyProject('x'));
     const cards = allTemplateCards();
-    expect(cards.slice(0, 4).map(c => c.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-sinsang', 'builtin-studio']);
+    expect(cards.slice(0, 3).map(c => c.id)).toEqual(['builtin-empty', 'builtin-gangdang', 'builtin-sinsang']);
     expect(cards.at(-1)).toMatchObject({ name: '내 것', user: true });
     expect(cards.at(-1).desc).toContain('저장한 템플릿');
   });

@@ -1,36 +1,16 @@
-// 프로젝트 템플릿: 시작 화면에서 고르는 "처음 상태". 내장 3개 + 사용자가 저장한 것(localStorage).
-// 서버가 없으므로 사용자 템플릿은 이 브라우저에만 남는다(내보내려면 JSON 저장을 쓴다).
-import { createEmptyProject, migrate, activeFloor } from '../state/schema.js';
-import { rectWalls } from '../geom/walls.js';
-import { normalizeWalls } from '../geom/normalize.js';
-import { detectRooms } from '../geom/rooms.js';
+// 프로젝트 템플릿: 시작 화면에서 고르는 "처음 상태". 내장 3개(빈 프로젝트 · 강당중 조리실 · 경산 신상중 급식실) + 사용자가 저장한 것(localStorage).
+// 서버가 없으므로 사용자 템플릿은 이 브라우저에만 남는다(내보내려면 JSON 저장을 쓴다). 원룸 6평은 계획 17(2026-10-20 — 조리실 전용 카탈로그)에서 뺐다.
+import { createEmptyProject, migrate } from '../state/schema.js';
 import { buildSampleProject } from '../samples/gangdang.js';
 import { buildSinsangProject } from '../samples/sinsang.js';
-import { placeTemplate, templateById } from './roomTemplates.js';
 
 export const TEMPLATE_KEY = 'kvp.templates';
-
-// 원룸 6평: 벽 두께 150이라 중심선 4150 × 5150이면 내부가 정확히 4000 × 5000 = 20 m²(약 6.05평)다.
-// (중심선을 4000 × 5000으로 두면 내부는 3850 × 4850 ≈ 18.7 m² ≈ 5.7평이라 이름과 어긋난다 — M-29.)
-function buildStudio() {
-  const p = createEmptyProject('원룸 6평');
-  const f = activeFloor(p);
-  f.name = '1층';
-  f.height = 2400;
-  f.walls = normalizeWalls(rectWalls([0, 0], [4150, 5150], 150, 2400));
-  f.rooms = detectRooms(f.walls);
-  const room = f.rooms[0];
-  room.name = '원룸'; room.height = 2400;
-  f.items = placeTemplate(f, room, templateById('studio-basic'));
-  return migrate(p);           // 파생값(면적 등)을 앱과 같은 규칙으로 다시 계산한다
-}
 
 export const BUILTIN_TEMPLATES = [
   { id: 'builtin-empty', name: '빈 프로젝트', desc: '빈 화면에서 방과 벽을 직접 그립니다.', build: () => migrate(createEmptyProject()) },
   { id: 'builtin-gangdang', name: '강당중 조리실', desc: '방 11개 · 환기 설비 39개 · 덕트 10계통이 그려진 예제 도면으로 시작합니다.', build: () => buildSampleProject() },
   // 2026-10-13 · 사용자 요청: 경산 신상중 급식기구 배치도(DXF)를 가져온 결과를 누구나 시작 화면에서 열어 보게 — samples/sinsang.js.
   { id: 'builtin-sinsang', name: '경산 신상중 급식실', desc: 'CAD 도면(DXF)에서 가져온 급식실 — 방 13개 · 문·창 32개 · 급식기구 167개가 배치된 예제입니다.', build: () => buildSinsangProject() },
-  { id: 'builtin-studio', name: '원룸 6평', desc: '침대·옷장·책상이 놓인 원룸 한 칸.', build: buildStudio },
 ];
 
 const readAll = () => { try { const t = JSON.parse(localStorage.getItem(TEMPLATE_KEY) ?? '[]'); return Array.isArray(t) ? t : []; } catch { return []; } };

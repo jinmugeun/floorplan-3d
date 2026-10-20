@@ -8,6 +8,9 @@ import { roomInnerPolygon, pointInPolygon, centroid } from '../src/geom/rooms.js
 import { itemCorners, nearestWallPlacement } from '../src/geom/items.js';
 import { collidingIds } from '../src/geom/collide.js';
 import { ROOM_TEMPLATES, templateById, placeTemplate, applyRoomTemplate, filterTemplates, itemsInRoom } from '../src/templates/roomTemplates.js';
+import { LEGACY_TO_KITCHEN } from '../src/products/catalogKitchen.js';
+// 2026-10-20 · 계획 17 Task 9: '가열조리 기본'의 벽걸이 손소독기(엑셀 k-23288396) — 템플릿에 남은 유일한 벽 부착 제품(벽걸이 후드는 천장 후드가 됐다).
+const SANITIZER = 'k-23288396';
 
 // 좌표는 일부러 소수로 둔다(격자에 기대지 않는지 보려고).
 function setup(w = 6000.5, h = 4000.25) {
@@ -61,20 +64,25 @@ describe('방 템플릿 데이터', () => {
     expect(filterTemplates(all, {})).toHaveLength(all.length);
   });
 
-  test('계획 5가 더한 6종이 있고 제품·타입이 규칙 안에 있다(§13.9)', () => {
-    expect(ROOM_TEMPLATES.length).toBeGreaterThanOrEqual(22);
-    const added = ['serve-line', 'cafe-bar', 'laundry', 'locker', 'meeting-8p', 'class-20p'];
-    for (const id of added) {
+  test('계획 5가 더한 템플릿 중 조리실 넷이 남고(카페 바·교실·원룸·화장실은 계획 17에서 뺐다) 제품·타입이 규칙 안에 있다(§13.9)', () => {
+    expect(ROOM_TEMPLATES).toHaveLength(18);
+    for (const id of ['serve-line', 'laundry', 'locker', 'meeting-8p']) {
       const t = templateById(id);
       expect(t, id).toBeTruthy();
       expect(['none', 'cook', 'prep', 'cold', 'wash', 'dining', 'storage', 'office', 'etc'], id).toContain(t.roomType);
       expect(t.items.length, id).toBeGreaterThanOrEqual(3);
       for (const it of t.items) expect(productById(it.productId), `${id}/${it.productId}`).toBeTruthy();
     }
-    expect(templateById('class-20p').items.filter(i => i.productId === 'desk-student')).toHaveLength(20);
-    expect(templateById('class-20p').items.some(i => i.productId === 'lectern')).toBe(true);
-    expect(templateById('meeting-8p').items.filter(i => i.productId === 'chair-office')).toHaveLength(8);
+    for (const id of ['studio-basic', 'cafe-bar', 'class-20p', 'etc-restroom']) expect(templateById(id), id).toBeNull();
+    expect(templateById('meeting-8p').items.filter(i => i.productId === LEGACY_TO_KITCHEN['chair-office'])).toHaveLength(8);
     expect(filterTemplates(ROOM_TEMPLATES, { roomType: 'office' }).map(t => t.id)).toContain('meeting-8p');
+  });
+
+  test('템플릿은 엑셀 급식기구만 놓는다 — 숨김 단종 제품이 없다(계획 17 Task 9)', () => {
+    for (const t of ROOM_TEMPLATES) for (const it of t.items) {
+      expect(it.productId, t.id).toMatch(/^k-/);
+      expect(productById(it.productId).hidden, `${t.id}/${it.productId}`).toBeFalsy();
+    }
   });
 });
 
@@ -94,13 +102,14 @@ describe('템플릿 배치', () => {
   test('벽 부착 제품은 그 방 벽에 붙고, 천장 제품은 방 높이에서 내려온다', () => {
     const a = setup();
     const made = placeTemplate(a.floor(), a.room(), templateById('cook-basic'));
-    const hood = made.find(it => it.productId === 'hood-wall');
-    expect(hood.attach).toBe('wall');
-    expect(a.room().wallIds).toContain(hood.wallId);
-    expect(hood.t).toBeGreaterThanOrEqual(0);
-    expect(hood.t).toBeLessThanOrEqual(1);
-    const lamp = placeTemplate(a.floor(), a.room(), templateById('dining-basic')).find(it => it.attach === 'ceiling');
-    expect(lamp.z).toBeCloseTo(a.room().height - lamp.size[2]);
+    const wallItem = made.find(it => it.productId === SANITIZER);
+    expect(wallItem.attach).toBe('wall');
+    expect(a.room().wallIds).toContain(wallItem.wallId);
+    expect(wallItem.t).toBeGreaterThanOrEqual(0);
+    expect(wallItem.t).toBeLessThanOrEqual(1);
+    const hood = made.find(it => it.attach === 'ceiling');                       // 벽걸이 후드였던 자리 — 엑셀 후드는 천장 부착
+    expect(productById(hood.productId).equip?.type).toBe('hood');
+    expect(hood.z).toBeCloseTo(a.room().height - hood.size[2]);
   });
 
   test('방 밖으로 떨어지는 항목은 빠진다', () => {
@@ -125,9 +134,9 @@ describe('템플릿 배치', () => {
     }
   });
 
-  // §13.9: 새 6종은 면적 3단 × 종횡비 6종에서 충돌 0이어야 한다(2C 매트릭스를 종횡비까지 넓혔다).
+  // §13.9: 새 템플릿(계획 5의 6종 중 계획 17에 남은 넷)은 면적 3단 × 종횡비 6종에서 충돌 0이어야 한다(2C 매트릭스를 종횡비까지 넓혔다).
   // 아주 가늘고 긴 방에서는 일부가 생략될 수 있다 — 그래도 겹치지 않고, 최소 3개는 놓인다.
-  const NEW_TEMPLATES = ['serve-line', 'cafe-bar', 'laundry', 'locker', 'meeting-8p', 'class-20p'];
+  const NEW_TEMPLATES = ['serve-line', 'laundry', 'locker', 'meeting-8p'];
   // 계획 6(§14.9)부터 몸통이 방 안쪽 bbox보다 큰 제품은 놓지 않는다: 폭 1.7 m짜리 방(ratio 0.25의
   // 최소 면적)에 1.8 m 배식대가 벽에 묻지 않고 들어갈 자리는 아예 없다. 그런 칸에서만 하한을 너무 큰
   // 제품 수만큼 낮춘다(Math.max(1, 3 - tooBigCount)) — 들어갈 수 있는 나머지 항목은 그대로 3개를
@@ -143,7 +152,7 @@ describe('템플릿 배치', () => {
       return sw > w || sh > h;
     }).length;
   };
-  test('새 템플릿 6종은 면적 3단 × 종횡비 6종에서 바닥 제품이 겹치지 않는다', () => {
+  test('새 템플릿 넷은 면적 3단 × 종횡비 6종에서 바닥 제품이 겹치지 않는다', () => {
     for (const id of NEW_TEMPLATES) {
       const t = templateById(id);
       expect(t, id).toBeTruthy();
@@ -163,8 +172,8 @@ describe('템플릿 배치', () => {
     const gap = area => {
       const r = rectRoom(area);
       const made = placeTemplate(r.floor, r.room, templateById('dining-basic'));
-      const table = made.find(i => i.productId === 'dining-4');
-      const chair = made.find(i => i.productId === 'chair-dining');
+      const table = made.find(i => i.productId === LEGACY_TO_KITCHEN['dining-4']);
+      const chair = made.find(i => i.productId === LEGACY_TO_KITCHEN['chair-dining']);
       return Math.hypot(chair.pos[0] - table.pos[0], chair.pos[1] - table.pos[1]);
     };
     expect(gap(25)).toBeCloseTo(gap(8), 0);
@@ -178,9 +187,9 @@ describe('템플릿 배치', () => {
     const made = placeTemplate(a.floor(), a.room(), far);
     expect(made).toHaveLength(1);              // 방 한가운데 TV는 붙일 벽이 상한 안에 없어 생략된다
     expect(made[0].wallId).toBeTruthy();
-    // 상한을 두어도 지금 템플릿의 벽 제품은 가장 큰 방에서도 모두 살아남는다
-    const big = rectRoom(90);
-    expect(placeTemplate(big.floor, big.room, templateById('cook-large')).find(i => i.productId === 'hood-wall').wallId).toBeTruthy();
+    // 상한을 두어도 지금 템플릿의 벽 제품(가열조리 기본의 손소독기)은 그 템플릿의 가장 큰 방에서도 살아남는다
+    const big = rectRoom(templateById('cook-basic').maxArea);
+    expect(placeTemplate(big.floor, big.room, templateById('cook-basic')).find(i => i.productId === SANITIZER).wallId).toBeTruthy();
   });
 
   test('남아 있는 가구(잠긴 제품) 위에는 놓지 않는다', () => {
@@ -204,7 +213,7 @@ describe('템플릿 배치', () => {
     expect(items.some(i => i.id === lockedSofa)).toBe(true);   // 잠긴 제품도 남는다(I-19)
     expect(items.filter(i => placed.includes(i.id))).toHaveLength(placed.length);
     // 벽 부착 제품은 dispatch 끝의 reattach로 pos가 (wallId, t)에서 다시 만들어진다.
-    const hood = items.find(i => i.productId === 'hood-wall');
+    const hood = items.find(i => i.productId === SANITIZER);
     expect(hood.wallId).toBeTruthy();
     expect(hood.pos.every(v => Number.isInteger(v))).toBe(true);
     a.store.undo();
@@ -219,17 +228,17 @@ describe('템플릿 배치', () => {
   // I1: reattach만으로는 자리 다툼이 풀리지 않는다 — seatCopies(freeT)를 지나야 한다.
   test('벽 제품이 남겨 둔 문과 같은 t에 앉지 않고, 두 번 적용해도 쌓이지 않는다', () => {
     const a = setup();
-    const probe = placeTemplate(a.floor(), a.room(), templateById('cook-basic')).find(i => i.productId === 'hood-wall');
+    const probe = placeTemplate(a.floor(), a.room(), templateById('cook-basic')).find(i => i.productId === SANITIZER);
     const doorId = addItem(a.store, createItem(productById('door-swing-900'), { pos: [...probe.pos], wallId: probe.wallId, t: probe.t }));
     applyRoomTemplate(a.store, a.room().id, 'cook-basic');
     const door = a.floor().items.find(i => i.id === doorId);
-    const hood = a.floor().items.find(i => i.productId === 'hood-wall');
+    const hood = a.floor().items.find(i => i.productId === SANITIZER);
     expect(door).toBeTruthy();
     expect(hood.wallId).toBe(door.wallId);
     expect(Math.abs(hood.t - door.t)).toBeGreaterThan(0.001);   // 문 자리를 비켜 앉았다
 
     const second = applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });
-    const hoods = a.floor().items.filter(i => i.productId === 'hood-wall');
+    const hoods = a.floor().items.filter(i => i.productId === SANITIZER);
     expect(hoods).toHaveLength(2);
     expect(Math.abs(hoods[0].t - hoods[1].t)).toBeGreaterThan(0.001);   // 같은 t에 쌓이지 않는다
     expect([...collidingIds(a.floor().items)]).toEqual([]);             // 바닥 제품도 겹치지 않는다
@@ -249,16 +258,24 @@ describe('템플릿 배치', () => {
   // 전역 제약(빈 단계 금지 · 최종 리뷰 I-3c): 지울 것도 놓을 것도 없는 [기존 제품 유지하고 추가]는
   // 토스트가 "0개 배치"를 말하면서 되돌림 단계 하나를 남겼다. 자리를 못 얻은 벽 제품은 seatCopies
   // 뒤에 떨어지므로 판정은 그 계산을 지나야 한다(made만 보면 1개인데 실제로 놓이는 것은 0개다).
+  // 계획 17 Task 9: '가열조리 기본'의 후드는 엑셀 후드(천장 부착)라 겹침 판정 없이 언제나 놓인다 — 방이 포화되지 않는다.
+  // 그래서 포화 시험은 천장 제품을 뺀 같은 템플릿(바닥 제품 + 벽걸이 손소독기)으로 하고, 손소독기(폭 250)는 한 벽에 여러 개 앉으므로
+  // 두 번이 아니라 더 놓을 것이 없을 때까지 적용한다. 마지막 적용의 made는 손소독기 하나, seatCopies 뒤에는 0개다.
   test('놓을 것도 지울 것도 없으면 dispatch하지 않는다(리뷰 I-3c)', () => {
-    const a = setup(1600.5, 1200.25);
-    applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });
-    applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });   // 여기서 방이 포화된다
-    const before = a.store.get(), undoable = a.store.canUndo();
-    const r = applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });
-    expect(r.placed).toEqual([]);
-    expect(r.skipped).toBe(templateById('cook-basic').items.length);
-    expect(a.store.get()).toBe(before);                 // 상태가 교체되지 않았다
-    expect(a.store.canUndo()).toBe(undoable);
+    const t = templateById('cook-basic'), all = t.items;
+    t.items = all.filter(i => productById(i.productId).attach !== 'ceiling');
+    try {
+      expect(t.items.some(i => i.productId === SANITIZER)).toBe(true);
+      const a = setup(1600.5, 1200.25);
+      for (let k = 0; k < 20 && applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false }).placed.length; k++);   // 여기서 방이 포화된다
+      const before = a.store.get(), undoable = a.store.canUndo();
+      const r = applyRoomTemplate(a.store, a.room().id, 'cook-basic', { replace: false });
+      expect(r.placed).toEqual([]);
+      expect(r.skipped).toBe(t.items.length);
+      expect(a.store.get()).toBe(before);                 // 상태가 교체되지 않았다
+      expect(a.store.canUndo()).toBe(undoable);
+      expect(a.floor().items.filter(i => i.productId === SANITIZER).length).toBeGreaterThan(1);   // 벽 자리를 다 쓸 때까지 앉았다
+    } finally { t.items = all; }
     // 놓이는 것이 있으면 예전 그대로 한 단계다.
     const big = setup();
     const ok = applyRoomTemplate(big.store, big.room().id, 'cook-basic');

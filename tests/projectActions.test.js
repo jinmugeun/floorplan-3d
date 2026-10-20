@@ -216,7 +216,7 @@ test('프로젝트를 갈아 끼우는 네 경로는 되돌릴 단계를 남기�
   const cases = [
     ['sample', '[data-start="sample"]'],
     ['restore', '[data-start="restore"]'],
-    ['template', '[data-template="builtin-studio"]'],
+    ['template', '[data-template="builtin-sinsang"]'],
   ];
   // 되돌릴 단계와 다시 할 단계를 **둘 다** 쌓아 둔 채로 교체를 지나간다(리뷰 M-2): 단계를 하나만
   // 쌓으면 future가 원래 비어 있어 canRedo() 단정이 공허하다.
