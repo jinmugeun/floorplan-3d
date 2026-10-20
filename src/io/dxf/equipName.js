@@ -13,6 +13,7 @@
 import { OPEN_BLOCK } from './blockOpenings.js';
 import { matchEquip } from './equipVocab.js';
 import { productById } from '../../products/catalog.js';
+import { kitchenFor } from '../../products/catalogKitchen.js';
 import { normDeg, wallAxis } from '../../geom/items.js';
 
 export const EQ_LAYER = 'EQUIP';
@@ -68,8 +69,13 @@ function frame(segs, deg) {
 //    폭이 다른 2도어 냉장고 둘을 손으로 놓고 왕복하면 "같은 제품 선택"이 n = 1로 꺼졌다 · 교정 기록도 도면 기구로 셌다).
 //  - 부착(사전 검토 I-6): 이름 본체의 어휘가 **그 제품을 가리키거나 제품이 일반 상자면** 어휘 — 처음 가져올 때 어휘가 정한 것이라 같은 답이 나온다
 //    (워터릴 = 일반 상자 · 벽, 후드 = 천장). 어휘가 다른 제품을 가리키면 제품의 부착이다(사람이 놓은 '벽걸이 후드'가 이름의 '후드' 때문에 천장으로
-//    가지 않게). 위생 기구 묶음(maxLong 초과)은 처음처럼 바닥. 이름에 없는 부착은 잃는다: 익명 블록이 안쪽 글자로 얻은 벽 부착, 벽 띠 위에 그려
-//    벽에 붙인 얇은 판넬 — 바닥으로 온다(2026-10-13 실측 사동 234개 중 3). 바닥 기구를 벽으로 옮기는 규칙은 두지 않는다(자동 이동 금지).
+//    가지 않게). 엑셀을 가리키는 어휘(legacy)는 가져오기가 그 어휘·크기·이름으로 고를 제품(kitchenFor)과 블록 제품이 같아도 어휘다(2026-10-20 · 계획 17
+//    Task 8 Fix 1 — 크기로 다시 고른 손세정대·캐비닛이 어휘 대표와 달라 세면기 벽 z 800·상부장 벽 z 1500이 바닥으로 떨어졌다). 이름은 EQ- 본체다.
+//    블록 제품이 그 어휘의 옛 id(legacy)여도 어휘다 — main이 내보낸 `@washbasin` 손세정대가 세면대(벽)가 아니라 어휘대로 바닥(계획 17 최종 리뷰 I-1).
+//    익명 블록은 이름 없이 골랐고 EQ- 본체는 그 제품 이름이라 답이 다를 수 있지만, 그런 경우는 모두 어휘 부착 = 제품 부착(바닥·천장)이라 결과가 같다
+//    (Fix 4 — '' 갈래를 지웠다 · tests/dxfExport.test.js가 어휘 칸 × 제품 크기 전부로 지킨다). 위생 기구 묶음(maxLong 초과)은 처음처럼 바닥.
+//    이름에 없는 부착은 잃는다: 익명 블록이 안쪽 글자로 얻은 벽 부착, 벽 띠 위에 그려 벽에 붙인 얇은 판넬 — 바닥으로 온다(2026-10-13 실측 사동 234개 중 3).
+//    바닥 기구를 벽으로 옮기는 규칙은 두지 않는다(자동 이동 금지).
 //  - z(리뷰 m-1): 벽·바닥·올려놓기는 삽입점 높이(it.z — 사람이 고친 z · 위 판넬의 z 900도 그대로), 천장은 equipment.js가 층고 − 높이로. it.z가 없으면
 //    (explode를 거치지 않은 호출) 어휘·제품의 기본값.
 //  - 이름: 본체가 제품 이름을 정리한 꼴과 같으면 제품 이름 그대로(`디퓨저 650×650`의 ×가 x로 바뀌어 이름 ≠ 제품명 → 라벨이 새로 서지 않게).
@@ -82,7 +88,7 @@ export function eqPlacement(it, segs, { toApp = p => p, sc = 1 } = {}) {
   const size = [f ? f.w * sc : eq.size[0] * k * sc, f ? f.d * sc : eq.size[1] * kv * sc, eq.size[2] * sc].map(r0);
   const pid = productById(eq.productId) ? eq.productId : GEN, product = productById(pid);
   let v = matchEquip(eq.name);
-  if (v && v.productId !== pid && pid !== GEN) v = null;
+  if (v && v.productId !== pid && pid !== GEN && !(v.legacy && (v.legacy === pid || kitchenFor(v.legacy, size, eq.name) === pid))) v = null;
   if (v?.maxLong && Math.max(size[0], size[1]) > v.maxLong) v = { productId: GEN, attach: 'floor', z: 0 };
   v ??= { productId: pid, attach: product.attach, z: product.zDefault ?? 0 };
   const attach = v.attach ?? product.attach, z = Number.isFinite(it.z) ? r0(it.z * sc) : attach === 'floor' ? 0 : v.z ?? 0;

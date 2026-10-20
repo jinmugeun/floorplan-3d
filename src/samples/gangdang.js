@@ -6,6 +6,7 @@ import { normalizeWalls } from '../geom/normalize.js';
 import { detectRooms, centroid } from '../geom/rooms.js';
 import { productById } from '../products/catalog.js';
 import { nearestWallPlacement, WALL_ATTACH_DIST } from '../geom/items.js';
+import { kitchenWallMat } from '../materials/defaults.js';
 
 const inside = (p, [x0, y0, x1, y1]) => p[0] > x0 && p[0] < x1 && p[1] > y0 && p[1] < y1;
 
@@ -35,6 +36,7 @@ export function buildSampleProject() {
   f.name = spec.floorName;
   f.height = spec.floorHeight;
   f.walls = normalizeWalls(spec.rooms.flatMap(r => rectWalls([r.rect[0], r.rect[1]], [r.rect[2], r.rect[3]], spec.thickness, spec.floorHeight)));
+  for (const w of f.walls) w.matIn = kitchenWallMat();   // 급식실 마감(2026-10-20 · 계획 17 Task 9): 벽 안쪽 흰 타일 · 방 바닥은 detectRooms의 새 방 기본값(칩 에폭시)
   f.rooms = detectRooms(f.walls);
   for (const room of f.rooms) {
     const src = spec.rooms.find(x => inside(centroid(room.points), x.rect));

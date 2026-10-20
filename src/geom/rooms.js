@@ -1,5 +1,6 @@
 import { uid } from '../state/schema.js';
 import { add, sub, mul, dot, cross, norm, perp, eq, dist } from './vec.js';
+import { defaultFloorMat } from '../materials/defaults.js';
 
 export const ROOM_FLOOR_COLOR = '#c9a77a';
 export const ROOM_CEILING_COLOR = '#f4f4f2';
@@ -151,7 +152,9 @@ export function detectRooms(walls, prevRooms = []) {
       floorMaterial: prev?.floorMaterial ?? 'wood-oak', ceilingMaterial: prev?.ceilingMaterial ?? 'paint-white',
       seats: prev?.seats ?? 0, matchWallHeight: prev?.matchWallHeight ?? false,
       floorColor: prev?.floorColor ?? ROOM_FLOOR_COLOR, ceilingColor: prev?.ceilingColor ?? ROOM_CEILING_COLOR,
-      floorMat: prev?.floorMat ?? null, ceilingMat: prev?.ceilingMat ?? null,
+      // 새 방(이전 방과 짝이 없는 면)만 급식실 바닥 기본값을 갖는다(계획 17 D6). 짝이 있으면 저장된 값 그대로 —
+      // `prev?.floorMat ?? 기본값`이면 저장된 null(바닥을 고르지 않은 옛 방)까지 덮어쓴다: 불러올 때마다 이 함수를 지난다(schema.normalizeFloor).
+      floorMat: prev ? prev.floorMat ?? null : defaultFloorMat(), ceilingMat: prev?.ceilingMat ?? null,
       design: prev?.design ?? { EA: 0, SA: 0 },
       points: f.pts, wallIds: f.wallIds.filter(id => wallById[id]),
       // 안쪽 폴리곤은 roomInnerPolygon이 이미 saneInner로 걸러 준다(뒤집힘·폭발이면 바깥 폴리곤 — 2026-10-06). saneArea는

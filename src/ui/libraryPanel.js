@@ -3,6 +3,7 @@ import { symbolSvg } from '../products/symbols.js';
 import { activeFloor } from '../state/schema.js';
 import { esc } from '../util/html.js';
 import { chipsHtml, wasChipFocused, refocusChip } from './libraryChips.js';
+import { LIB_TAB_KITCHEN, LIB_MORE, LIB_MORE_LABEL } from './messages.js';
 
 const key = id => `fav:${id}`;
 // 즐겨찾기는 프로젝트 파일이 아니라 브라우저에 남긴다(계정이 없으므로). 저장이 막힌 브라우저에서도 죽지 않는다.
@@ -10,7 +11,10 @@ export const isFav = id => { try { return localStorage.getItem(key(id)) === '1';
 export const toggleFav = id => { try { isFav(id) ? localStorage.removeItem(key(id)) : localStorage.setItem(key(id), '1'); } catch { /* 저장 불가 */ } };
 export const favProducts = () => PRODUCTS.filter(p => isFav(p.id));
 
-const TABS = [['ohouse', '오늘의집 제품'], ['fav', '즐겨찾기'], ['placed', '배치된 제품']];
+const TABS = [['ohouse', LIB_TAB_KITCHEN], ['fav', '즐겨찾기'], ['placed', '배치된 제품']];
+// '전체' 그리드는 칩마다 앞의 몇 장만 보인다(계획 17 Task 4): 엑셀 급식기구 ~500장을 한꺼번에 그리면 DOM이 무겁다(타일마다 SVG) —
+// 나머지는 칩의 [더 보기 (n)]으로 들어간다. 칩 하나를 고르면 그 칩의 타일은 전부다.
+export const GRID_PER_CHIP = 12;
 
 export function createLibraryPanel(container, { store, ui, onPick = () => {}, onDragEnd = () => {} }) {
   const st = { tab: 'ohouse', category: null, sub: null, q: '', sort: 'name', mode: 'place', replaceIds: [] };
@@ -35,8 +39,7 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     if (st.q.trim()) return sortProducts(searchProducts(st.q), st.sort);       // 검색은 항상 전체 검색(명세 LB-03)
     if (st.tab === 'fav') return sortProducts(favProducts(), st.sort);
     if (st.tab === 'placed') { const m = placedCounts(); return sortProducts(PRODUCTS.filter(p => m.has(p.id)), st.sort); }
-    // §15.8: 필터가 없으면 "전체" 그리드다(타일은 카테고리 순, 그 안에서 현재 정렬 기준).
-    if (!st.category) return CATEGORIES.flatMap(c => sortProducts(productsIn(c.name), st.sort));
+    // 칩이 없는 '전체'(§15.8)는 여기 오지 않는다 — renderList가 groupedHtml()로 먼저 그린다(계획 17 Task 4).
     return sortProducts(productsIn(st.category, st.sub), st.sort);
   }
   function tileHtml(p, count) {
@@ -60,11 +63,23 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     if (st.tab !== 'ohouse' || st.q.trim() || !st.category) { c.innerHTML = ''; return; }
     c.innerHTML = `<button type="button" data-up="1" class="crumb">‹ ${esc(st.category)}${st.sub ? ` / ${esc(st.sub)}` : ''}</button>`;
   }
-  // 칩 행은 "오늘의집 제품" 탭에서만 뜻이 있다(즐겨찾기·배치된 제품은 카테고리 필터가 없다).
+  // 칩 행은 "급식기구" 탭에서만 뜻이 있다(즐겨찾기·배치된 제품은 카테고리 필터가 없다).
   function renderChips() {
     part('chips').innerHTML = st.tab === 'ohouse' && !st.q.trim() ? chipsHtml(CATEGORIES.map(c => c.name), { active: st.category }) : '';
   }
+  // '전체' 그리드(검색·칩 없음): 칩마다 제목 + 앞 GRID_PER_CHIP장 + [더 보기 (n)].
+  function groupedHtml() {
+    return CATEGORIES.map(c => {
+      const list = sortProducts(productsIn(c.name), st.sort);
+      if (!list.length) return '';
+      const more = list.length - GRID_PER_CHIP;
+      return `<div class="lib-group"><h3>${esc(c.name)} <span class="muted">${list.length}</span></h3>
+        <div class="tiles">${list.slice(0, GRID_PER_CHIP).map(p => tileHtml(p)).join('')}</div>
+        ${more > 0 ? `<button type="button" class="lib-more" data-more="${esc(c.name)}" aria-label="${esc(LIB_MORE_LABEL(c.name, more))}">${esc(LIB_MORE(more))}</button>` : ''}</div>`;
+    }).join('');
+  }
   function renderList() {
+    if (st.tab === 'ohouse' && !st.q.trim() && !st.category) { part('list').innerHTML = groupedHtml(); return; }
     const list = visible(), el = part('list');
     const counts = st.tab === 'placed' ? placedCounts() : null;
     const subs = st.tab === 'ohouse' && !st.q.trim() && st.category && !st.sub
@@ -90,6 +105,16 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     if (cat) {
       const had = wasChipFocused(cat);
       st.category = st.category === cat.dataset.cat ? null : cat.dataset.cat; st.sub = null; render();
+      refocusChip(part('chips'), st.category, had);
+      return;
+    }
+    const more = ev.target.closest('[data-more]');
+    // [더 보기]도 목록을 통째로 새로 그린다: 키보드로 눌렀으면 새로 켜진 칩으로 포커스를 옮기고, 깊은 묶음에서
+    // 눌러 #panel이 아래로 내려가 있어도 탭·칩 행이 다시 보이게 한다(계획 17 Task 4 리뷰 I-1·I-2).
+    if (more) {
+      const had = document.activeElement === more;
+      st.category = more.dataset.more; st.sub = null; render();
+      try { part('tabs').scrollIntoView?.({ block: 'nearest' }); } catch { /* 스크롤 불가 환경 */ }   // 탭 바로 아래가 칩 행 — 둘 다 보인다
       refocusChip(part('chips'), st.category, had);
       return;
     }

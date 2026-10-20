@@ -229,8 +229,10 @@ test('placedMaterials가 레거시 문자열 마감재도 센다', async () => {
   const { buildSampleProject } = await import('../src/samples/gangdang.js');
   const f = activeFloor(buildSampleProject());
   const counts = placedMaterials(f);
-  expect(counts.get('paint-white')).toBeGreaterThanOrEqual(f.walls.length);   // 벽 안·밖 + 천장
-  expect(counts.get('wood-oak')).toBe(f.rooms.length);                        // 방 바닥(카탈로그 id)
+  expect(counts.get('paint-white')).toBeGreaterThanOrEqual(f.walls.length);   // 벽 밖(레거시 문자열) + 천장
+  expect(counts.get('tile-white-300')).toBe(f.walls.length);                  // 벽 안쪽 — 급식실 마감(계획 17 Task 9 · gangdang.js)
+  expect(counts.get('epoxy-chip-gray')).toBe(f.rooms.length);                 // 방 바닥 — 새 방 기본값(계획 17 Task 7)
+  expect(counts.get('wood-oak')).toBeUndefined();
   expect(counts.get('wood')).toBeUndefined();                                 // 카탈로그에 없는 id는 세지 않는다
   expect([...counts.values()].reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
 });

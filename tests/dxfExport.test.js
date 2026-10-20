@@ -19,7 +19,8 @@ import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
 import { DXF_PARAMS, HEIGHT_RANGE } from '../src/io/dxf/params.js';
 import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_EXPORT_AS_MENU } from '../src/ui/dxfMessages.js';
-import { matchEquip, sizeInName, skipReason } from '../src/io/dxf/equipVocab.js';
+import { matchEquip, sizeInName, skipReason, kitchenOr, EQUIP_VOCAB } from '../src/io/dxf/equipVocab.js';
+import { kitchenFor, KITCHEN_PRODUCTS, LEGACY_SUBS } from '../src/products/catalogKitchen.js';
 import { importSnapshot } from '../src/io/dxfFeedback.js';
 import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
 import { ITEM_RANGE } from '../src/state/schema.js';
@@ -257,7 +258,7 @@ test('입력 도면 안내의 기구 문장은 코드와 맞는다 — 블록 �
   const EXAMPLE = '세정대 2조 1500-750';
   expect(card('keep')).toContain(`<code>${EXAMPLE}</code>`);
   expect(card('keep')).toContain('기구 블록');
-  expect(matchEquip(EXAMPLE)).toMatchObject({ productId: 'sink-double' });
+  expect(matchEquip(EXAMPLE)).toMatchObject({ productId: kitchenOr('sink-double') });   // 어휘 → 엑셀 세정대(2026-10-20 · 계획 17 Task 8)
   expect(sizeInName(EXAMPLE)).toEqual([1500, 750]);
   expect(card('drop')).not.toMatch(/기구|급식/);
   expect(html).toContain(DXF_EQUIPMENT_OPT);                                     // 검토 창의 체크 이름 그대로
@@ -601,6 +602,68 @@ test('기구 왕복: 수·중심(≤ 10 mm)·크기·이름·제품·부착·z·
   // 두 번째 왕복도 같다(고정점 — r2.back은 r1의 앱 좌표로 되돌린다).
   const r2 = importText(exportDxf(r1.project));
   same(got(r1), got(r2), r2.back);
+});
+
+// 2026-10-20 · 계획 17 Task 8 Fix 1(리뷰 1): 어휘는 엑셀 대표를 가리키고 서는 제품은 크기·이름으로 다시 고르므로(kitchenFor) EQ- 블록의 제품이 어휘 대표와
+// 다를 수 있다. 그 어휘·크기·이름으로 가져오기가 고를 제품과 같으면 어휘(벽 부착·z)를 지킨다 — 예전 규칙(어휘 제품 = 블록 제품일 때만)으로는
+// 세면기(벽 z 800)·상부장(벽 z 1500)이 왕복 뒤 제품의 부착(바닥)으로 떨어졌다.
+test('EQ- 왕복: 크기로 다시 고른 벽걸이 어휘 기구(To세면기A 500×370 · 상부장 600×350)는 벽에 다시 앉고 제품·z·크기가 그대로다', () => {
+  const tag = name => ({ name, pos: [-741000.5, 338000.25], rot: 0, scale: [1, 1], layer: '급식기구', depth: 0, mirrored: false, block: '*Model_Space' });
+  const sq = (k, x0, y0, x1, y1) => [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]].map(([a, b, c, d]) => ({ a: [a, b], b: [c, d], layer: '급식기구', src: 'LINE', ins: k }));
+  // 9 × 6 m 방(중심선 · 두께 200 — 북쪽 벽 안쪽 면 y 5900)에 붙여 그린 두 블록.
+  const raw = [[0, 0, 9000, 0], [9000, 0, 9000, 6000], [9000, 6000, 0, 6000], [0, 6000, 0, 0]].map(([a, b, c, d]) => ({ a: [a, b], b: [c, d], thickness: 200 }));
+  const ex = { inserts: [tag('To세면기A'), tag('상부장')], segs: [...sq(0, 1000, 5530, 1500, 5900), ...sq(1, 3000, 5550, 3600, 5900)], arcs: [], polyArcs: [], circles: [], texts: [], dims: [], hatches: [] };
+  const first = buildProject(raw, { height: 3500, ex, layerRoles: new Map([['급식기구', 'equip']]) }).project;
+  const pick = p => ['To세면기A', '상부장'].map(n => p.floors[0].items.find(i => i.name === n));
+  const A = pick(first);
+  for (const a of A) expect([a.name, a.attach, Boolean(a.wallId), a.productId.startsWith('k-')]).toEqual([a.name, 'wall', true, true]);
+  expect(A.map(a => a.productId)).toEqual([kitchenFor('washbasin', A[0].size, 'To세면기A'), kitchenFor('cabinet-upper', A[1].size, '상부장')]);
+  expect(A[0].productId).not.toBe(kitchenOr('washbasin'));                 // 어휘 대표(480×470)가 아니라 크기가 맞는 손세정대 — 이 경우를 시험한다
+  const B = pick(importText(exportDxf(first)).project);
+  A.forEach((a, i) => {
+    expect(B[i], a.name).toBeTruthy();
+    expect([B[i].productId, B[i].attach, Boolean(B[i].wallId), Math.round(B[i].z), B[i].size]).toEqual([a.productId, 'wall', true, Math.round(a.z), a.size]);
+  });
+});
+
+// 2026-10-20 · 계획 17 Task 8 Fix 4: 익명 블록은 이름 없이 고르고(kitchenFor(legacy, 크기, '')) EQ- 본체는 그 제품 이름이라, 다시 들여올 때 어휘 유지 판정에
+// '' 갈래가 필요한지 따졌다. 어휘 칸 × 그 세부품명의 제품 크기(0.8·1·1.25배 × 제품·어휘 높이) 전부에서 '' 갈래로만 어휘가 남는 경우는 있지만
+// (복합 손세정대 · 배기후드(세척기) 등) 모두 어휘 부착 = 제품 부착이다 — eqPlacement의 부착이 그 어휘 부착과 같다. 그래서 갈래를 지웠다. 이 시험이 지킨다.
+test("EQ- 왕복: 익명 블록이 고른 제품(이름 없는 kitchenFor)을 제품 이름 EQ- 블록으로 다시 들여오면 부착이 그 어휘의 부착이다 — '' 갈래 없이", () => {
+  const rect = (w, d) => { const P = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]; return P.map((p, i) => ({ a: p, b: P[(i + 1) % 4] })); };
+  let checked = 0;
+  for (const v0 of EQUIP_VOCAB.filter(v => v.legacy)) {
+    for (const p0 of KITCHEN_PRODUCTS.filter(p => LEGACY_SUBS[v0.legacy][0].includes(p.sub))) for (const k of [0.8, 1, 1.25]) for (const h of [p0.size[2], v0.height]) {
+      const size = [Math.round(p0.size[0] * k), p0.size[1], h], pid = kitchenFor(v0.legacy, size, ''), name = productById(pid).name, v = matchEquip(name);
+      if (!v?.legacy || kitchenFor(v.legacy, size, '') !== pid || (v.maxLong && Math.max(size[0], size[1]) > v.maxLong)) continue;
+      const got = eqPlacement({ name: eqBlockName(name, size, pid), pos: [0, 0], rot: 0, scale: [1, 1] }, rect(size[0], size[1]));
+      expect([got.pid, got.patch.attach], `${v0.legacy} ${size} ${name}`).toEqual([pid, v.attach]);
+      checked++;
+    }
+  }
+  expect(checked).toBeGreaterThan(1000);
+});
+
+// 2026-10-20 · 계획 17 최종 리뷰 I-1: main(계획 14~16)이 내보낸 정규화 DXF는 블록 제품이 옛 id다(`@washbasin`). 어휘의 productId가 엑셀 대표로 바뀌어
+// 어휘 legacy(옛 id)가 블록 제품과 같아도 어휘를 버렸다 — 바닥 페달식 손세정대가 옛 제품 부착(세면대 = 벽 z 800)으로 바뀌었다. main 결과를 그대로 적는다.
+test('EQ- 왕복(옛 id): main이 내보낸 `@washbasin` 손세정대·손세척대는 바닥 z 0 · maxLong 넘는 위생 묶음도 바닥 · 어휘와 제품이 같은 칸은 그대로', () => {
+  const rect = (w, d) => { const P = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]; return P.map((p, i) => ({ a: p, b: P[(i + 1) % 4] })); };
+  const one = name => { const s = parseEqBlock(name).size, g = eqPlacement({ name, pos: [0, 0], z: 0, rot: 0, scale: [1, 1] }, rect(s[0], s[1])); return [g.pid, g.patch.attach, g.patch.z]; };
+  expect(one('EQ-손세정대_500-370-500x370x850@washbasin')).toEqual(['washbasin', 'floor', 0]);
+  expect(one('EQ-손세척대-600x500x850@washbasin')).toEqual(['washbasin', 'floor', 0]);
+  expect(one('EQ-To세면기A(w)-2600x1500x200@washbasin')).toEqual(['washbasin', 'floor', 0]);
+  // main과 같던 칸(어휘 부착 = 옛 제품 부착)은 바뀌지 않는다.
+  expect(one('EQ-세면기-480x470x200@washbasin')).toEqual(['washbasin', 'wall', 0]);
+  expect(one('EQ-상부장-900x350x700@cabinet-upper')).toEqual(['cabinet-upper', 'wall', 0]);
+  expect(one('EQ-세정대_2조_1500-750-1500x750x850@sink-double')).toEqual(['sink-double', 'floor', 0]);
+  // 전체 왕복: 옛 프로젝트(main에서 가져온 손세정대 = washbasin · 바닥)를 서쪽 벽 면에 붙여 두고 내보내 다시 들이면 바닥 그대로다.
+  const p = synthetic(), f = p.floors[0];
+  for (const [y, name] of [[-2500, '손세정대 500-370'], [2200, '손세척대']]) {
+    const { pos, rot } = seatOn(f, -4000, y, [500, 370, 850], true);
+    f.items.push(createItem(productById('washbasin'), { pos, rot, size: [500, 370, 850], attach: 'floor', z: 0, name, dxfBlock: name, dxfProduct: 'washbasin' }));
+  }
+  const back = importText(exportDxf(p)).project.floors[0].items.filter(i => i.productId === 'washbasin');
+  expect(back.map(i => [i.name, i.attach, Math.round(i.z), i.wallId ?? null]).sort()).toEqual([['손세정대 500-370', 'floor', 0, null], ['손세척대', 'floor', 0, null]]);
 });
 
 // 2026-10-13 · 최종 리뷰 X-1(M-E5/N-2): 손으로 놓은 같은 제품 둘(폭 900 · 1000 냉장고)을 왕복하면 예전에는 둘 다 dxfBlock(크기가 든 EQ- 이름)을 얻어

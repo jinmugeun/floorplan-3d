@@ -155,7 +155,7 @@ describe('마감재 상태 연산', () => {
     expect(assignmentOf(g, { kind: 'wall', id: wallId, side: 'in' }).id).toBe('paint-navy');
     // §17.4(1): 새 형식이 비어 있는 면은 이제 레거시 문자열 필드로 떨어진다(예전 기대값은 null이었다).
     expect(assignmentOf(g, { kind: 'wall', id: wallId, side: 'out' }).id).toBe('paint-white');   // makeWall의 material
-    expect(assignmentOf(g, { kind: 'floor', id: roomId }).id).toBe('wood-oak');                  // detectRooms의 floorMaterial
+    expect(assignmentOf(g, { kind: 'floor', id: roomId }).id).toBe('epoxy-chip-gray');           // 새 방 바닥 기본값(명시 지정 — 계획 17 Task 7)
     expect(assignmentOf(g, null)).toBeNull();
     const w = g.walls.find(x => x.id === wallId);
     expect(faceArea(g, { kind: 'wall', id: wallId, side: 'in' })).toBeCloseTo((wallLength(w) * w.height) / 1e6, 6);
@@ -170,6 +170,7 @@ describe('마감재 상태 연산', () => {
     const s = setup();
     const f0 = activeFloor(s.get());
     const wallId = f0.walls[0].id, roomId = f0.rooms[0].id;
+    applyMaterial(s, { kind: 'floor', id: roomId }, null);   // 새 방 바닥 기본값(계획 17)을 걷어 레거시 값만 남긴다
     // 레거시 값을 옛 파일 모양('wood' 별칭)까지 갖춰 둔다 — 보고용 조회만 이것을 읽어야 한다.
     s.dispatch(d => { activeFloor(d).rooms.find(r => r.id === roomId).floorMaterial = 'wood'; }, { record: false });
     const g = activeFloor(s.get());
@@ -321,8 +322,10 @@ describe('마감재 상태 연산', () => {
     const inAssign = assignmentOf(f, { kind: 'wall', id: w.id, side: 'in' });
     expect(inAssign).toEqual({ id: 'paint-white', offset: [0, 0], angle: 0 });
     expect(assignmentOf(f, { kind: 'wall', id: w.id, side: 'out' }).id).toBe('paint-white');
-    expect(assignmentOf(f, { kind: 'floor', id: r.id }).id).toBe('wood-oak');
+    expect(assignmentOf(f, { kind: 'floor', id: r.id }).id).toBe('epoxy-chip-gray');   // 새 방은 바닥이 명시 지정이다(계획 17 Task 7)
     expect(assignmentOf(f, { kind: 'ceiling', id: r.id }).id).toBe('paint-white');
+    applyMaterial(store, { kind: 'floor', id: r.id }, null);                          // 걷으면 레거시 floorMaterial로 떨어진다
+    expect(assignmentOf(activeFloor(store.get()), { kind: 'floor', id: r.id }).id).toBe('wood-oak');
     // 옛 파일이 들고 있는 'wood'는 별칭 표를 지나 wood-oak가 된다(저장 형식은 그대로 — 되쓰지 않는다).
     const legacy = { walls: [], rooms: [{ id: 'r9', floorMaterial: 'wood', ceilingMaterial: 'paint-white' }] };
     expect(assignmentOf(legacy, { kind: 'floor', id: 'r9' })).toEqual({ id: 'wood-oak', offset: [0, 0], angle: 0 });

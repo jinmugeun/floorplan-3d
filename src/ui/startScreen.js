@@ -27,7 +27,7 @@ export function openStartScreen({ store, restored = null, restoredAt = null, onE
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', '시작하기');
   // 내장 템플릿 카드는 버튼 하나다. **저장한** 템플릿 카드는 열기 + [이름 변경]·[삭제] 세 버튼이라
   // 버튼 안에 버튼을 넣을 수 없어 div로 감싼다(§16.10 · 감사 §18).
-  // 축소 도면(§16.12 · 감사 §48): "원룸 6평"이 어떤 도면인지 열지 않고 알 수 있게 한다.
+  // 축소 도면(§16.12 · 감사 §48): "경산 신상중 급식실"이 어떤 도면인지 열지 않고 알 수 있게 한다.
   const previewTag = id => `<canvas data-tpl="${esc(id)}" width="${PREVIEW_PX}" height="${PREVIEW_PX}" aria-hidden="true"></canvas>`;
   const tplCard = c => (c.user
     ? `<div class="start-card tpl user">
@@ -35,7 +35,7 @@ export function openStartScreen({ store, restored = null, restoredAt = null, onE
         <div class="row"><button type="button" data-tpl-rename="${esc(c.id)}">이름 변경</button><button type="button" data-tpl-delete="${esc(c.id)}" class="danger">삭제</button></div>
       </div>`
     : `<button type="button" class="start-card tpl" data-template="${esc(c.id)}">${previewTag(c.id)}<b>${esc(c.name)}</b><span>${esc(c.desc)}</span></button>`);
-  // 카드 하나마다 그 템플릿의 프로젝트를 한 번 만들어 그린다(내장 원룸 + 저장한 템플릿 몇 장).
+  // 카드 하나마다 그 템플릿의 프로젝트를 한 번 만들어 그린다(내장 신상중 + 저장한 템플릿 몇 장).
   // 실패하거나 도면이 비면 캔버스는 빈 채 남는다(mountPreviews가 null을 받으면 그린 것이 없다).
   // 동작 카드 셋도 같은 틀의 그림을 갖는다(§17.12(1)): 샘플은 실제 도면, 나머지는 자리표시다.
   // 샘플 프로젝트는 한 번만 만들어 돌려 쓴다(시작 화면을 열 때마다 짓지 않는다 — 40 ms급이지만

@@ -17,21 +17,27 @@ import { detectRooms } from '../geom/rooms.js';
 import { createItem } from '../state/schema.js';
 import { normalizeDuct } from '../state/ductSchema.js';
 import { productById } from '../products/catalog.js';
+import { KITCHEN_PRODUCTS } from '../products/catalogKitchen.js';
 import { buildFloorGroup } from './build.js';
 import { syncLabelDots } from './labelDots.js';
 
-// 재질 변형을 고루 갖춘 작은 층: 벽(바깥면·안쪽 면·윗면·윤곽선)·바닥·천장(숨김 — compile은 보이지 않는 것도 훑는다)·
+// 재질 변형을 고루 갖춘 작은 층: 벽(바깥면·안쪽 면·윗면·윤곽선)·바닥·천장(숨김 — compile은 보이지 않는 것도 훑는다)·스테인리스 형상(오븐·배식대 — 계획 17)·
 // 문 개구부·창(반투명 MeshStandard)·기둥·일반 제품(이름 라벨)·설비(번호 라벨)·덕트(반투명 + 단면 라벨).
 export function warmFloor() {
   const walls = rectWalls([0, 0], [4000, 3000], 200, 2400);
   const w = walls[0];
   const on = (id, t, patch = {}) => createItem(productById(id), { wallId: w.id, t, ...patch });
+  // 엑셀에서 그 형상이 사라져도 예열이 createItem(undefined)로 던지지 않게 일반 상자로(계획 17 최종 리뷰 M-15).
+  const kitchen = shape => KITCHEN_PRODUCTS.find(p => p.shape === shape) ?? productById('equip-generic');
   const items = [
     on('door-swing-900', 0.25),
     on('window-slide-1200', 0.7),
     createItem(productById('column-square'), { pos: [600, 600] }),
     createItem(productById('hood-box'), { pos: [2000, 1500], z: 1800, props: { type: 'hood', no: 1 } }),
     createItem(productById('fridge-2door'), { pos: [3200, 2200], name: '예열 이름' }),
+    // 스테인리스 형상 재질(계획 17 Task 6): 오븐 = 스테인리스(양면)·유리(반투명)·어두운 부품·강조 · 배식대 = 국·반찬 색
+    createItem(kitchen('oven'), { pos: [1000, 2200] }),
+    createItem(kitchen('counter'), { pos: [2600, 700] }),
   ];
   const ducts = [normalizeDuct({ id: 'warm-duct', kind: 'exhaust', points: [[500, 1500], [3500, 1500]], segments: [{ w: 400, h: 300, z: 2100 }] })].filter(Boolean);
   return { walls, rooms: detectRooms(walls), items, ducts, height: 2400 };

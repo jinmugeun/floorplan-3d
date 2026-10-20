@@ -8,7 +8,7 @@ import { openFloorDialog } from './floorDialog.js';
 import { esc } from '../util/html.js';
 import { confirmDialog } from './confirmDialog.js';
 import { toast } from './toast.js';
-import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js';
+import { productById, fmtSize, ATTACH_LABELS } from '../products/catalog.js'; import { productRowsHtml } from './productRows.js';
 import { materialRowsHtml, mountSwatches, applyMaterialField, targetFor, hasMaterial } from './materialRows.js';
 import { equipRowsHtml, roomDesignRowsHtml, applyVentField, ventRowsClick } from './equipRows.js';
 import { ductPanelHtml, applyDuctField, ductPanelClick } from './ductPanel.js';
@@ -76,7 +76,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
         ${clash ? `<p class="error">${COLLISION_ITEM}</p>` : ''}
         <p class="muted">${esc(it.name || p?.name || '제품')} · ${esc(it.code || p?.code || '')}</p>
         ${field('크기 (W×D×H)', `<output>${fmtSize(it.size)}</output>`)}
-        ${p?.price ? field('가격', `<output>${p.price.toLocaleString('ko-KR')}원</output>`) : ''}
+        ${p?.price ? field('가격', `<output>${p.price.toLocaleString('ko-KR')}원</output>`) : ''}${productRowsHtml(p)}
         ${field('부착 타입', `<output>${ATTACH_LABELS[it.attach]}</output>`)}
         ${field('색상', `<input type="color" name="color" value="${esc(it.color)}">`)}
         ${lenField(withUnit('너비', units, showUnit), 'w', it.size[0], 10, 5000, false, units)}
@@ -286,7 +286,7 @@ export function createPropsPanel(container, store, ui, { deleteSelection = () =>
     if (ev.target.name === 'delete' && ui.get().selection) { deleteSelection(); return; }
     const m = /^align([VH])(Start|Center|End)$/.exec(ev.target.name ?? '');
     if (m) { itemActions.align?.(m[1] === 'V' ? 'v' : 'h', m[2].toLowerCase()); return; }
-    if (ev.target.name === 'group') { itemActions.group?.(); return; }
+    if (ev.target.name === 'group') { itemActions.group?.(); return; } if (ev.target.name === 'productReplace') { itemActions.replace?.(); return; }
     if (ev.target.name === 'ungroup') { itemActions.ungroup?.(); return; }
   };
   container.addEventListener('change', onChange); container.addEventListener('input', onInput); container.addEventListener('click', onClick); container.addEventListener('focusout', onFocusOut);

@@ -235,5 +235,13 @@ export const MATERIAL_APPLIED = name => `"${name}"을 발랐습니다`;
 export const PATH_2D_HINT = '2D에서 사용';
 export const PATH_FP_HINT = '1인칭 위치를 먼저 찍거나 [Esc]로 취소해주세요';
 
+// 제품 라이브러리·속성 패널(2026-10-20 · 계획 17 Task 4). 탭 이름은 카탈로그가 식별번호 엑셀 급식기구로 바뀌어 '오늘의집 제품'에서 바뀌었다.
+export const LIB_TAB_KITCHEN = '급식기구';
+export const LIB_MORE = n => `더 보기 (${n})`;
+export const LIB_MORE_LABEL = (cat, n) => `${cat} ${LIB_MORE(n)}`;   // 버튼의 접근성 이름: 보이는 글자에는 칩 이름이 없다(리뷰)
+export const PRODUCT_LEGACY_NOTE = '단종 제품 — 엑셀 제품으로 바꿔 주세요';
+export const PRODUCT_DRAWN_NOTE = '도면에서 가져온 기구 — 제품을 고르면 견적에 듭니다';
+export const PRODUCT_REPLACE = '제품 교체';
+
 // DXF 가져오기 문구(DXF_*)는 dxfMessages.js에 있다(2026-10-12 · 300줄 예산). 부르는 쪽은 그대로 여기서 import한다.
 export * from './dxfMessages.js';

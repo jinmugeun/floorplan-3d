@@ -2,9 +2,11 @@ import { describe, test, expect, vi, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { buildItems, itemMesh, itemVisible3, paintItem, COLLIDE_COLOR } from '../src/view3d/items3d.js';
 import { disposeGroup, sceneSignature } from '../src/view3d/build.js';
-import { enableAssets, requestAsset, templateOf, __setLoader, __reset } from '../src/view3d/itemAssets.js';
+import { enableAssets, requestAsset, templateOf, onAssetsReady, assetsVersion, __setLoader, __reset } from '../src/view3d/itemAssets.js';
+import { __notifyShapeTexturesReady } from '../src/view3d/shapes/materials.js';
 import { createItem, createEmptyProject } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
+import { KITCHEN_PRODUCTS } from '../src/products/catalogKitchen.js';
 import { RAD } from '../src/geom/items.js';
 import { collidingIds, memoCollisions } from '../src/geom/collide.js';
 
@@ -111,10 +113,9 @@ describe('3D 아이템', () => {
     expect(lines(itemMesh(mk('dining-4', { pos: [0, 0] }), { edges: true }))).toBe(5);
     expect(lines(itemMesh(mk('dining-4', { pos: [0, 0] })))).toBe(0);
     expect(lines(itemMesh(mk('cabinet-lower', { pos: [0, 0] }), { edges: true }))).toBe(1);
-    const g = buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: {} });
-    expect(lines(g)).toBe(5);                                    // 기본값은 켜짐
-    const off = buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: { itemEdges: false } });
-    expect(lines(off)).toBe(0);
+    // buildItems는 선 객체를 만들지 않는다(윤곽선은 화면 후처리 — 계획 17 Task 6)
+    expect(lines(buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: {} }))).toBe(0);
+    expect(lines(buildItems(floor([mk('dining-4', { pos: [0, 0] })]), { v3: { itemEdges: false } }))).toBe(0);
   });
 
   // 2D는 (translate → rotate → scale)로 반전을 아이템 로컬 축에 먹인다(items2d.drawItem).
@@ -154,15 +155,13 @@ describe('3D 아이템', () => {
   });
 });
 
-// §13.4: 성능 우선에서는 제품 윤곽선을 만들지 않는다(v3.itemEdges 값은 그대로 둔다).
-test('성능 우선 모드는 제품 윤곽선을 붙이지 않는다', () => {
+// 계획 17 Task 6: 윤곽선은 화면 후처리(outlinePass)라 buildItems는 어느 모드에서도 선 객체를 만들지 않는다 — 켜고 끄기는 outlineEnabled(view).
+test('buildItems는 표시·성능 모드 모두 선 객체(itemEdge)를 만들지 않는다', () => {
   const items = [mk('sofa-3', { pos: [1000.5, 1000.25] })];
   const edgeCount = g => { let n = 0; g.traverse(o => { if (o.name === 'itemEdge') n += 1; }); return n; };
-  const on = buildItems(floor(items), { v3: { itemEdges: true } });
-  expect(edgeCount(on)).toBeGreaterThan(0);
+  expect(edgeCount(buildItems(floor(items), { v3: { itemEdges: true } }))).toBe(0);
   const off = buildItems(floor(items), { v3: { itemEdges: true }, perfMode: 'performance' });
   expect(edgeCount(off)).toBe(0);
-  // 아이템 자체는 그대로 있다(형상만 남는다).
   expect(off.children).toHaveLength(1);
 });
 
@@ -255,5 +254,67 @@ describe('실사 에셋', () => {
     expect(sceneSignature({ ...s, view: { ...s.view, v3: { ...s.view.v3, assets: false } } })).not.toBe(a);
     requestAsset({ id: 'x', asset: 'x' }); await settle();
     expect(sceneSignature(s)).not.toBe(a);                                     // 도착 묶음마다 버전이 오른다
+  });
+});
+
+// ── 스테인리스 형상(2026-10-20 · 계획 17 Task 5) ──
+describe('엑셀 제품 · 도면 기구 형상', () => {
+  const kp = shape => KITCHEN_PRODUCTS.find(p => p.shape === shape);
+  test('엑셀 제품은 공유 형상 그룹으로 서고, 충돌은 재질이 아니라 붉은 상자 선이다', () => {
+    const item = createItem(kp('sink'), { pos: [1000.5, 2000.25] });
+    const obj = itemMesh(item);
+    expect(obj.name).toBe('item');
+    expect(obj.children.every(m => m.isMesh && m.userData.shared && m.name.startsWith('shape-'))).toBe(true);
+    expect(obj.userData.assetSize).toEqual(item.size);
+    obj.traverse(o => expect(o.userData.itemId).toBe(item.id));
+    const before = obj.children[0].material.color.getHexString();
+    paintItem(obj, COLLIDE_COLOR);
+    expect(obj.children[0].material.color.getHexString()).toBe(before);
+    expect(obj.getObjectByName('collideBox')).toBeTruthy();
+  });
+  test('도면 기구는 이름으로 형상을 고른다', () => {
+    const it = mk('equip-generic', { pos: [0, 0], name: '세정대 2조 1500-750', size: [1500, 750, 850] });
+    expect(itemMesh(it).children.some(m => m.name === 'shape-steel')).toBe(true);
+  });
+  test('반전·회전은 상자와 같은 규칙(로컬 축 음수 배율)', () => {
+    const obj = itemMesh(createItem(kp('cabinet'), { pos: [0, 0], rot: 90, flipH: true }));
+    expect(obj.rotation.y).toBeCloseTo(-RAD(90));
+    expect([obj.scale.x, obj.scale.y, obj.scale.z]).toEqual([-1, 1, 1]);
+  });
+  test('형상 아이템에는 윤곽선 선 객체를 붙이지 않는다(윤곽선은 화면 후처리 — Task 6)', () => {
+    const obj = itemMesh(createItem(kp('range'), { pos: [0, 0] }), { edges: true });
+    expect(obj.getObjectByName('itemEdge')).toBeUndefined();
+  });
+  test('disposeGroup은 공유 지오메트리·재질을 버리지 않는다', () => {
+    const g = buildItems(floor([createItem(kp('oven'), { pos: [0, 0] })]), { v3: {} });
+    const geo = g.children[0].children[0].geometry, mat = g.children[0].children[0].material;
+    const gd = vi.spyOn(geo, 'dispose'), md = vi.spyOn(mat, 'dispose');
+    disposeGroup(g);
+    expect(gd).not.toHaveBeenCalled(); expect(md).not.toHaveBeenCalled();
+  });
+  // 계획 17 Task 5 리뷰: 색 바꾼 아이템의 스테인리스(tintedSteel)는 아이템 전용이라 버리고, 병합 지오메트리는 캐시가 나눠 쓰니 남긴다.
+  test('색 바꾼 형상 아이템: disposeGroup이 아이템 전용 스테인리스 재질만 한 번 버리고 공유 지오메트리는 남긴다', () => {
+    const p = kp('worktable');
+    const g = buildItems(floor([createItem(p, { pos: [0, 0], color: '#ff0000' })]), { v3: {} });
+    const steel = g.children[0].getObjectByName('shape-steel');
+    expect(steel.material.userData.perMesh).toBe(true);
+    expect(steel.material.color.getHexString()).toBe('ff0000');
+    const md = vi.spyOn(steel.material, 'dispose'), gd = vi.spyOn(steel.geometry, 'dispose');
+    try {
+      disposeGroup(g);
+      expect(md).toHaveBeenCalledTimes(1); expect(gd).not.toHaveBeenCalled();
+    } finally { gd.mockRestore(); }
+  });
+  // items3d 모듈 배선: 헤어라인 텍스처 도착(onShapeTexturesReady)이 에셋 도착과 같은 길(assetsChanged → onAssetsReady)로 view3d에 닿는다.
+  test('헤어라인 텍스처가 도착하면 onAssetsReady가 한 틱 뒤 불리고 assetsVersion이 오른다', async () => {
+    __reset();
+    const seen = vi.fn(), off = onAssetsReady(seen), v0 = assetsVersion();
+    try {
+      __notifyShapeTexturesReady();
+      expect(seen).not.toHaveBeenCalled();                            // 알림은 다음 틱(assetsChanged의 묶음)
+      await new Promise(r => setTimeout(r, 0));
+      expect(seen).toHaveBeenCalledTimes(1);
+      expect(assetsVersion()).toBe(v0 + 1);
+    } finally { off(); }
   });
 });

@@ -142,6 +142,8 @@ function doExtract(opts = {}) {
     dividerByNames: opts.dividerByNames === true,
     // 기구 배치(2026-10-12 · 계획 13 Task 3): 기본 켬 — 검토 창 체크박스가 끈다(끄면 계획 12까지와 같은 결과). 후보는 고른 도면 상자(r.roi) 안만.
     ex, roi: r.roi, layerRoles, equipment: opts.equipment !== false,
+    // 급식실 마감(2026-10-20 · 계획 17 Task 8): 기본 켬 — 검토 창 체크박스가 끈다. 벽 안쪽 흰 타일(바닥은 새 방 기본값 — geom/rooms.js).
+    kitchenWalls: opts.kitchenWalls !== false,
     // 면적 기준선의 근거: 이 도면(± 10 m) 안의 치수. 측정점은 건물 밖 치수줄이 아니라 재는 자리에 있다.
     dims: ex.dims.filter(d => d.p1 && inBox(d.p1, r.roi && { x0: r.roi.x0 - 10000, y0: r.roi.y0 - 10000, x1: r.roi.x1 + 10000, y1: r.roi.y1 + 10000 })),
     // 개구부는 두 재료를 함께 쓴다: 스윙 호(ex.arcs)와 **벽 틈**(r.gaps · 사전 검토 C-2).

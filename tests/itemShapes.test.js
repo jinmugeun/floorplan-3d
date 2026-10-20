@@ -46,7 +46,8 @@ describe('조합 형상', () => {
   // (500×500×300, fan 결함이 나온 실제 제품 크기) · 깊이가 얇은 것 · 너비가 얇은 것.
   // 얇은 두 크기는 의자 다리·냉장고 손잡이가 깊이를 상한에 넣지 않던 같은 종류의 결함을 잡는다.
   test('형상은 아이템 크기 안에 들어간다(조합 형상 제품 전부 × 크기 5종)', () => {
-    const shaped = PRODUCTS.filter(p => SHAPE_SYMBOLS.includes(p.symbol));
+    // 계획 17: 엑셀 제품(shape 있음)은 스테인리스 형상(view3d/shapes — tests/shapes.test.js)으로 선다 — 조합 형상은 shape 없는 제품만 본다.
+    const shaped = PRODUCTS.filter(p => !p.shape && SHAPE_SYMBOLS.includes(p.symbol));
     expect(new Set(shaped.map(p => p.symbol)).size).toBe(SHAPE_SYMBOLS.length);   // 13종을 다 덮는다
     expect(shaped.length).toBeGreaterThan(SHAPE_SYMBOLS.length);
     let checked = 0;
@@ -87,9 +88,10 @@ describe('조합 형상', () => {
 });
 
 describe('카테고리 재질', () => {
-  test('카탈로그의 모든 카테고리에 재질이 있다', () => {
-    for (const c of CATEGORIES) expect(ITEM_MATERIALS[c.name]).toBeTruthy();
-    expect(Object.keys(ITEM_MATERIALS).sort()).toEqual(CATEGORIES.map(c => c.name).sort());
+  // 계획 17: 칩 10개와, 숨김 단종 제품의 옛 카테고리(옛 프로젝트가 그린다) 모두 재질이 있다.
+  test('카탈로그의 모든 카테고리(칩 + 숨김 단종의 옛 카테고리)에 재질이 있다', () => {
+    for (const c of CATEGORIES) expect(ITEM_MATERIALS[c.name], c.name).toBeTruthy();
+    for (const p of PRODUCTS) expect(ITEM_MATERIALS[p.category], p.id).toBeTruthy();
   });
 
   test('제품 색이 이기고, 스키마 기본색이면 카테고리 색을 쓴다', () => {

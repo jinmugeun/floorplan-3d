@@ -5,6 +5,7 @@
 // roomType은 propsPanel의 ROOM_TYPES 값과 같다(none/cook/prep/cold/wash/dining/storage/office/etc).
 import { activeFloor, createItem } from '../state/schema.js';
 import { productById } from '../products/catalog.js';
+import { LEGACY_TO_KITCHEN } from '../products/catalogKitchen.js';
 import { roomInnerPolygon, pointInPolygon } from '../geom/rooms.js';
 import { nearestWallPlacement, itemCorners, isEmbed, WALL_ATTACH_DIST } from '../geom/items.js';
 import { obbOverlap } from '../geom/collide.js';
@@ -14,24 +15,21 @@ import { reattach, seatCopies, pruneDuctConnections } from '../state/floorIntern
 const T = (id, name, roomType, use, minArea, maxArea, budget, items) => ({ id, name, roomType, use, minArea, maxArea, budget, items });
 const I = (productId, at, rot = 0, offset = [0, 0]) => ({ productId, at, rot, offset });
 // rot 규약(바닥 제품): 0 = 북쪽 벽에 등, 90 = 동쪽 벽에 등, 180 = 남쪽, 270 = 서쪽.
-// 같은 제품을 격자로 깔 때(교실 책상 20개). cols × rowsN 개를 at 자리 중심으로 pitch mm 간격으로 둔다.
-// 같은 규칙을 스무 번 적지 않으려는 것이고, 만들어지는 항목은 I(...)와 똑같은 모양이다.
-const grid = (productId, at, cols, rowsN, pitchX, pitchY, rot = 0) => {
-  const out = [];
-  for (let r = 0; r < rowsN; r++) {
-    for (let c = 0; c < cols; c++) out.push(I(productId, at, rot, [(c - (cols - 1) / 2) * pitchX, (r - (rowsN - 1) / 2) * pitchY]));
-  }
-  return out;
-};
-
-export const ROOM_TEMPLATES = [
+// 2026-10-20 · 계획 17 Task 9: 항목은 기존(숨김 단종) 제품 id로 적고 아래 ROOM_TEMPLATES가 엑셀 급식기구로 바꾼다(LEGACY_TO_KITCHEN — 같은 세부품명 안
+// 크기 최근접). 엑셀에 짝이 없는 제품(조명·변기·거울·샤워부스·수납 박스·벤치)은 뺐고, 원룸·카페 바·교실·화장실 템플릿은 지웠다(조리실 전용 카탈로그).
+// 엑셀 제품을 바로 적는 항목: 벽걸이 손소독기(HACCP — 조리실 입구). 벽걸이 후드가 천장 후드로 바뀐 뒤 템플릿에 남은 유일한 벽 부착 제품이다
+// (벽 자리 다툼 — seatCopies — 을 템플릿 경로에서 계속 시험한다 · tests/roomTemplates.test.js).
+// 후드('hood-wall' → 엑셀 천장 후드)는 레인지와 같은 자리(at·offset)에 둔다 — 후드 중심이 레인지 중심 위다(가열조리 대형은 첫 레인지).
+// 옛 벽걸이 후드 자리(at y 0.05)에서는 몸통이 벽 안쪽 면을 넘었다(Task 9 리뷰 Important 1).
+const HAND_SANITIZER = 'k-23288396';
+const RAW_TEMPLATES = [
   T('cook-basic', '가열조리 기본', 'cook', '상업', 8, 30, 6000000, [
-    I('range-gas-6', [0.2, 0.2]), I('worktable-1800', [0.2, 0.2], 0, [1550, 0]), I('hood-wall', [0.2, 0.05]),
-    I('sink-single', [0.8, 0.82], 180), I('shelf-steel-4', [0.2, 0.85], 180),
+    I('range-gas-6', [0.2, 0.2]), I('worktable-1800', [0.2, 0.2], 0, [1550, 0]), I('hood-wall', [0.2, 0.2]),
+    I('sink-single', [0.8, 0.82], 180), I('shelf-steel-4', [0.2, 0.85], 180), I(HAND_SANITIZER, [0.5, 0.05]),
   ]),
   T('cook-large', '가열조리 대형', 'cook', '상업', 25, 90, 12000000, [
     I('range-gas-6', [0.18, 0.18]), I('range-gas-6', [0.18, 0.18], 0, [1250, 0]), I('worktable-1800', [0.18, 0.18], 0, [3350, 0]),
-    I('hood-wall', [0.18, 0.05]), I('sink-double', [0.75, 0.85], 180), I('shelf-steel-4', [0.2, 0.85], 180), I('light-fluorescent', [0.5, 0.5]),
+    I('hood-wall', [0.18, 0.18]), I('sink-double', [0.75, 0.85], 180), I('shelf-steel-4', [0.2, 0.85], 180),
   ]),
   T('prep-basic', '전처리 기본', 'prep', '상업', 8, 20, 4000000, [
     I('worktable-1800', [0.5, 0.18]), I('sink-double', [0.5, 0.82], 180), I('shelf-steel-4', [0.08, 0.5], 270), I('fridge-2door', [0.92, 0.5], 90),
@@ -45,7 +43,7 @@ export const ROOM_TEMPLATES = [
   ]),
   T('cold-large', '비가열조리 확장', 'cold', '상업', 15, 50, 7000000, [
     I('worktable-1800', [0.3, 0.2]), I('worktable-1800', [0.3, 0.2], 0, [0, 1100]), I('sink-single', [0.78, 0.2]),
-    I('fridge-2door', [0.9, 0.8], 180), I('fridge-kimchi', [0.55, 0.85], 180), I('storage-box', [0.12, 0.88]),
+    I('fridge-2door', [0.9, 0.8], 180), I('fridge-kimchi', [0.55, 0.85], 180),
   ]),
   T('wash-basic', '식기세척 기본', 'wash', '상업', 8, 20, 5000000, [
     I('sink-double', [0.45, 0.2]), I('dishwasher', [0.45, 0.2], 0, [1250, 0]), I('shelf-steel-4', [0.22, 0.85], 180), I('worktable-1800', [0.75, 0.85], 180),
@@ -56,66 +54,52 @@ export const ROOM_TEMPLATES = [
   ]),
   T('dining-basic', '식당 4인', 'dining', '상업', 8, 25, 1500000, [
     I('dining-4', [0.5, 0.5]), I('chair-dining', [0.5, 0.5], 0, [0, -700]), I('chair-dining', [0.5, 0.5], 180, [0, 700]),
-    I('chair-dining', [0.5, 0.5], 270, [-900, 0]), I('chair-dining', [0.5, 0.5], 90, [900, 0]), I('light-pendant', [0.5, 0.5]),
+    I('chair-dining', [0.5, 0.5], 270, [-900, 0]), I('chair-dining', [0.5, 0.5], 90, [900, 0]),
   ]),
   T('dining-hall', '단체 식당 24석', 'dining', '상업', 30, 120, 6000000, [
     I('dining-6', [0.28, 0.3]), I('chair-dining', [0.28, 0.3], 0, [-450, -800]), I('chair-dining', [0.28, 0.3], 0, [450, -800]),
     I('dining-6', [0.72, 0.3]), I('chair-dining', [0.72, 0.3], 0, [-450, -800]), I('chair-dining', [0.72, 0.3], 0, [450, -800]),
-    I('dining-6', [0.28, 0.75]), I('dining-6', [0.72, 0.75]), I('light-fluorescent', [0.35, 0.5]), I('light-fluorescent', [0.65, 0.5]),
+    I('dining-6', [0.28, 0.75]), I('dining-6', [0.72, 0.75]),
   ]),
   T('storage-shelf', '창고 선반', 'storage', '상업', 6, 30, 900000, [
-    I('shelf-steel-4', [0.22, 0.15]), I('shelf-steel-4', [0.22, 0.15], 0, [1300, 0]),
-    I('shelf-steel-4', [0.22, 0.85], 180), I('storage-box', [0.22, 0.85], 180, [1300, 0]), I('storage-box', [0.22, 0.85], 180, [1900, 0]),
+    I('shelf-steel-4', [0.22, 0.15]), I('shelf-steel-4', [0.22, 0.15], 0, [1300, 0]), I('shelf-steel-4', [0.22, 0.85], 180),
   ]),
   T('storage-cold', '냉장 창고', 'storage', '상업', 6, 20, 3000000, [
     I('fridge-2door', [0.25, 0.2]), I('fridge-2door', [0.25, 0.2], 0, [950, 0]), I('fridge-kimchi', [0.25, 0.2], 0, [1750, 0]), I('shelf-steel-4', [0.3, 0.85], 180),
   ]),
   T('office-1p', '1인 사무실', 'office', '주거', 4, 15, 1200000, [
-    I('desk-1400', [0.5, 0.25]), I('chair-office', [0.5, 0.25], 180, [0, 700]), I('bookshelf', [0.88, 0.8], 180), I('light-ceiling', [0.5, 0.5]),
+    I('desk-1400', [0.5, 0.25]), I('chair-office', [0.5, 0.25], 180, [0, 700]), I('bookshelf', [0.88, 0.8], 180),
   ]),
   T('office-4p', '4인 사무실', 'office', '상업', 15, 60, 4500000, [
     I('desk-1400', [0.25, 0.22]), I('chair-office', [0.25, 0.22], 180, [0, 700]), I('desk-1400', [0.75, 0.22]), I('chair-office', [0.75, 0.22], 180, [0, 700]),
-    I('desk-1400', [0.25, 0.78], 180), I('desk-1400', [0.75, 0.78], 180), I('bookshelf', [0.5, 0.95], 180), I('light-fluorescent', [0.5, 0.5]),
+    I('desk-1400', [0.25, 0.78], 180), I('desk-1400', [0.75, 0.78], 180), I('bookshelf', [0.5, 0.95], 180),
   ]),
-  T('etc-restroom', '화장실', 'etc', '상업', 3, 15, 2500000, [
-    I('toilet', [0.25, 0.3]), I('washbasin', [0.72, 0.06]), I('mirror-wall', [0.45, 0.04]), I('shower-booth', [0.78, 0.75]),
-  ]),
-  T('studio-basic', '원룸 기본', 'none', '주거', 12, 40, 3000000, [
-    I('bed-queen', [0.25, 0.42]), I('wardrobe-1200', [0.85, 0.15]), I('desk-1400', [0.78, 0.8], 180),
-    I('chair-office', [0.78, 0.8], 0, [0, -700]), I('light-ceiling', [0.5, 0.5]),
-  ]),
-  // 계획 5가 더한 6종(§13.9). 묶음은 offset(mm)으로 붙여 두고 at은 0.15~0.8 안에 둔다
-  // (제품 치수는 고정이라 비율만 쓰면 작은 방에서 반드시 파고든다 — 2C와 같은 규칙).
-  T('serve-line', '배식 라인', 'dining', '상업', 12, 60, 5000000, [
-    I('serve-counter', [0.3, 0.3]), I('serve-counter', [0.3, 0.3], 0, [1850, 0]),
+  // 계획 5가 더한 템플릿(§13.9) 중 조리실에 맞는 넷. 묶음은 offset(mm)으로 붙여 두고 at은 0.15~0.8 안에 둔다
+  // (제품 치수는 고정이라 비율만 쓰면 작은 방에서 반드시 파고든다 — 2C와 같은 규칙). 배식대는 엑셀 반찬 배식대(1980)라 간격이 2050이고,
+  // 배식대(깊이 750)와 보온고(850)가 한 방에 겹쳐 들어가야 해 최소 면적이 15 m²다(12 m² · 종횡비 4의 폭 1.5 m 방에는 둘이 안 들어간다).
+  T('serve-line', '배식 라인', 'dining', '상업', 15, 60, 5000000, [
+    I('serve-counter', [0.3, 0.3]), I('serve-counter', [0.3, 0.3], 0, [2050, 0]),
     I('warmer-cabinet', [0.3, 0.75], 180), I('warmer-cabinet', [0.3, 0.75], 180, [1000, 0]),
   ]),
-  T('cafe-bar', '카페 바', 'dining', '상업', 12, 50, 8000000, [
-    I('bar-counter', [0.5, 0.4]),
-    I('coffee-machine', [0.5, 0.4], 0, [-1400, 800]),
-    I('fridge-2door', [0.5, 0.4], 180, [1300, 800]),
-    I('stool-round', [0.5, 0.4], 0, [-800, -650]), I('stool-round', [0.5, 0.4], 0, [0, -650]), I('stool-round', [0.5, 0.4], 0, [800, -650]),
-  ]),
   T('laundry', '세탁실', 'etc', '주거', 6, 25, 2500000, [
-    I('washer-drum', [0.3, 0.3]), I('dryer', [0.3, 0.3], 0, [700, 0]),
-    I('shelf-steel-4', [0.3, 0.8], 180), I('storage-box', [0.8, 0.8], 180),
+    I('washer-drum', [0.3, 0.3]), I('dryer', [0.3, 0.3], 0, [700, 0]), I('shelf-steel-4', [0.3, 0.8], 180),
   ]),
+  // 사물함은 세 벽에 하나씩(한 줄로 셋이면 좁은 방 6 m² · 종횡비 0.25에서 하나가 빠진다).
   T('locker', '탈의·사물함', 'etc', '상업', 6, 30, 2000000, [
-    I('locker-12', [0.3, 0.15]), I('locker-12', [0.3, 0.15], 0, [1000, 0]),
-    I('bench-1200', [0.4, 0.6]), I('bench-1200', [0.4, 0.6], 0, [0, 500]),
+    I('locker-12', [0.3, 0.15]), I('locker-12', [0.5, 0.85], 180), I('locker-12', [0.85, 0.5], 90),
   ]),
   T('meeting-8p', '회의실 8인', 'office', '상업', 15, 60, 5000000, [
     I('meeting-table-2400', [0.5, 0.5]),
     I('chair-office', [0.5, 0.5], 0, [-800, -1000]), I('chair-office', [0.5, 0.5], 0, [0, -1000]), I('chair-office', [0.5, 0.5], 0, [800, -1000]),
     I('chair-office', [0.5, 0.5], 180, [-800, 1000]), I('chair-office', [0.5, 0.5], 180, [0, 1000]), I('chair-office', [0.5, 0.5], 180, [800, 1000]),
     I('chair-office', [0.5, 0.5], 270, [-1800, 0]), I('chair-office', [0.5, 0.5], 90, [1800, 0]),
-    I('light-fluorescent', [0.5, 0.5]),
-  ]),
-  T('class-20p', '교실 20인', 'office', '상업', 40, 120, 8000000, [
-    ...grid('desk-student', [0.5, 0.55], 4, 5, 900, 900),
-    I('lectern', [0.5, 0.55], 180, [0, -2700]),
   ]),
 ];
+
+// 엑셀 급식기구로 바꾼다(k- 로 시작하면 이미 엑셀 제품). 짝이 없는 기존 id가 남아 있으면 undefined가 되어
+// 테스트(모든 productId가 카탈로그에 있다)가 잡는다 — 숨김 단종 제품으로 조용히 떨어지지 않게 `?? id`를 쓰지 않는다.
+const kitchenId = id => (id.startsWith('k-') ? id : LEGACY_TO_KITCHEN[id]);
+export const ROOM_TEMPLATES = RAW_TEMPLATES.map(t => ({ ...t, items: t.items.map(i => ({ ...i, productId: kitchenId(i.productId) })) }));
 
 export const templateById = id => ROOM_TEMPLATES.find(t => t.id === id) ?? null;
 
@@ -143,6 +127,7 @@ export function itemsInRoom(floor, room) {
 }
 
 const FLOORISH = it => it.attach === 'floor' || it.attach === 'floorLay';
+const wallsOf = (floor, room) => floor.walls.filter(w => room.wallIds.includes(w.id));   // 그 방 벽(배치·자리 다툼 모두 — 리뷰 I-2)
 // 축 ax 위로 잰 회전 사각형의 반지름(지지함수).
 const halfExtent = (it, ax) => Math.max(...itemCorners(it).map(c => Math.abs(dot(sub(c, it.pos), ax))));
 
@@ -196,8 +181,9 @@ export function placeTemplate(floor, room, template, { avoid = [], stats = null 
   const bump = k => { if (stats) stats[k] = (stats[k] ?? 0) + 1; };
   // 벽을 찾는 거리에 상한을 둔다: 방 bbox 전체를 주면 몇 미터 떨어진 엉뚱한 벽에 조용히 붙는다.
   const reach = Math.min(Math.max(x1 - x0, y1 - y0), 5 * WALL_ATTACH_DIST);
-  const roomWalls = floor.walls.filter(w => room.wallIds.includes(w.id));
+  const roomWalls = wallsOf(floor, room);
   const taken = avoid.filter(FLOORISH);
+  const overhead = avoid.filter(it => it.attach === 'ceiling');   // 천장 제품은 천장 제품끼리만 부딪친다
   const out = [];
   for (const spec of template.items ?? []) {
     const p = productById(spec.productId);
@@ -212,9 +198,21 @@ export function placeTemplate(floor, room, template, { avoid = [], stats = null 
     } else if (!pointInPolygon(pos, inner)) continue;        // 방 밖으로 떨어지는 항목은 뺀다
     if (p.attach === 'ceiling') patch.z = Math.max(0, (room.height ?? 2300) - p.size[2]);
     const item = createItem(p, patch);
+    if (item.attach === 'ceiling') {
+      // 천장 제품(엑셀 후드 1000×1000 등)도 몸통을 방 안쪽 bbox로 당긴다 — 바닥 제품과의 겹침은 보지 않는다(레인지 위 후드).
+      // 방보다 크거나, 이미 있거나 방금 놓은 천장 제품과 발자국이 겹치면 놓지 않는다: [기존 제품 유지하고 추가]를 되풀이해도
+      // 후드가 같은 자리에 쌓이지 않는다(2026-10-20 · 계획 17 Task 9 리뷰 Important 1 · Minor 1).
+      const up = clampToRoom(item, box);
+      if (!up || overhead.some(o => obbOverlap(o, up, 1))) { bump('skipped'); continue; }
+      up.pos = [Math.round(up.pos[0]), Math.round(up.pos[1])];
+      if (up.pos[0] !== patch.pos[0] || up.pos[1] !== patch.pos[1]) bump('moved');
+      overhead.push(up);
+      out.push(up);
+      continue;
+    }
     if (!FLOORISH(item)) { out.push(item); continue; }
     // 중심은 방 안이지만 몸통이 벽에 걸친 제품을 안쪽으로 당긴다(§14.9). 벽 부착 제품은 벽 위에
-    // 있어야 하므로(불변식 I-2) 여기 오지 않고, 천장 제품은 위에서 이미 out으로 빠진다.
+    // 있어야 하므로(불변식 I-2) 여기 오지 않고, 천장 제품은 위에서 따로 당긴다.
     const fitted = clampToRoom(item, box);
     if (!fitted) { bump('skipped'); continue; }               // 방보다 큰 제품은 놓지 않는다
     const free = separate(fitted, taken, inner, box);
@@ -254,8 +252,9 @@ export function applyRoomTemplate(store, roomId, templateId, { replace = true } 
   // dispatch **앞에서** 센다(최종 리뷰 I-3c): 자리를 못 얻은 벽 제품은 keep에서 떨어지므로,
   // 실제로 놓이는 것이 하나도 없는지는 이 계산을 지나야 알 수 있다(made만 보면 알 수 없다 —
   // 포화된 방에 [기존 제품 유지하고 추가]를 하면 made는 1개인데 keep은 0개다). seatCopies는
-  // ctx.items를 복사해 쓰므로 여기서 불러도 상태를 건드리지 않는다.
-  const seated = seatCopies(made.map(m => structuredClone(m)), { walls: f.walls, items: f.items.filter(i => !kill.has(i.id)) });
+  // ctx.items를 복사해 쓰므로 여기서 불러도 상태를 건드리지 않는다. 벽은 그 방 벽만 준다(계획 17 최종 리뷰 I-2): 층 전체 벽을 주면 T자 끝에서
+  // 이웃 방 칸막이가 더 가까워 손소독기가 방 밖에 앉았다(신상중 13개 방 중 4개 · 1개는 빠짐). 붙여넣기·복제·배열 경로는 그대로 층 전체 벽이다.
+  const seated = seatCopies(made.map(m => structuredClone(m)), { walls: wallsOf(f, room), items: f.items.filter(i => !kill.has(i.id)) });
   const keep = seated.filter((s, i) => !(made[i].attach === 'wall' && made[i].wallId && !s.wallId));
   // 지울 것도 놓을 것도 없고 방 타입도 그대로면 dispatch하지 않는다: 모든 제품이 자리가 없어
   // 건너뛰어진 [기존 제품 유지하고 추가]는 토스트가 "0개 배치"를 말하면서 되돌림 단계 하나를

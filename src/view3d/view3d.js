@@ -6,7 +6,7 @@ import { buildFloorGroup, disposeGroup, toThree, sceneSignature, TRANSPARENT_OPA
 import { hiddenWallIds, applyCutawayTo, shotCutaway, soloMeshVisible } from './cutaway.js';
 import { planBounds } from '../geom/elevation.js';
 import { cameraDistance, fitDistance, shotPosition, canReframeShot } from './fit.js';
-import { sunPosition, nightFactor } from './sun.js';
+import { sunPosition, nightFactor } from './sun.js'; import { installOutline, outlineEnabled } from './outlinePass.js';
 import { applyPerfMode } from './perfMode.js';
 import { headingDeg, toWorldXY } from './camera.js';
 import { createFirstPerson } from './firstPerson.js';
@@ -21,7 +21,7 @@ import { warmShaders } from './shaderWarm.js'; import { enableAssets, onAssetsRe
 
 export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFallback = () => {}, openMenu = () => {}, itemActions = {}, surfaceActions = {}, onOrthoView = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; installOutline(renderer, { enabled: () => outlineEnabled(store.get().view) });   // 윤곽선 = renderer.render를 감싼 후처리(계획 17 Task 6 — 화면·1인칭·투영·렌더샷이 같은 render 줄로 탄다)
   container.appendChild(renderer.domElement); enableAssets(); let envMap = null; try { envMap = createEnvMap(renderer); setEnvMap(envMap); } catch (e) { console.warn(`환경 맵 생략: ${e?.message ?? e}`); }   // 실사 에셋은 3D가 있을 때만 받는다(계획 15 Task B — 그 전에는 requestAsset이 no-op) · 환경 맵은 에셋 재질만(envMap.js · 계획 15b — 금속 생성 모델이 검게 보이지 않게)
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef1f4);
   const persp = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
@@ -29,9 +29,9 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
   let camera = persp;
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.1; controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-  // three r155+ 는 물리 광량 단위를 쓰므로 예전 값(0.9/0.8)으로는 장면이 어둡다.
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.6); scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-12, 30, -18); sun.castShadow = true; sun.shadow.normalBias = 0.03; scene.add(sun);   // 그림자 여드름(줄무늬) 방지 — 텍셀 ≈ 2 cm(512² · ±5 m) · 계획 15 최종 리뷰 D-m6
+  // three r155+ 물리 광량 단위. 급식실 룩(계획 17 Task 6 · 시안 proto.html steel): 반구광 바닥색을 회색으로 · 보조광 하나 · 옅은 그림자(intensity 0.5).
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xb9bcc2, 1.2); scene.add(hemi); const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(-6, 6, 3); scene.add(fill);
+  const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(-12, 30, -18); sun.castShadow = true; sun.shadow.normalBias = 0.03; sun.shadow.intensity = 0.5; scene.add(sun);   // 그림자 여드름(줄무늬) 방지 — 텍셀 ≈ 2 cm(512² · ±5 m) · 계획 15 최종 리뷰 D-m6
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xdfe4e9 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.005; ground.receiveShadow = true; scene.add(ground);
 
   let group = null, mode = 'iso', raf = 0, alive = true, cullFirst = false;
@@ -126,14 +126,14 @@ export function createView3D(container, store, ui, { onExitFp = () => {}, onFpFa
     camera.position.copy(t.clone().add(d));
     controls.update(); requestRender();
   }
-  // three r155+ 는 물리 광량 단위다. 기존 값(방향광 2.4, 환경광 2.6)이 기본 강도 0.8 / 환경광 0.6에
-  // 대응하도록 3배 / 4.33배로 환산한다.
+  // 물리 광량 환산(계획 17 Task 6): 기본 강도 0.8 → 방향광 1.4(× 1.75), 환경광 0.6 → 반구광 1.2(× 2) — 급식실 룩 시안의 값.
+  // 저장 형식(view.sun)과 햇빛 팝오버는 그대로다(밤 계수 nightFactor도 그대로).
   function applySun(s = {}) {
     const p = sunPosition(s);
     sun.position.set(p[0], p[1], p[2]);
     const night = nightFactor(s);                  // 밤에는 방향광·환경광을 함께 줄인다
-    sun.intensity = (s.intensity ?? 0.8) * 3 * night;
-    hemi.intensity = (s.ambient ?? 0.6) * 4.33 * (0.4 + 0.6 * night);
+    sun.intensity = (s.intensity ?? 0.8) * 1.75 * night;
+    hemi.intensity = (s.ambient ?? 0.6) * 2 * (0.4 + 0.6 * night);
     requestRender();
   }
   // 도면 전체가 들어오도록 카메라를 다시 잡는다. 현재 모드(plan / iso)의 프레이밍을 그대로 쓴다.

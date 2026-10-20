@@ -50,7 +50,7 @@ test('템플릿 카드 목록을 보여주고 고르면 onTemplate이 불린다'
   openStartScreen({ store: createStore(createEmptyProject()), onTemplate: id => picked.push(id) });
   const root = document.getElementById('startScreen');
   const cards = [...root.querySelectorAll('[data-template]')];
-  expect(cards.map(c => c.dataset.template)).toEqual(['builtin-sinsang', 'builtin-studio']); // 빈 프로젝트·강당중 샘플은 위 카드가 담당한다 · 신상중(2026-10-13)은 템플릿 카드
+  expect(cards.map(c => c.dataset.template)).toEqual(['builtin-sinsang']); // 빈 프로젝트·강당중 샘플은 위 카드가 담당한다 · 신상중(2026-10-13)은 템플릿 카드 · 원룸은 계획 17에서 뺐다
   expect(cards[0].classList.contains('tpl')).toBe(true);         // 위 카드 3개와 구분되는 클래스
   expect(root.querySelectorAll('.start-card:not(.tpl)')).toHaveLength(4);
   expect(root.textContent).toContain('템플릿');
@@ -182,7 +182,7 @@ test('카드 동작 → 그다음 onClose 한 번 (DXF·템플릿·Esc·close())
   document.querySelector('[data-start="dxf"]').click();
   expect(calls).toEqual(['dxf', 'close']);
   expect(document.querySelector('#startScreen')).toBeNull();
-  // 템플릿 카드(기본 템플릿 builtin-studio)도 같은 차례다(2026-10-06 최종 리뷰 — 제목에만 있고 누르지 않았다).
+  // 템플릿 카드(내장 템플릿 builtin-sinsang)도 같은 차례다(2026-10-06 최종 리뷰 — 제목에만 있고 누르지 않았다).
   calls.length = 0;
   openStartScreen({ store, onTemplate: () => calls.push('template'), onClose: () => calls.push('close') });
   document.querySelector('[data-template]').click();

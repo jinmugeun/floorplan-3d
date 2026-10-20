@@ -2,7 +2,7 @@
 // 로더는 __setLoader로 바꿔 끼운다: 단위 테스트는 GLB도 네트워크도 건드리지 않는다.
 import { test, expect, vi } from 'vitest';
 import * as THREE from 'three';
-import { assetUrl, enableAssets, templateOf, requestAsset, onAssetsReady, assetsVersion, fitClone, setEnvMap, __setLoader, __reset } from '../src/view3d/itemAssets.js';
+import { assetUrl, enableAssets, templateOf, requestAsset, onAssetsReady, assetsVersion, fitClone, setEnvMap, envMapNow, onEnvMap, assetsChanged, __setLoader, __reset } from '../src/view3d/itemAssets.js';
 
 const box = (w, h, d, y0 = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial()); m.position.y = y0 + h / 2; const g = new THREE.Group(); g.add(m); return g; };
 const flush = () => new Promise(r => setTimeout(r, 0));
@@ -115,4 +115,30 @@ test('setEnvMap은 받은 템플릿과 앞으로 받을 템플릿의 재질(배�
   setEnvMap(tex); __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(1, 1, 1)));
   requestAsset({ id: 'c', asset: 'c' }); await flush(); await flush();
   expect(mats(templateOf('c'))[0].envMap).toBeNull();
+});
+// 계획 17 Task 5 리뷰: 모델 밖 자원(스테인리스 형상 재질·사진 마감재)이 쓰는 환경 맵 구독과 도착 알림.
+test('onEnvMap 구독자는 setEnvMap의 텍스처(null 포함)를 받고, 구독을 끊으면 더 받지 않는다 · envMapNow는 지금 값', () => {
+  __reset();
+  const tex = { isTexture: true, dispose() {} }, seen = vi.fn();
+  const off = onEnvMap(seen);
+  try {
+    setEnvMap(tex);
+    expect(seen).toHaveBeenCalledTimes(1); expect(seen).toHaveBeenLastCalledWith(tex); expect(envMapNow()).toBe(tex);
+    setEnvMap(null);
+    expect(seen).toHaveBeenCalledTimes(2); expect(seen).toHaveBeenLastCalledWith(null); expect(envMapNow()).toBeNull();
+    off();
+    setEnvMap(tex);
+    expect(seen).toHaveBeenCalledTimes(2);
+  } finally { off(); __reset(); }
+});
+test('assetsChanged는 한 틱 뒤 onAssetsReady를 한 번 부르고(같은 틱은 묶음) assetsVersion을 올린다', async () => {
+  __reset();
+  const seen = vi.fn(), off = onAssetsReady(seen), v0 = assetsVersion();
+  try {
+    assetsChanged(); assetsChanged();
+    expect(seen).not.toHaveBeenCalled();                              // 알림은 다음 틱
+    await flush();
+    expect(seen).toHaveBeenCalledTimes(1); expect(seen).toHaveBeenCalledWith(v0 + 1);
+    expect(assetsVersion()).toBe(v0 + 1);
+  } finally { off(); }
 });

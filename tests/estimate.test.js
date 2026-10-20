@@ -23,6 +23,7 @@ const mat = id => ({ id, offset: [0, 0], angle: 0 });
 describe('견적서 계산', () => {
   test('같은 제품은 수량으로 묶이고 금액이 단가 × 수량이다', () => {
     const a = setup();
+    applyMaterial(a.store, { kind: 'floor', id: a.floor().rooms[0].id }, null);   // 새 방 바닥 기본값(계획 17 Task 7)을 걷는다 — 이 테스트는 제품 합만 본다
     addItem(a.store, createItem(productById('chair-dining'), { pos: [1000, 1000] }));
     addItem(a.store, createItem(productById('chair-dining'), { pos: [1500, 1000] }));
     addItem(a.store, createItem(productById('dining-4'), { pos: [2000.5, 1500.25] }));
@@ -100,13 +101,26 @@ describe('견적서 계산', () => {
     const f = a.floor();
     expect(f.walls[0].material).toBe('paint-white');
     expect(f.rooms[0].floorMaterial).toBe('wood-oak');
-    expect(estimateRows(f).materials).toEqual([]);
-    expect(estimateRows(f).total).toBe(0);
+    // 명시 지정은 새 방의 바닥 기본값(칩 에폭시 · 계획 17 Task 7) 하나뿐이다 — 걷으면 물량이 0이다.
+    expect(estimateRows(f).materials.map(r => r.id)).toEqual(['epoxy-chip-gray']);
+    applyMaterial(a.store, { kind: 'floor', id: f.rooms[0].id }, null);
+    expect(estimateRows(a.floor()).materials).toEqual([]);
+    expect(estimateRows(a.floor()).total).toBe(0);
     applyMaterial(a.store, { kind: 'floor', id: f.rooms[0].id }, mat('wood-oak'));
     const rows = estimateRows(a.floor()).materials;
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe('wood-oak');
     expect(rows[0].areaM2).toBeCloseTo(Math.round(a.floor().rooms[0].area * 100) / 100, 2);
+  });
+
+  // 계획 17 Task 7: 새 방은 바닥이 칩 에폭시(45,000원/m²)로 명시 지정된다 — 견적서 마감재 칸에 바로 잡힌다.
+  test('새 방의 바닥 기본값은 칩 에폭시로 견적에 잡힌다(리터럴)', () => {
+    const a = setup();
+    const rows = estimateRows(a.floor());
+    // 안쪽 넓이 = (4000.5 − 200) × (3000.25 − 200) / 1e6 = 10.6428 → round2 10.64 · 10.64 × 45000 = 478,800
+    expect(rows.materials).toHaveLength(1);
+    expect(rows.materials[0]).toMatchObject({ id: 'epoxy-chip-gray', name: '그레이 칩 에폭시', areaM2: 10.64, unitPrice: 45000, total: 478800 });
+    expect(rows.total).toBe(478800);
   });
 
   test('빈 층은 빈 견적이 된다', () => {
@@ -318,20 +332,19 @@ describe('제품 행 묶음: productId · 이름 · 크기(계획 13 Task 5)', (
   });
 });
 
-// 리뷰 I-2(2026-10-12): 내장 강당중 샘플의 제품 행 수를 못 박는다. 옛 규칙(productId 하나)은 11행이었고 지금은 16행이다 —
-// 늘어난 5행은 모두 **후드**(kind 'equipment')다: 샘플 데이터(gangdang.json — 도면 M-106)가 후드마다 조리기구에 맞춘 크기를
-// 따로 적는다(hood-box 1000×1100 · 1200×1100 ×2 · 1600×1200 · 1700×1500 ×2 · 2000×1000 → 5행, hood-box-filter
-// 1700×1500 · 1800×1100 ×2 → 2행). 크기가 다른 후드는 다른 물건이므로 의도된 분할이다. 카탈로그 제품이 샘플에서 우연히
-// 다른 크기를 얻어 갈린 행은 없다(디퓨저·팬·환기캡·조리기구는 모두 제품 크기 그대로 한 행씩).
+// 리뷰 I-2(2026-10-12) · 계획 17 Task 9: 내장 강당중 샘플의 제품 행 수를 못 박는다 — 16행(후드 7행은 크기별 · 나머지는 제품마다 한 행).
+// 후드는 기술서(gangdang.json — 도면 M-106)가 조리기구에 맞춘 크기를 따로 적는다(1000×1100 · 1200×1100 ×2 · 1600×1200 · 1700×1500 ×3 · 1800×1100 ×2 · 2000×1000).
+// 계획 17에서 기존 후드 두 종이 크기 최근접 엑셀 후드로 바뀌었다(tools/products/remap-samples.mjs). 같은 1700×1500이라도 일반(배기)·필터(이중급배기) 후드는
+// 다른 제품이라 두 행이다.
 test('강당중 샘플은 16행(후드만 크기별)이고 수량 합은 아이템 수와 같다', () => {
   const floor = buildSampleProject().floors[0];
   const rows = estimateRows(floor);
   expect(rows.products).toHaveLength(16);
-  const byId = id => rows.products.filter(r => r.productId === id).map(r => `${r.size}×${r.qty}`);
-  expect(byId('hood-box')).toEqual(['1000×1100×600×1', '1200×1100×600×2', '1600×1200×600×1', '1700×1500×600×2', '2000×1000×600×1']);
-  expect(byId('hood-box-filter')).toEqual(['1700×1500×600×1', '1800×1100×600×2']);
+  const isHood = r => productById(r.productId)?.equip?.type === 'hood';
+  expect(rows.products.filter(isHood).map(r => `${r.size}×${r.qty}`).sort()).toEqual(
+    ['1000×1100×600×1', '1200×1100×600×2', '1600×1200×600×1', '1700×1500×600×1', '1700×1500×600×2', '1800×1100×600×2', '2000×1000×600×1']);
   // 후드 말고는 제품마다 한 행이다.
-  const others = rows.products.filter(r => !r.productId.startsWith('hood-box'));
+  const others = rows.products.filter(r => !isHood(r));
   expect(new Set(others.map(r => r.productId)).size).toBe(others.length);
   expect(rows.products.reduce((s, r) => s + r.qty, 0)).toBe(floor.items.filter(i => i.kind !== 'opening' && !i.hidden).length);
 });

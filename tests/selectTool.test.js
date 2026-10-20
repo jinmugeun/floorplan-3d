@@ -245,9 +245,9 @@ test('context menu items depend on what is under the cursor', () => {
   expect(roomItems.map(i => (i === 'sep' ? 'sep' : i.label)))
     .toEqual(['템플릿 적용하기', '방 복사', '마감재 복사', '재질 교체', '마감재 편집기', '단일 공간 모드', 'sep', '삭제']);   // '마감재 편집기'는 §17.12 이월(감사 §12)
   expect(pick(roomItems, '방 복사').shortcut).toBeUndefined(); // M-10: Ctrl+C는 방 복사에 묶여 있지 않다
-  // 리뷰 N-1(§17.4(1) 개정): 메뉴는 편집 표면이라 **작성 상태**만 본다 — detectRooms가 넣는 레거시
-  // floorMaterial('wood-oak')은 고른 값이 아니므로 복사할 것이 없다(surfaceMenu.test.js가 두 상태를 단정한다).
-  expect(pick(roomItems, '마감재 복사').disabled).toBe(true);
+  // 리뷰 N-1(§17.4(1) 개정): 메뉴는 편집 표면이라 **작성 상태**만 본다. 계획 17 Task 7부터 새 방은 바닥(칩 에폭시)이
+  // 명시 지정이라 복사할 것이 있다(마감재가 없는 방의 비활성은 surfaceMenu.test.js가 단정한다).
+  expect(pick(roomItems, '마감재 복사').disabled).toBe(false);
   expect(pick(roomItems, '템플릿 적용하기').disabled).toBe(true); // surfaceActions.applyTemplate이 아직 없다(Task 9에서 켜진다)
   pick(roomItems, '방 복사').onSelect();
   expect(activeFloor(store.get()).rooms).toHaveLength(2);

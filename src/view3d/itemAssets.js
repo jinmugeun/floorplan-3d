@@ -25,6 +25,12 @@ export const enableAssets = (on = true) => { enabled = !!on; };
 export const templateOf = id => cache.get(id) ?? null;
 export const assetsVersion = () => version;
 export const onAssetsReady = cb => { subs.add(cb); return () => { subs.delete(cb); }; };
+// 환경 맵 구독·도착 알림(2026-10-20 · 계획 17 Task 5): 스테인리스 형상 재질(shapes/materials.js)·사진 마감재(build.js)도 같은 환경 맵을 쓰고,
+// 모델 밖의 비동기 자원(헤어라인·사진 텍스처)이 도착하면 에셋 도착과 같은 길(onAssetsReady → view3d 리빌드·렌더)로 알린다.
+const envSubs = new Set();
+export const envMapNow = () => envMap;
+export const onEnvMap = cb => { envSubs.add(cb); return () => { envSubs.delete(cb); }; };
+export function assetsChanged() { settle(); }
 const defaultLoader = url => import('./assetLoader.js').then(m => m.loadScene(url));
 
 // 테스트 훅: 로더 바꿔 끼우기((url) => Promise<Object3D>)와 모듈 상태 비우기.
@@ -33,7 +39,7 @@ export const __reset = () => { cache.clear(); subs.clear(); clearTimeout(timer);
 
 // 환경 맵(2026-10-15 · 계획 15b · envMap.js): 에셋 재질(템플릿이 공유 · 복제도 공유)에만 건다 — 이미 받은 템플릿에도, 앞으로 받을 템플릿(normalize)에도. null이면 뗀다.
 // 왜 재질별인가: scene.environment는 벽·바닥·상자까지 바꾼다. 금속(metallic 1)인 생성 모델은 환경 맵이 없으면 검게 보인다(envMap.js 머리).
-export function setEnvMap(tex) { envMap = tex ?? null; for (const t of cache.values()) if (t) applyEnvMap(t, envMap); }
+export function setEnvMap(tex) { envMap = tex ?? null; for (const t of cache.values()) if (t) applyEnvMap(t, envMap); for (const cb of envSubs) cb(envMap); }
 function applyEnvMap(root, tex) {
   root.traverse(o => { const m = o.material; if (!m) return; for (const mat of Array.isArray(m) ? m : [m]) if ('envMap' in mat) { mat.envMap = tex; mat.envMapIntensity = 1; mat.needsUpdate = true; } });
 }

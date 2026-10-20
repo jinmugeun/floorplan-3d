@@ -14,6 +14,7 @@ import { railDividers } from './railDividers.js';
 import { addDividersByNames } from './nameDividers.js';
 import { equipItems } from './equipment.js';
 import { collidingIds } from '../../geom/collide.js';
+import { kitchenWallMat } from '../../materials/defaults.js';
 
 // 점 p에서 선분 a–b까지의 거리.
 const distSeg = (p, a, b) => {
@@ -143,6 +144,7 @@ export function buildProject(raw, {
   // 한 파일의 두 도면이라 없으면 남의 기구가 건물 밖에 선다 · 사전 검토 C-1), layerRoles = 레이어 → 역할(검토 창 행 — 없으면 이름 규칙으로 떨어져
   // 내곡중 `건축` 레이어의 익명 기구 넷이 빠진다 · Task 2 측정 11 → 7). ex가 없으면(옛 호출자) 기구는 없다.
   ex = null, roi = null, layerRoles = null, equipment = true,
+  kitchenWalls = false,     // 급식실 마감(2026-10-20 · 계획 17 Task 8): 켜면 벽 안쪽 흰 타일. 워커는 기본 켬이다(점수판 도구도 워커를 거쳐 켬 — 지표는 matIn을 안 본다). 직접 부르는 테스트는 꺼짐
 } = {}) {
   const { toApp, box, size } = makeToApp(raw, scale);
   // 순서가 계약이다: makeWall → normalizeWalls(T자 분할) → **그다음** 고립 덩어리 제거 → detectRooms.
@@ -183,6 +185,8 @@ export function buildProject(raw, {
     if (w.rail) { railIds.add(w.id); delete w.rail; }
     if (w.byName) { nameIds.add(w.id); delete w.byName; }
   }
+  // 급식실 마감(계획 17 Task 8): 벽 안쪽(방 쪽 면 — build.js가 그 벽을 가진 모든 방의 안쪽 면에 칠한다)에 흰 타일. 구획선은 벽이 아니다.
+  if (kitchenWalls) for (const w of walls) if (!w.virtual) w.matIn = kitchenWallMat();
   const rooms = detectRooms(walls);
   for (const room of rooms) room.height = height;      // §18.8: 층고 한 칸이 층·벽·방을 함께 정한다
   const unmatchedNames = autoNames ? nameRooms(rooms, texts, toApp, { labels }).unmatched : [];

@@ -48,6 +48,9 @@ export const DXF_RAIL_DIVIDED = n => `난간으로 닫은 구획선 ${n}개를 �
 // stats.equipment.trimmed — 사동 7 · 내곡 1). 통계에만 있어 '손세정대 500-370'이 500×355로 조용히 섰다 — 0이 아닐 때만 **맨 끝**에 붙인다
 // (충돌 칸 뒤라 e2e 기구 알림 정규식 `(?: · 충돌 (\d+)건)?`이 그대로 맞는다 — tests/dxfDialog.test.js가 e2e.mjs의 정규식으로 확인).
 export const DXF_EQUIPMENT_OPT = '도면의 기구를 제품으로 배치';
+// 급식실 마감(2026-10-20 · 계획 17 Task 8): 검토 창 체크박스(기본 켬) — 가져온 벽 안쪽(방 쪽 면)에 흰 타일 300. 바닥은 이 칸과 무관하게 새 방 기본값(칩 에폭시 —
+// materials/defaults.js)이다. 학교 전체 도면처럼 급식실이 아니면 끈다.
+export const DXF_KITCHEN_WALLS = '벽 흰 타일(급식실 마감)';
 export const DXF_EQUIPMENT = (placed, product, generic, colliding, clash = 0, trimmed = 0) =>
   `기구 ${placed}개 배치 — 제품 ${product} · 일반 ${generic}${colliding ? ` · 충돌 ${colliding}건(기둥·기구 겹침 · 빨간 테두리)` : ''}${clash ? ` · 벽·기둥과 겹침 ${clash}` : ''}${trimmed ? ` · 기둥 면에 맞춰 줄임 ${trimmed}` : ''}`;
 export const DXF_TRACE_SKIPPED = '원 도면이 너무 커서 배경으로 남기지 않았습니다';

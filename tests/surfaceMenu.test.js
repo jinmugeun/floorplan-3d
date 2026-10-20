@@ -145,7 +145,7 @@ describe('2D 마감재 적용 모드', () => {
     a.t.onPointerUp([-9000, -9000], {});
     expect(a.ui.get().selection).toBeNull();
     expect(a.ui.get().matPick).not.toBeNull();
-    expect(a.floor().rooms[0].floorMat).toBeNull();
+    expect(a.floor().rooms[0].floorMat).toEqual({ id: 'epoxy-chip-gray', offset: [0, 0], angle: 0 });   // 새 방 기본값 그대로 — 빈 곳 클릭은 바르지 않는다
   });
 
   test('선택 도구 우클릭이 공용 메뉴를 돌려준다', () => {
@@ -212,9 +212,10 @@ test('비활성 항목에는 모두 사유(title)가 있다', () => {
 });
 
 // N-1: detectRooms가 지금도 넣는 레거시 floorMaterial('wood-oak')은 **고른 값이 아니다** —
-// 픽스처를 비우지 않아도 방 메뉴의 [마감재 복사]는 꺼져 있고, 실제로 바르면 켜진다.
+// 새 방의 바닥 기본값(칩 에폭시 · 계획 17 Task 7)을 걷으면 방 메뉴의 [마감재 복사]는 꺼지고, 실제로 바르면 켜진다.
 test('마감재가 없으면 "마감재 복사"가 사유와 함께 비활성이다', () => {
   const a = setup();
+  applyMaterial(a.store, { kind: 'floor', id: a.roomId }, null);
   expect(a.floor().rooms.find(r => r.id === a.roomId).floorMaterial).toBe('wood-oak');  // 레거시는 그대로 있다
   const items = roomMenuItems({ store: a.store, ui: a.ui, roomId: a.roomId, actions: a.actions });
   const copy = pick(items, '마감재 복사');

@@ -11,6 +11,11 @@ import { importDxf } from '../src/io/dxf/client.js';
 import { collidingIds } from '../src/geom/collide.js';
 import { estimateRows } from '../src/io/estimate.js';
 import { DXF_FEEDBACK_EXPORTED } from '../src/ui/messages.js';
+import { kitchenFor } from '../src/products/catalogKitchen.js';
+// 2026-10-20 · 계획 17 Task 8(Fix 1): EX의 세 제품(세정대 1500×750 · 후드 1500×1300 · 작업대 700×600)이 서는 엑셀 제품. 첫 인자 = 어휘의 기존 id(legacy),
+// 세 번째 = 아이템이 받는 도면 이름(equipment.js가 kitchenFor에 넘긴다 — '2조' · '고정식').
+const KF = (legacy, size, name = '') => kitchenFor(legacy, size, name);
+const SINK = KF('sink-double', [1500, 750, 850], '세정대 2조 1500-750'), HOOD_ID = KF('hood-box', [1500, 1300, 600], '후드1500-1300'), WORK = KF('worktable-1800', [700, 600, 850], '고정식작업대 700-600');
 
 // DXF 좌표(y 위쪽)의 사각형 중심선 넷.
 const rect = (x0, y0, x1, y1, thickness = 200) => [
@@ -27,8 +32,8 @@ const RAW = rect(0, 0, 9000, 6000);
 const COLUMNS = [{ c: [4500, 3000], w: 800, h: 800, u: [1, 0] }];
 const EX = {
   inserts: [
-    ins('세정대 2조 1500-750'),        // 0 → sink-double(제품)
-    ins('후드1500-1300'),               // 1 → hood-box(천장 · z = 층고 − 600)
+    ins('세정대 2조 1500-750'),        // 0 → SINK(엑셀 세정대 · 어휘 sink-double)
+    ins('후드1500-1300'),               // 1 → HOOD_ID(엑셀 후드 · 어휘 hood-box · 천장 · z = 층고 − 600)
     ins('zw$AB12', 'X-ANON'),           // 2 → 익명 · 레이어 역할이 equip일 때만 선다(이름 규칙으로는 other)
     ins('고정식작업대 700-600'),        // 3 → 기둥 몸통 안 → clash
     ins('다단식선반 1500-750'),         // 4 → 도면 상자(roi) 밖 → 서지 않는다
@@ -62,7 +67,7 @@ test('기구는 개구부·기둥 뒤에 붙고, 켜든 끄든 벽·방·개구�
   const { equipment: e1, items: n1, ...s1 } = on.stats, { equipment: e0, items: n0, ...s0 } = off.stats;
   expect(canon(s1)).toBe(canon(s0));
   expect(floorOf(off).items.map(i => i.productId)).toEqual(['door-swing-900', 'column-square']);
-  expect(floorOf(on).items.map(i => i.productId)).toEqual(['door-swing-900', 'column-square', 'sink-double', 'hood-box', 'equip-generic', 'worktable-1800']);
+  expect(floorOf(on).items.map(i => i.productId)).toEqual(['door-swing-900', 'column-square', SINK, HOOD_ID, 'equip-generic', WORK]);
   expect([n0, n1]).toEqual([2, 6]);                                   // stats.items는 층의 아이템 전부(기구 포함)
   expectZero(e0);                                                     // 끄면 같은 모양의 0 통계
   expect(Object.keys(e1)).toEqual(KEYS);
@@ -93,6 +98,20 @@ test('기둥에 ≤ equipTrim 들어간 기구는 깎여 colliding에 들지 않
   expect(floorOf(deep).items.find(i => i.dxfBlock).size).toEqual([700, 600, 850]);
 });
 
+// 2026-10-20 · 계획 17 Task 8: kitchenWalls = 벽 안쪽(방 쪽 면) 흰 타일. 옛 호출자(점수판 도구·테스트)는 기본 꺼짐이라 그대로이고,
+// 켜도 벽 선·방·아이템은 글자 그대로 같다(마감 지정만 붙는다). 구획선은 벽이 아니라 마감이 없다.
+test('kitchenWalls: 켜면 구획선 아닌 벽마다 matIn = 흰 타일 300 · 끄면(기본) 그대로 · 벽 선·방·아이템은 같다', () => {
+  const off = build(), on = build({ kitchenWalls: true });
+  expect(floorOf(off).walls.every(w => w.matIn === null)).toBe(true);
+  const solid = floorOf(on).walls.filter(w => !w.virtual);
+  expect(solid.length).toBeGreaterThan(0);
+  expect(solid.every(w => w.matIn?.id === 'tile-white-300')).toBe(true);
+  expect(floorOf(on).walls.filter(w => w.virtual).every(w => w.matIn === null)).toBe(true);
+  const strip = f => f.walls.map(({ matIn, ...w }) => w);
+  expect(canon(strip(floorOf(on)))).toBe(canon(strip(floorOf(off))));
+  expect(canon([floorOf(on).rooms, floorOf(on).items])).toBe(canon([floorOf(off).rooms, floorOf(off).items]));
+});
+
 // 2026-10-12 · 계획 13 최종 리뷰 F-1(컨트롤러 결정): 가져온 기구는 맞춘 제품 id를 dxfProduct에 남기고, 견적은 제품을 바꾸기 전까지 0원으로 센다 —
 // 기구를 켜든 끄든 견적 합계가 같다(사동 실측: 켬 145.87 M원 → 14.25 M원 = 끔).
 test('가져온 기구는 dxfProduct = productId를 남기고, 기구를 켜든 끄든 견적 합계가 같다', () => {
@@ -106,10 +125,10 @@ test('가져온 기구는 dxfProduct = productId를 남기고, 기구를 켜든 
 
 test('equipItems가 받는 입력: 도면 상자(roi) · 레이어 행의 역할(layerRoles) · 앱 좌표 기둥 아이템 · 층고', () => {
   const items = floorOf(build()).items;
-  expect(items.find(i => i.productId === 'sink-double')).toMatchObject({ name: '세정대 2조 1500-750', pos: [-2750, 1625], size: [1500, 750, 850] });
+  expect(items.find(i => i.productId === SINK)).toMatchObject({ name: '세정대 2조 1500-750', pos: [-2750, 1625], size: [1500, 750, 850] });
   // 층고: 후드 z = 층고 − 높이(배치 도구의 천장 규칙)
-  expect(items.find(i => i.productId === 'hood-box')).toMatchObject({ attach: 'ceiling', z: 2900 });
-  expect(floorOf(build({ height: 3000 })).items.find(i => i.productId === 'hood-box').z).toBe(2400);
+  expect(items.find(i => i.productId === HOOD_ID)).toMatchObject({ attach: 'ceiling', z: 2900 });
+  expect(floorOf(build({ height: 3000 })).items.find(i => i.productId === HOOD_ID).z).toBe(2400);
   // roi: 도면 상자 밖의 선반은 서지 않는다(신상중 A·B는 한 파일의 두 도면 — 사전 검토 C-1). roi가 없으면 선다.
   expect(items.some(i => i.name === '다단식선반 1500-750')).toBe(false);
   expect(build({ roi: null }).stats.equipment.placed).toBe(5);
@@ -121,7 +140,7 @@ test('equipItems가 받는 입력: 도면 상자(roi) · 레이어 행의 역할
   // 역할표(파싱 때의 roles.checkRoles 표 — Task 2 리뷰: 반드시 넘긴다): 블록 종류 symbol이면 빠지고, 레이어 칸은 행이 없을 때 이름 규칙보다 먼저다.
   const table = { layers: new Map([['X-ANON', 'equip']]), blocks: new Map([['세정대 2조 1500-750', { kind: 'symbol' }]]), texts: new Map() };
   const withTable = build({ roles: table, layerRoles: null });
-  expect(floorOf(withTable).items.some(i => i.productId === 'sink-double')).toBe(false);
+  expect(floorOf(withTable).items.some(i => i.productId === SINK)).toBe(false);
   expect(withTable.stats.equipment).toMatchObject({ placed: 3, anonymous: 1 });
   expect(withTable.stats.equipment.skipped.symbol).toBe(1);
 });
@@ -131,7 +150,7 @@ test('교정 기록: 가져온 직후 스냅숏에 기구가 들고, 도면 기�
   const { project } = build();
   const meta = buildImportMeta({ project, fileName: '사동중.dxf', opts: { layers: ['WAL'], equipment: true }, stats: {} });
   expect(meta.options.equipment).toBe(true);
-  expect(meta.snapshot.items.map(i => i.productId)).toEqual(['door-swing-900', 'column-square', 'sink-double', 'hood-box', 'equip-generic', 'worktable-1800']);
+  expect(meta.snapshot.items.map(i => i.productId)).toEqual(['door-swing-900', 'column-square', SINK, HOOD_ID, 'equip-generic', WORK]);
   const fl = project.floors[0], gone = fl.items.find(i => i.productId === 'equip-generic');
   const after = { ...project, floors: [{ ...fl, items: fl.items.filter(i => i !== gone) }], meta: { dxfImport: meta } };
   const fb = buildDxfFeedback(after);
@@ -170,12 +189,16 @@ test('워커 extract: equipment는 기본 켬(세정대 하나가 제품으로 �
     expect(parsed.type).toBe('parsed');
     const base = { layers: parsed.summary.checked, trace: false };
     const on = handle({ type: 'extract', opts: base }), off = handle({ type: 'extract', opts: { ...base, equipment: false } });
+    // 계획 17 Task 8: 워커의 kitchenWalls는 기본 켬(검토 창이 넘기지 않아도) — false면 마감이 없다.
+    expect(on.project.floors[0].walls.every(w => w.virtual || w.matIn?.id === 'tile-white-300')).toBe(true);
+    const bare = handle({ type: 'extract', opts: { ...base, kitchenWalls: false } });
+    expect(bare.project.floors[0].walls.every(w => w.matIn === null)).toBe(true);
     expect([on.type, off.type]).toEqual(['extracted', 'extracted']);
     expect(on.stats).toMatchObject({ walls: 4, rooms: 1, equipment: { placed: 1, product: 1, generic: 0, clash: 0 } });
     expectZero(off.stats.equipment);
     expect([off.stats.walls, off.stats.rooms, off.stats.areaM2]).toEqual([on.stats.walls, on.stats.rooms, on.stats.areaM2]);
     const eq = on.project.floors[0].items.filter(i => !structural(i));
-    expect(eq.map(i => [i.productId, i.name, i.size])).toEqual([['sink-double', BLOCK, [1500, 750, 850]]]);
+    expect(eq.map(i => [i.productId, i.name, i.size])).toEqual([[SINK, BLOCK, [1500, 750, 850]]]);
     expect(off.project.floors[0].items.filter(i => !structural(i))).toEqual([]);
   } finally { if (had) globalThis.self = prev; else delete globalThis.self; }
 });

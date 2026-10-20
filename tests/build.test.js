@@ -286,7 +286,9 @@ test('벽 본체는 matOut, 방 안쪽 면은 matIn 텍스처를 쓴다(소수 �
 test('레거시 마감재 문자열만 있는 면은 무늬 없이 색으로 칠한다', () => {
   const walls = rectWalls([0.5, 0.25], [4000.5, 3000.75], 200);
   expect(walls[0].material).toBe('paint-white');                    // makeWall이 지금도 넣는 레거시 값
-  const rooms = detectRooms(walls);
+  const detected = detectRooms(walls);
+  expect(detected[0].floorMat).toEqual({ id: 'epoxy-chip-gray', offset: [0, 0], angle: 0 });   // 새 방 기본값(계획 17 Task 7)
+  const rooms = detected.map(r => ({ ...r, floorMat: null }));      // 기본값을 걷어 레거시만 남긴 면
   expect(rooms[0].floorMaterial).toBe('wood-oak');                  // detectRooms가 지금도 넣는 레거시 값
   const g = buildFloorGroup({ walls, rooms, height: 2300 }, { wallOpacity: 1 });
   expect(g.children.find(c => c.name === 'wall').material.map).toBeNull();
