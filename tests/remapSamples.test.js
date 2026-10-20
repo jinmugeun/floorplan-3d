@@ -98,6 +98,31 @@ test('remapSinsang: 이름 있는 기구는 도면 이름으로 고르고(가져
   expect(d.props).toMatchObject({ type: 'appliance', kind: 'ricecooker', heat: 'electric', hoodId: 'h1' });   // 가스(기존 씨앗)였던 열원은 새 제품 · 후드 연결은 그대로
 });
 
+// 리뷰 Minor 6: 셈과 쓰기가 같아야 한다 — 이미 칩 에폭시·흰 타일인 면은 덮어쓰지 않는다(맞춘 오프셋·각도가 남는다). --check 0이면 써도 바뀌는 것이 없다.
+test('remapSinsang: 이미 급식실 마감인 면은 세지도 덮어쓰지도 않는다', () => {
+  const floorMat = { id: 'epoxy-chip-gray', offset: [100, 0], angle: 15 }, matIn = { id: 'tile-white-300', offset: [0, 50], angle: 0 };
+  const spec = { floors: [{ walls: [{ id: 'w1', virtual: false, matIn }, { id: 'w2', virtual: false, matIn: { id: 'paint-white', offset: [0, 0], angle: 0 } }],
+    rooms: [{ id: 'r1', floorMat }, { id: 'r2', floorMat: null }], items: [] }] };
+  const { spec: out, items, finishes } = remapSinsang(spec);
+  expect([items, finishes]).toEqual([0, 2]);
+  expect(out.floors[0].rooms.map(r => r.floorMat)).toEqual([floorMat, { id: 'epoxy-chip-gray', offset: [0, 0], angle: 0 }]);
+  expect(out.floors[0].walls.map(w => w.matIn)).toEqual([matIn, { id: 'tile-white-300', offset: [0, 0], angle: 0 }]);
+  expect(remapSinsang(out)).toMatchObject({ items: 0, finishes: 0 });
+  expect(remapSinsang(out).spec).toEqual(out);                    // 0이면 쓸 것도 없다
+});
+
+// 리뷰 Minor 5: 설비 목록에 없는 id의 줄은 그대로 두고(TypeError 없이), "props"가 없는 크기 없는 줄에도 크기를 적는다(조용히 빠뜨리지 않는다).
+test('remapGangdangText: 설비 목록 밖의 줄은 그대로 · props 없는 줄에도 크기를 적는다', () => {
+  const stray = '{\r\n  "equipment": [],\r\n  "extra": [\r\n    { "id": "x1", "product": "ricecooker-gas", "pos": [0, 0] }\r\n  ]\r\n}\r\n';
+  expect(remapGangdangText(stray)).toEqual({ text: stray, items: 0 });
+  const bare = '{\r\n  "equipment": [\r\n    { "id": "eq_a01", "product": "ricecooker-gas", "pos": [0, 0], "rot": 90 },\r\n    { "id": "eq_a02", "product": "range-gas-high", "pos": [0, 0] }\r\n  ]\r\n}\r\n';
+  const { text: out, items } = remapGangdangText(bare);
+  expect(items).toBe(2);
+  expect(out).toContain(`{ "id": "eq_a01", "product": "${kitchenFor('ricecooker-gas', [1000, 800, 900])}", "pos": [0, 0], "rot": 90, "size": [1000, 800, 900] },\r\n`);
+  expect(out).toContain(`{ "id": "eq_a02", "product": "${kitchenFor('range-gas-high', [1200, 750, 850])}", "pos": [0, 0], "size": [1200, 750, 850] }\r\n`);
+  expect(JSON.parse(out).equipment.map(e => e.size)).toEqual([[1000, 800, 900], [1200, 750, 850]]);
+});
+
 test('remapGangdangText: 설비 줄의 product만 바꾸고 크기가 없던 줄에는 기존 크기를 적는다(손 서식·CRLF 유지)', () => {
   const text = '{\r\n  "equipment": [\r\n    { "id": "eq_a01", "product": "ricecooker-gas", "pos": [0, 0], "rot": 90, "props": { "kind": "ricecooker" } },\r\n    { "id": "eq_d01", "product": "diffuser-650", "pos": [0, 0] }\r\n  ]\r\n}\r\n';
   const { text: out, items } = remapGangdangText(text);

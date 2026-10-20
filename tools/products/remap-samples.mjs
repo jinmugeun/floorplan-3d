@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { productById } from '../../src/products/catalog.js';
 import { kitchenFor } from '../../src/products/catalogKitchen.js';
-import { defaultFloorMat, kitchenWallMat } from '../../src/materials/defaults.js';
+import { defaultFloorMat, kitchenWallMat, DEFAULT_FLOOR_MAT_ID, KITCHEN_WALL_MAT_ID } from '../../src/materials/defaults.js';
 
 const SAMPLES = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/samples');
 const isKitchen = id => String(id ?? '').startsWith('k-');
@@ -47,8 +47,9 @@ export function remapSinsang(spec) {
       reseed(it, old, np);
       items++;
     }
-    for (const r of f.rooms ?? []) { if (r.floorMat?.id !== defaultFloorMat().id) finishes++; r.floorMat = defaultFloorMat(); }
-    for (const w of f.walls ?? []) if (!w.virtual) { if (w.matIn?.id !== kitchenWallMat().id) finishes++; w.matIn = kitchenWallMat(); }
+    // 셈과 쓰기가 같다: 이미 칩 에폭시·흰 타일인 면은 덮어쓰지 않는다(맞춘 오프셋·각도가 남는다 — --check 0이면 써도 바뀌는 것이 없다).
+    for (const r of f.rooms ?? []) if (r.floorMat?.id !== DEFAULT_FLOOR_MAT_ID) { r.floorMat = defaultFloorMat(); finishes++; }
+    for (const w of f.walls ?? []) if (!w.virtual && w.matIn?.id !== KITCHEN_WALL_MAT_ID) { w.matIn = kitchenWallMat(); finishes++; }
   }
   return { spec: out, items, finishes };
 }
@@ -59,12 +60,18 @@ export function remapGangdangText(text) {
   const lines = text.split('\n').map(line => {
     const m = /"id": "([^"]+)", "product": "([^"]+)"/.exec(line);
     if (!m) return line;
-    const e = spec.equipment.find(x => x.id === m[1]), old = productById(m[2]);
-    const nid = target(m[2], e?.size ?? old?.size);
+    const e = (spec.equipment ?? []).find(x => x.id === m[1]);
+    if (!e) return line;                                   // 설비 목록 밖의 줄(다른 배열)은 건드리지 않는다
+    const old = productById(m[2]), nid = target(m[2], e.size ?? old?.size);
     if (!nid) return line;
-    items++;
     let out = line.replace(`"product": "${m[2]}"`, `"product": "${nid}"`);
-    if (!e.size) out = out.replace('"props":', `"size": [${old.size.join(', ')}], "props":`);
+    if (!e.size) {   // 크기가 없던 줄: "props" 앞에, 없으면 줄 끝 객체를 닫기 전에 기존 크기를 적는다(조용히 빠뜨리지 않는다)
+      const size = `"size": [${old.size.join(', ')}]`;
+      if (out.includes('"props":')) out = out.replace('"props":', `${size}, "props":`);
+      else if (/ \}(,?\r?)$/.test(out)) out = out.replace(/ \}(,?\r?)$/, `, ${size} }$1`);
+      else throw new Error(`remap-samples: ${m[1]} 줄에 크기를 적을 자리가 없다 — ${line.trim()}`);
+    }
+    items++;
     return out;
   });
   return { text: lines.join('\n'), items };

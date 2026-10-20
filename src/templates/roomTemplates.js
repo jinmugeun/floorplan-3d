@@ -19,15 +19,17 @@ const I = (productId, at, rot = 0, offset = [0, 0]) => ({ productId, at, rot, of
 // 크기 최근접). 엑셀에 짝이 없는 제품(조명·변기·거울·샤워부스·수납 박스·벤치)은 뺐고, 원룸·카페 바·교실·화장실 템플릿은 지웠다(조리실 전용 카탈로그).
 // 엑셀 제품을 바로 적는 항목: 벽걸이 손소독기(HACCP — 조리실 입구). 벽걸이 후드가 천장 후드로 바뀐 뒤 템플릿에 남은 유일한 벽 부착 제품이다
 // (벽 자리 다툼 — seatCopies — 을 템플릿 경로에서 계속 시험한다 · tests/roomTemplates.test.js).
+// 후드('hood-wall' → 엑셀 천장 후드)는 레인지와 같은 자리(at·offset)에 둔다 — 후드 중심이 레인지 중심 위다(가열조리 대형은 첫 레인지).
+// 옛 벽걸이 후드 자리(at y 0.05)에서는 몸통이 벽 안쪽 면을 넘었다(Task 9 리뷰 Important 1).
 const HAND_SANITIZER = 'k-23288396';
 const RAW_TEMPLATES = [
   T('cook-basic', '가열조리 기본', 'cook', '상업', 8, 30, 6000000, [
-    I('range-gas-6', [0.2, 0.2]), I('worktable-1800', [0.2, 0.2], 0, [1550, 0]), I('hood-wall', [0.2, 0.05]),
+    I('range-gas-6', [0.2, 0.2]), I('worktable-1800', [0.2, 0.2], 0, [1550, 0]), I('hood-wall', [0.2, 0.2]),
     I('sink-single', [0.8, 0.82], 180), I('shelf-steel-4', [0.2, 0.85], 180), I(HAND_SANITIZER, [0.5, 0.05]),
   ]),
   T('cook-large', '가열조리 대형', 'cook', '상업', 25, 90, 12000000, [
     I('range-gas-6', [0.18, 0.18]), I('range-gas-6', [0.18, 0.18], 0, [1250, 0]), I('worktable-1800', [0.18, 0.18], 0, [3350, 0]),
-    I('hood-wall', [0.18, 0.05]), I('sink-double', [0.75, 0.85], 180), I('shelf-steel-4', [0.2, 0.85], 180),
+    I('hood-wall', [0.18, 0.18]), I('sink-double', [0.75, 0.85], 180), I('shelf-steel-4', [0.2, 0.85], 180),
   ]),
   T('prep-basic', '전처리 기본', 'prep', '상업', 8, 20, 4000000, [
     I('worktable-1800', [0.5, 0.18]), I('sink-double', [0.5, 0.82], 180), I('shelf-steel-4', [0.08, 0.5], 270), I('fridge-2door', [0.92, 0.5], 90),
@@ -180,6 +182,7 @@ export function placeTemplate(floor, room, template, { avoid = [], stats = null 
   const reach = Math.min(Math.max(x1 - x0, y1 - y0), 5 * WALL_ATTACH_DIST);
   const roomWalls = floor.walls.filter(w => room.wallIds.includes(w.id));
   const taken = avoid.filter(FLOORISH);
+  const overhead = avoid.filter(it => it.attach === 'ceiling');   // 천장 제품은 천장 제품끼리만 부딪친다
   const out = [];
   for (const spec of template.items ?? []) {
     const p = productById(spec.productId);
@@ -194,9 +197,21 @@ export function placeTemplate(floor, room, template, { avoid = [], stats = null 
     } else if (!pointInPolygon(pos, inner)) continue;        // 방 밖으로 떨어지는 항목은 뺀다
     if (p.attach === 'ceiling') patch.z = Math.max(0, (room.height ?? 2300) - p.size[2]);
     const item = createItem(p, patch);
+    if (item.attach === 'ceiling') {
+      // 천장 제품(엑셀 후드 1000×1000 등)도 몸통을 방 안쪽 bbox로 당긴다 — 바닥 제품과의 겹침은 보지 않는다(레인지 위 후드).
+      // 방보다 크거나, 이미 있거나 방금 놓은 천장 제품과 발자국이 겹치면 놓지 않는다: [기존 제품 유지하고 추가]를 되풀이해도
+      // 후드가 같은 자리에 쌓이지 않는다(2026-10-20 · 계획 17 Task 9 리뷰 Important 1 · Minor 1).
+      const up = clampToRoom(item, box);
+      if (!up || overhead.some(o => obbOverlap(o, up, 1))) { bump('skipped'); continue; }
+      up.pos = [Math.round(up.pos[0]), Math.round(up.pos[1])];
+      if (up.pos[0] !== patch.pos[0] || up.pos[1] !== patch.pos[1]) bump('moved');
+      overhead.push(up);
+      out.push(up);
+      continue;
+    }
     if (!FLOORISH(item)) { out.push(item); continue; }
     // 중심은 방 안이지만 몸통이 벽에 걸친 제품을 안쪽으로 당긴다(§14.9). 벽 부착 제품은 벽 위에
-    // 있어야 하므로(불변식 I-2) 여기 오지 않고, 천장 제품은 위에서 이미 out으로 빠진다.
+    // 있어야 하므로(불변식 I-2) 여기 오지 않고, 천장 제품은 위에서 따로 당긴다.
     const fitted = clampToRoom(item, box);
     if (!fitted) { bump('skipped'); continue; }               // 방보다 큰 제품은 놓지 않는다
     const free = separate(fitted, taken, inner, box);
