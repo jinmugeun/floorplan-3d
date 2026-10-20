@@ -1,10 +1,12 @@
 // 엑셀 급식기구 카탈로그(계획 17 Task 3). 원자료(kitchenData.js — tools/products/excel-to-catalog.mjs가 만든다)를 규칙(kitchenRules.js)으로
 // 펼쳐 제품이 된다. 앱 시작 때 한 번(495행 · 수 ms). 카탈로그(catalog.js)가 [남는 기존 제품 · 이것 · 숨김 단종]으로 합친다.
 // 기존 제품 → 엑셀 제품 대응(LEGACY_TO_KITCHEN · kitchenFor · kitchenFit)도 여기 있다: 템플릿·샘플·DXF 어휘가 "옛 id 대신 어느 엑셀 제품인가"를 묻는다.
-// 대응 규칙: 후보 = 세부품명이 맞고(이름 정규식이 있으면 이름도) → 크기가 가장 가까운 것. 거리 = Σ|ln(a/b)|(정렬한 긴 변·짧은 변·높이) — 비율이라 큰 기구와 작은 기구에 공평하고, 회전된 아이템 크기에도 같다.
+// 대응 규칙(이름 없는 kitchenFor · LEGACY_TO_KITCHEN): 후보 = 세부품명이 맞고(이름 정규식이 있으면 이름도) → 크기가 가장 가까운 것. 도면 이름이 있으면 아래 kitchenFor 주석.
+// 거리 = Σ|ln(a/b)|(정렬한 긴 변·짧은 변·높이) — 비율이라 큰 기구와 작은 기구에 공평하고, 회전된 아이템 크기에도 같다.
 // 같은 거리면 원자료 순서(엑셀 행 순서)의 앞이 이긴다 — 결과가 실행마다 같다. kitchenFit은 같은 열원 안에서만 고르고, 같은 거리면 원래 제품이 이긴다.
 // kitchenFit에 도면 이름을 주면 이름의 N조·N구·N도어·N단·N찬을 가진 후보 안에서 고른다(그런 후보가 있을 때만).
-// DXF 기구(계획 17 Task 8 Fix 1·2)는 kitchenFor(어휘의 기존 id, 크기, 도면 이름)로 고른다 — 이름이 있으면 정규식 대신 이름 낱말(열원·시리즈·선택 수·제품 낱말).
+// DXF 기구(계획 17 Task 8 Fix 1~4)는 kitchenFor(어휘의 기존 id, 크기, 도면 이름)로 고른다 — 이름이 있으면 정규식 대신 이름 낱말(열원·시리즈·선택 수·제품 낱말),
+// 제품 낱말 거르기가 쓰이지 않았으면 대표 제품 형상, 같은 거리면 표의 정규식에 맞는 후보(kitchenFor 주석).
 import data from './kitchenData.js';
 import { expandRow, KITCHEN_CHIPS } from './kitchenRules.js';
 import { LEGACY_PRODUCTS } from './catalogLegacy.js';
@@ -68,23 +70,24 @@ const PRODUCT_WORDS = ['담금', '컵', '건조기', '세탁기', '작업대', '
 //  - 이름이 있으면(DXF 블록 이름) 정규식을 쓰지 않는다: 표의 정규식 상당수(/1조/ · /2조/ · /2도어/ · /도어형/)는 갈래가 아니라 크기 대표라
 //    양문 1260 냉장고가 2도어 640으로, 담금세척기가 2조 세정대로, 컵자동세척기가 도어형 세척기로 섰다(Fix 1 실측). 대신 이름의 낱말로 열원 →
 //    고정식/이동식 → 선택 수 → 제품 낱말 차례로 거른다. 각 거르기는 후보가 하나라도 남을 때만 쓴다(취반기(전기) → 전기 취반기 · 9조 → 무시).
-//    제품 낱말이 하나도 안 걸리면 대표 제품(LEGACY_TO_KITCHEN)과 같은 형상만 남긴다 — 배식대·싱크대 세부품명 안의 운반차(cart)가 배분대·개수대를
-//    이기지 않게(Fix 3). 낱말이 걸리면 건너뛴다(세탁기 삶기 → 삶기용 세탁기는 형상 machine). 같은 거리면 표의 정규식에 맞는 후보가 이긴다(같은
-//    1500×1300의 이중급배기후드보다 배기후드 — 원자료 순서상 이중이 앞이다), 그다음 원자료 순서.
+//    제품 낱말 거르기가 쓰이지 않았으면(이름에 낱말이 없거나, 있어도 그 낱말을 가진 후보가 없으면 — Fix 4: '개수대 작업대') 대표 제품(LEGACY_TO_KITCHEN)과
+//    같은 형상만 남긴다 — 배식대·싱크대 세부품명 안의 운반차(cart)가 배분대·개수대를 이기지 않게(Fix 3). 낱말 거르기가 쓰였으면 건너뛴다(세탁기 삶기 →
+//    삶기용 세탁기는 형상 machine). 같은 거리면 표의 정규식에 맞는 후보가 이긴다(같은 1500×1300의 이중급배기후드보다 배기후드 — 원자료 순서상 이중이
+//    앞이다), 그다음 원자료 순서.
 export function kitchenFor(legacyId, sizeMm, name = '') {
   const rule = LEGACY_SUBS[legacyId];
   if (!rule) return null;
   const [subs, re] = rule, text = String(name ?? '').trim();
   let list = KITCHEN_PRODUCTS.filter(p => subs.includes(p.sub));
-  const keep = ok => { const n = list.filter(ok); if (n.length) list = n; };
+  const keep = ok => { const n = list.filter(ok); if (n.length) list = n; return n.length > 0; };   // 쓰였는가(후보가 남았는가)
   if (!text) { if (re) keep(p => re.test(p.name)); }
   else {
     const heat = heatWord(text), want = [...optionTokens(text)], words = PRODUCT_WORDS.filter(w => text.includes(w));
     if (heat) keep(p => p.equip?.heat === heat);
     for (const w of SERIES) if (text.includes(w)) keep(p => p.name.includes(w));
     if (want.length) keep(p => want.every(t => optionsById.get(p.id).has(t)));
-    if (words.length) keep(p => words.every(w => p.name.includes(w)));
-    else { const shape = byId.get(LEGACY_TO_KITCHEN[legacyId])?.shape; if (shape) keep(p => p.shape === shape); }   // 이름 경로만 — 모듈 읽기 뒤에 불린다
+    const hit = words.length > 0 && keep(p => words.every(w => p.name.includes(w)));
+    if (!hit) { const shape = byId.get(LEGACY_TO_KITCHEN[legacyId])?.shape; if (shape) keep(p => p.shape === shape); }   // 이름 경로만 — 모듈 읽기 뒤에 불린다
   }
   const own = legacyById.get(legacyId)?.size;
   const size = validSize(sizeMm) ? sizeMm : validSize(own) ? own : [900, 600, 850];

@@ -235,8 +235,9 @@ export function equipItems(ex, { roi = null, walls = [], columns = [], toApp = p
     size = [r0(size[0]), r0(size[1]), r0(nd?.[2] || v?.height || DEFAULT_H)];
     const pos = toApp(c).map(r0), rot = f ? normDeg(-f.r) : 0;
     const nm = cleanName(it.name) || it.name, named = !anon && !isJunkName(nm);
-    // 엑셀을 가리키는 어휘(legacy가 있는 칸)면 그 어휘의 제품 갈래 안에서 이 기구 크기·도면 이름에 맞는 제품으로 다시 고른다(2026-10-20 · 계획 17
-    // Task 8 Fix 1·2 — kitchenFor: 이름이 있으면 열원 → 고정식/이동식 → 선택 수 → 제품 낱말, 없으면 표의 정규식 → 크기 최근접). 이름 = 아이템이 받는 이름(익명·쓰레기는 '').
+    // 엑셀을 가리키는 어휘(legacy가 있는 칸)면 그 어휘의 세부품명 안에서 이 기구 크기·도면 이름에 맞는 제품으로 다시 고른다(2026-10-20 · 계획 17
+    // Task 8 Fix 1~4 — kitchenFor: 이름이 있으면 열원 → 고정식/이동식 → 선택 수 → 제품 낱말 → (낱말 거르기가 안 쓰였으면) 대표 형상 → 크기 최근접
+    // (같으면 표 정규식 우선), 이름이 없으면 표 정규식 → 크기 최근접). 이름 = 아이템이 받는 이름(익명·쓰레기는 '').
     // 세부품명 전체(kitchenFit)에서 고르면 고정식작업대가 이동식·보조배식대로, 취반기(전기)가 가스로 섰다. 일반 상자·짝 없는 숨김 id는 그대로다.
     // 정규화 DXF의 EQ- 블록(eqPlacement)은 이 줄을 지나지 않는다 — 사람이 고른 제품을 바꾸지 않는다.
     const pid0 = v?.productId ?? GEN, pid = v?.legacy ? (kitchenFor(v.legacy, size, named ? nm : '') ?? pid0) : pid0;

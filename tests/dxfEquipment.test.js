@@ -9,8 +9,9 @@ import { createItem, createFloor, createEmptyProject, normalizeProject, migrate 
 import { productById } from '../src/products/catalog.js';
 import { kitchenFor } from '../src/products/catalogKitchen.js';
 import { kitchenOr } from '../src/io/dxf/equipVocab.js';
-// 2026-10-20 · 계획 17 Task 8(Fix 1): 어휘의 기존 id(legacy)로 엑셀 제품을 기구 크기·도면 이름에 맞춰 다시 고른다(kitchenFor — 그 어휘의 제품 갈래 안:
-// 세부품명 → 열원 낱말 → 선택 수 → 이름 정규식 → 고정식/이동식). name = 아이템이 받는 도면 이름(정리본 — 익명 블록은 '').
+// 2026-10-20 · 계획 17 Task 8(Fix 1~4): 어휘의 기존 id(legacy)로 엑셀 제품을 기구 크기·도면 이름에 맞춰 다시 고른다(kitchenFor — 세부품명 안:
+// 이름이 있으면 열원 → 고정식/이동식 → 선택 수 → 제품 낱말 → (낱말 거르기가 안 쓰였으면) 대표 형상 → 크기 최근접(같으면 표 정규식 우선),
+// 이름이 없으면 표 정규식 → 크기 최근접). name = 아이템이 받는 도면 이름(정리본 — 익명 블록은 '').
 const KF = (legacy, size, name = '') => kitchenFor(legacy, size, name);
 import { setBlockTable } from '../src/io/dxf/blockOpenings.js';
 import { explode, mat, apply } from '../src/io/dxf/explode.js';

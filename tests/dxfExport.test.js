@@ -19,8 +19,8 @@ import { detectRooms, pointInPolygon } from '../src/geom/rooms.js';
 import { buildProject } from '../src/io/dxf/toProject.js';
 import { DXF_PARAMS, HEIGHT_RANGE } from '../src/io/dxf/params.js';
 import { DXF_FEEDBACK_MENU, DXF_FEEDBACK_NONE, DXF_EQUIPMENT_OPT, DXF_EQUIPMENT, DXF_EXPORT_AS_MENU } from '../src/ui/dxfMessages.js';
-import { matchEquip, sizeInName, skipReason, kitchenOr } from '../src/io/dxf/equipVocab.js';
-import { kitchenFor } from '../src/products/catalogKitchen.js';
+import { matchEquip, sizeInName, skipReason, kitchenOr, EQUIP_VOCAB } from '../src/io/dxf/equipVocab.js';
+import { kitchenFor, KITCHEN_PRODUCTS, LEGACY_SUBS } from '../src/products/catalogKitchen.js';
 import { importSnapshot } from '../src/io/dxfFeedback.js';
 import { DRAWING_PRICE_NOTE } from '../src/io/estimateTable.js';
 import { ITEM_RANGE } from '../src/state/schema.js';
@@ -624,6 +624,24 @@ test('EQ- 왕복: 크기로 다시 고른 벽걸이 어휘 기구(To세면기A 5
     expect(B[i], a.name).toBeTruthy();
     expect([B[i].productId, B[i].attach, Boolean(B[i].wallId), Math.round(B[i].z), B[i].size]).toEqual([a.productId, 'wall', true, Math.round(a.z), a.size]);
   });
+});
+
+// 2026-10-20 · 계획 17 Task 8 Fix 4: 익명 블록은 이름 없이 고르고(kitchenFor(legacy, 크기, '')) EQ- 본체는 그 제품 이름이라, 다시 들여올 때 어휘 유지 판정에
+// '' 갈래가 필요한지 따졌다. 어휘 칸 × 그 세부품명의 제품 크기(0.8·1·1.25배 × 제품·어휘 높이) 전부에서 '' 갈래로만 어휘가 남는 경우는 있지만
+// (복합 손세정대 · 배기후드(세척기) 등) 모두 어휘 부착 = 제품 부착이다 — eqPlacement의 부착이 그 어휘 부착과 같다. 그래서 갈래를 지웠다. 이 시험이 지킨다.
+test("EQ- 왕복: 익명 블록이 고른 제품(이름 없는 kitchenFor)을 제품 이름 EQ- 블록으로 다시 들여오면 부착이 그 어휘의 부착이다 — '' 갈래 없이", () => {
+  const rect = (w, d) => { const P = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]; return P.map((p, i) => ({ a: p, b: P[(i + 1) % 4] })); };
+  let checked = 0;
+  for (const v0 of EQUIP_VOCAB.filter(v => v.legacy)) {
+    for (const p0 of KITCHEN_PRODUCTS.filter(p => LEGACY_SUBS[v0.legacy][0].includes(p.sub))) for (const k of [0.8, 1, 1.25]) for (const h of [p0.size[2], v0.height]) {
+      const size = [Math.round(p0.size[0] * k), p0.size[1], h], pid = kitchenFor(v0.legacy, size, ''), name = productById(pid).name, v = matchEquip(name);
+      if (!v?.legacy || kitchenFor(v.legacy, size, '') !== pid || (v.maxLong && Math.max(size[0], size[1]) > v.maxLong)) continue;
+      const got = eqPlacement({ name: eqBlockName(name, size, pid), pos: [0, 0], rot: 0, scale: [1, 1] }, rect(size[0], size[1]));
+      expect([got.pid, got.patch.attach], `${v0.legacy} ${size} ${name}`).toEqual([pid, v.attach]);
+      checked++;
+    }
+  }
+  expect(checked).toBeGreaterThan(1000);
 });
 
 // 2026-10-13 · 최종 리뷰 X-1(M-E5/N-2): 손으로 놓은 같은 제품 둘(폭 900 · 1000 냉장고)을 왕복하면 예전에는 둘 다 dxfBlock(크기가 든 EQ- 이름)을 얻어

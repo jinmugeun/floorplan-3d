@@ -280,6 +280,13 @@ describe('기존 id → 엑셀 제품 대응', () => {
       expect([p.shape, /회수차/.test(p.name)], n).toEqual(['sink', false]);
     }
     expect(name('washer-drum', [450, 540, 809], '세탁기 삶기 450-540-809').name).toMatch(/삶기용/);   // 제품 낱말(세탁기)이 걸리면 형상 거르기 없음(삶기용은 machine)
+    // Fix 4: "걸렸다" = 제품 낱말 거르기가 실제로 쓰였다(남은 후보가 있었다). 이름에 낱말이 있어도 그 세부품명에 가진 후보가 없으면 형상 거르기를 한다 —
+    // 개수대 작업대 900×630은 크기가 딱 맞는 식판 회수차(cart)가 아니다.
+    for (const [id, s, n] of [['sink-single', [900, 630, 850], '개수대 작업대'], ['sink-single', [900, 630, 850], '개수대 선반'], ['serve-counter', [900, 600, 900], '배분대 작업대']]) {
+      const p = name(id, s, n);
+      expect([p.shape, p.shape === 'cart'], n).toEqual([productById(LEGACY_TO_KITCHEN[id]).shape, false]);
+    }
+    expect(KITCHEN_PRODUCTS.some(p => p.shape === 'cart' && p.size[0] === 900 && p.size[1] === 630)).toBe(true);   // 900×630 운반차가 있다(시험이 뜻이 있게)
     // Fix 3: 같은 거리면 표의 정규식(/^배기후드/)에 맞는 후보가 이긴다 — 같은 크기의 이중급배기후드가 원자료 순서상 앞이다.
     for (const [s, n] of [[[1500, 1300, 600], '후드1500-1300'], [[1200, 1200, 600], '후드1200-1200']]) {
       expect(KITCHEN_PRODUCTS.some(p => /^이중급배기후드/.test(p.name) && p.size[0] === s[0] && p.size[1] === s[1]), n).toBe(true);
