@@ -21,13 +21,13 @@ export const LEGACY_SUBS = {
   'fridge-2door': [['냉장고'], /2도어/], 'fridge-kimchi': [['김치냉장고'], null], 'warmer-cabinet': [['상업용식품온장고'], null],
   dishwasher: [['상업용식기세척기'], /도어형/], 'dishwasher-conveyor': [['상업용식기세척기'], /컨베이어/],
   'ricecooker-gas': [['취반기'], /가스/], 'soup-kettle': [['국솥'], /회전/], 'wok-kettle': [['국솥'], /만능/],
-  'griddle-electric': [['부침기'], /전기/], 'steamer-combi': [['상업용오븐'], null], 'oven-built': [['상업용오븐'], null],
+  'griddle-electric': [['부침기'], /전기/], 'steamer-combi': [['상업용오븐'], /전기/], 'oven-built': [['상업용오븐'], null],
   'hood-box': [['상업용주방후드'], /^배기후드/], 'hood-box-filter': [['상업용주방후드'], /이중/], 'hood-wall': [['상업용주방후드'], null],
   'worktable-1800': [['상업용조리대'], /작업대/], 'serve-counter': [['배식대'], /반찬|배식대/], 'shelf-steel-4': [['식기건조대'], /선반/],
   'locker-12': [['사물함', '캐비닛'], null], 'cabinet-lower': [['캐비닛'], /낮은/], 'cabinet-upper': [['캐비닛'], null], bookshelf: [['캐비닛'], null],
   'dining-6': [['이동식스툴테이블'], /6인/], 'dining-4': [['이동식스툴테이블'], /4인/], 'desk-1400': [['책상'], null], 'meeting-table-2400': [['회의용탁자'], null],
   'chair-office': [['작업용의자', '접이식의자'], null], 'chair-dining': [['접이식의자'], null],
-  'washer-drum': [['세탁건조기', '가정용세탁기'], /세탁기/], dryer: [['세탁건조기'], null],
+  'washer-drum': [['세탁건조기', '가정용세탁기'], /드럼/], dryer: [['세탁건조기'], /건조기/],
 };
 
 // 바닥 발자국은 방향과 무관하게 잰다: DXF·샘플 아이템은 회전된 채 [750, 1500, 850]처럼 크기를 든다(Task 8·9 계약 — 정렬한 [긴 변, 짧은 변, 높이]끼리).
@@ -43,14 +43,20 @@ function nearest(list, sizeMm) {
 const byId = new Map(KITCHEN_PRODUCTS.map(p => [p.id, p]));
 const legacyById = new Map(LEGACY_PRODUCTS.map(p => [p.id, p]));
 
-// 기존 id + 크기 → 엑셀 제품 id | null(대응 표에 없는 id — 침대·소파·조명 등).
+// 크기로 쓸 수 있는가: 유한한 양수 세 개([w, d, h] mm).
+const validSize = s => Array.isArray(s) && s.length === 3 && s.every(v => Number.isFinite(v) && v > 0);
+
+// 기존 id + 크기 → 엑셀 제품 id | null(대응 표에 없는 id — 침대·소파·조명 등). 표에 있는 id는 언제나 풀린다:
+// 크기가 잘못됐으면(null · 길이 2 · NaN · 0) 기존 제품 자기 크기로 고른다.
 export function kitchenFor(legacyId, sizeMm) {
   const rule = LEGACY_SUBS[legacyId];
   if (!rule) return null;
   const [subs, re] = rule;
   const inSub = KITCHEN_PRODUCTS.filter(p => subs.includes(p.sub));
   const named = re ? inSub.filter(p => re.test(p.name)) : inSub;
-  return nearest(named.length ? named : inSub, sizeMm ?? legacyById.get(legacyId)?.size ?? [900, 600, 850])?.id ?? null;
+  const own = legacyById.get(legacyId)?.size;
+  const size = validSize(sizeMm) ? sizeMm : validSize(own) ? own : [900, 600, 850];
+  return nearest(named.length ? named : inSub, size)?.id ?? null;
 }
 
 // 대표 대응(기존 제품 자기 크기 기준) — DXF 어휘·방 템플릿이 쓴다. 표의 모든 id가 풀려야 한다(tests/catalogKitchen.test.js).

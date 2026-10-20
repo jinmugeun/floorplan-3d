@@ -81,4 +81,47 @@ describe('기존 id → 엑셀 제품 대응', () => {
     expect(kitchenFit('sink-double', [1500, 750, 850])).toBe('sink-double');
     expect(kitchenFit(two, null)).toBe(two);
   });
+
+  test('뜻이 맞는 대응 — 전기 콤비스티머는 전기 오븐, 드럼세탁기는 드럼 세탁기, 건조기는 건조기', () => {
+    const steamer = productById(LEGACY_TO_KITCHEN['steamer-combi']);
+    expect(steamer.equip.heat).toBe('electric');
+    expect(steamer.name).toMatch(/전기/);
+    expect(productById(LEGACY_TO_KITCHEN['washer-drum']).name).toMatch(/드럼/);
+    expect(productById(LEGACY_TO_KITCHEN.dryer).name).toMatch(/건조기/);
+  });
+
+  test('kitchenFor: 표에 있는 id는 크기가 잘못돼도(세 개의 유한한 양수가 아니면) 기존 제품 자기 크기로 풀린다 — null은 "표에 없음"뿐', () => {
+    const own = LEGACY_TO_KITCHEN['sink-double'];
+    expect(kitchenFor('sink-double', [1800, 750])).toBe(own);
+    expect(kitchenFor('sink-double', null)).toBe(own);
+    expect(kitchenFor('sink-double', undefined)).toBe(own);
+    expect(kitchenFor('sink-double', [1800, NaN, 850])).toBe(own);
+    expect(kitchenFor('sink-double', [1800, 0, 850])).toBe(own);
+    expect(kitchenFor('sink-double', [1800, 750, 850, 1])).toBe(own);
+    expect(kitchenFor('sink-double', '1800x750x850')).toBe(own);
+    for (const id of Object.keys(LEGACY_SUBS)) expect(kitchenFor(id, [1800, 750]), id).toBe(LEGACY_TO_KITCHEN[id]);
+  });
+
+  test('방향과 무관하다 — [w, d, h]와 [d, w, h]가 같은 제품으로 풀린다(kitchenFor · kitchenFit)', () => {
+    for (const s of [[1260, 800, 1910], [1500, 750, 850], [1000, 900, 1800], [650, 700, 1350]]) {
+      const r = [s[1], s[0], s[2]];
+      for (const id of Object.keys(LEGACY_SUBS)) expect(kitchenFor(id, r), `${id} ${s}`).toBe(kitchenFor(id, s));
+    }
+    const two = LEGACY_TO_KITCHEN['fridge-2door'];
+    expect(productById(kitchenFit(two, [800, 1260, 1910])).name).toMatch(/4도어/);
+    for (const p of KITCHEN_PRODUCTS) expect(kitchenFit(p.id, [p.size[1], p.size[0], p.size[2]]), p.id).toBe(kitchenFit(p.id, p.size));
+  });
+
+  test('같은 거리면 원자료(엑셀 행) 순서의 앞이 이긴다', () => {
+    const ids = KITCHEN_PRODUCTS.map(p => p.id);
+    // 가스 회전식 국솥 k-24975705(앞)와 k-25449419(뒤)는 세부품명·형상·크기(1580×1040×870)가 같다.
+    expect(productById('k-25449419').size).toEqual(productById('k-24975705').size);
+    expect(ids.indexOf('k-24975705')).toBeLessThan(ids.indexOf('k-25449419'));
+    expect(kitchenFit('k-25449419', [1580, 1040, 870])).toBe('k-24975705');
+    expect(kitchenFit('k-25449419', [1040, 1580, 870])).toBe('k-24975705');
+    // 식기세척기 전기(도어형) k-24157686(앞)과 k-22161686(뒤)은 크기(650×700×1350)가 같다 — kitchenFor도 앞을 고른다.
+    expect(productById('k-22161686').size).toEqual(productById('k-24157686').size);
+    expect(ids.indexOf('k-24157686')).toBeLessThan(ids.indexOf('k-22161686'));
+    expect(kitchenFor('dishwasher', [650, 700, 1350])).toBe('k-24157686');
+  });
 });
