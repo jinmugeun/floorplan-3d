@@ -6,7 +6,12 @@ import { RAD } from '../geom/items.js';
 import { memoCollisions } from '../geom/collide.js';
 import { shapeFor, itemMaterial, ITEM_EDGE_COLOR } from './itemShapes.js';
 import { perfSettings } from './perfMode.js';
-import { templateOf, requestAsset, fitClone } from './itemAssets.js';
+import { templateOf, requestAsset, fitClone, assetsChanged } from './itemAssets.js';
+import { shapeSpecFor, buildShape } from './shapes/index.js';
+import { onShapeTexturesReady } from './shapes/materials.js';
+
+// 헤어라인 텍스처가 도착하면 에셋 도착과 같은 길로 다시 그린다(계획 17 Task 5 — 공유 재질에는 이미 붙었지만 view3d는 알림이 있어야 그린다).
+onShapeTexturesReady(() => assetsChanged());
 
 const M = v => v / 1000;
 export const itemVisible3 = (item, v3 = {}) => itemVisible(item, v3);
@@ -80,7 +85,9 @@ export function itemMesh(item, { edges = false, assets = true, product = product
   const useAsset = assets && !!product?.asset;
   const tpl = useAsset ? templateOf(product.id) : null;
   if (useAsset && !tpl) requestAsset(product);   // 받는 중·실패한 종류는 requestAsset이 거른다
-  const obj = tpl ? assetGroup(tpl, item) : (shapeFor(item) ?? simpleMesh(item));
+  // 엑셀 제품·도면 기구는 스테인리스 형상(병합·공유), 문·창·기둥·환기 부속·숨김 단종 제품은 예전 형상 그대로(계획 17 Task 5)
+  const spec = tpl ? null : shapeSpecFor(item, product);
+  const obj = tpl ? assetGroup(tpl, item) : (spec && buildShape(spec, item, product)) || shapeFor(item) || simpleMesh(item);
   obj.position.copy(toThree([item.pos[0], item.pos[1], item.z + item.size[2] / 2]));
   obj.rotation.y = -RAD(item.rot);
   // 2D와 같은 반전: 캔버스가 (translate → rotate → scale)로 아이템 로컬 축을 세우듯
@@ -89,7 +96,7 @@ export function itemMesh(item, { edges = false, assets = true, product = product
   // 이것이 없으면 후드 슬릿·냉장고 손잡이·침대 헤드보드가 2D와 3D에서 반대쪽에 온다.
   obj.scale.set(item.flipH ? -1 : 1, 1, item.flipV ? -1 : 1);
   obj.name = 'item';
-  if (edges && !tpl) addEdges(obj);   // 모델에는 윤곽선을 붙이지 않는다: 삼각형 수천 개의 EdgesGeometry는 비싸고 선이 질감을 덮는다
+  if (edges && !tpl && !spec) addEdges(obj);   // 모델·스테인리스 형상에는 선 객체를 붙이지 않는다(형상은 병합 메시라 EdgesGeometry가 비싸다 — 윤곽선은 Task 6 후처리)
   // 레이캐스트가 자식을 맞혀도 어느 아이템인지 알 수 있게 모든 자손에 id를 박는다(엣지 선까지).
   obj.traverse(o => { o.userData.itemId = item.id; });
   return obj;

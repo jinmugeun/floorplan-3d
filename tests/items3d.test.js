@@ -5,6 +5,7 @@ import { disposeGroup, sceneSignature } from '../src/view3d/build.js';
 import { enableAssets, requestAsset, templateOf, __setLoader, __reset } from '../src/view3d/itemAssets.js';
 import { createItem, createEmptyProject } from '../src/state/schema.js';
 import { productById } from '../src/products/catalog.js';
+import { KITCHEN_PRODUCTS } from '../src/products/catalogKitchen.js';
 import { RAD } from '../src/geom/items.js';
 import { collidingIds, memoCollisions } from '../src/geom/collide.js';
 
@@ -255,5 +256,42 @@ describe('실사 에셋', () => {
     expect(sceneSignature({ ...s, view: { ...s.view, v3: { ...s.view.v3, assets: false } } })).not.toBe(a);
     requestAsset({ id: 'x', asset: 'x' }); await settle();
     expect(sceneSignature(s)).not.toBe(a);                                     // 도착 묶음마다 버전이 오른다
+  });
+});
+
+// ── 스테인리스 형상(2026-10-20 · 계획 17 Task 5) ──
+describe('엑셀 제품 · 도면 기구 형상', () => {
+  const kp = shape => KITCHEN_PRODUCTS.find(p => p.shape === shape);
+  test('엑셀 제품은 공유 형상 그룹으로 서고, 충돌은 재질이 아니라 붉은 상자 선이다', () => {
+    const item = createItem(kp('sink'), { pos: [1000.5, 2000.25] });
+    const obj = itemMesh(item);
+    expect(obj.name).toBe('item');
+    expect(obj.children.every(m => m.isMesh && m.userData.shared && m.name.startsWith('shape-'))).toBe(true);
+    expect(obj.userData.assetSize).toEqual(item.size);
+    obj.traverse(o => expect(o.userData.itemId).toBe(item.id));
+    const before = obj.children[0].material.color.getHexString();
+    paintItem(obj, COLLIDE_COLOR);
+    expect(obj.children[0].material.color.getHexString()).toBe(before);
+    expect(obj.getObjectByName('collideBox')).toBeTruthy();
+  });
+  test('도면 기구는 이름으로 형상을 고른다', () => {
+    const it = mk('equip-generic', { pos: [0, 0], name: '세정대 2조 1500-750', size: [1500, 750, 850] });
+    expect(itemMesh(it).children.some(m => m.name === 'shape-steel')).toBe(true);
+  });
+  test('반전·회전은 상자와 같은 규칙(로컬 축 음수 배율)', () => {
+    const obj = itemMesh(createItem(kp('cabinet'), { pos: [0, 0], rot: 90, flipH: true }));
+    expect(obj.rotation.y).toBeCloseTo(-RAD(90));
+    expect([obj.scale.x, obj.scale.y, obj.scale.z]).toEqual([-1, 1, 1]);
+  });
+  test('형상 아이템에는 윤곽선 선 객체를 붙이지 않는다(윤곽선은 화면 후처리 — Task 6)', () => {
+    const obj = itemMesh(createItem(kp('range'), { pos: [0, 0] }), { edges: true });
+    expect(obj.getObjectByName('itemEdge')).toBeUndefined();
+  });
+  test('disposeGroup은 공유 지오메트리·재질을 버리지 않는다', () => {
+    const g = buildItems(floor([createItem(kp('oven'), { pos: [0, 0] })]), { v3: {} });
+    const geo = g.children[0].children[0].geometry, mat = g.children[0].children[0].material;
+    const gd = vi.spyOn(geo, 'dispose'), md = vi.spyOn(mat, 'dispose');
+    disposeGroup(g);
+    expect(gd).not.toHaveBeenCalled(); expect(md).not.toHaveBeenCalled();
   });
 });
