@@ -154,3 +154,6 @@ export const photoKey = dirs => `${dirs.color}|${dirs.normal}|${dirs.rough}`;
 const colorUse = new Map();
 for (const m of MATERIALS) { const d = photoDirs(m)?.color; if (d) colorUse.set(d, (colorUse.get(d) ?? 0) + 1); }
 export const sharesColorMap = material => (colorUse.get(photoDirs(material)?.color) ?? 0) > 1;
+// 타일 배열의 무채색 공용 색 지도를 쓰는 재질(계획 19 설계 §5) — 견본은 사진을 받지 않고 base + 줄눈 격자로 그린다(pattern.tileSwatchParts).
+// 섞음(블루믹스·체크믹스)은 색을 구운 자기 지도(색 폴더 ≠ 거칠기 폴더)라 지도를 그대로 그린다.
+export const tileGridSwatch = material => !!material?.tiles && !!photoDirs(material) && photoDirs(material).color === photoDirs(material).rough;

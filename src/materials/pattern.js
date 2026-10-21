@@ -1,6 +1,7 @@
 // 마감재 무늬를 px 정사각 타일 안의 부품 목록으로 만든다(symbols.js와 같은 방식: 순수 함수라 테스트된다).
 // 부품: { t:'rect', x, y, w, h, fill } | { t:'line', x1, y1, x2, y2, fill, lw } | { t:'circle', x, y, r, fill }
 // 스와치(materialPanel)·텍스처(texture.js)·미리보기(materialEditor)가 같은 목록을 각자 그린다.
+import { DEFAULT_GROUT } from './catalog.js';
 const rect = (x, y, w, h, fill) => ({ t: 'rect', x, y, w, h, fill });
 const line = (x1, y1, x2, y2, fill, lw = 1) => ({ t: 'line', x1, y1, x2, y2, fill, lw });
 const circle = (x, y, r, fill) => ({ t: 'circle', x, y, r, fill });
@@ -57,11 +58,24 @@ export function patternParts(material, px = 64) {
   }
 }
 
-export function drawPattern(ctx, material, px = 64) {
-  for (const p of patternParts(material, px)) {
+// 타일 견본(계획 19 설계 §5): 바탕 base + 줄눈색(grout ?? DEFAULT_GROUT) 격자. 줄눈이 base를 받지 않아 검정 견본에도 밝은 격자가 보인다.
+// 칸 수 = 견본 한 변에 약 200 mm가 들도록 round(200 / 조각 간격)을 2~8로 자른다(25 mm → 8 · 48 → 4 · 육각 → 4 · 97 → 2 · 대형 → 2).
+// 육각 재질도 견본·2D에서는 사각 격자다(설계 §8). 선 굵기 px / 48(96 px 견본에서 2 px).
+export function tileSwatchParts(material, px = 64) {
+  const m = material ?? {}, grout = m.grout ?? DEFAULT_GROUT, [sx, sy] = m.scale ?? [300, 300], lw = Math.max(1, px / 48);
+  const cells = s => Math.min(8, Math.max(2, Math.round(200 / (s || 200))));
+  const nx = cells(sx), ny = cells(sy), parts = [rect(0, 0, px, px, m.base ?? '#ffffff')];
+  for (let i = 0; i <= nx; i++) parts.push(line((i / nx) * px, 0, (i / nx) * px, px, grout, lw));
+  for (let j = 0; j <= ny; j++) parts.push(line(0, (j / ny) * px, px, (j / ny) * px, grout, lw));
+  return parts;
+}
+
+export function drawParts(ctx, parts) {
+  for (const p of parts) {
     if (p.t === 'rect') { ctx.fillStyle = p.fill; ctx.fillRect(p.x, p.y, p.w, p.h); continue; }
     if (p.t === 'circle') { ctx.fillStyle = p.fill; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); continue; }
     ctx.strokeStyle = p.fill; ctx.lineWidth = p.lw ?? 1;
     ctx.beginPath(); ctx.moveTo(p.x1, p.y1); ctx.lineTo(p.x2, p.y2); ctx.stroke();
   }
 }
+export const drawPattern = (ctx, material, px = 64) => drawParts(ctx, patternParts(material, px));
