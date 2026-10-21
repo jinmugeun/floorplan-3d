@@ -1,4 +1,4 @@
-import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById } from '../materials/catalog.js';
+import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById, photoDirs } from '../materials/catalog.js';
 import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, MAT_RANGE } from '../state/schema.js';
 import { assignmentOf } from '../state/materialOps.js';
@@ -31,19 +31,19 @@ export function placedMaterials(floor) {
 }
 
 export const SWATCH_PX = 96;
-// 사진 마감재(계획 17 Task 7)의 견본: 무늬(바탕색 speckle)를 먼저 그리고, 사진(색 맵)이 오면 그 위에 덮는다. 이미지는 폴더당 한 번 받는다.
-// 오기 전에 그린 캔버스는 기다리는 목록에 두었다가 도착 때 한꺼번에 덮는다(패널을 다시 그리지 않는다). Image가 없는 환경(node)은 무늬만.
+// 사진 마감재(계획 17 Task 7 · 계획 18)의 견본: 무늬(바탕색 speckle 등)를 먼저 그리고, 색 지도(photoDirs(m).color 폴더의 color.webp)가 오면 그 위에 덮는다.
+// 이미지는 폴더당 한 번 받는다. 오기 전에 그린 캔버스는 기다리는 목록에 두었다가 도착 때 한꺼번에 덮는다(패널을 다시 그리지 않는다). Image가 없는 환경(node)은 무늬만.
 // 받기가 실패한 폴더는 failed로 남겨 그 뒤 견본을 기다리는 목록에 넣지 않는다(무늬만 · 다시 받지 않는다 — 리뷰 Fix 1-3).
-const swatchPhotos = new Map();   // photo 폴더 → { img, ready, failed, waiting: Set<canvas> }
-function swatchPhoto(material, canvas) {
+const swatchPhotos = new Map();   // 색 지도 폴더 → { img, ready, failed, waiting: Set<canvas> }
+function swatchPhoto(dir, canvas) {
   if (typeof Image === 'undefined') return null;
-  let e = swatchPhotos.get(material.photo);
+  let e = swatchPhotos.get(dir);
   if (!e) {
     e = { img: new Image(), ready: false, failed: false, waiting: new Set() };
-    swatchPhotos.set(material.photo, e);
+    swatchPhotos.set(dir, e);
     e.img.onload = () => { e.ready = true; for (const c of e.waiting) c.getContext('2d')?.drawImage(e.img, 0, 0, SWATCH_PX, SWATCH_PX); e.waiting.clear(); };
     e.img.onerror = () => { e.failed = true; e.waiting.clear(); };
-    e.img.src = `textures/${material.photo}/color.webp`;
+    e.img.src = `textures/${dir}/color.webp`;
   }
   if (e.failed) return null;
   if (!e.ready) e.waiting.add(canvas);
@@ -54,8 +54,9 @@ export function drawSwatch(canvas, material) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;                                        // jsdom 등 2D 컨텍스트가 없는 환경
   drawPattern(ctx, material, SWATCH_PX);
-  if (!material?.photo) return;
-  const e = swatchPhoto(material, canvas);
+  const dir = photoDirs(material)?.color;
+  if (!dir) return;
+  const e = swatchPhoto(dir, canvas);
   if (e?.ready) ctx.drawImage(e.img, 0, 0, SWATCH_PX, SWATCH_PX);
 }
 

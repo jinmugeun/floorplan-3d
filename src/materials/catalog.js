@@ -1,11 +1,25 @@
 // 마감재 카탈로그(순수 데이터). 실판매 자재 DB는 범위 밖이라 제조사는 모두 '오늘의집'으로 두고
 // base = 바탕색, accent = 무늬색, pattern = 무늬 종류, scale = 무늬 한 칸의 실제 크기(mm),
 // pricePerM2 = m²당 단가(원, 정적)로 둔다. 견적서(estimate.js)가 면적과 곱한다.
-export const MATERIAL_CATEGORIES = ['페인트', '벽지', '대리석', '마루/잔디', '타일', '벽돌', '콘크리트', '시멘트', '테라조', '카페트', '스테인리스'];
+// 렌더 필드(모두 선택 — 없으면 예전 동작 · 계획 18 설계 §2.1): photo = 사진 폴더(문자열 하나, 또는 맵마다 { color, normal, rough } — photoDirs) ·
+// tint = 선형 RGB(사진 색에 곱하고, 사진이 없으면 3D 재질 색 그대로) · roughness · normalScale · gloss = 환경 반사 세기(0·없으면 환경 맵 없음).
+export const MATERIAL_CATEGORIES = ['페인트', '벽지', '대리석', '마루/잔디', '타일', '벽돌', '콘크리트', '시멘트', '테라조', '바닥 코팅', '카페트', '스테인리스'];
 export const MATERIAL_PATTERNS = ['solid', 'stripe', 'tile', 'plank', 'brick', 'speckle', 'marble', 'concrete', 'carpet', 'steel'];
 
 const M = (id, name, code, category, base, accent, pattern, scale, pricePerM2) =>
   ({ id, name, code, category, maker: '오늘의집', base, accent, pattern, scale, pricePerM2 });
+// 바닥 코팅 15종(계획 18): 코드 FC-01~15(MMA → UD200 → MF) · 임시 단가 45,000원/m²(실제 단가는 사용자가 알려 주면 바꾼다).
+// base = 제조사 견본 캡처의 평균색(2D·견본·사진 도착 전 색). tint·roughness·normalScale·gloss = 시안 2판(app/.superpowers/sdd/scratch/floor-colors
+// report.txt · result.json)이 앱 조명 아래에서 견본 평균에 맞춘 값. MMA = 칩 무늬 + 규사 무광(mma-grit 공용) · UD200 = 흰 바탕 골재 요철
+// (ud200 공용 — 색은 tint) · MF = 사진 없는 매끈한 단색(tint가 3D 색) + 반광.
+const FC = (n, id, name, base, accent, pattern, scale, render) =>
+  ({ ...M(id, name, `FC-${String(n).padStart(2, '0')}`, '바닥 코팅', base, accent, pattern, [scale, scale], 45000), ...render });
+const mma = (n, c, name, base, chip, tint) => FC(n, `mma-${c}`, `MMA ${name}`, base, chip, 'speckle', 1200,
+  { photo: { color: `mma-${c}`, normal: 'mma-grit', rough: 'mma-grit' }, tint, roughness: 1, normalScale: 1 });
+const ud200 = (n, c, name, base, accent, tint) => FC(n, `ucrete-ud200-${c}`, `Ucrete UD200 ${name}`, base, accent, 'concrete', 1000,
+  { photo: 'ud200', tint, roughness: 1, normalScale: 1.8, gloss: 0.1 });
+const mf = (n, c, name, base, accent, tint) => FC(n, `ucrete-mf-${c}`, `Ucrete MF ${name}`, base, accent, 'solid', 1000,
+  { tint, roughness: 0.6, gloss: 0.15 });
 
 export const MATERIALS = [
   // 페인트
@@ -53,9 +67,25 @@ export const MATERIALS = [
   M('terrazzo-black', '블랙 테라조', 'TZ-02', '테라조', '#3c3f43', '#d6d9dc', 'speckle', [800, 800], 96000),
   M('terrazzo-pink', '핑크 테라조', 'TZ-03', '테라조', '#eddcd8', '#b98a86', 'speckle', [800, 800], 104000),
   M('terrazzo-green', '그린 테라조', 'TZ-04', '테라조', '#dfe7de', '#7f9a82', 'speckle', [800, 800], 110000),
-  // 사진 마감재(계획 17 Task 7): photo = public/textures/<photo>/{color,normal,rough}.webp(ambientCG Granite002A · CC0). base는 사진 평균색이라
-  // 2D·견본·사진이 오기 전 3D가 이 색으로 칠한다. 단가는 임시 값(급식실 에폭시 칩 바닥 — 사용자가 바꿀 값).
-  { ...M('epoxy-chip-gray', '그레이 칩 에폭시', 'TZ-05', '테라조', '#a7a7a3', '#6f6f6c', 'speckle', [1200, 1200], 45000), photo: 'granite-gray', gloss: 0.25 },
+  // 바닥 코팅(계획 18). 그레이 칩 에폭시(계획 17 Task 7 · 새 방 기본)는 id·이름·코드·단가를 그대로 두고 이 묶음으로 옮겼다(저장된 프로젝트·견적 행이
+  // 바뀌지 않게). 색 지도는 ambientCG Granite002A(CC0) 그대로, 법선·거칠기는 mma-grit(무광 — 그라나이트 거칠기 맵 평균 0.023이 거울 반사점을 냈다).
+  { ...M('epoxy-chip-gray', '그레이 칩 에폭시', 'TZ-05', '바닥 코팅', '#a7a7a3', '#6f6f6c', 'speckle', [1200, 1200], 45000),
+    photo: { color: 'granite-gray', normal: 'mma-grit', rough: 'mma-grit' }, roughness: 1, normalScale: 1, gloss: 0.25 },
+  mma(1, 'darkgray', '다크그레이', '#83868e', '#313336', [1.0496, 1.0525, 1.0625]),
+  mma(2, 'gray', '그레이', '#bbbdc2', '#414143', [1.132, 1.1291, 1.1334]),
+  mma(3, 'black', '블랙', '#414244', '#bec2cb', [0.6958, 0.6952, 0.7203]),
+  mma(4, 'beige', '베이지', '#a38661', '#29221b', [1.0627, 1.0601, 1.0392]),
+  mma(5, 'yellow', '옐로우', '#bab1a6', '#3c3a37', [1.1296, 1.1277, 1.131]),
+  ud200(6, 'yellow', '옐로우', '#bb913a', '#a67e21', [0.6364, 0.3616, 0.0427]),
+  ud200(7, 'cream', '크림', '#e9d89f', '#cbb98b', [1.0645, 0.8905, 0.445]),
+  ud200(8, 'red', '레드', '#9d4f42', '#95473a', [0.431, 0.0897, 0.0588]),
+  ud200(9, 'green', '그린', '#5a7e48', '#4c6f3b', [0.1205, 0.2619, 0.0734]),
+  ud200(10, 'gray', '그레이', '#87847c', '#77746d', [0.3047, 0.2891, 0.2545]),
+  mf(11, 'yellow', '옐로우', '#e38a1d', '#e2891c', [0.693, 0.2199, 0.0005]),
+  mf(12, 'cream', '크림', '#dcc592', '#dbc590', [0.6435, 0.4997, 0.2516]),
+  mf(13, 'red', '레드', '#a04836', '#9f4835', [0.312, 0.0468, 0.0209]),
+  mf(14, 'green', '그린', '#38542e', '#38542e', [0.0236, 0.0688, 0.0125]),
+  mf(15, 'gray', '그레이', '#7d7e86', '#7d7b84', [0.1774, 0.1781, 0.2074]),
   // 카페트
   M('carpet-gray', '그레이 카페트', 'CP-01', '카페트', '#a8acb0', '#8f9397', 'carpet', [500, 500], 32000),
   M('carpet-navy', '네이비 카페트', 'CP-02', '카페트', '#3b4a63', '#2e3b50', 'carpet', [500, 500], 36000),
@@ -77,3 +107,19 @@ export function searchMaterials(q) {
   if (!s) return [];
   return MATERIALS.filter(m => `${m.name} ${m.code} ${m.category} ${m.maker}`.toLowerCase().includes(s));
 }
+
+// 사진 폴더 해석(계획 18 설계 §2.1 — 3D 로더 texture.photoTextures와 마감재 패널 견본이 같은 함수를 쓴다). photo가 문자열이면 세 장이 한 폴더,
+// 객체 { color, normal, rough }이면 맵마다 폴더가 다르다(공용 맵 mma-grit · ud200을 한 번만 받기 위해). 사진이 없거나 모양이 틀리면 null.
+export function photoDirs(material) {
+  const p = material?.photo;
+  if (typeof p === 'string') return p ? { color: p, normal: p, rough: p } : null;
+  if (!p || typeof p !== 'object') return null;
+  const { color, normal, rough } = p;
+  return [color, normal, rough].every(d => typeof d === 'string' && d) ? { color, normal, rough } : null;
+}
+// 폴더 묶음 키 — 로더의 세 장 묶음 캐시 · 공유 복제본 · 도착 알림 인자
+export const photoKey = dirs => `${dirs.color}|${dirs.normal}|${dirs.rough}`;
+// 색 지도 폴더를 카탈로그 재질 둘 이상이 나눠 쓰는가(UD200의 흰 바탕 지도) — 견본은 base를 칠하고 그 위에 곱해 그린다(설계 §4).
+const colorUse = new Map();
+for (const m of MATERIALS) { const d = photoDirs(m)?.color; if (d) colorUse.set(d, (colorUse.get(d) ?? 0) + 1); }
+export const sharesColorMap = material => (colorUse.get(photoDirs(material)?.color) ?? 0) > 1;

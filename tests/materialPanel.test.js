@@ -26,17 +26,30 @@ const mat = id => ({ id, offset: [0, 0], angle: 0 });
 beforeEach(() => { localStorage.clear(); document.activeElement?.blur?.(); });
 
 describe('마감재 패널', () => {
-  test('탭 3개와 카테고리 11개를 보여주고 카테고리로 들어가면 스와치 타일이 나온다', () => {
+  test('탭 3개와 카테고리 12개를 보여주고 카테고리로 들어가면 스와치 타일이 나온다', () => {
     const { el } = setup();
     expect([...el.querySelectorAll('[data-tab]')].map(b => b.textContent)).toEqual(['오늘의집 마감재', '즐겨찾기', '배치된 마감재']);
-    expect(el.querySelectorAll('[data-cat]')).toHaveLength(11);
+    expect(el.querySelectorAll('[data-cat]')).toHaveLength(12);
     click(el, '[data-cat="타일"]');
     const tiles = [...el.querySelectorAll('.tile')];
     expect(tiles).toHaveLength(4);
     expect(tiles[0].querySelector('canvas')).not.toBeNull();
     expect(tiles[0].textContent).toContain('오늘의집');
     click(el, '[data-up]');
-    expect(el.querySelectorAll('[data-cat]')).toHaveLength(11);
+    expect(el.querySelectorAll('[data-cat]')).toHaveLength(12);
+  });
+
+  // 계획 18: 바닥 코팅 묶음 — 그레이 칩 에폭시(새 방 기본) + 15종(FC-01~15)
+  test('바닥 코팅 칩은 테라조 다음이고 누르면 16장(그레이 칩 에폭시 먼저 · MMA → UD200 → MF)이 나온다', () => {
+    const { el } = setup();
+    const cats = [...el.querySelectorAll('[data-cat]')].map(b => b.dataset.cat);
+    expect(cats.indexOf('바닥 코팅')).toBe(cats.indexOf('테라조') + 1);
+    click(el, '[data-cat="바닥 코팅"]');
+    const ids = [...el.querySelectorAll('.tile')].map(t => t.dataset.id);
+    expect(ids).toHaveLength(16);
+    expect(ids.slice(0, 6)).toEqual(['epoxy-chip-gray', 'mma-darkgray', 'mma-gray', 'mma-black', 'mma-beige', 'mma-yellow']);
+    expect(ids.at(-1)).toBe('ucrete-mf-gray');
+    expect(el.querySelector('.tile[data-id="ucrete-mf-red"]').textContent).toContain('FC-13');
   });
 
   test('타일을 클릭하면 적용 모드가 켜지고 onPick이 불린다', () => {
@@ -188,7 +201,7 @@ test('placeTile은 타일 크기 칸에 포커스를 준다', () => {
 // §15.8: 마감재 패널도 같은 구조다(타일 배치로 들어오면 타일 칩이 켜진 채다).
 test('처음 열면 전체 스와치 그리드가 보이고 타일 배치는 타일 칩을 켠다', () => {
   const { el, panel } = setup();
-  expect(el.querySelectorAll('.chips button[data-cat]')).toHaveLength(11);
+  expect(el.querySelectorAll('.chips button[data-cat]')).toHaveLength(12);
   expect(el.querySelectorAll('.tile').length).toBeGreaterThan(10);
   expect(el.querySelector('.cat-list')).toBeNull();
   panel.placeTile();
