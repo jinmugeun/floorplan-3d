@@ -186,7 +186,11 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     if (name === 'q') { st.q = ev.target.value; renderChips(); renderCrumbs(); renderList(); return; }
     if (name !== 'scaleW' && name !== 'scaleH') return;
     if (st.category !== TILE_CATEGORY) return;              // 타일 칸이 남아 있는 다른 카테고리에서는 읽지 않는다
-    st.scale = [clampScale(container.querySelector('[name="scaleW"]').value), clampScale(container.querySelector('[name="scaleH"]').value)];
+    const inputs = [container.querySelector('[name="scaleW"]'), container.querySelector('[name="scaleH"]')];
+    st.scale = inputs.map(el => clampScale(el.value));
+    // 손대지 않은 다른 칸은 실린 값(자른 값)으로 되쓴다 — 모자이크 52.5가 100으로 실리는데 칸은 52.5로 남지 않게. 치는 칸은 건드리지 않는다(포커스·입력 중 값 유지).
+    const o = inputs[0] === ev.target ? 1 : 0;
+    if (inputs[o].value !== String(st.scale[o])) inputs[o].value = String(st.scale[o]);
     // 이미 켜져 있는 적용 모드도 새 크기를 따라가게 한다(다음 클릭부터 바로 먹는다).
     // 타일 흐름에서 켠 matPick만 따라간다: 벽 메뉴 "마감재 복사"가 넣어 둔 비-타일 배정에
     // 타일 크기를 주입하지 않게 category까지 본다(I-1).

@@ -193,6 +193,7 @@ describe('타일 배치와 타일 크기', () => {
     w.value = '200';
     w.dispatchEvent(new Event('input', { bubbles: true }));
     expect(ui.get().matPick.assignment.scale).toEqual([200, 100]);   // H 52.5 → 하한 100(덮어쓰기 범위는 그대로 100~2000)
+    expect(el.querySelector('[name="scaleH"]').value).toBe('100');   // 손대지 않은 칸도 실린 값(자른 값)을 보인다
     click(el, '.tile[data-id="tile-black-25"]');
     expect(ui.get().matPick.assignment.scale).toEqual([200, 100]);   // 한 번 고친 크기는 다음 타일에도 실린다(예전 규칙)
     panel.placeTile();
