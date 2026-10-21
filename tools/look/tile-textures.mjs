@@ -2,7 +2,7 @@
 //   node tools/look/tile-textures.mjs [출력 폴더]   (기본 public/textures — 승인본을 덮어쓴다. 재현 확인은 임시 폴더로)
 // 시안 app/.superpowers/sdd/scratch/tile-look/gen.mjs(2026-10-21)를 옮긴 것이다. 바뀐 곳은 출력 폴더(인자 · tile-<배열>) · 끈 조정 손잡이
 // (--only · DITHER · NENC — 승인본 설정으로 고정) · sizes.json 안 씀뿐이다. 난수 호출 순서와 수식은 그대로다.
-// 섞음 색(MIXES)은 사용자가 준 시트라인 상품 페이지 사진에서 시안 sample.mjs가 뽑은 표본이다(사진은 저장소 밖 — 색 숫자만 여기와 카탈로그 tint에 남는다).
+// 섞음 색(MIXES)은 사용자가 준 쉬트라인 상품 페이지 사진에서 시안 sample.mjs가 뽑은 표본이다(사진은 저장소 밖 — 색 숫자만 여기와 카탈로그 tint에 남는다).
 //
 // 배열 하나 = 세 장(공용):
 //   color.webp  — 거의 흰 무채색(선형 0.80) 면 + 조각마다 미세한 밝기 차 + 줄눈 자리(같은 0.80 × 줄눈 그늘). 색은 재질 tint가, 줄눈 색은 groutColor가 칠한다
@@ -34,13 +34,13 @@ const LAYOUTS = {
   sq25: { kind: 'square', pitch: [25, 25], n: [16, 16], px: 1024, grout: 2.0, depth: 1.0, edgeR: 1.4, cornerR: 1.6, pillow: 0.12, tilt: 0.3, jitter: 0.22, tone: 0.03, ao: 0.32, seed: 2501 },
   sq48: { kind: 'square', pitch: [50, 50], n: [8, 8], px: 1024, grout: 2.0, depth: 1.2, edgeR: 1.8, cornerR: 2.0, pillow: 0.2, tilt: 0.2, jitter: 0.28, tone: 0.02, ao: 0.32, seed: 4801 },
   sq97: { kind: 'square', pitch: [100, 100], n: [8, 8], px: 1024, grout: 3.0, depth: 1.4, edgeR: 2.0, cornerR: 2.5, pillow: 0.25, tilt: 0.22, jitter: 0.35, tone: 0.02, ao: 0.3, seed: 9701 },
-  // 육각: 평평한 변이 위·아래(시트라인 G09·G10 사진과 같은 방향). 맞변 거리 F = 50(제품 '5 × 5.8 cm') · 줄눈 2.5 → 맞변 간격 52.5 · 열 간격 1.5 × 52.5/√3 = 45.47
+  // 육각: 평평한 변이 위·아래(쉬트라인 G09·G10 사진과 같은 방향). 맞변 거리 F = 50(제품 '5 × 5.8 cm') · 줄눈 2.5 → 맞변 간격 52.5 · 열 간격 1.5 × 52.5/√3 = 45.47
   hex50: { kind: 'hex', F: 50, grout: 2.5, cols: 8, rows: 8, px: 1024, depth: 1.2, edgeR: 1.6, cornerR: 1.6, pillow: 0.18, tilt: 0.3, jitter: 0.28, tone: 0.025, ao: 0.32, seed: 5001 },
   // 대형: 줄눈 2 mm · 얕게 · 모서리 미세 면취(정사각 컷 포세린)
   lg300: { kind: 'square', pitch: [300, 300], n: [2, 2], px: 1024, grout: 2.0, depth: 0.8, edgeR: 0.9, cornerR: 0.6, pillow: 0.06, tilt: 0.06, jitter: 0.2, tone: 0.012, ao: 0.2, seed: 30001 },
   lg600: { kind: 'square', pitch: [600, 600], n: [2, 2], px: 1024, grout: 2.0, depth: 0.8, edgeR: 0.7, cornerR: 0.6, pillow: 0.08, tilt: 0.05, jitter: 0.2, tone: 0.01, ao: 0.2, seed: 60001, speckle: true },
 };
-// 섞음 색 지도(조각 배치는 배열과 같다 — 같은 시드로 같은 조각 번호). colors = sRGB(시트라인 사진 표본) · frac = 비율 · rule 'random' | 'check'
+// 섞음 색 지도(조각 배치는 배열과 같다 — 같은 시드로 같은 조각 번호). colors = sRGB(쉬트라인 사진 표본) · frac = 비율 · rule 'random' | 'check'
 const MIXES = {
   'sq25-bluemix': { layout: 'sq25', rule: 'random', colors: [['#467daa', 0.3], ['#78aec7', 0.35], ['#b0cdd5', 0.35]], seed: 777 },   // A07 C25MB01 k-평균 세 무리
   'sq48-check': { layout: 'sq48', rule: 'check', colors: [['#0c0c08', 0.5], ['#e7e8ef', 0.5]], seed: 778 },                              // B05 4802-18 (흰색은 밝기만 240으로)
