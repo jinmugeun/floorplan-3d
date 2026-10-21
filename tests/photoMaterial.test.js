@@ -45,7 +45,7 @@ describe('칩 에폭시 카탈로그 항목', () => {
     expect(m).toMatchObject({ name: '그레이 칩 에폭시', code: 'TZ-05', category: '바닥 코팅', maker: '오늘의집', base: '#a7a7a3', pattern: 'speckle', scale: [1200, 1200], pricePerM2: 45000, photo: { color: 'granite-gray', normal: 'mma-grit', rough: 'mma-grit' }, gloss: 0.25 });
     expect(MATERIAL_PATTERNS).toContain(m.pattern);
     expect(materialById('tile-white-300').gloss).toBe(0.3);
-    expect(materialById('tile-white-300').photo).toBeUndefined();
+    expect(materialById('tile-white-300').photo).toBe('tile-lg300');   // 계획 19: 흰 타일 300도 타일 배열 사진 재질
   });
 });
 
@@ -53,7 +53,7 @@ describe('사진 텍스처(photoTextures)', () => {
   test('node(document 없음)에서는 null이고 아무것도 받지 않는다', () => {
     const spy = vi.spyOn(THREE.TextureLoader.prototype, 'loadAsync');
     expect(photoTextures(epoxy())).toBeNull();
-    expect(photoTextures(materialById('tile-white-300'))).toBeNull();   // 사진이 없는 재질
+    expect(photoTextures(materialById('paint-white'))).toBeNull();      // 사진이 없는 재질
     expect(spy).not.toHaveBeenCalled();
   });
 
@@ -218,12 +218,12 @@ describe('build.js — 광택 마감', () => {
     const walls = rectWalls([0, 0], [4000, 3000], 200).map(w => ({ ...w, ...patch }));
     return { walls, rooms: detectRooms(walls), height: 2300 };
   };
-  test('칩 에폭시 바닥은 환경 반사 0.25, 흰 타일 벽 안쪽 면은 거칠기 0.35 · 반사 0.3', () => {
+  test('칩 에폭시 바닥은 환경 반사 0.25, 흰 타일 벽 안쪽 면은 반사 0.3 · 거칠기는 사진 재질이라 build.js가 덮지 않는다(도착 전 벽 기본 0.9)', () => {
     const g = buildFloorGroup(floorWith({ matIn: assign('tile-white-300') }), { wallOpacity: 1 });
     const fl = g.children.find(c => c.name === 'floor');
     expect(fl.material.envMapIntensity).toBe(0.25);
     const face = g.children.find(c => c.name === 'wallFace');
-    expect(face.material.roughness).toBe(0.35);
+    expect(face.material.roughness).toBe(0.9);                           // 계획 19: 흰 타일 300은 사진 재질 — 도착 뒤 재질 값 1.2(texture.applyPhoto)
     expect(face.material.envMapIntensity).toBe(0.3);
     const plain = buildFloorGroup(floorWith({ matIn: assign('paint-white') }), { wallOpacity: 1 }).children.find(c => c.name === 'wallFace');
     expect(plain.material.roughness).toBe(0.9);                          // 무광 면은 그대로

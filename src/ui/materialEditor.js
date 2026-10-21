@@ -152,7 +152,11 @@ export function openMaterialEditor({ store, wallId, side = 'in', seedDefault = t
       row.querySelector('[name="scaleH"]').value = String(sh);
     }
     else if (name === 'scaleW' || name === 'scaleH') {
-      r.mat = { ...r.mat, scale: [clampScale(row.querySelector('[name="scaleW"]').value), clampScale(row.querySelector('[name="scaleH"]').value)] };
+      const cells = [row.querySelector('[name="scaleW"]'), row.querySelector('[name="scaleH"]')];
+      r.mat = { ...r.mat, scale: cells.map(el => clampScale(el.value)) };
+      // 두 칸 모두 실린 값(자른 값)으로 되쓴다 — 25 mm 모자이크가 100으로 실리는데 칸은 25로 남지 않게(계획 19 최종 리뷰 I-1).
+      // 이 편집기는 change(값 확정 뒤)만 들으므로 고친 칸을 되써도 입력 중인 글을 지우지 않는다(패널은 input이라 다른 칸만 쓴다).
+      cells.forEach((el, k) => { if (el.value !== String(r.mat.scale[k])) el.value = String(r.mat.scale[k]); });
     }
     else if (['u0', 'u1', 'z0', 'z1'].includes(name)) { const v = Number(ev.target.value); if (Number.isFinite(v)) r[name] = v; }
     part('error').textContent = '';

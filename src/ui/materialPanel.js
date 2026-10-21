@@ -1,5 +1,5 @@
-import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById, photoDirs, sharesColorMap } from '../materials/catalog.js';
-import { drawPattern } from '../materials/pattern.js';
+import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById, photoDirs, sharesColorMap, tileGridSwatch } from '../materials/catalog.js';
+import { drawPattern, drawParts, tileSwatchParts } from '../materials/pattern.js';
 import { activeFloor, MAT_RANGE } from '../state/schema.js';
 import { assignmentOf } from '../state/materialOps.js';
 import { esc } from '../util/html.js';
@@ -66,6 +66,8 @@ export function drawSwatch(canvas, material) {
   canvas.width = SWATCH_PX; canvas.height = SWATCH_PX;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;                                        // jsdom 등 2D 컨텍스트가 없는 환경
+  // 타일 배열(계획 19 설계 §5): 무채색 공용 지도를 base 위에 곱하면 줄눈까지 base 색이 된다 → base + 줄눈 격자를 직접 그린다(사진을 받지 않는다).
+  if (tileGridSwatch(material)) { drawParts(ctx, tileSwatchParts(material, SWATCH_PX)); return; }
   drawPattern(ctx, material, SWATCH_PX);
   const dir = photoDirs(material)?.color;
   if (!dir) return;
@@ -88,7 +90,8 @@ const defaultTileScale = () => [...(materialsIn(TILE_CATEGORY)[0]?.scale ?? [300
 const TABS = [['ohouse', '오늘의집 마감재'], ['fav', '즐겨찾기'], ['placed', '배치된 마감재']];
 
 export function createMaterialPanel(container, { store, ui, onPick = () => {} }) {
-  const st = { tab: 'ohouse', category: null, q: '', mode: 'place', target: null, scale: null };
+  // scale = 사용자가 고친 타일 크기(고치기 전 null) · shown = 고치기 전 칸에 보이는 크기(마지막에 고른 타일의 기본 크기 — 계획 19)
+  const st = { tab: 'ohouse', category: null, q: '', mode: 'place', target: null, scale: null, shown: null };
   container.innerHTML = `
     <div class="tabs" data-part="tabs"></div>
     <p class="hint" data-part="note" hidden></p>
@@ -121,7 +124,7 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
   }
   // 타일 크기 두 칸은 카테고리가 '타일'일 때만 보인다(§13.3).
   function renderTile() {
-    part('tile').innerHTML = st.category === TILE_CATEGORY ? tileScaleHtml(st.scale ?? defaultTileScale()) : '';
+    part('tile').innerHTML = st.category === TILE_CATEGORY ? tileScaleHtml(st.scale ?? st.shown ?? defaultTileScale()) : '';
   }
   function renderCrumbs() {
     const c = part('crumbs');
@@ -170,7 +173,10 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     // 검색 중에는 목록이 전 카테고리라 카테고리 필터가 실제로 걸려 있지 않다: 그때 나온 비-타일에
     // 타일 크기를 실으면 그 재질이 자기 scale 대신 타일 크기로 반복되고 저장 파일에도 남는다(I-1).
     const tiling = st.category === TILE_CATEGORY && !st.q.trim();
-    const scale = tiling ? [...(st.scale ?? defaultTileScale())] : null;
+    // 크기 칸을 고치지 않았으면 scale을 싣지 않는다 — 25·48 mm 모자이크가 칸의 기본값(300)을 받지 않고 자기 조각 간격으로 놓인다(계획 19 설계 §3).
+    // 칸에는 고른 타일의 기본 크기를 보인다. 한 번 고친 크기는 예전처럼 다음 타일에도 실린다.
+    const scale = tiling && st.scale ? [...st.scale] : null;
+    if (tiling && !st.scale) { st.shown = [...m.scale]; renderTile(); }
     ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0, ...(scale ? { scale } : {}) }, ...(tiling ? { category: TILE_CATEGORY } : {}) } });
     onPick(m, { mode: 'place', target: null });
   };
@@ -180,7 +186,11 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     if (name === 'q') { st.q = ev.target.value; renderChips(); renderCrumbs(); renderList(); return; }
     if (name !== 'scaleW' && name !== 'scaleH') return;
     if (st.category !== TILE_CATEGORY) return;              // 타일 칸이 남아 있는 다른 카테고리에서는 읽지 않는다
-    st.scale = [clampScale(container.querySelector('[name="scaleW"]').value), clampScale(container.querySelector('[name="scaleH"]').value)];
+    const inputs = [container.querySelector('[name="scaleW"]'), container.querySelector('[name="scaleH"]')];
+    st.scale = inputs.map(el => clampScale(el.value));
+    // 손대지 않은 다른 칸은 실린 값(자른 값)으로 되쓴다 — 모자이크 52.5가 100으로 실리는데 칸은 52.5로 남지 않게. 치는 칸은 건드리지 않는다(포커스·입력 중 값 유지).
+    const o = inputs[0] === ev.target ? 1 : 0;
+    if (inputs[o].value !== String(st.scale[o])) inputs[o].value = String(st.scale[o]);
     // 이미 켜져 있는 적용 모드도 새 크기를 따라가게 한다(다음 클릭부터 바로 먹는다).
     // 타일 흐름에서 켠 matPick만 따라간다: 벽 메뉴 "마감재 복사"가 넣어 둔 비-타일 배정에
     // 타일 크기를 주입하지 않게 category까지 본다(I-1).
@@ -198,7 +208,7 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
     placeTile() {
       const m = materialsIn(TILE_CATEGORY)[0] ?? null;
       st.tab = 'ohouse'; st.q = ''; st.category = TILE_CATEGORY; st.mode = 'place'; st.target = null;
-      st.scale = [...(m?.scale ?? [300, 300])];
+      st.scale = null; st.shown = [...(m?.scale ?? [300, 300])];   // 고치지 않은 상태로 연다(계획 19)
       const q = container.querySelector('[name="q"]');
       if (q) q.value = '';
       render();
@@ -206,7 +216,7 @@ export function createMaterialPanel(container, { store, ui, onPick = () => {} })
       // 여기서는 방금 보인 타일 크기 칸에 포커스를 준다(§14.10 — 감사 #17).
       const w = container.querySelector('[name="scaleW"]');
       w?.focus(); w?.select?.();
-      if (m) ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0, scale: [...st.scale] }, category: TILE_CATEGORY } });
+      if (m) ui.set({ matPick: { assignment: { id: m.id, offset: [0, 0], angle: 0, scale: [...st.shown] }, category: TILE_CATEGORY } });
       return m;
     },
     get state() { return { ...st }; },

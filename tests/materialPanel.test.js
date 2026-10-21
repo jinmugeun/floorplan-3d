@@ -32,7 +32,7 @@ describe('마감재 패널', () => {
     expect(el.querySelectorAll('[data-cat]')).toHaveLength(12);
     click(el, '[data-cat="타일"]');
     const tiles = [...el.querySelectorAll('.tile')];
-    expect(tiles).toHaveLength(4);
+    expect(tiles).toHaveLength(18);                                // 계획 19: 기존 4 + 모자이크 14
     expect(tiles[0].querySelector('canvas')).not.toBeNull();
     expect(tiles[0].textContent).toContain('오늘의집');
     click(el, '[data-up]');
@@ -133,7 +133,7 @@ describe('타일 배치와 타일 크기', () => {
     click(el, '[data-cat="타일"]');
     expect(el.querySelector('[name="scaleW"]').value).toBe('300');   // tile-white-300의 기본 크기
     expect(el.querySelector('[name="scaleH"]').value).toBe('300');
-    expect(el.querySelectorAll('.tile')).toHaveLength(4);            // 타일 목록은 그대로다
+    expect(el.querySelectorAll('.tile')).toHaveLength(18);           // 타일 목록은 그대로다(계획 19: 18종)
   });
 
   test('타일을 고르면 지금의 크기가 matPick에 실리고, 칸을 고치면 곧바로 반영된다', () => {
@@ -177,6 +177,30 @@ describe('타일 배치와 타일 크기', () => {
     w.dispatchEvent(new Event('input', { bubbles: true }));
     expect(ui.get().matPick).toBe(copied);                            // 손대지 않았다
     expect('scale' in ui.get().matPick.assignment).toBe(false);
+  });
+
+  // 계획 19: 25·48 mm 모자이크가 칸의 기본값(300)을 받으면 12배로 커진다 — 칸을 고치지 않았으면 scale을 싣지 않고 칸에는 고른 타일의 크기를 보인다.
+  test('크기 칸을 고치지 않고 모자이크를 고르면 scale 없이 재질 기본 크기 · 칸은 그 크기 · 고친 뒤에는 예전처럼 실린다', () => {
+    const { el, ui, panel } = setup();
+    click(el, '[data-cat="타일"]');
+    click(el, '.tile[data-id="tile-white-25"]');
+    expect(ui.get().matPick).toEqual({ assignment: mat('tile-white-25'), category: '타일' });
+    expect(el.querySelector('[name="scaleW"]').value).toBe('25');
+    click(el, '.tile[data-id="tile-hex-black"]');
+    expect('scale' in ui.get().matPick.assignment).toBe(false);
+    expect(el.querySelector('[name="scaleH"]').value).toBe('52.5');
+    const w = el.querySelector('[name="scaleW"]');
+    w.value = '200';
+    w.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(ui.get().matPick.assignment.scale).toEqual([200, 100]);   // H 52.5 → 하한 100(덮어쓰기 범위는 그대로 100~2000)
+    expect(el.querySelector('[name="scaleH"]').value).toBe('100');   // 손대지 않은 칸도 실린 값(자른 값)을 보인다
+    click(el, '.tile[data-id="tile-black-25"]');
+    expect(ui.get().matPick.assignment.scale).toEqual([200, 100]);   // 한 번 고친 크기는 다음 타일에도 실린다(예전 규칙)
+    panel.placeTile();
+    expect(panel.state.scale).toBeNull();                            // 타일 배치는 고치지 않은 상태로 연다
+    click(el, '.tile[data-id="tile-mint-48"]');
+    expect('scale' in ui.get().matPick.assignment).toBe(false);
+    expect(el.querySelector('[name="scaleW"]').value).toBe('50');
   });
 
   test('placeTile()이 타일 카테고리를 열고 첫 타일로 적용 모드를 켠다', () => {

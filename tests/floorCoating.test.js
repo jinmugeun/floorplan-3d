@@ -96,10 +96,10 @@ describe('photoDirs · photoKey · sharesColorMap', () => {
     expect(photoDirs({ photo: { color: 'a', normal: 'b' } })).toBeNull();
     expect(photoDirs({ photo: { color: 'a', normal: 'b', rough: 3 } })).toBeNull();
   });
-  test('photoKey는 색|법선|거칠기 · sharesColorMap은 색 지도를 나눠 쓰는 UD200만 참', () => {
+  test('photoKey는 색|법선|거칠기 · 바닥 코팅에서 sharesColorMap은 색 지도를 나눠 쓰는 UD200만 참(타일 배열은 tileCatalog.test.js)', () => {
     expect(photoKey(photoDirs(materialById('epoxy-chip-gray')))).toBe('granite-gray|mma-grit|mma-grit');
     expect(photoKey(photoDirs(materialById('ucrete-ud200-gray')))).toBe('ud200|ud200|ud200');
-    expect(MATERIALS.filter(sharesColorMap).map(m => m.id)).toEqual(TABLE.map(r => r[0]).filter(id => id.startsWith('ucrete-ud200-')));
+    expect(MATERIALS.filter(m => m.category === '바닥 코팅' && sharesColorMap(m)).map(m => m.id)).toEqual(TABLE.map(r => r[0]).filter(id => id.startsWith('ucrete-ud200-')));
     expect(sharesColorMap({ photo: 'missing-photo' })).toBe(false);
   });
 });

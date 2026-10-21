@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { materialById, photoDirs, photoKey } from './catalog.js';
 import { drawPattern } from './pattern.js';
+import { groutPatch, clearGroutPatch } from './grout.js';
 
 export const TEX_PX = 128;              // 무늬 한 칸을 그리는 캔버스 크기(반복은 repeat이 한다)
 
@@ -82,6 +83,16 @@ function sharedPhotoMaps(bundle, maps, rx, ry, ox, oy, rot) {
   photoClones.set(key, set);
   return set;
 }
+// 셰이더 예열(shaderWarm.warmGroup — 계획 19 설계 §4.1): 예열 빌드 동안만 사진 재질에 빈 텍스처 세 장을 붙여 사진이 온 뒤와 같은 프로그램 키
+// (USE_MAP·NORMALMAP·ROUGHNESSMAP·METALNESSMAP + 줄눈 키)를 낸다. 사진은 받지 않고(2D만 쓰는 세션이 타일 텍스처를 받지 않게 — 설계 §6) 공유
+// 복제본 캐시에도 넣지 않는다. compile은 텍스처를 GPU에 올리지 않는다(shaderWarm.js 머리).
+let warming = false, warmMaps = null;
+export function withWarmPhotos(fn) {
+  warmMaps ??= { map: new THREE.Texture(), normalMap: new THREE.Texture(), roughnessMap: new THREE.Texture() };
+  const prev = warming;
+  warming = true;
+  try { return fn(); } finally { warming = prev; }
+}
 // 테스트용 — 사진 캐시(URL · 묶음)와 공유 복제본을 비운다(복제본은 dispose). 구독(build.js의 모듈 구독)은 남긴다.
 export function __resetPhotos() {
   for (const set of photoClones.values()) for (const k of PHOTO_MAPS) set[k].dispose();
@@ -121,6 +132,10 @@ export function materialTexture(id, { makeCanvas = null, scale = null } = {}) {
   return tex;
 }
 
+// 타일 배열(계획 19 설계 §3): 텍스처 한 장에 조각이 tiles[0] × tiles[1]개 든다 → 한 장 크기 = 조각 간격(scale — 배정의 덮어쓰기 포함) × tiles.
+// 반복은 1000 / (scale × tiles)이고 offset도 이 한 장으로 나눈다. tiles가 없는 재질은 scale이 곧 한 장이다(예전 그대로).
+export const tileSheet = (material, sc) => (Array.isArray(material?.tiles) ? [sc[0] * material.tiles[0], sc[1] * material.tiles[1]] : sc);
+
 // 반복 횟수 = 면 크기(mm) ÷ 무늬 한 칸 크기(mm). 0 나누기를 막고 최소 0.05를 준다.
 // worldUv: uv가 0~1이 아니라 "미터"인 지오메트리(ShapeGeometry는 정점 좌표를 그대로 uv로 쓰고, 벽 본체
 // ExtrudeGeometry는 build.js가 벽 축으로 잰 거리를 uv에 넣는다)는 uv에 이미 면 크기가 들어 있다. 그래서 repeat은
@@ -139,6 +154,8 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   if (!threeMaterial) return threeMaterial;
   threeMaterial.map = null;
   if ('normalMap' in threeMaterial) { threeMaterial.normalMap = null; threeMaterial.roughnessMap = null; }   // 사진 갈래가 붙였던 것(재사용 재질)
+  if ('metalnessMap' in threeMaterial) { threeMaterial.metalness = 0; threeMaterial.metalnessMap = null; }   // 금속 타일이 붙였던 것(계획 19)
+  clearGroutPatch(threeMaterial);                                                                           // 줄눈 규칙도 떼고 시작한다(계획 19)
   if (!assignment || display === 'white') return threeMaterial;
   const m = materialById(assignment.id);
   if (!m) return threeMaterial;
@@ -181,18 +198,22 @@ export const normalSign = kind => (BACK_FACING_KINDS.has(kind) ? -1 : 1);
 // applyAssignment의 사진 갈래. 반복·오프셋·각도 규칙은 무늬 갈래와 같다(같은 faceRepeat · 원점 기준 회전 · offset mm ÷ 한 장 mm).
 // 사진이 아직 안 왔으면 바탕색만 칠한다 — 도착 알림이 장면을 다시 짓는다(photoTextures 머리).
 // 재질 값(계획 18 설계 §2.1): normalScale(없으면 0.5) × 뒷면 부호 · roughness(없으면 0.9 — 거칠기 맵이 곱해진다) · tint(없으면 PHOTO_TINT · 선형).
+// 타일(계획 19 설계 §4): metalness > 0이면 metalnessMap = 거칠기 지도(B = 면 마스크 → 줄눈은 금속이 아니다 · 환경 맵은 build.js gloss) · tiles면 줄눈 규칙.
 function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv, kind) {
-  const maps = photoTextures(m);
+  const maps = warming ? warmMaps : photoTextures(m);   // 예열은 받지 않고 빈 텍스처로 프로그램 키만 맞춘다(withWarmPhotos)
   if (!maps) { threeMaterial.color.set(m.base); return threeMaterial; }
-  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sc });
+  const sheet = tileSheet(m, sc);                 // 타일 배열은 한 장 = 조각 간격 × tiles(계획 19)
+  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sheet });
   const shifted = i => Number(assignment.offset?.[i]) || 0;
   const rot = ((Number(assignment.angle) || 0) * Math.PI) / 180;
-  const set = sharedPhotoMaps(photoKey(photoDirs(m)), maps, rx, ry, shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000), rot);
+  const set = warming ? warmMaps : sharedPhotoMaps(photoKey(photoDirs(m)), maps, rx, ry, shifted(0) / (sheet[0] || 1000), shifted(1) / (sheet[1] || 1000), rot);
   for (const key of PHOTO_MAPS) threeMaterial[key] = set[key];   // 같은 배치는 같은 복제본 — 리빌드가 GPU 재업로드를 부르지 않는다
   const ns = (m.normalScale ?? 0.5) * normalSign(kind);
   threeMaterial.normalScale?.set(ns, ns);
   threeMaterial.roughness = m.roughness ?? 0.9;
   threeMaterial.color.setRGB(...(m.tint ?? PHOTO_TINT));          // 선형 값 — 시안 render.html의 color.setRGB(tint)와 같다
+  if (m.metalness > 0 && 'metalnessMap' in threeMaterial) { threeMaterial.metalness = m.metalness; threeMaterial.metalnessMap = set.roughnessMap; }
+  if (m.tiles) groutPatch(threeMaterial, m.grout);
   threeMaterial.needsUpdate = true;
   return threeMaterial;
 }

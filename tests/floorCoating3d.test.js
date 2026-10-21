@@ -128,14 +128,14 @@ describe('build.js — 면 종류 부호 · 광택 거칠기', () => {
     }
   });
 
-  test('MF 바닥: 거칠기 0.6 · 환경 반사 0.15 · tint 색 · 맵 없음 — 흰 타일 벽은 그대로 0.35', () => {
+  test('MF 바닥: 거칠기 0.6 · 환경 반사 0.15 · tint 색 · 맵 없음 — 흰 타일 벽(계획 19부터 사진 재질)은 build.js가 거칠기를 덮지 않는다', () => {
     const fl = buildFloorGroup(floorWith('ucrete-mf-red'), { wallOpacity: 1 }).children.find(c => c.name === 'floor').material;
     expect(fl.roughness).toBe(0.6);
     expect(fl.envMapIntensity).toBe(0.15);
     expect(fl.map).toBeNull();
     expect(rgb(fl)).toEqual([0.312, 0.0468, 0.0209]);
     const face = buildFloorGroup(floorWith('ucrete-mf-red', 'tile-white-300'), { wallOpacity: 1 }).children.find(c => c.name === 'wallFace').material;
-    expect(face.roughness).toBe(0.35);
+    expect(face.roughness).toBe(0.9);                                     // 도착 전 벽 기본 — 도착 뒤 재질 값 1.2(applyPhoto)
   });
 
   test('MMA 바닥은 광택이 없어 환경 반사를 넣지 않고, UD200은 0.1 · 칩 에폭시는 0.25(사진 재질 거칠기는 재질 값 그대로)', async () => {
