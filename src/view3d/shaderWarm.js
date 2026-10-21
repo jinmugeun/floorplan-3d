@@ -19,12 +19,19 @@ import { normalizeDuct } from '../state/ductSchema.js';
 import { productById } from '../products/catalog.js';
 import { KITCHEN_PRODUCTS } from '../products/catalogKitchen.js';
 import { buildFloorGroup } from './build.js';
+import { withWarmPhotos } from '../materials/texture.js';
 import { syncLabelDots } from './labelDots.js';
 
 // 재질 변형을 고루 갖춘 작은 층: 벽(바깥면·안쪽 면·윗면·윤곽선)·바닥·천장(숨김 — compile은 보이지 않는 것도 훑는다)·스테인리스 형상(오븐·배식대 — 계획 17)·
 // 문 개구부·창(반투명 MeshStandard)·기둥·일반 제품(이름 라벨)·설비(번호 라벨)·덕트(반투명 + 단면 라벨).
+// 타일(계획 19 설계 §4.1): 줄눈 패치(customProgramCacheKey) × 금속(metalnessMap) × 벽 본체(FrontSide)·방 안쪽 면(DoubleSide) 네 변형을 첫 두 벽에 바른다
+// (나머지 두 벽은 지정 없는 벽 변형으로 남긴다). 사진은 받지 않는다 — warmGroup이 withWarmPhotos로 짓는다.
+export const WARM_TILES = ['tile-white-300', 'tile-metal-48'];
 export function warmFloor() {
   const walls = rectWalls([0, 0], [4000, 3000], 200, 2400);
+  const [tile, metal] = WARM_TILES.map(id => () => ({ id, offset: [0, 0], angle: 0 }));
+  walls[0] = { ...walls[0], matOut: tile(), matIn: metal() };
+  walls[1] = { ...walls[1], matOut: metal(), matIn: tile() };
   const w = walls[0];
   const on = (id, t, patch = {}) => createItem(productById(id), { wallId: w.id, t, ...patch });
   // 엑셀에서 그 형상이 사라져도 예열이 createItem(undefined)로 던지지 않게 일반 상자로(계획 17 최종 리뷰 M-15).
@@ -47,7 +54,7 @@ export function warmFloor() {
 // 실사 에셋 없이 짓는다(2026-10-13 · 계획 15 Task B · 사전 검토 I-6): 예열은 2D 시작 직후 유휴 시간에 돈다 — 예열 층의 제품에 asset이
 // 붙으면 2D만 쓰는 세션이 GLB·로더 청크를 받는다. 모델 재질의 프로그램은 첫 3D 프레임이 링크한다.
 export function warmGroup(view = {}) {
-  const g = buildFloorGroup(warmFloor(), { ...view, v3: { ...view.v3, assets: false } });
+  const g = withWarmPhotos(() => buildFloorGroup(warmFloor(), { ...view, v3: { ...view.v3, assets: false } }));
   const labels = g.children.find(o => o.name === 'labels');
   const sprite = labels?.children.find(o => o.isSprite);
   if (sprite) syncLabelDots(labels, [sprite]);
