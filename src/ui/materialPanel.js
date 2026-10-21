@@ -1,4 +1,4 @@
-import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById, photoDirs } from '../materials/catalog.js';
+import { MATERIAL_CATEGORIES, MATERIALS, materialsIn, searchMaterials, materialById, photoDirs, sharesColorMap } from '../materials/catalog.js';
 import { drawPattern } from '../materials/pattern.js';
 import { activeFloor, MAT_RANGE } from '../state/schema.js';
 import { assignmentOf } from '../state/materialOps.js';
@@ -32,21 +32,34 @@ export function placedMaterials(floor) {
 
 export const SWATCH_PX = 96;
 // 사진 마감재(계획 17 Task 7 · 계획 18)의 견본: 무늬(바탕색 speckle 등)를 먼저 그리고, 색 지도(photoDirs(m).color 폴더의 color.webp)가 오면 그 위에 덮는다.
-// 이미지는 폴더당 한 번 받는다. 오기 전에 그린 캔버스는 기다리는 목록에 두었다가 도착 때 한꺼번에 덮는다(패널을 다시 그리지 않는다). Image가 없는 환경(node)은 무늬만.
-// 받기가 실패한 폴더는 failed로 남겨 그 뒤 견본을 기다리는 목록에 넣지 않는다(무늬만 · 다시 받지 않는다 — 리뷰 Fix 1-3).
-const swatchPhotos = new Map();   // 색 지도 폴더 → { img, ready, failed, waiting: Set<canvas> }
-function swatchPhoto(dir, canvas) {
+// 색 지도를 여러 재질이 나눠 쓰면(UD200의 흰 바탕 지도 — sharesColorMap) base를 칠하고 그 위에 곱해(multiply) 그린다 — 다섯 견본이 각자 색으로 보인다(설계 §4).
+// 이미지는 폴더당 한 번 받는다. 오기 전에 그린 캔버스는 기다리는 목록(캔버스 → 재질)에 두었다가 도착 때 한꺼번에 덮는다(패널을 다시 그리지 않는다).
+// Image가 없는 환경(node)은 무늬만. 받기가 실패한 폴더는 failed로 남겨 그 뒤 견본을 기다리는 목록에 넣지 않는다(무늬만 · 다시 받지 않는다 — 리뷰 Fix 1-3).
+const swatchPhotos = new Map();   // 색 지도 폴더 → { img, ready, failed, waiting: Map<canvas, material> }
+export function paintSwatchPhoto(ctx, img, material) {
+  if (!sharesColorMap(material)) { ctx.drawImage(img, 0, 0, SWATCH_PX, SWATCH_PX); return; }
+  ctx.fillStyle = material.base;
+  ctx.fillRect(0, 0, SWATCH_PX, SWATCH_PX);
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.drawImage(img, 0, 0, SWATCH_PX, SWATCH_PX);
+  ctx.globalCompositeOperation = 'source-over';
+}
+function swatchPhoto(dir, canvas, material) {
   if (typeof Image === 'undefined') return null;
   let e = swatchPhotos.get(dir);
   if (!e) {
-    e = { img: new Image(), ready: false, failed: false, waiting: new Set() };
+    e = { img: new Image(), ready: false, failed: false, waiting: new Map() };
     swatchPhotos.set(dir, e);
-    e.img.onload = () => { e.ready = true; for (const c of e.waiting) c.getContext('2d')?.drawImage(e.img, 0, 0, SWATCH_PX, SWATCH_PX); e.waiting.clear(); };
+    e.img.onload = () => {
+      e.ready = true;
+      for (const [c, m] of e.waiting) { const x = c.getContext('2d'); if (x) paintSwatchPhoto(x, e.img, m); }
+      e.waiting.clear();
+    };
     e.img.onerror = () => { e.failed = true; e.waiting.clear(); };
     e.img.src = `textures/${dir}/color.webp`;
   }
   if (e.failed) return null;
-  if (!e.ready) e.waiting.add(canvas);
+  if (!e.ready) e.waiting.set(canvas, material);
   return e;
 }
 export function drawSwatch(canvas, material) {
@@ -56,8 +69,8 @@ export function drawSwatch(canvas, material) {
   drawPattern(ctx, material, SWATCH_PX);
   const dir = photoDirs(material)?.color;
   if (!dir) return;
-  const e = swatchPhoto(dir, canvas);
-  if (e?.ready) ctx.drawImage(e.img, 0, 0, SWATCH_PX, SWATCH_PX);
+  const e = swatchPhoto(dir, canvas, material);
+  if (e?.ready) paintSwatchPhoto(ctx, e.img, material);
 }
 
 // 타일 크기 덮어쓰기(§13.3). 범위는 normalizeAssignment가 자르는 값과 같은 곳에서 온다.
