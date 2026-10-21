@@ -141,8 +141,8 @@ describe('applyAssignment — 사진 갈래', () => {
       expect(m[k].offset.x).toBeCloseTo(0.5, 9);                         // 600 mm ÷ 1200 mm
       expect(m[k].rotation).toBeCloseTo(Math.PI / 2, 9);
     }
-    expect(m.normalScale.x).toBe(0.5);
-    expect(m.roughness).toBe(0.9);
+    expect(m.normalScale.x).toBe(1);                                      // 재질 값 1(계획 18 — mma-grit) · 종류 없음 = 부호 +1
+    expect(m.roughness).toBe(1);                                          // 무광(계획 18) — 거칠기 맵(mma-grit 0.8~1.0)이 곱해진다
     expect([m.color.r, m.color.g, m.color.b]).toEqual(PHOTO_TINT);
   });
 

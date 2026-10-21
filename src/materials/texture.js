@@ -134,7 +134,8 @@ export function faceRepeat(material, faceSizeMm, { worldUv = false, scale = null
 }
 
 // three 재질 하나에 지정을 반영한다. 지정이 없거나 화이트 단색 모드면 map을 붙이지 않는다.
-export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false } = {}) {
+// kind = 면 종류(build.surfaceMaterial의 'floor'·'ceiling'·'wall'·'wallTop') — 사진 갈래의 법선 부호(normalSign)에만 쓴다(계획 18).
+export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false, kind = null } = {}) {
   if (!threeMaterial) return threeMaterial;
   threeMaterial.map = null;
   if ('normalMap' in threeMaterial) { threeMaterial.normalMap = null; threeMaterial.roughnessMap = null; }   // 사진 갈래가 붙였던 것(재사용 재질)
@@ -142,7 +143,10 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   const m = materialById(assignment.id);
   if (!m) return threeMaterial;
   const sc = assignScale(assignment, m);          // 배정의 scale이 있으면 그것이 무늬 한 칸의 크기다
-  if (m.photo) return applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv);
+  if (m.photo) return applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv, kind);
+  // 사진 없는 단색 코팅(MF — 계획 18): tint(선형 RGB)를 3D 재질 색으로 그대로 칠한다. 견본 평균 base(sRGB)를 칠하면 조명의 밝기 차만큼
+  // 어긋난다(시안이 이렇게 맞춰 견본 평균에 닿았다 — 설계 §2.2). 무늬 텍스처는 붙이지 않는다(MF 무늬는 solid).
+  if (m.tint) { threeMaterial.color.setRGB(...m.tint); threeMaterial.needsUpdate = true; return threeMaterial; }
   // 재질의 기본 크기와 같은 scale은 캐시 키에 넣지 않는다: 같은 그림을 두 장 들고 있지 않게(M-5).
   const own = Array.isArray(m.scale) && sc[0] === Number(m.scale[0]) && sc[1] === Number(m.scale[1]);
   const tex = materialTexture(assignment.id, { makeCanvas, scale: assignment?.scale && !own ? sc : null });
@@ -166,9 +170,18 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   return threeMaterial;
 }
 
+// 위에서 보면 뒷면인 면 종류(계획 18 설계 §3.3). 바닥·벽 윗면은 ShapeGeometry를 rotation.x = +π/2로 눕힌 DoubleSide 면이라 법선이 아래(−y)를
+// 향해 위에서 보면 뒷면이다 — three r169는 DoubleSide 뒷면에서 tbn에 −1을 곱해(normal_fragment_begin) 법선 맵 요철 명암이 반대로 나온다
+// (시안 work/dome.png). 이 두 종류만 normalScale 부호를 뒤집는다. 천장은 같은 지오메트리지만 FrontSide라 아래에서 보면 앞면이고(tbn을 뒤집지
+// 않는다), 벽은 보이는 면이 앞면이다(본체 FrontSide · 방 안쪽 면 법선 = 방 안쪽 — detectRooms가 polygonArea 양수 면만 방으로 둔다 ·
+// 영역 평면 법선 = 벽 법선 쪽). 브라우저 법선 방향 검사(계획 18 Task 5 dome.mjs)가 면 종류마다 확인한다.
+export const BACK_FACING_KINDS = new Set(['floor', 'wallTop']);
+export const normalSign = kind => (BACK_FACING_KINDS.has(kind) ? -1 : 1);
+
 // applyAssignment의 사진 갈래. 반복·오프셋·각도 규칙은 무늬 갈래와 같다(같은 faceRepeat · 원점 기준 회전 · offset mm ÷ 한 장 mm).
 // 사진이 아직 안 왔으면 바탕색만 칠한다 — 도착 알림이 장면을 다시 짓는다(photoTextures 머리).
-function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv) {
+// 재질 값(계획 18 설계 §2.1): normalScale(없으면 0.5) × 뒷면 부호 · roughness(없으면 0.9 — 거칠기 맵이 곱해진다) · tint(없으면 PHOTO_TINT · 선형).
+function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv, kind) {
   const maps = photoTextures(m);
   if (!maps) { threeMaterial.color.set(m.base); return threeMaterial; }
   const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sc });
@@ -176,9 +189,10 @@ function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv) {
   const rot = ((Number(assignment.angle) || 0) * Math.PI) / 180;
   const set = sharedPhotoMaps(photoKey(photoDirs(m)), maps, rx, ry, shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000), rot);
   for (const key of PHOTO_MAPS) threeMaterial[key] = set[key];   // 같은 배치는 같은 복제본 — 리빌드가 GPU 재업로드를 부르지 않는다
-  threeMaterial.normalScale?.set(0.5, 0.5);
-  threeMaterial.roughness = 0.9;
-  threeMaterial.color.setRGB(...PHOTO_TINT);      // 선형 값 — 시안의 THREE.Color(0.72, 0.72, 0.71)과 같다
+  const ns = (m.normalScale ?? 0.5) * normalSign(kind);
+  threeMaterial.normalScale?.set(ns, ns);
+  threeMaterial.roughness = m.roughness ?? 0.9;
+  threeMaterial.color.setRGB(...(m.tint ?? PHOTO_TINT));          // 선형 값 — 시안 render.html의 color.setRGB(tint)와 같다
   threeMaterial.needsUpdate = true;
   return threeMaterial;
 }

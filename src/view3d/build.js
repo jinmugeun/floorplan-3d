@@ -36,10 +36,10 @@ function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize
   m.depthWrite = opacity >= 1; // 반투명 면이 깊이 버퍼를 쓰면 뒤 벽과 z-fighting이 난다
   m.userData.perMesh = true;
   // 마감재 지정이 있으면 무늬 텍스처를 붙인다(렌더 우선순위 region > mat > color).
-  if (assignment && (faceSize || worldUv)) applyAssignment(m, assignment, faceSize, { display, worldUv });
-  // 광택 마감(카탈로그 gloss — 칩 에폭시·흰 타일): 약한 환경 반사. 무광 면은 지금 밝기 그대로다(scene.environment를 쓰지 않는 원칙 — envMap.js 머리).
+  if (assignment && (faceSize || worldUv)) applyAssignment(m, assignment, faceSize, { display, worldUv, kind });   // kind → 사진 법선 부호(texture.normalSign)
+  // 광택 마감(카탈로그 gloss — 칩 에폭시·흰 타일·Ucrete): 약한 환경 반사. 사진 없는 광택 면의 거칠기는 카탈로그 roughness(MF 0.6 · 없으면 0.35). 무광 면은 지금 밝기 그대로다(scene.environment를 쓰지 않는 원칙 — envMap.js 머리).
   const gm = assignment && display !== 'white' ? materialById(assignment.id) : null;
-  if (gm?.gloss) { if (!gm.photo) m.roughness = 0.35; m.envMap = envMapNow(); m.envMapIntensity = gm.gloss; }
+  if (gm?.gloss) { if (!gm.photo) m.roughness = gm.roughness ?? 0.35; m.envMap = envMapNow(); m.envMapIntensity = gm.gloss; }
   return m;
 }
 const lineMaterial = color => { const m = new THREE.LineBasicMaterial({ color }); m.userData.perMesh = true; return m; };
