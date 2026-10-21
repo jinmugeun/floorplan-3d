@@ -121,6 +121,10 @@ export function materialTexture(id, { makeCanvas = null, scale = null } = {}) {
   return tex;
 }
 
+// 타일 배열(계획 19 설계 §3): 텍스처 한 장에 조각이 tiles[0] × tiles[1]개 든다 → 한 장 크기 = 조각 간격(scale — 배정의 덮어쓰기 포함) × tiles.
+// 반복은 1000 / (scale × tiles)이고 offset도 이 한 장으로 나눈다. tiles가 없는 재질은 scale이 곧 한 장이다(예전 그대로).
+export const tileSheet = (material, sc) => (Array.isArray(material?.tiles) ? [sc[0] * material.tiles[0], sc[1] * material.tiles[1]] : sc);
+
 // 반복 횟수 = 면 크기(mm) ÷ 무늬 한 칸 크기(mm). 0 나누기를 막고 최소 0.05를 준다.
 // worldUv: uv가 0~1이 아니라 "미터"인 지오메트리(ShapeGeometry는 정점 좌표를 그대로 uv로 쓰고, 벽 본체
 // ExtrudeGeometry는 build.js가 벽 축으로 잰 거리를 uv에 넣는다)는 uv에 이미 면 크기가 들어 있다. 그래서 repeat은
@@ -184,10 +188,11 @@ export const normalSign = kind => (BACK_FACING_KINDS.has(kind) ? -1 : 1);
 function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv, kind) {
   const maps = photoTextures(m);
   if (!maps) { threeMaterial.color.set(m.base); return threeMaterial; }
-  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sc });
+  const sheet = tileSheet(m, sc);                 // 타일 배열은 한 장 = 조각 간격 × tiles(계획 19)
+  const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sheet });
   const shifted = i => Number(assignment.offset?.[i]) || 0;
   const rot = ((Number(assignment.angle) || 0) * Math.PI) / 180;
-  const set = sharedPhotoMaps(photoKey(photoDirs(m)), maps, rx, ry, shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000), rot);
+  const set = sharedPhotoMaps(photoKey(photoDirs(m)), maps, rx, ry, shifted(0) / (sheet[0] || 1000), shifted(1) / (sheet[1] || 1000), rot);
   for (const key of PHOTO_MAPS) threeMaterial[key] = set[key];   // 같은 배치는 같은 복제본 — 리빌드가 GPU 재업로드를 부르지 않는다
   const ns = (m.normalScale ?? 0.5) * normalSign(kind);
   threeMaterial.normalScale?.set(ns, ns);

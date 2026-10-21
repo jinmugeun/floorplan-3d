@@ -228,16 +228,17 @@ test('faceRepeat worldUv는 면 크기를 무시하고 미터당 반복 수를 �
 
 test('applyAssignment는 map·repeat·offset·rotation을 세팅하고 화이트 모드에서는 붙이지 않는다', () => {
   const m = new THREE.MeshStandardMaterial();
-  applyAssignment(m, assign('tile-white-300', { offset: [150, 75.5], angle: 90 }), [3000, 2400]);
+  // 무늬 갈래(사진 없는 재질) — 흰 타일 300은 계획 19부터 사진(타일 배열) 재질이라 그레이 스트라이프 벽지(WP-02 · 300 × 600)로 본다
+  applyAssignment(m, assign('wallpaper-stripe', { offset: [150, 75.5], angle: 90 }), [3000, 2400]);
   expect(m.map).toBeTruthy();
   expect(m.map.repeat.x).toBeCloseTo(10, 6);        // 3000 / 300
   expect(m.map.offset.x).toBeCloseTo(0.5, 6);       // 150 / 300
-  expect(m.map.offset.y).toBeCloseTo(75.5 / 300, 6);
+  expect(m.map.offset.y).toBeCloseTo(75.5 / 600, 6);
   expect(m.map.rotation).toBeCloseTo(Math.PI / 2, 6);
   expect(m.map.center.x).toBe(0);                  // 회전·오프셋은 원점 기준(조각 위상이 렌더에서도 맞게)
   expect(m.color.getHex()).toBe(0xffffff);
   const w = new THREE.MeshStandardMaterial();
-  applyAssignment(w, assign('tile-white-300'), [3000, 2400], { display: 'white' });
+  applyAssignment(w, assign('wallpaper-stripe'), [3000, 2400], { display: 'white' });
   expect(w.map).toBeNull();
   const none = new THREE.MeshStandardMaterial();
   applyAssignment(none, null, [3000, 2400]);
@@ -302,7 +303,7 @@ test('레거시 마감재 문자열만 있는 면은 무늬 없이 색으로 칠
 test('바닥·천장은 방 재질을 쓰고 월드 uv 반복(미터당)을 쓴다', () => {
   // 벽 두께 200, 외곽 4200 × 3200 → 방 안쪽 바닥이 정확히 4000 × 3000 mm.
   const walls = rectWalls([0, 0], [4200, 3200], 200);
-  const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('tile-white-300'), ceilingMat: null, hideCeiling: false }));
+  const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('wallpaper-stripe'), ceilingMat: null, hideCeiling: false }));   // 무늬 갈래(300 × 600)
   const g = buildFloorGroup({ walls, rooms, height: 2300 }, { wallOpacity: 1 });
   const fl = g.children.find(c => c.name === 'floor');
   expect(fl.material.map).toBeTruthy();
@@ -312,16 +313,16 @@ test('바닥·천장은 방 재질을 쓰고 월드 uv 반복(미터당)을 쓴�
   expect(su).toBeCloseTo(4, 6);
   expect(sv).toBeCloseTo(3, 6);
   expect(fl.material.map.repeat.x).toBeCloseTo(1000 / 300, 9);
-  expect(fl.material.map.repeat.y).toBeCloseTo(1000 / 300, 9);
-  // 화면에 보이는 타일 수 = uv 범위 × repeat. 300 mm 타일이면 13.33 × 10장이어야 한다.
+  expect(fl.material.map.repeat.y).toBeCloseTo(1000 / 600, 9);
+  // 화면에 보이는 칸 수 = uv 범위 × repeat. 300 × 600 mm 무늬면 13.33 × 5칸이어야 한다.
   expect(su * fl.material.map.repeat.x).toBeCloseTo(40 / 3, 6);
-  expect(sv * fl.material.map.repeat.y).toBeCloseTo(10, 6);
+  expect(sv * fl.material.map.repeat.y).toBeCloseTo(5, 6);
 });
 
 test('월드 uv 면은 방이 커져도 무늬 한 칸 크기가 같다(타일 수만 늘어난다)', () => {
   const build = (wmm, hmm) => {
     const walls = rectWalls([0, 0], [wmm + 200, hmm + 200], 200);
-    const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('tile-white-300'), hideCeiling: true }));
+    const rooms = detectRooms(walls).map(r => ({ ...r, floorMat: assign('wallpaper-stripe'), hideCeiling: true }));
     return buildFloorGroup({ walls, rooms, height: 2300 }, { wallOpacity: 1 }).children.find(c => c.name === 'floor');
   };
   const small = build(2000, 2000), big = build(6000.5, 4000);
@@ -472,7 +473,7 @@ test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들�
   const walls = rectWalls([0, 0], [4000, 3000], 200);
   const target = walls[0];
   target.regions = {
-    in: [{ id: 'rg1', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 1200, mat: assign('tile-white-300') }],
+    in: [{ id: 'rg1', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 1200, mat: assign('wallpaper-stripe') }],
     out: [{ id: 'rg2', kind: 'rect', u0: 500.5, u1: 1500.5, z0: 300, z1: 900, mat: assign('brick-red') }],
   };
   const g = buildFloorGroup({ walls, rooms: detectRooms(walls), height: 2300 }, { wallOpacity: 1 });
@@ -495,7 +496,7 @@ test('영역은 벽면에서 띄운 평면 메시가 되고 벽 id·면을 들�
   expect(uvSpan(band.geometry)[1]).toBeCloseTo(1.2, 6);
   expect(band.material.map.repeat.x).toBeCloseTo(1000 / 300, 6);
   expect(uvSpan(band.geometry)[0] * band.material.map.repeat.x).toBeCloseTo(4000 / 300, 6);   // 4000 mm 띠 / 300 타일
-  expect(uvSpan(band.geometry)[1] * band.material.map.repeat.y).toBeCloseTo(1200 / 300, 6);
+  expect(uvSpan(band.geometry)[1] * band.material.map.repeat.y).toBeCloseTo(1200 / 600, 6);
   expect(uvSpan(rect.geometry)[0] * rect.material.map.repeat.x).toBeCloseTo(1000 / 230, 5);   // 1500.5 - 500.5 = 1000 / 적벽돌 230
   expect(uvSpan(rect.geometry)[1] * rect.material.map.repeat.y).toBeCloseTo(600 / 60, 5);
   // 벽 축 좌표라 uv 값 자체가 영역이 벽에서 있는 자리다(0~1 uv면 늘 0~1이었다).
@@ -625,7 +626,7 @@ test('영역도 개구부를 피해 쪼개지고, 개구부 안에 잠긴 영역
   const walls = rectWalls([0, 0], [4000, 3000], 200);
   const target = walls.find(w => w.a[1] === 0 && w.b[1] === 0);
   target.regions = {
-    in: [{ id: 'band', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 900, mat: assign('tile-white-300') }],
+    in: [{ id: 'band', kind: 'band', u0: 0, u1: 4000, z0: 0, z1: 900, mat: assign('wallpaper-stripe') }],
     out: [{ id: 'inside', kind: 'rect', u0: 1600, u1: 2400, z0: 200, z1: 800, mat: assign('brick-red') }],
   };
   const items = [createItem(productById('door-swing-900'), { wallId: target.id, t: 0.5, pos: [2000, 0] })];
@@ -681,17 +682,17 @@ test('assignScale과 faceRepeat가 assignment.scale을 우선한다(소수 크�
 
 test('applyAssignment는 assignment.scale로 반복·오프셋을 잡고 텍스처 캐시 키를 나눈다', () => {
   const m = new THREE.MeshStandardMaterial();
-  applyAssignment(m, { id: 'tile-white-300', offset: [150, 0], angle: 0, scale: [600, 600] }, [3000, 2400]);
+  applyAssignment(m, { id: 'wallpaper-stripe', offset: [150, 0], angle: 0, scale: [600, 600] }, [3000, 2400]);   // 무늬 갈래(계획 19 — 흰 타일 300은 사진 재질)
   expect(m.map.repeat.x).toBeCloseTo(5, 9);
   expect(m.map.repeat.y).toBeCloseTo(4, 9);
   expect(m.map.offset.x).toBeCloseTo(0.25, 9);                 // 150 / 600
-  const base = materialTexture('tile-white-300');
-  const scaled = materialTexture('tile-white-300', { scale: [600, 600] });
+  const base = materialTexture('wallpaper-stripe');
+  const scaled = materialTexture('wallpaper-stripe', { scale: [600, 600] });
   expect(scaled).not.toBe(base);                               // 키가 다르다
-  expect(materialTexture('tile-white-300', { scale: [600, 600] })).toBe(scaled);
+  expect(materialTexture('wallpaper-stripe', { scale: [600, 600] })).toBe(scaled);
   // M-5: 재질의 기본 크기와 같은 scale은 키를 나누지 않는다(같은 그림을 두 장 들고 있지 않게).
   const m2 = new THREE.MeshStandardMaterial();
-  applyAssignment(m2, { id: 'tile-white-300', offset: [0, 0], angle: 0, scale: [300, 300] }, [3000, 2400]);
+  applyAssignment(m2, { id: 'wallpaper-stripe', offset: [0, 0], angle: 0, scale: [300, 600] }, [3000, 2400]);
   expect(m2.map.image).toBe(base.image);                       // 캐시 원본을 복제해 쓴다 = 같은 캔버스
   // assignScale은 카탈로그 배열을 그대로 내주지 않는다(M-4).
   const sc = assignScale({ id: 'tile-white-300' }, materialById('tile-white-300'));

@@ -1,8 +1,9 @@
 // 마감재 카탈로그(순수 데이터). 실판매 자재 DB는 범위 밖이라 제조사는 모두 '오늘의집'으로 두고
 // base = 바탕색, accent = 무늬색, pattern = 무늬 종류, scale = 무늬 한 칸의 실제 크기(mm),
 // pricePerM2 = m²당 단가(원, 정적)로 둔다. 견적서(estimate.js)가 면적과 곱한다.
-// 렌더 필드(모두 선택 — 없으면 예전 동작 · 계획 18 설계 §2.1): photo = 사진 폴더(문자열 하나, 또는 맵마다 { color, normal, rough } — photoDirs) ·
-// tint = 선형 RGB(사진 색에 곱하고, 사진이 없으면 3D 재질 색 그대로) · roughness · normalScale · gloss = 환경 반사 세기(0·없으면 환경 맵 없음).
+// 렌더 필드(모두 선택 — 없으면 예전 동작 · 계획 18 설계 §2.1 · 계획 19 설계 §3): photo = 사진 폴더(문자열 하나, 또는 맵마다 { color, normal, rough } — photoDirs) ·
+// tint = 선형 RGB(사진 색에 곱하고, 사진이 없으면 3D 재질 색 그대로) · roughness · normalScale · gloss = 환경 반사 세기(0·없으면 환경 맵 없음) ·
+// tiles = 텍스처 한 장의 조각 수 [nx, ny](타일 배열 — 줄눈 규칙) · metalness(> 0이면 거칠기 지도 B = 면 마스크를 metalnessMap으로) · grout = sRGB 줄눈색(없으면 DEFAULT_GROUT).
 export const MATERIAL_CATEGORIES = ['페인트', '벽지', '대리석', '마루/잔디', '타일', '벽돌', '콘크리트', '시멘트', '테라조', '바닥 코팅', '카페트', '스테인리스'];
 export const MATERIAL_PATTERNS = ['solid', 'stripe', 'tile', 'plank', 'brick', 'speckle', 'marble', 'concrete', 'carpet', 'steel'];
 
@@ -20,6 +21,21 @@ const ud200 = (n, c, name, base, accent, tint) => FC(n, `ucrete-ud200-${c}`, `Uc
   { photo: 'ud200', tint, roughness: 1, normalScale: 1.8, gloss: 0.1 });
 const mf = (n, c, name, base, accent, tint) => FC(n, `ucrete-mf-${c}`, `Ucrete MF ${name}`, base, accent, 'solid', 1000,
   { tint, roughness: 0.6, gloss: 0.15 });
+// 벽 타일(계획 19 — 시안 app/.superpowers/sdd/scratch/tile-look report.txt · result.json). 배열 폴더 tile-<배열>/{color,normal,rough}는 무채색 공용이고
+// 색은 tint(선형 · albedo = tint × 0.80)다. scale = 조각 간격(2D 'tile' 무늬·크기 덮어쓰기와 같은 뜻) · 한 장 = scale × tiles(texture.tileSheet).
+// 거칠기 지도의 면 값이 0.10이라 roughness = 면 거칠기 ÷ 0.10(유광 1 · 무광 5.5 · 대형 무광 6 — three가 곱한 뒤 1로 자른다). 진한 단색 유광은 gloss 0.15.
+// 새 14종: 코드 TL-05~18 · 임시 단가 60,000원/m²(실제 단가는 사용자가 알려 주면 바꾼다) · base/accent = 시안 materials.js의 '지금' 단색(금속은 SS-02 · SS-04).
+export const DEFAULT_GROUT = '#d4d1ca';   // 백시멘트 회백 — 줄눈 규칙(materials/grout.js)과 견본 격자(pattern.tileSwatchParts)가 쓴다
+const LAYOUT = {   // 배열 → [조각 간격 mm, 한 장의 조각 수] — tools/look/tile-textures.mjs LAYOUTS와 같은 한 장(육각 45.47 × 8 = 363.76 ≈ 363.73)
+  sq25: [[25, 25], [16, 16]], sq48: [[50, 50], [8, 8]], sq97: [[100, 100], [8, 8]],
+  hex50: [[45.47, 52.5], [8, 8]], lg300: [[300, 300], [2, 2]], lg600: [[600, 600], [2, 2]],
+};
+const GLOSSY = { roughness: 1, normalScale: 1, gloss: 0.3 }, DARK = { ...GLOSSY, gloss: 0.15 }, MATTE = { roughness: 5.5, normalScale: 1, gloss: 0.1 };
+const METAL = roughness => ({ roughness, normalScale: 1, gloss: 0.9, metalness: 1 });   // 금속은 환경 맵(gloss)이 꼭 있어야 한다 — 없으면 검다
+const look = (layout, tint, finish, photo = `tile-${layout}`) => ({ photo, tiles: [...LAYOUT[layout][1]], tint, ...finish });
+const own = (color, normal, rough) => ({ color: `tile-${color}`, normal: `tile-${normal}`, rough: `tile-${rough}` });   // 섞음 색 지도 · 엠보 법선
+const TL = (n, id, name, base, accent, layout, ...rest) =>
+  ({ ...M(id, name, `TL-${String(n).padStart(2, '0')}`, '타일', base, accent, 'tile', [...LAYOUT[layout][0]], 60000), ...look(layout, ...rest) });
 
 export const MATERIALS = [
   // 페인트
@@ -42,11 +58,26 @@ export const MATERIALS = [
   M('wood-walnut', '월넛 원목마루', 'WD-02', '마루/잔디', '#8d6142', '#6b452d', 'plank', [1200, 190], 92000),
   M('wood-ash', '애쉬 강마루', 'WD-03', '마루/잔디', '#e2d4bd', '#c3b096', 'plank', [1200, 190], 52000),
   M('grass-lawn', '인조 잔디', 'WD-04', '마루/잔디', '#5f8a4a', '#476b36', 'carpet', [500, 500], 38000),
-  // 타일
-  { ...M('tile-white-300', '화이트 타일 300', 'TL-01', '타일', '#f4f5f6', '#cfd4d8', 'tile', [300, 300], 42000), gloss: 0.3 },   // 급식실 벽 기본(계획 17) — 약한 광택
-  M('tile-gray-600', '그레이 포세린 600', 'TL-02', '타일', '#c8cccf', '#a8adb2', 'tile', [600, 600], 58000),
-  M('tile-mosaic-100', '모자이크 타일 100', 'TL-03', '타일', '#dfe9ec', '#9fc3cc', 'tile', [100, 100], 66000),
-  M('tile-hex-black', '블랙 헥사 타일', 'TL-04', '타일', '#3a3f45', '#6f767e', 'tile', [200, 200], 70000),
+  // 타일 — 기존 4종은 id·이름·코드·단가 그대로(계획 19 설계 §3). 모자이크 타일 100의 색 = 시트라인 C형 97 mm 견본 중 옛 base #dfe9ec에 가장 가까운
+  // C02 화이트 유광(표본 #e7e7e9 · ΔE 3.58)을 시안 흰색 규칙대로 최대 채널 240으로 · 블랙 헥사 = G10 실측 검정 #0d0c0f(50 mm 육각 · 진한 유광 0.15).
+  { ...M('tile-white-300', '화이트 타일 300', 'TL-01', '타일', '#f4f5f6', '#cfd4d8', 'tile', [300, 300], 42000), ...look('lg300', [1.1289, 1.1394, 1.15], { ...GLOSSY, roughness: 1.2 }) },   // 급식실 벽 기본(계획 17)
+  { ...M('tile-gray-600', '그레이 포세린 600', 'TL-02', '타일', '#c8cccf', '#a8adb2', 'tile', [600, 600], 58000), ...look('lg600', [0.722, 0.7548, 0.78], { ...MATTE, roughness: 6 }) },
+  { ...M('tile-mosaic-100', '모자이크 타일 100', 'TL-03', '타일', '#efeff0', '#cecece', 'tile', [100, 100], 66000), ...look('sq97', [1.0789, 1.0789, 1.0892], GLOSSY) },
+  { ...M('tile-hex-black', '블랙 헥사 타일', 'TL-04', '타일', '#0d0c0f', '#6f767e', 'tile', [45.47, 52.5], 70000), ...look('hex50', [0.005, 0.0046, 0.006], DARK) },
+  TL(5, 'tile-white-25', '화이트 유광 25 모자이크', '#edecf0', '#cccbce', 'sq25', [1.0586, 1.0485, 1.0892], GLOSSY),
+  TL(6, 'tile-black-25', '블랙 유광 25 모자이크', '#1c1c19', '#181816', 'sq25', [0.0145, 0.0145, 0.0122], DARK),
+  TL(7, 'tile-mint-25', '민트 유광 25 모자이크', '#c3edea', '#a8ccc9', 'sq25', [0.6822, 1.0586, 1.0285], GLOSSY),
+  TL(8, 'tile-bluemix-25', '블루믹스 유광 25 모자이크', '#78aec7', '#6796ab', 'sq25', [1.1111, 1.1111, 1.1111], GLOSSY, own('sq25-bluemix', 'sq25', 'sq25')),
+  TL(9, 'tile-white-matte-48', '화이트 무광 48 모자이크', '#f0f0ed', '#cececc', 'sq48', [1.0892, 1.0892, 1.0586], MATTE),
+  TL(10, 'tile-lightgray-48', '연그레이 유광 48 모자이크', '#c8c7c4', '#acaba9', 'sq48', [0.722, 0.7139, 0.69], GLOSSY),
+  TL(11, 'tile-ivory-48', '아이보리 유광 48 모자이크', '#e1dcca', '#c2bdae', 'sq48', [0.9412, 0.8946, 0.7383], GLOSSY),
+  TL(12, 'tile-checkmix-48', '체크믹스 유광 48 모자이크', '#7c7d80', '#6b6c6e', 'sq48', [1.1111, 1.1111, 1.1111], GLOSSY, own('sq48-check', 'sq48', 'sq48')),
+  TL(13, 'tile-mint-48', '민트 유광 48 모자이크', '#c0e5e7', '#a5c5c7', 'sq48', [0.6589, 0.9794, 0.9989], GLOSSY),
+  TL(14, 'tile-metal-48', '메탈실버 유광 48 모자이크', '#dfe3e6', '#bcc2c7', 'sq48', [0.775, 0.7875, 0.8], METAL(1.6)),
+  TL(15, 'tile-metal-emboss-48', '메탈실버 엠보 48 모자이크', '#b9bfc4', '#9aa1a7', 'sq48', [0.725, 0.725, 0.725], METAL(2.5), own('sq48', 'sq48-emboss', 'sq48')),
+  TL(16, 'tile-skyblue-97', '연하늘 유광 97 모자이크', '#abcdcf', '#93b0b2', 'sq97', [0.5091, 0.7631, 0.78], GLOSSY),
+  TL(17, 'tile-deepgray-97', '딥그레이 유광 97 모자이크', '#677070', '#596060', 'sq97', [0.1695, 0.2025, 0.2025], DARK),
+  TL(18, 'tile-hex-white-50', '화이트 무광 육각 50 모자이크', '#f0f0ed', '#cececc', 'hex50', [1.0892, 1.0892, 1.0586], MATTE),
   // 벽돌
   M('brick-red', '적벽돌', 'BR-01', '벽돌', '#a8563c', '#e2dcd2', 'brick', [230, 60], 72000),
   M('brick-white', '화이트 페인티드 벽돌', 'BR-02', '벽돌', '#eeeae4', '#cfc9c0', 'brick', [230, 60], 68000),

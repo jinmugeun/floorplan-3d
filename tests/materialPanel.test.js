@@ -32,7 +32,7 @@ describe('마감재 패널', () => {
     expect(el.querySelectorAll('[data-cat]')).toHaveLength(12);
     click(el, '[data-cat="타일"]');
     const tiles = [...el.querySelectorAll('.tile')];
-    expect(tiles).toHaveLength(4);
+    expect(tiles).toHaveLength(18);                                // 계획 19: 기존 4 + 모자이크 14
     expect(tiles[0].querySelector('canvas')).not.toBeNull();
     expect(tiles[0].textContent).toContain('오늘의집');
     click(el, '[data-up]');
@@ -133,7 +133,7 @@ describe('타일 배치와 타일 크기', () => {
     click(el, '[data-cat="타일"]');
     expect(el.querySelector('[name="scaleW"]').value).toBe('300');   // tile-white-300의 기본 크기
     expect(el.querySelector('[name="scaleH"]').value).toBe('300');
-    expect(el.querySelectorAll('.tile')).toHaveLength(4);            // 타일 목록은 그대로다
+    expect(el.querySelectorAll('.tile')).toHaveLength(18);           // 타일 목록은 그대로다(계획 19: 18종)
   });
 
   test('타일을 고르면 지금의 크기가 matPick에 실리고, 칸을 고치면 곧바로 반영된다', () => {
