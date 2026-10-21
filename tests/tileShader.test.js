@@ -3,7 +3,7 @@
 import { describe, test, expect, vi, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { materialById } from '../src/materials/catalog.js';
-import { applyAssignment, photoTextures, withWarmPhotos, __resetPhotos } from '../src/materials/texture.js';
+import { applyAssignment, photoTextures, withWarmPhotos, __resetPhotos, PHOTO_MAPS } from '../src/materials/texture.js';
 import { GROUT_KEY, GROUT_MAP_FRAGMENT, groutLinear, groutUniform, groutPatch } from '../src/materials/grout.js';
 import { buildFloorGroup } from '../src/view3d/build.js';
 import { warmGroup, WARM_TILES } from '../src/view3d/shaderWarm.js';
@@ -132,5 +132,30 @@ describe('셰이더 예열(shaderWarm)', () => {
     expect(spy).toHaveBeenCalledTimes(3);
     expect(real.map).toBeNull();
     expect(real.color.getHexString()).toBe('dfe3e6');
+  });
+
+  // 최종 리뷰 M-1: 예열이 공유 복제본 캐시(sharedPhotoMaps)를 지나게 바뀌면 같은 배치 키(묶음|반복|0|0|0)에 빈 텍스처 복제본이 남아
+  // 사진이 온 뒤의 타일 벽이 올라간 적 없는 빈 텍스처를 붙인다(검게 보인다). 예열과 같은 배치로 칠해 진짜 지도의 source인지 본다.
+  test('예열 뒤에 도착한 사진은 진짜 지도를 붙인다(예열의 빈 텍스처가 아니다)', async () => {
+    const warm = withWarmPhotos(() => painted('tile-white-300'));
+    await arrive('tile-white-300');
+    const real = painted('tile-white-300');                                          // 예열과 같은 반복·오프셋·각도
+    const maps = photoTextures(materialById('tile-white-300'));
+    for (const k of PHOTO_MAPS) {
+      expect(real[k], k).not.toBeNull();
+      expect(real[k].source, k).toBe(maps[k].source);
+      expect(real[k].source, k).not.toBe(warm[k].source);
+    }
+  });
+
+  // T3-m3: fn이 던져도 finally가 예열 표시를 되돌린다 — 뒤의 평소 빌드는 사진을 받고 빈 텍스처를 붙이지 않는다.
+  test('withWarmPhotos 안에서 fn이 던져도 끝나면 평소대로 받는다', () => {
+    const spy = vi.spyOn(THREE.TextureLoader.prototype, 'loadAsync').mockImplementation(() => new Promise(() => {}));
+    globalThis.document = {};
+    expect(() => withWarmPhotos(() => { throw new Error('예열 실패'); })).toThrow('예열 실패');
+    const real = painted('tile-metal-48');
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect([real.map, real.normalMap, real.roughnessMap, real.metalnessMap]).toEqual([null, null, null, null]);
+    expect(isDefault(real)).toBe(true);
   });
 });
