@@ -3,8 +3,8 @@ import { MATERIAL_CATEGORIES, MATERIAL_PATTERNS, MATERIALS, materialById, materi
 import { patternParts, drawPattern } from '../src/materials/pattern.js';
 
 describe('마감재 카탈로그', () => {
-  test('카테고리 11개가 정확한 이름과 순서로 있다', () => {
-    expect(MATERIAL_CATEGORIES).toEqual(['페인트', '벽지', '대리석', '마루/잔디', '타일', '벽돌', '콘크리트', '시멘트', '테라조', '카페트', '스테인리스']);
+  test('카테고리 12개가 정확한 이름과 순서로 있다(바닥 코팅은 테라조 다음 — 계획 18)', () => {
+    expect(MATERIAL_CATEGORIES).toEqual(['페인트', '벽지', '대리석', '마루/잔디', '타일', '벽돌', '콘크리트', '시멘트', '테라조', '바닥 코팅', '카페트', '스테인리스']);
   });
 
   test('재질이 40개 이상이고 카테고리마다 3개 이상이며 id·코드가 겹치지 않는다', () => {

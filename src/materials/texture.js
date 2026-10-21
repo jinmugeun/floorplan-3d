@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { materialById } from './catalog.js';
+import { materialById, photoDirs, photoKey } from './catalog.js';
 import { drawPattern } from './pattern.js';
 
 export const TEX_PX = 128;              // 무늬 한 칸을 그리는 캔버스 크기(반복은 repeat이 한다)
@@ -12,28 +12,43 @@ const defaultCanvas = () => (typeof document === 'undefined' ? null : document.c
 const cache = new Map();
 export function clearTextureCache() { for (const t of cache.values()) t?.dispose?.(); cache.clear(); }
 
-// 사진 마감재(계획 17 Task 7): 카탈로그 항목의 photo = public/textures/<photo>/ 폴더. 색·법선·거칠기 3장을 종류당 한 번 받아 캐시한다.
-// three r169: 로드가 끝나기 전에 clone한 텍스처는 영영 올라가지 않는다 — 도착 전에는 null을 돌려(쓰는 쪽은 바탕색) 붙이지 않게 하고,
-// 도착하면 onPhotoReady 구독자(build.js → itemAssets.assetsChanged → view3d 리빌드)에게 알린다. node(document 없음)는 늘 null이고
-// 캐시에도 넣지 않는다(뒤에 가짜 document를 깐 테스트가 받을 수 있게). 실패는 한 번 경고하고 그 종류는 다시 받지 않는다(바탕색으로 남는다).
-const photos = new Map(), photoSubs = new Set();
+// 사진 마감재(계획 17 Task 7 · 계획 18): 카탈로그 항목의 photo → photoDirs(색·법선·거칠기 폴더 — public/textures/<폴더>/{color,normal,rough}.webp).
+// 텍스처는 **URL마다** 한 번 받아 캐시하고(mma-grit/normal.webp는 MMA 5색과 그레이 칩 에폭시가 함께 쓴다), 재질의 세 장 묶음은 폴더 묶음 키
+// (photoKey = '색|법선|거칠기')로 캐시한다. three r169: 로드가 끝나기 전에 clone한 텍스처는 영영 올라가지 않는다 — 도착 전에는 null을 돌려
+// (쓰는 쪽은 바탕색) 붙이지 않게 하고, 도착하면 onPhotoReady 구독자(build.js → itemAssets.assetsChanged → view3d 리빌드)에게 묶음 키로 알린다.
+// node(document 없음)는 늘 null이고 캐시에도 넣지 않는다(뒤에 가짜 document를 깐 테스트가 받을 수 있게). 실패는 묶음마다 한 번 경고하고
+// 그 묶음은 다시 받지 않는다(바탕색으로 남는다).
+const photos = new Map(), photoUrls = new Map(), photoSubs = new Set();
 export const PHOTO_MAPS = ['map', 'normalMap', 'roughnessMap'];
-export const PHOTO_TINT = [0.72, 0.72, 0.71];   // 선형 색 곱 — 시안(scratch/look/proto.html floorPhoto)에서 사진 그대로는 바닥이 떠 보였다
+export const PHOTO_TINT = [0.72, 0.72, 0.71];   // tint 없는 사진 재질의 선형 색 곱 — 시안(scratch/look/proto.html floorPhoto)에서 사진 그대로는 바닥이 떠 보였다
 export const onPhotoReady = cb => { photoSubs.add(cb); return () => { photoSubs.delete(cb); }; };
+function photoUrl(loader, url, isColor) {
+  if (!photoUrls.has(url)) {
+    photoUrls.set(url, loader.loadAsync(url).then(t => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+      if (isColor) t.colorSpace = THREE.SRGBColorSpace;   // 법선·거칠기는 색이 아니다
+      return t;
+    }));
+  }
+  return photoUrls.get(url);
+}
 export function photoTextures(material) {
-  const dir = material?.photo;
-  if (!dir) return null;
-  if (photos.has(dir)) return photos.get(dir).maps;
+  const dirs = photoDirs(material);
+  if (!dirs) return null;
+  const key = photoKey(dirs);
+  if (photos.has(key)) return photos.get(key).maps;
   if (typeof document === 'undefined') return null;
   const entry = { maps: null };
-  photos.set(dir, entry);
+  photos.set(key, entry);
   const loader = new THREE.TextureLoader();
-  Promise.all(['color', 'normal', 'rough'].map(k => loader.loadAsync(`textures/${dir}/${k}.webp`))).then(([map, normalMap, roughnessMap]) => {
-    for (const t of [map, normalMap, roughnessMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; }
-    map.colorSpace = THREE.SRGBColorSpace;
+  Promise.all([
+    photoUrl(loader, `textures/${dirs.color}/color.webp`, true),
+    photoUrl(loader, `textures/${dirs.normal}/normal.webp`, false),
+    photoUrl(loader, `textures/${dirs.rough}/rough.webp`, false),
+  ]).then(([map, normalMap, roughnessMap]) => {
     entry.maps = { map, normalMap, roughnessMap };
-    notifyPhoto(dir);
-  }).catch(e => console.warn(`사진 마감재 생략(${dir}): ${e?.message ?? e}`));
+    notifyPhoto(key);
+  }).catch(e => console.warn(`사진 마감재 생략(${key}): ${e?.message ?? e}`));
   return null;
 }
 // 구독자마다 따로 감싼다(리뷰 Fix 1-4): 하나가 던져도 나머지는 알림을 받고, 받기 실패 경고("생략")로 새지 않는다. 경고는 구독자당 한 번.
@@ -46,12 +61,12 @@ function notifyPhoto(dir) {
   }
 }
 // 배치별 공유 복제본(리뷰 Fix 1-1): three 0.169의 Texture.copy()는 needsUpdate = true로 **공유 source.version**을 올린다 —
-// 면마다 새로 복제하면 리빌드마다 1024² 사진 3장을 GPU에 다시 올리고 밉맵을 다시 만든다. 같은 (폴더 · 반복 · 오프셋 · 각도)는
+// 면마다 새로 복제하면 리빌드마다 1024² 사진 3장을 GPU에 다시 올리고 밉맵을 다시 만든다. 같은 (폴더 묶음 키 · 반복 · 오프셋 · 각도)는
 // 같은 복제본 3장을 나눠 쓰고(반복·오프셋·각도는 uniform이라 GPU 텍스처는 원본과 하나다), disposeGroup은 이것을 버리지 않는다
 // (userData.photoShared — clone 표시가 없다). 배치 종류만큼 JS 객체가 남는다(GPU 메모리는 늘지 않는다).
 const photoClones = new Map();   // 키 → { map, normalMap, roughnessMap }
-function sharedPhotoMaps(dir, maps, rx, ry, ox, oy, rot) {
-  const key = `${dir}|${rx}|${ry}|${ox}|${oy}|${rot}`;
+function sharedPhotoMaps(bundle, maps, rx, ry, ox, oy, rot) {
+  const key = `${bundle}|${rx}|${ry}|${ox}|${oy}|${rot}`;
   let set = photoClones.get(key);
   if (set) return set;
   set = {};
@@ -67,10 +82,10 @@ function sharedPhotoMaps(dir, maps, rx, ry, ox, oy, rot) {
   photoClones.set(key, set);
   return set;
 }
-// 테스트용 — 사진 캐시와 공유 복제본을 비운다(복제본은 dispose). 구독(build.js의 모듈 구독)은 남긴다.
+// 테스트용 — 사진 캐시(URL · 묶음)와 공유 복제본을 비운다(복제본은 dispose). 구독(build.js의 모듈 구독)은 남긴다.
 export function __resetPhotos() {
   for (const set of photoClones.values()) for (const k of PHOTO_MAPS) set[k].dispose();
-  photoClones.clear(); photos.clear();
+  photoClones.clear(); photos.clear(); photoUrls.clear();
 }
 
 // 타일 크기 덮어쓰기(§13.3): 마감재 배정이 쓸 수 있는 scale을 들고 있으면 재질의 기본 scale 대신 쓴다.
@@ -119,7 +134,8 @@ export function faceRepeat(material, faceSizeMm, { worldUv = false, scale = null
 }
 
 // three 재질 하나에 지정을 반영한다. 지정이 없거나 화이트 단색 모드면 map을 붙이지 않는다.
-export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false } = {}) {
+// kind = 면 종류(build.surfaceMaterial의 'floor'·'ceiling'·'wall'·'wallTop') — 사진 갈래의 법선 부호(normalSign)에만 쓴다(계획 18).
+export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display = 'normal', makeCanvas = null, worldUv = false, kind = null } = {}) {
   if (!threeMaterial) return threeMaterial;
   threeMaterial.map = null;
   if ('normalMap' in threeMaterial) { threeMaterial.normalMap = null; threeMaterial.roughnessMap = null; }   // 사진 갈래가 붙였던 것(재사용 재질)
@@ -127,7 +143,10 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   const m = materialById(assignment.id);
   if (!m) return threeMaterial;
   const sc = assignScale(assignment, m);          // 배정의 scale이 있으면 그것이 무늬 한 칸의 크기다
-  if (m.photo) return applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv);
+  if (m.photo) return applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv, kind);
+  // 사진 없는 단색 코팅(MF — 계획 18): tint(선형 RGB)를 3D 재질 색으로 그대로 칠한다. 견본 평균 base(sRGB)를 칠하면 조명의 밝기 차만큼
+  // 어긋난다(시안이 이렇게 맞춰 견본 평균에 닿았다 — 설계 §2.2). 무늬 텍스처는 붙이지 않는다(MF 무늬는 solid).
+  if (m.tint) { threeMaterial.color.setRGB(...m.tint); threeMaterial.needsUpdate = true; return threeMaterial; }
   // 재질의 기본 크기와 같은 scale은 캐시 키에 넣지 않는다: 같은 그림을 두 장 들고 있지 않게(M-5).
   const own = Array.isArray(m.scale) && sc[0] === Number(m.scale[0]) && sc[1] === Number(m.scale[1]);
   const tex = materialTexture(assignment.id, { makeCanvas, scale: assignment?.scale && !own ? sc : null });
@@ -151,19 +170,29 @@ export function applyAssignment(threeMaterial, assignment, faceSizeMm, { display
   return threeMaterial;
 }
 
+// 위에서 보면 뒷면인 면 종류(계획 18 설계 §3.3). 바닥·벽 윗면은 ShapeGeometry를 rotation.x = +π/2로 눕힌 DoubleSide 면이라 법선이 아래(−y)를
+// 향해 위에서 보면 뒷면이다 — three r169는 DoubleSide 뒷면에서 tbn에 −1을 곱해(normal_fragment_begin) 법선 맵 요철 명암이 반대로 나온다
+// (시안 work/dome.png). 이 두 종류만 normalScale 부호를 뒤집는다. 천장은 같은 지오메트리지만 FrontSide라 아래에서 보면 앞면이고(tbn을 뒤집지
+// 않는다), 벽은 보이는 면이 앞면이다(본체 FrontSide · 방 안쪽 면 법선 = 방 안쪽 — detectRooms가 polygonArea 양수 면만 방으로 둔다 ·
+// 영역 평면 법선 = 벽 법선 쪽). 브라우저 법선 방향 검사(계획 18 Task 5 dome.mjs)가 면 종류마다 확인한다.
+export const BACK_FACING_KINDS = new Set(['floor', 'wallTop']);
+export const normalSign = kind => (BACK_FACING_KINDS.has(kind) ? -1 : 1);
+
 // applyAssignment의 사진 갈래. 반복·오프셋·각도 규칙은 무늬 갈래와 같다(같은 faceRepeat · 원점 기준 회전 · offset mm ÷ 한 장 mm).
 // 사진이 아직 안 왔으면 바탕색만 칠한다 — 도착 알림이 장면을 다시 짓는다(photoTextures 머리).
-function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv) {
+// 재질 값(계획 18 설계 §2.1): normalScale(없으면 0.5) × 뒷면 부호 · roughness(없으면 0.9 — 거칠기 맵이 곱해진다) · tint(없으면 PHOTO_TINT · 선형).
+function applyPhoto(threeMaterial, m, assignment, faceSizeMm, sc, worldUv, kind) {
   const maps = photoTextures(m);
   if (!maps) { threeMaterial.color.set(m.base); return threeMaterial; }
   const [rx, ry] = faceRepeat(m, faceSizeMm, { worldUv, scale: sc });
   const shifted = i => Number(assignment.offset?.[i]) || 0;
   const rot = ((Number(assignment.angle) || 0) * Math.PI) / 180;
-  const set = sharedPhotoMaps(m.photo, maps, rx, ry, shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000), rot);
+  const set = sharedPhotoMaps(photoKey(photoDirs(m)), maps, rx, ry, shifted(0) / (sc[0] || 1000), shifted(1) / (sc[1] || 1000), rot);
   for (const key of PHOTO_MAPS) threeMaterial[key] = set[key];   // 같은 배치는 같은 복제본 — 리빌드가 GPU 재업로드를 부르지 않는다
-  threeMaterial.normalScale?.set(0.5, 0.5);
-  threeMaterial.roughness = 0.9;
-  threeMaterial.color.setRGB(...PHOTO_TINT);      // 선형 값 — 시안의 THREE.Color(0.72, 0.72, 0.71)과 같다
+  const ns = (m.normalScale ?? 0.5) * normalSign(kind);
+  threeMaterial.normalScale?.set(ns, ns);
+  threeMaterial.roughness = m.roughness ?? 0.9;
+  threeMaterial.color.setRGB(...(m.tint ?? PHOTO_TINT));          // 선형 값 — 시안 render.html의 color.setRGB(tint)와 같다
   threeMaterial.needsUpdate = true;
   return threeMaterial;
 }

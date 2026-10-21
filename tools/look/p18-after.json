@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-21",
+  "gpu": "ANGLE (Intel, Intel(R) UHD Graphics 730 (0x00004C8B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "firstMs": 649.2,
+  "firstDraws": 760,
+  "orbitGapMs": 10.2,
+  "orbitP90Ms": 22.6,
+  "draws": 800,
+  "errors": 0,
+  "runs": 3
+}

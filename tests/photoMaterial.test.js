@@ -40,9 +40,9 @@ describe('급식실 마감 기본값(defaults.js)', () => {
 });
 
 describe('칩 에폭시 카탈로그 항목', () => {
-  test('테라조 칸의 사진 마감재이고 단가·크기·광택이 정해져 있다', () => {
+  test('바닥 코팅 칸의 사진 마감재이고 단가·크기·광택이 정해져 있다(색 지도 그라나이트 · 법선·거칠기 mma-grit — 계획 18)', () => {
     const m = epoxy();
-    expect(m).toMatchObject({ name: '그레이 칩 에폭시', code: 'TZ-05', category: '테라조', maker: '오늘의집', base: '#a7a7a3', pattern: 'speckle', scale: [1200, 1200], pricePerM2: 45000, photo: 'granite-gray', gloss: 0.25 });
+    expect(m).toMatchObject({ name: '그레이 칩 에폭시', code: 'TZ-05', category: '바닥 코팅', maker: '오늘의집', base: '#a7a7a3', pattern: 'speckle', scale: [1200, 1200], pricePerM2: 45000, photo: { color: 'granite-gray', normal: 'mma-grit', rough: 'mma-grit' }, gloss: 0.25 });
     expect(MATERIAL_PATTERNS).toContain(m.pattern);
     expect(materialById('tile-white-300').gloss).toBe(0.3);
     expect(materialById('tile-white-300').photo).toBeUndefined();
@@ -65,8 +65,8 @@ describe('사진 텍스처(photoTextures)', () => {
     expect(photoTextures(epoxy())).toBeNull();                          // 두 번 불러도 다시 받지 않는다
     await flush();
     off();
-    expect(urls).toEqual(['textures/granite-gray/color.webp', 'textures/granite-gray/normal.webp', 'textures/granite-gray/rough.webp']);
-    expect(seen).toEqual(['granite-gray']);
+    expect(urls).toEqual(['textures/granite-gray/color.webp', 'textures/mma-grit/normal.webp', 'textures/mma-grit/rough.webp']);
+    expect(seen).toEqual(['granite-gray|mma-grit|mma-grit']);                // 알림 인자 = 폴더 묶음 키(photoKey · 계획 18)
     const maps = photoTextures(epoxy());
     expect(maps.map.wrapS).toBe(THREE.RepeatWrapping);
     expect(maps.map.colorSpace).toBe(THREE.SRGBColorSpace);
@@ -99,7 +99,7 @@ describe('사진 텍스처(photoTextures)', () => {
     await flush();
     offBad(); offOk();
     expect(bad).toHaveBeenCalledTimes(2);
-    expect(seen).toEqual(['granite-gray', 'granite-gray-2']);
+    expect(seen).toEqual(['granite-gray|mma-grit|mma-grit', 'granite-gray-2|granite-gray-2|granite-gray-2']);
     expect(photoTextures(epoxy())).not.toBeNull();                       // 도착한 사진은 그대로 캐시에 있다
     expect(warn).toHaveBeenCalledTimes(1);                               // 구독자당 한 번
     expect(String(warn.mock.calls[0][0])).toContain('구독자 고장');
@@ -141,8 +141,8 @@ describe('applyAssignment — 사진 갈래', () => {
       expect(m[k].offset.x).toBeCloseTo(0.5, 9);                         // 600 mm ÷ 1200 mm
       expect(m[k].rotation).toBeCloseTo(Math.PI / 2, 9);
     }
-    expect(m.normalScale.x).toBe(0.5);
-    expect(m.roughness).toBe(0.9);
+    expect(m.normalScale.x).toBe(1);                                      // 재질 값 1(계획 18 — mma-grit) · 종류 없음 = 부호 +1
+    expect(m.roughness).toBe(1);                                          // 무광(계획 18) — 거칠기 맵(mma-grit 0.8~1.0)이 곱해진다
     expect([m.color.r, m.color.g, m.color.b]).toEqual(PHOTO_TINT);
   });
 
