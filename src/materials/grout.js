@@ -22,7 +22,10 @@ export const GROUT_MAP_FRAGMENT = `
 // sRGB 줄눈색 → 선형 ÷ 0.80(three Color는 sRGB 16진을 선형 작업 공간으로 읽는다). #d4d1ca → (0.823, 0.797, 0.738) — 시안 result.json groutTint.
 export const groutLinear = hex => new THREE.Color(hex ?? DEFAULT_GROUT).multiplyScalar(1 / FACE_LIN);
 
-const uniforms = new WeakMap();   // 재질 → { value: Color } — 같은 uniform 객체를 이어 써서 재사용 재질의 줄눈색이 바뀌어도 다음 그리기에 반영된다
+// 재질 → { value: Color }(groutColor uniform). 컴파일 전에 groutPatch를 거듭 걸면 같은 객체의 값만 바뀌지만, 이미 컴파일된 재질은 제자리에서 다시
+// 패치되지 않는다: applyAssignment가 clearGroutPatch로 이 항목을 먼저 지우고, three r169는 같은 키의 프로그램을 이미 가진 재질에 onBeforeCompile을
+// 다시 부르지 않는다. 줄눈색이나 패치 여부를 바꾸려면 호출자가 새 재질을 써야 한다(build.js가 늘 새로 만든다 — 계획 19 최종 리뷰 M-2).
+const uniforms = new WeakMap();
 const groutKey = () => GROUT_KEY;
 export const groutUniform = material => uniforms.get(material) ?? null;
 export function groutPatch(material, groutHex) {
