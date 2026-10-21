@@ -32,7 +32,11 @@ function surfaceMaterial(kind, view, color = null, { assignment = null, faceSize
   let opacity = key === 'wall' ? (view.wallOpacity ?? 1) : key === 'floor' ? (view.floorOpacity ?? 1) : 1;
   if (display === 'transparent' && TRANSPARENT_OPACITY[key]) opacity = Math.min(opacity, TRANSPARENT_OPACITY[key]);
   m.opacity = opacity;
-  m.transparent = opacity < 1; m.forceSinglePass = twoSided; // 불투명 면은 투명 정렬 패스를 타지 않게 한다 · 반투명 DoubleSide 평면도 한 패스(DOUBLE_SIDED) — r169 뒷면→앞면 두 번 그리기의 뒷면 패스(FLIP_SIDED)는 tbn을 뒤집지 않아 normalSign −1이 요철을 반대로 만든다(평면은 어디서 봐도 한 면만 보여 두 번 그릴 까닭도 없다)
+  m.transparent = opacity < 1; // 불투명 면은 투명 정렬 패스를 타지 않게 한다
+  // 반투명 DoubleSide 평면(바닥·벽 윗면)은 한 패스로 그린다 — 평면은 한 번에 한 면만 보여 한 패스로 충분하다. r169의 뒷면→앞면 두 번 그리기를 끄면
+  // 반투명 바닥·벽 윗면의 draw가 절반이 되고, 패스마다 needsUpdate로 도는 프레임당 프로그램 재평가도 없어진다. 법선 부호와는 무관하다: r169는
+  // BackSide 패스에서 normalScale uniform을 negate해(refreshUniformsCommon) DOUBLE_SIDED 뒷면(tbn × faceDirection)과 같게 그린다(Task 5 dome-debug).
+  m.forceSinglePass = twoSided;
   m.depthWrite = opacity >= 1; // 반투명 면이 깊이 버퍼를 쓰면 뒤 벽과 z-fighting이 난다
   m.userData.perMesh = true;
   // 마감재 지정이 있으면 무늬 텍스처를 붙인다(렌더 우선순위 region > mat > color).

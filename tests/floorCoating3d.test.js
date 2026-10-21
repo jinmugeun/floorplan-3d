@@ -111,13 +111,13 @@ describe('build.js — 면 종류 부호 · 광택 거칠기', () => {
     expect(g.children.find(c => c.name === 'ceiling').material.side).toBe(THREE.FrontSide);
   });
 
-  // 리뷰 Fix 1: three r169는 transparent·DoubleSide·!forceSinglePass 재질을 BackSide → FrontSide 두 번 그린다(WebGLRenderer.renderObject).
-  // BackSide 패스는 FLIP_SIDED만 켜고 DOUBLE_SIDED가 없어 tbn을 뒤집지 않는다 — 위에서 보이는 바닥·벽 윗면이 앞면처럼 그려져 −1이 요철을 반대로 만든다.
-  // 바닥·벽 윗면은 늘 한 번(DOUBLE_SIDED)에 그려야 부호가 맞는다.
+  // 리뷰 Fix 1(까닭은 최종 리뷰 I-1에서 정정): three r169는 transparent·DoubleSide·!forceSinglePass 재질을 BackSide → FrontSide 두 번 그린다(WebGLRenderer.renderObject).
+  // 바닥·벽 윗면은 평면이라 한 번에 한 면만 보여 한 패스로 충분하다 — forceSinglePass가 반투명 면의 draw를 절반으로 줄이고 프레임마다의 프로그램 재평가를 없앤다.
+  // 법선 부호와는 무관하다: BackSide 패스도 three가 normalScale uniform을 negate해(refreshUniformsCommon) 요철이 같으므로, 한 패스에서도 부호는 그대로 −1이다.
   test.each([
     ['투명 모드', { display: 'transparent' }],
     ['불투명도 < 1', { floorOpacity: 0.5, wallOpacity: 0.5 }],
-  ])('반투명 바닥·벽 윗면(%s)도 한 패스로 그려 법선 음수가 맞다', async (_, view) => {
+  ])('반투명 바닥·벽 윗면(%s)은 한 패스로 그리고 법선 음수를 그대로 둔다', async (_, view) => {
     await arrive('mma-gray');
     const g = buildFloorGroup(floorWith('mma-gray', 'mma-gray'), view);
     for (const name of ['floor', 'wallTop']) {
