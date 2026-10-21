@@ -2,7 +2,7 @@
 // (bytes · sha256 — CRLF 변환 같은 손상을 잡는다 · tests/assetsCatalog.test.js와 같은 방식). 네트워크·sharp 없이 저장소 파일만 본다.
 import { test, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,10 +30,8 @@ test('바닥 코팅 텍스처 10장은 생성 도구 결과 그대로다(bytes �
   expect(Object.values(FLOOR_TEXTURES).reduce((s, [n]) => s + n, 0)).toBe(1568196);
 });
 
-test('한 장 ≤ 250,000 B · public/textures 합계 ≤ 2.5 MB', () => {
+test('한 장 ≤ 250,000 B(public/textures 합계는 계획 19부터 tileTextures.test.js — ≤ 3 MB)', () => {
   for (const f of Object.keys(FLOOR_TEXTURES)) expect(statSync(join(TEX, f)).size, f).toBeLessThanOrEqual(250000);
-  const sizes = d => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? sizes(join(d, e.name)) : [statSync(join(d, e.name)).size]));
-  expect(sizes(TEX).reduce((s, n) => s + n, 0)).toBeLessThanOrEqual(2621440);
 });
 
 test('NOTICE.md가 바닥 코팅 텍스처의 출처(절차 생성 · 제3자 자료 없음 · 제조사 견본 팔레트 · 생성 도구)를 적는다', () => {
