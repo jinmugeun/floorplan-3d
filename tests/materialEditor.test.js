@@ -312,3 +312,20 @@ test('타일 크기 칸은 재질의 기본 scale을 보인다(비-타일로 바
   expect(Number(row.querySelector('[name="scaleW"]').value)).toBe(solid.scale[0]);
   expect(Number(row.querySelector('[name="scaleH"]').value)).toBe(solid.scale[1]);
 });
+
+// 계획 19 최종 리뷰 I-1(패널 8f3c93d와 같은 결함): 25 mm 모자이크 칸은 25를 보이는데 한 칸을 고치면
+// 두 칸 모두 100~2000으로 잘려 실린다. 칸이 실린 값(자른 값)을 보여야 [적용] 뒤 3D와 어긋나지 않는다.
+test('영역 타일 크기 칸은 실린 값(자른 값)을 보인다 — 25 mm 모자이크에서 W 200 → H 100', () => {
+  const a = setup();
+  click(a.root, '[name="addBand"]');
+  const row = a.q('.region-row');
+  set(row.querySelector('[name="mat"]'), 'tile-black-25');
+  expect(row.querySelector('[name="scaleH"]').value).toBe('25');            // 재질 기본 scale(덮어쓰기 없음)
+  set(row.querySelector('[name="scaleW"]'), 200);
+  expect(row.querySelector('[name="scaleW"]').value).toBe('200');
+  expect(row.querySelector('[name="scaleH"]').value).toBe('100');           // 손대지 않은 칸도 자른 값을 보인다
+  set(row.querySelector('[name="scaleH"]'), 9999);
+  expect(row.querySelector('[name="scaleH"]').value).toBe('2000');          // 고친 칸도 change(확정) 뒤라 자른 값으로 되쓴다
+  click(a.root, '[name="apply"]');
+  expect(a.wall().regions.in[0].mat.scale).toEqual([200, 2000]);
+});
