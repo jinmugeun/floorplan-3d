@@ -111,6 +111,23 @@ describe('build.js — 면 종류 부호 · 광택 거칠기', () => {
     expect(g.children.find(c => c.name === 'ceiling').material.side).toBe(THREE.FrontSide);
   });
 
+  // 리뷰 Fix 1: three r169는 transparent·DoubleSide·!forceSinglePass 재질을 BackSide → FrontSide 두 번 그린다(WebGLRenderer.renderObject).
+  // BackSide 패스는 FLIP_SIDED만 켜고 DOUBLE_SIDED가 없어 tbn을 뒤집지 않는다 — 위에서 보이는 바닥·벽 윗면이 앞면처럼 그려져 −1이 요철을 반대로 만든다.
+  // 바닥·벽 윗면은 늘 한 번(DOUBLE_SIDED)에 그려야 부호가 맞는다.
+  test.each([
+    ['투명 모드', { display: 'transparent' }],
+    ['불투명도 < 1', { floorOpacity: 0.5, wallOpacity: 0.5 }],
+  ])('반투명 바닥·벽 윗면(%s)도 한 패스로 그려 법선 음수가 맞다', async (_, view) => {
+    await arrive('mma-gray');
+    const g = buildFloorGroup(floorWith('mma-gray', 'mma-gray'), view);
+    for (const name of ['floor', 'wallTop']) {
+      const mats = g.children.filter(c => c.name === name).map(c => c.material);
+      expect(mats.length).toBeGreaterThan(0);
+      for (const m of mats) expect({ name, transparent: m.transparent, forceSinglePass: m.forceSinglePass, ns: m.normalScale.x })
+        .toEqual({ name, transparent: true, forceSinglePass: true, ns: -1 * materialById('mma-gray').normalScale });
+    }
+  });
+
   test('MF 바닥: 거칠기 0.6 · 환경 반사 0.15 · tint 색 · 맵 없음 — 흰 타일 벽은 그대로 0.35', () => {
     const fl = buildFloorGroup(floorWith('ucrete-mf-red'), { wallOpacity: 1 }).children.find(c => c.name === 'floor').material;
     expect(fl.roughness).toBe(0.6);
