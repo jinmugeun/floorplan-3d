@@ -32,6 +32,10 @@ const TABLE = [
 const tiles = () => materialsIn('타일');
 // 생성 도구(tools/look/tile-textures.mjs LAYOUTS)의 한 장 크기(mm) — 거칠기 폴더로 찾는다
 const SHEET = { 'tile-sq25': [400, 400], 'tile-sq48': [400, 400], 'tile-sq97': [800, 800], 'tile-hex50': [363.73, 420], 'tile-lg300': [600, 600], 'tile-lg600': [1200, 1200] };
+// 앱이 까는 배율(2026-10-22): sq25는 도구가 간격 25 mm(조각 23 + 줄눈 2)로 그린 장을 간격 27 mm로 깐다 — 상품 상세의 25 mm 계열은 조각이 2.5 cm이고
+// 한 장(약 297 mm)에 11×11이다. 그래서 조각 24.8 + 줄눈 2.2 mm가 된다. 나머지 배열은 도구의 한 장 그대로다.
+const LAID = { 'tile-sq25': 27 / 25 };
+const TILE_25 = ['tile-white-25', 'tile-black-25', 'tile-mint-25', 'tile-bluemix-25'];
 const toLin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
 const albedo = hex => { const a = [1, 3, 5].map(i => toLin(parseInt(hex.slice(i, i + 2), 16))), mx = Math.max(...a); return mx > 0.92 ? a.map(v => v * 0.92 / mx) : a; };
 const assign = (id, patch = {}) => ({ id, offset: [0, 0], angle: 0, ...patch });
@@ -81,13 +85,22 @@ describe('카탈로그 타일 18종', () => {
     expect(materialById('tile-white-300').roughness).toBe(1.2);
   });
 
-  test('한 장 크기(scale × tiles)는 생성 도구 배열의 한 장과 같다(육각은 45.47 × 8 ≈ 363.73)', () => {
+  test('한 장 크기(scale × tiles)는 생성 도구 배열의 한 장 × 까는 배율이다(육각은 45.47 × 8 ≈ 363.73 · sq25는 27/25)', () => {
     for (const m of tiles()) {
-      const want = SHEET[photoDirs(m).rough], got = tileSheet(m, m.scale);
+      const dir = photoDirs(m).rough, k = LAID[dir] ?? 1, want = SHEET[dir].map(v => v * k), got = tileSheet(m, m.scale);
       expect(got[0], m.id).toBeCloseTo(want[0], 0);
       expect(got[1], m.id).toBeCloseTo(want[1], 6);
     }
     expect(materialById('tile-hex-black').scale).toEqual([45.47, 52.5]);       // 옛 200 mm 사각 → 50 mm 육각(설계 §3)
+  });
+
+  test('25 mm 계열은 상품 상세대로 간격 27 mm(조각 2.5 cm · 한 장 약 297 mm에 11×11) · 한 장 432 mm', () => {
+    for (const id of TILE_25) {
+      expect(materialById(id).scale, id).toEqual([27, 27]);
+      expect(tileSheet(materialById(id), materialById(id).scale), id).toEqual([432, 432]);
+    }
+    expect(27 * 11).toBe(297);
+    expect(23 * (27 / 25)).toBeCloseTo(24.84, 2);                              // 도구의 조각 23 mm → 깔린 조각
   });
 
   test('tint = 표본 albedo ÷ 0.80(0.92 상한) — 단색은 base가 표본이다 · 섞음은 1/0.9 · 금속은 F0 ÷ 0.80', () => {
@@ -122,8 +135,8 @@ describe('카탈로그 타일 18종', () => {
 
 describe('반복 식 — 1000 / (scale × tiles)', () => {
   test('tileSheet: 한 장 = 조각 간격 × tiles · 덮어쓰기 scale도 같은 비율 · tiles 없는 재질은 scale 그대로', () => {
-    expect(tileSheet(materialById('tile-white-25'), [25, 25])).toEqual([400, 400]);
-    expect(tileSheet(materialById('tile-white-25'), [100, 100])).toEqual([1600, 1600]);   // 덮어쓰기 100 mm → 줄눈 폭도 4배
+    expect(tileSheet(materialById('tile-white-25'), [27, 27])).toEqual([432, 432]);
+    expect(tileSheet(materialById('tile-white-25'), [100, 100])).toEqual([1600, 1600]);   // 덮어쓰기 100 mm → 줄눈 폭도 100/27배
     expect(tileSheet(materialById('tile-hex-white-50'), [45.47, 52.5])[1]).toBe(420);
     const sc = [1200, 190];
     expect(tileSheet(materialById('wood-oak'), sc)).toBe(sc);
@@ -132,9 +145,9 @@ describe('반복 식 — 1000 / (scale × tiles)', () => {
   test('사진이 오면 반복·offset은 한 장 기준(월드 uv) — 같은 배열의 다른 색은 같은 공유 복제본', async () => {
     await arrive('tile-white-25', 'tile-black-25', 'tile-hex-black', 'tile-white-300');
     const w = painted('tile-white-25', { offset: [100, 50] });
-    expect(w.map.repeat.x).toBeCloseTo(1000 / 400, 9);
-    expect(w.map.offset.x).toBeCloseTo(100 / 400, 9);
-    expect(w.map.offset.y).toBeCloseTo(50 / 400, 9);
+    expect(w.map.repeat.x).toBeCloseTo(1000 / 432, 9);
+    expect(w.map.offset.x).toBeCloseTo(100 / 432, 9);
+    expect(w.map.offset.y).toBeCloseTo(50 / 432, 9);
     expect(painted('tile-black-25', { offset: [100, 50] }).map).toBe(w.map);
     const hex = painted('tile-hex-black');
     expect(hex.map.repeat.x).toBeCloseTo(1000 / (45.47 * 8), 9);

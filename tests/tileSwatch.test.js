@@ -30,14 +30,14 @@ test('격자 견본 대상: 배열 공용 색 지도를 쓰는 16종(메탈 포�
   for (const id of ['mma-gray', 'ucrete-ud200-red', 'paint-white', 'steel-embossed']) expect(tileGridSwatch(materialById(id)), id).toBe(false);
 });
 
-test('tileSwatchParts: base 바탕 + 줄눈색 격자 — 칸 수는 약 200 mm(25 → 8 · 48 → 4 · 육각 → 4 · 97 → 2 · 대형 → 2) · 선 굵기 px/48', () => {
+test('tileSwatchParts: base 바탕 + 줄눈색 격자 — 칸 수는 약 200 mm(25 계열 간격 27 → 7 · 48 → 4 · 육각 → 4 · 97 → 2 · 대형 → 2) · 선 굵기 px/48', () => {
   const black = tileSwatchParts(materialById('tile-black-25'), SWATCH_PX);
   expect(black[0]).toEqual({ t: 'rect', x: 0, y: 0, w: SWATCH_PX, h: SWATCH_PX, fill: '#1c1c19' });
-  expect(lines(black)).toHaveLength(9 * 2);
+  expect(lines(black)).toHaveLength(8 * 2);
   expect(lines(black).every(p => p.fill === DEFAULT_GROUT && p.lw === 2)).toBe(true);
-  expect(lines(black)[1]).toEqual({ t: 'line', x1: 12, y1: 0, x2: 12, y2: SWATCH_PX, fill: DEFAULT_GROUT, lw: 2 });
+  expect(lines(black)[1]).toEqual({ t: 'line', x1: SWATCH_PX / 7, y1: 0, x2: SWATCH_PX / 7, y2: SWATCH_PX, fill: DEFAULT_GROUT, lw: 2 });
   const n = id => lines(tileSwatchParts(materialById(id), SWATCH_PX)).length / 2 - 1;
-  expect(['tile-black-25', 'tile-mint-48', 'tile-hex-black', 'tile-skyblue-97', 'tile-white-300', 'tile-gray-600'].map(n)).toEqual([8, 4, 4, 2, 2, 2]);
+  expect(['tile-black-25', 'tile-mint-48', 'tile-hex-black', 'tile-skyblue-97', 'tile-white-300', 'tile-gray-600'].map(n)).toEqual([7, 4, 4, 2, 2, 2]);
   expect(lines(tileSwatchParts({ ...materialById('tile-black-25'), grout: '#ffffff' }, SWATCH_PX)).every(p => p.fill === '#ffffff')).toBe(true);
 });
 

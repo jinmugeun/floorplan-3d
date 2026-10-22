@@ -26,8 +26,11 @@ const mf = (n, c, name, base, accent, tint) => FC(n, `ucrete-mf-${c}`, `Ucrete M
 // 거칠기 지도의 면 값이 0.10이라 roughness = 면 거칠기 ÷ 0.10(유광 1 · 무광 5.5 · 대형 무광 6 — three가 곱한 뒤 1로 자른다). 진한 단색 유광은 gloss 0.15.
 // 새 14종: 코드 TL-05~18 · 임시 단가 60,000원/m²(실제 단가는 사용자가 알려 주면 바꾼다) · base/accent = 시안 materials.js의 '지금' 단색(금속은 SS-02 · SS-04).
 export const DEFAULT_GROUT = '#d4d1ca';   // 백시멘트 회백 — 줄눈 규칙(materials/grout.js)과 견본 격자(pattern.tileSwatchParts)가 쓴다
-const LAYOUT = {   // 배열 → [조각 간격 mm, 한 장의 조각 수] — tools/look/tile-textures.mjs LAYOUTS와 같은 한 장(육각 45.47 × 8 = 363.76 ≈ 363.73)
-  sq25: [[25, 25], [16, 16]], sq48: [[50, 50], [8, 8]], sq97: [[100, 100], [8, 8]],
+// 배열 → [조각 간격 mm, 한 장의 조각 수] — tools/look/tile-textures.mjs LAYOUTS와 같은 한 장(육각 45.47 × 8 = 363.76 ≈ 363.73).
+// sq25만 예외: 도구는 간격 25(조각 23 + 줄눈 2)로 그렸지만 상품 상세의 25 mm 계열은 조각 2.5 cm · 한 장 약 297 mm에 11×11이라
+// 간격 27로 깐다(조각 24.8 + 줄눈 2.2 mm · 2026-10-22). 텍스처는 그대로다.
+const LAYOUT = {
+  sq25: [[27, 27], [16, 16]], sq48: [[50, 50], [8, 8]], sq97: [[100, 100], [8, 8]],
   hex50: [[45.47, 52.5], [8, 8]], lg300: [[300, 300], [2, 2]], lg600: [[600, 600], [2, 2]],
 };
 const GLOSSY = { roughness: 1, normalScale: 1, gloss: 0.3 }, DARK = { ...GLOSSY, gloss: 0.15 }, MATTE = { roughness: 5.5, normalScale: 1, gloss: 0.1 };

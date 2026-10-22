@@ -185,7 +185,7 @@ describe('타일 배치와 타일 크기', () => {
     click(el, '[data-cat="타일"]');
     click(el, '.tile[data-id="tile-white-25"]');
     expect(ui.get().matPick).toEqual({ assignment: mat('tile-white-25'), category: '타일' });
-    expect(el.querySelector('[name="scaleW"]').value).toBe('25');
+    expect(el.querySelector('[name="scaleW"]').value).toBe('27');
     click(el, '.tile[data-id="tile-hex-black"]');
     expect('scale' in ui.get().matPick.assignment).toBe(false);
     expect(el.querySelector('[name="scaleH"]').value).toBe('52.5');
