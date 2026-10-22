@@ -320,7 +320,7 @@ test('영역 타일 크기 칸은 실린 값(자른 값)을 보인다 — 25 mm 
   click(a.root, '[name="addBand"]');
   const row = a.q('.region-row');
   set(row.querySelector('[name="mat"]'), 'tile-black-25');
-  expect(row.querySelector('[name="scaleH"]').value).toBe('25');            // 재질 기본 scale(덮어쓰기 없음)
+  expect(row.querySelector('[name="scaleH"]').value).toBe('27');            // 재질 기본 scale(덮어쓰기 없음 · 25 계열 간격 27)
   set(row.querySelector('[name="scaleW"]'), 200);
   expect(row.querySelector('[name="scaleW"]').value).toBe('200');
   expect(row.querySelector('[name="scaleH"]').value).toBe('100');           // 손대지 않은 칸도 자른 값을 보인다
