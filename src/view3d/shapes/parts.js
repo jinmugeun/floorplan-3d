@@ -45,6 +45,46 @@ export function createParts([w, d, h]) {
     g.computeVertexNormals();
     return add(g, mat);
   };
+  // 둥근 모서리 판(창·덮개): 면 크기 [a, b], 모서리 반경 r, 두께 t, 중심 [x, y, z]. face = 바깥 면이 보는 쪽 —
+  // '+z'(a = x폭 · b = 높이) · '+x' · '-x'(a = 깊이 · b = 높이). 바깥 면 + 옆 띠만 그린다(안쪽 면은 몸체에 붙어 안 보인다).
+  // taper: 바깥 면을 둘레에서 그만큼 안으로 들인다(옆 띠가 비스듬해진다 — 윤곽선이 법선 차로 밑동·윗면 테두리를 어느 각에서나 긋는다).
+  // 모서리당 seg 조각이라 판 하나가 삼각형 12·(seg + 1)개다(상자 + 원기둥 4개로 짓는 것보다 훨씬 적다).
+  const plate = (mat, [a, b], r, t, [x, y, z], { face = '+z', seg = 3, taper = 0 } = {}) => {
+    const tp = clamp(taper, 0, Math.min(a, b) / 2 - 2e-5), rr = clamp(r, 0, Math.min(a, b) / 2 - 1e-5), n = rr > 0 ? seg : 0;
+    const ringOf = (ia, ib, ir) => {
+      const pts = [], corners = [[ia / 2 - ir, ib / 2 - ir], [-ia / 2 + ir, ib / 2 - ir], [-ia / 2 + ir, -ib / 2 + ir], [ia / 2 - ir, -ib / 2 + ir]];
+      corners.forEach(([cx, cy], k) => {
+        for (let i = 0; i <= n; i++) { const q = (k + (n ? i / n : 0.5)) * Math.PI / 2; pts.push([cx + ir * Math.cos(q), cy + ir * Math.sin(q)]); }
+      });
+      return pts;
+    };
+    const ia = a - 2 * tp, ib = b - 2 * tp;   // 안쪽 반경은 안쪽 반 크기를 넘지 않는다(넘으면 모서리가 엇갈려 바깥 면이 뒤집힌다 — 리뷰)
+    const lo = ringOf(a, b, rr), hi = tp > 0 ? ringOf(ia, ib, n ? clamp(rr - tp, 0, Math.min(ia, ib) / 2 - 1e-5) : 0) : lo;
+    const N = lo.length, pos = [], nor = [], uv = [], idx = [], zt = t / 2;
+    pos.push(0, 0, zt); nor.push(0, 0, 1); uv.push(0.5, 0.5);          // 바깥 면: 가운데 점 + 둘레 부채(반시계 → +z)
+    for (const [px, py] of hi) { pos.push(px, py, zt); nor.push(0, 0, 1); uv.push(px / a + 0.5, py / b + 0.5); }
+    for (let i = 0; i < N; i++) idx.push(0, 1 + i, 1 + ((i + 1) % N));
+    const A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), nv = new THREE.Vector3();
+    for (let i = 0; i < N; i++) {                                         // 옆 띠: 변마다 네 점(평평한 법선 = 바깥, taper면 비스듬히)
+      const j = (i + 1) % N, base = pos.length / 3;
+      A.set(lo[i][0], lo[i][1], -zt); B.set(lo[j][0], lo[j][1], -zt); D.set(hi[i][0], hi[i][1], zt);
+      nv.crossVectors(B.clone().sub(A), D.clone().sub(A));
+      if (nv.lengthSq() < 1e-20) nv.set(0, 0, 1); else nv.normalize();   // 두께 0 · 깎음 없음이면 띠가 납작하다(normalize는 영 벡터를 영으로 둔다)
+      pos.push(lo[i][0], lo[i][1], -zt, lo[j][0], lo[j][1], -zt, hi[j][0], hi[j][1], zt, hi[i][0], hi[i][1], zt);
+      for (let k = 0; k < 4; k++) nor.push(nv.x, nv.y, nv.z);
+      uv.push(i / N, 0, j / N, 0, j / N, 1, i / N, 1);
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    if (face === '+x') g.rotateY(Math.PI / 2);
+    else if (face === '-x') g.rotateY(-Math.PI / 2);
+    g.translate(x, y, z);
+    return add(g, mat);
+  };
   // 몸체: 앞면이 hd − BODY_IN에 오게 깊이를 줄인 상자(앞에 문짝·조작판이 붙는다). y = 중심 높이.
   const body = (mat, [sx, sy], y, x = 0) => box(mat, [sx, sy, d - BODY_IN], [x, y, -BODY_IN / 2]);
   // 앞면 판(문짝·조작판·유리). layer 0 = 몸체 바로 앞, 1 = 그 앞(유리창이 문짝 위에).
@@ -80,5 +120,5 @@ export function createParts([w, d, h]) {
     cyl('steel', 0.012, up, [x, baseY + up / 2, z], { seg: 10 });
     cyl('steel', 0.01, 0.14, [x, baseY + up - 0.012, z + 0.07], { axis: 'z', seg: 10 });
   };
-  return { list, size: { w, d, h, hw, hd, hh }, box, cyl, frustum, body, front, handle, handleH, knob, legs, slab, basin, faucet };
+  return { list, size: { w, d, h, hw, hd, hh }, box, cyl, frustum, plate, body, front, handle, handleH, knob, legs, slab, basin, faucet };
 }

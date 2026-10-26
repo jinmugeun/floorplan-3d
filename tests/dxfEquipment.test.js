@@ -281,6 +281,14 @@ test('벽 부착 어휘(워터릴): 벽 면이 300 mm 안이면 벽에 붙인다
   expect(far.stats.wallMounted).toBe(0);
 });
 
+// 2026-10-26: 외형도의 평면 블록 AQ_BOX_PLAN(510×217 — 기준선 = 벽면)을 벽 앞에 놓으면 공기질 함체 제품이 벽에 붙어 선다(형상 enclosure · 아랫면 1,200).
+test('공기질 함체 평면 블록(AQ_BOX_PLAN): 벽에 붙는 aq-enclosure · 510×217×310 · 아랫면 1,200', () => {
+  const W = makeWall({ a: [0, 0], b: [6000, 0], thickness: 200 });
+  const it = only(run(one('AQ_BOX_PLAN', [2000, -317, 2510, -100]), { walls: [W] }));   // 앱 y 100~317(벽면 y 100에 닿는다)
+  expect(it).toMatchObject({ productId: 'aq-enclosure', attach: 'wall', wallId: W.id, side: 1, rot: 0, size: [510, 217, 310], z: 1200 });
+  expect(it.pos).toEqual([2255, 209]);                                    // 벽면 100 + 깊이 반 108.5 → 정수 mm
+});
+
 test('벽 방향 크기: 세로 벽에 붙는 온수기는 벽 방향 폭이 size[0]', () => {
   const W = makeWall({ a: [0, 0], b: [0, 6000], thickness: 200 });   // 앱 좌표 세로 벽
   const it = only(run(one('온수기 560-400', [100, -2560, 500, -2000]), { walls: [W] }));   // 앱 x 100~500 · y 2000~2560

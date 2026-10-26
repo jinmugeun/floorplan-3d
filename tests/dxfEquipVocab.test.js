@@ -34,6 +34,11 @@ test('어휘의 대상: 엑셀에 짝이 있으면 엑셀 급식기구(k-), 없�
   expect(matchEquip('To양변기F(w)').legacy).toBeUndefined();
 });
 
+test('공기질 센서 함체: 외형도의 평면 블록(AQ_BOX_PLAN)과 한글 이름만 함체 — 입면 블록(정면·측면…)은 아니다', () => {
+  for (const n of ['AQ_BOX_PLAN', '공기질 센서함체', '공기질함체-510', '공기질(센서)함체', '공기질 (센서) 함체', '공기질_센서_함체']) expect(matchEquip(n), n).toEqual({ productId: 'aq-enclosure', height: 310, attach: 'wall', z: 1200 });
+  for (const n of ['AQ_BOX_FRONT', 'AQ_BOX_SIDE_R', 'AQ_BOX_BACK', 'AQ_BOX_BOTTOM']) expect(matchEquip(n), n).toBeNull();
+});
+
 test('대표 이름이 기대 제품으로 간다(앞 항목이 이긴다)', () => {
   const want = {
     '세정대 2조 1500-750': K('sink-double'), '세정대 1조 900-750': K('sink-single'), '세정대 담금 1500-800': K('sink-double'), '수류담금세척기 TR1500S': K('sink-double'),
