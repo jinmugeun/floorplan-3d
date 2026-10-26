@@ -58,7 +58,8 @@ export function createParts([w, d, h]) {
       });
       return pts;
     };
-    const lo = ringOf(a, b, rr), hi = tp > 0 ? ringOf(a - 2 * tp, b - 2 * tp, n ? Math.max(rr - tp, 1e-4) : 0) : lo;
+    const ia = a - 2 * tp, ib = b - 2 * tp;   // 안쪽 반경은 안쪽 반 크기를 넘지 않는다(넘으면 모서리가 엇갈려 바깥 면이 뒤집힌다 — 리뷰)
+    const lo = ringOf(a, b, rr), hi = tp > 0 ? ringOf(ia, ib, n ? clamp(rr - tp, 0, Math.min(ia, ib) / 2 - 1e-5) : 0) : lo;
     const N = lo.length, pos = [], nor = [], uv = [], idx = [], zt = t / 2;
     pos.push(0, 0, zt); nor.push(0, 0, 1); uv.push(0.5, 0.5);          // 바깥 면: 가운데 점 + 둘레 부채(반시계 → +z)
     for (const [px, py] of hi) { pos.push(px, py, zt); nor.push(0, 0, 1); uv.push(px / a + 0.5, py / b + 0.5); }
@@ -67,8 +68,8 @@ export function createParts([w, d, h]) {
     for (let i = 0; i < N; i++) {                                         // 옆 띠: 변마다 네 점(평평한 법선 = 바깥, taper면 비스듬히)
       const j = (i + 1) % N, base = pos.length / 3;
       A.set(lo[i][0], lo[i][1], -zt); B.set(lo[j][0], lo[j][1], -zt); D.set(hi[i][0], hi[i][1], zt);
-      nv.crossVectors(B.clone().sub(A), D.clone().sub(A)).normalize();
-      if (!Number.isFinite(nv.x)) nv.set(0, 0, 1);
+      nv.crossVectors(B.clone().sub(A), D.clone().sub(A));
+      if (nv.lengthSq() < 1e-20) nv.set(0, 0, 1); else nv.normalize();   // 두께 0 · 깎음 없음이면 띠가 납작하다(normalize는 영 벡터를 영으로 둔다)
       pos.push(lo[i][0], lo[i][1], -zt, lo[j][0], lo[j][1], -zt, hi[j][0], hi[j][1], zt, hi[i][0], hi[i][1], zt);
       for (let k = 0; k < 4; k++) nor.push(nv.x, nv.y, nv.z);
       uv.push(i / N, 0, j / N, 0, j / N, 1, i / N, 1);

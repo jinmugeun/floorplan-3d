@@ -199,6 +199,27 @@ describe('둥근 판(parts.plate)', () => {
     const sq = P.plate('dark', [0.1, 0.1], 0, 0.01, [0, 0, 0]);   // 반경 0이면 네모 판(모서리 점 하나씩)
     expect(sq.index.count / 3).toBe(12);
   });
+  // 리뷰: 법선을 꼭짓점 하나로만 보면 감김이 뒤집혀도(면이 컬링돼 사라져도) 지나간다 — 삼각형마다 변의 외적이 저장된 법선과 같은 쪽인지 본다.
+  const flipped = g => {
+    const p = g.attributes.position, nr = g.attributes.normal, ix = g.index.array, v = i => new THREE.Vector3().fromBufferAttribute(p, i);
+    let bad = 0;
+    for (let k = 0; k < ix.length; k += 3) {
+      const [a, b, c] = [ix[k], ix[k + 1], ix[k + 2]], n = new THREE.Vector3().crossVectors(v(b).sub(v(a)), v(c).sub(v(a)));
+      if (n.lengthSq() < 1e-18) continue;                                   // 넓이 0(겹친 점)은 그려지지 않는다
+      if (n.dot(new THREE.Vector3().fromBufferAttribute(nr, a)) <= 0) bad++;
+    }
+    return bad;
+  };
+  test('감김과 법선이 맞다(+z · ±x · 깎음 있음/없음 · 반경 0) · 큰 깎음에도 바깥 면이 뒤집히지 않는다 · 두께 0도 법선이 있다', () => {
+    const P = createParts([1, 1, 1]);
+    for (const face of ['+z', '+x', '-x']) for (const taper of [0, 0.005]) for (const r of [0, 0.012]) {
+      expect(flipped(P.plate('steel', [0.075, 0.076], r, 0.004, [0.1, 0.2, 0.3], { face, taper })), `${face} ${taper} ${r}`).toBe(0);
+    }
+    expect(flipped(P.plate('steel', [0.075, 0.076], 0.012, 0.004, [0, 0, 0], { taper: 0.0375 - 2e-5 }))).toBe(0);
+    const flat = P.plate('dark', [0.1, 0.05], 0.01, 0, [0, 0, 0]);
+    const nr = flat.attributes.normal;
+    for (let i = 0; i < nr.count; i++) expect(Math.hypot(nr.getX(i), nr.getY(i), nr.getZ(i)), String(i)).toBeCloseTo(1, 6);
+  });
 });
 
 describe('공기질 함체(enclosure)', () => {
@@ -220,6 +241,25 @@ describe('공기질 함체(enclosure)', () => {
     expect((bb.max.y - bb.min.y) * 1000).toBeCloseTo(130, 3);
     expect(((bb.max.y + bb.min.y) / 2) * 1000).toBeCloseTo(40, 3);       // 창은 위로 40 mm(외형도 AQ_BOX_FRONT y 130…260)
     expect(bb.max.z).toBeCloseTo(0.217 / 2, 6);                          // 앞면에 붙는다(+z)
+  });
+  // 리뷰: 경첩·잠금쇠·덮개·슬롯이 옆을 바꾸거나 뒤쪽으로 가도 잡는다(외형도 SIDE_R · SIDE_L · BOTTOM).
+  test('경첩은 +x(y ±87) · 잠금쇠는 −x · 덮개는 옆마다 앞쪽(z +63) 셋 + 뒤쪽(z −63) 하나 · 슬롯 20은 바닥 앞쪽(z +54)', () => {
+    const list = parts(), mm = v => Math.round(v * 10000) / 10;
+    const centre = g => { g.computeBoundingBox(); return g.boundingBox.getCenter(new THREE.Vector3()); };
+    const accent = list.filter(p => p.mat === 'accent').map(p => centre(p.geo));
+    const hinges = accent.filter(c => c.x > 0), latch = accent.filter(c => c.x < 0);
+    expect(hinges).toHaveLength(4);                                       // 날개 + 축 × 2
+    expect([...new Set(hinges.map(c => mm(c.y)))].sort((a, b) => a - b)).toEqual([-87, 87]);
+    expect(hinges.every(c => Math.abs(c.z) < 1e-9)).toBe(true);           // 이음매(z 0)를 걸친다
+    expect(latch.map(c => mm(c.z)).sort((a, b) => a - b)).toEqual([-31.8, -28, 10.3]);   // 받침 · 손잡이 · 걸이
+    for (const side of [1, -1]) {
+      const covers = list.filter(p => p.mat === 'steel' && !p.geo.parameters && Math.sign(p.geo.attributes.normal.getX(0)) === side).map(p => centre(p.geo));
+      expect(covers.map(c => [mm(c.z), mm(c.y)]).sort((a, b) => b[0] - a[0] || b[1] - a[1]), String(side)).toEqual([[63, 97], [63, 0], [63, -97], [-63, 97]]);
+    }
+    const slots = list.filter(p => p.mat === 'dark' && p.geo.parameters?.width && Math.abs(p.geo.parameters.depth - 0.067) < 1e-9).map(p => centre(p.geo));
+    expect(slots).toHaveLength(20);
+    expect(slots.every(c => mm(c.z) === 54 && c.y < -0.15)).toBe(true);
+    expect(slots.map(c => mm(c.x)).sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, i) => -190 + i * 20));
   });
   test('크기를 바꾸면 자리가 비율로 늘어난다(창 폭 = 410/510 × w)', () => {
     const win = windowOf(parts([1020, 217, 310]));
