@@ -4,7 +4,7 @@
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 export const SHAPE_FAMILIES = ['worktable', 'sink', 'range', 'kettle', 'ricecooker', 'oven', 'griddle', 'dishwasher', 'cabinet', 'hood',
-  'rack', 'cart', 'counter', 'table', 'chair', 'machine', 'wallunit', 'panel'];
+  'rack', 'cart', 'counter', 'table', 'chair', 'machine', 'wallunit', 'panel', 'enclosure'];   // enclosure = 공기질 함체(2026-10-26 · 카탈로그 직접 지정)
 
 // 앞 항목이 이긴다: 손소독기(벽부착)가 소독(캐비닛)보다, 야채세척기(기계)가 세척기(식기세척기)보다, 운반카가 배식대보다 먼저다.
 export const NAME_SHAPES = [

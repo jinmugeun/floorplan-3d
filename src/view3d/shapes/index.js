@@ -12,8 +12,9 @@ import { sink, dishwasher } from './wash.js';
 import { cabinet, rack, cart } from './store.js';
 import { worktable, counter, table, chair } from './serve.js';
 import { hood, machine, wallunit, panel } from './misc.js';
+import { enclosure } from './enclosure.js';
 
-export const FAMILY = { worktable, sink, range, kettle, ricecooker, oven, griddle, dishwasher, cabinet, hood, rack, cart, counter, table, chair, machine, wallunit, panel };
+export const FAMILY = { worktable, sink, range, kettle, ricecooker, oven, griddle, dishwasher, cabinet, hood, rack, cart, counter, table, chair, machine, wallunit, panel, enclosure };
 export { SHAPE_FAMILIES };
 export const GENERIC_ID = 'equip-generic';
 
@@ -38,7 +39,7 @@ const customColor = (item, product) => {
 };
 
 // 형상이 감당하지 못하는 크기를 돌린다: 아주 얇으면 판, 아주 낮으면(< 300 mm) 받침(작업대 꼴). 사용자가 크기를 줄여도 박스 밖으로 안 나간다.
-const LOW_OK = new Set(['worktable', 'panel', 'cart', 'wallunit', 'machine', 'sink']);
+const LOW_OK = new Set(['worktable', 'panel', 'cart', 'wallunit', 'machine', 'sink', 'enclosure']);   // 함체는 비율로 늘어나 낮아도 같은 꼴(기본 높이 310)
 export function fitSpec(spec, sizeMm) {
   if (!spec) return null;
   if (isThin(sizeMm)) return { shape: 'panel', opts: {} };

@@ -9,17 +9,26 @@ describe('제품 카탈로그', () => {
   test('카테고리(칩) 10개가 정확한 이름과 순서로 있다 — 엑셀 9개 + 건축 요소', () => {
     expect(CATEGORIES.map(c => c.name)).toEqual(['조리', '세척·소독', '냉장·냉동', '싱크·조리대', '배식', '후드·환기', '운반·보관', '가구·사무', '위생·기타', '건축 요소']);
     expect(CATEGORIES.find(c => c.name === '건축 요소').subs).toEqual(['문', '창문', '기둥', '개구부']);
-    expect(CATEGORIES.find(c => c.name === '후드·환기').subs.slice(-3)).toEqual(['디퓨저', '팬', '환기캡']);
+    expect(CATEGORIES.find(c => c.name === '후드·환기').subs.slice(-4)).toEqual(['디퓨저', '팬', '환기캡', '공기질']);
     expect(CATEGORIES.find(c => c.name === '후드·환기').subs).toContain('상업용주방후드');
   });
 
-  test('남는 기존 제품은 21종(문 6 · 창 3 · 기둥 2 · 개구부 · 디퓨저 3 · 팬 3 · 환기캡 2 · 도면 기구)이고 도면 기구만 숨김이다', () => {
+  test('남는 기존 제품은 22종(문 6 · 창 3 · 기둥 2 · 개구부 · 디퓨저 3 · 팬 3 · 환기캡 2 · 공기질 함체 · 도면 기구)이고 도면 기구만 숨김이다', () => {
     expect(KEPT_IDS).toEqual(['door-swing-900', 'door-swing-1000', 'door-double-1800', 'door-slide-1500', 'door-slide-900', 'door-pocket-900',
       'window-slide-1200', 'window-slide-1800', 'window-fix-600', 'column-square', 'column-round', 'opening-pass',
-      'diffuser-650', 'diffuser-650-350', 'diffuser-500-350', 'fan-exhaust-700', 'fan-supply-filter', 'fan-wall-500', 'ventcap-100', 'ventcap-150', 'equip-generic']);
+      'diffuser-650', 'diffuser-650-350', 'diffuser-500-350', 'fan-exhaust-700', 'fan-supply-filter', 'fan-wall-500', 'ventcap-100', 'ventcap-150', 'aq-enclosure', 'equip-generic']);
     expect(KEPT_IDS.filter(id => productById(id).hidden)).toEqual(['equip-generic']);
     expect(productById('door-swing-900')).toMatchObject({ category: '건축 요소', sub: '문' });
     expect(productById('fan-wall-500')).toMatchObject({ category: '후드·환기', sub: '팬' });
+  });
+
+  // 2026-10-26: 사용자 CAD 그림 1~10의 공기질 함체(바깥 510×217×310) — 벽에 거는 형상 제품(enclosure · 스테인리스).
+  test('공기질 함체(aq-enclosure): 후드·환기 › 공기질 · 벽 부착 · 아랫면 1,200 · 형상 enclosure · 검색된다', () => {
+    expect(productById('aq-enclosure')).toMatchObject({ name: '공기질 함체', code: 'AQ-EN510', category: '후드·환기', sub: '공기질', size: [510, 217, 310],
+      attach: 'wall', symbol: 'box', zDefault: 1200, shape: 'enclosure', kind: 'product', price: 0 });
+    expect(isListed(productById('aq-enclosure'))).toBe(true);
+    expect(searchProducts('공기질함체').map(p => p.id)).toContain('aq-enclosure');
+    expect(searchProducts('AQ-EN510').map(p => p.id)).toEqual(['aq-enclosure']);
   });
 
   // 2026-10-12 · 계획 13 Task 2: DXF 가져오기가 카탈로그로 맞추지 못한 기구가 서는 일반 상자(크기·이름은 아이템이 도면 값으로 덮는다).

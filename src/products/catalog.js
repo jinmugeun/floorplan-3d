@@ -1,7 +1,7 @@
 // 제품 카탈로그(순수 데이터). 2D는 symbol로 선화를 그리고, 3D는 shape가 있으면 스테인리스 형상(view3d/shapes), 없으면 예전 조합 형상이다.
 // size = [너비 w(좌우), 깊이 d(앞뒤), 높이 h] mm. zDefault = "바닥으로부터의 높이"(item.z) 기본값.
 // opening이 있는 제품(문·창·개구부)은 벽에 그 크기의 구멍을 뚫는다(opening.sill = zDefault).
-// 2026-10-20 · 계획 17 Task 3: 카탈로그 = [남는 기존 21종 · 식별번호 엑셀 급식기구(catalogKitchen.js) · 숨김 단종(catalogLegacy.js)].
+// 2026-10-20 · 계획 17 Task 3: 카탈로그 = [남는 기존 21종(+ 2026-10-26 공기질 함체 = 22) · 식별번호 엑셀 급식기구(catalogKitchen.js) · 숨김 단종(catalogLegacy.js)].
 //  - PRODUCTS는 숨김까지 전부다: '배치된 제품' 탭·즐겨찾기·조회(productById)가 쓴다. 라이브러리의 칩·'전체'·검색은 isListed(숨김 제외)만 본다.
 //  - 남는 기존 제품의 카테고리는 칩 이름으로 옮겼다: 문·창·기둥·개구부 → '건축 요소', 디퓨저·팬·환기캡 → '후드·환기'. 도면 기구(catalogDrawing.js)는
 //    '도면 기구' 그대로 숨김(견적표 DRAWING_CATEGORY 규칙 — estimate.js).
@@ -11,8 +11,8 @@ import { LEGACY_PRODUCTS, LEGACY_PRICES } from './catalogLegacy.js';
 import { KITCHEN_PRODUCTS, KITCHEN_PRICES, KITCHEN_CATEGORIES } from './catalogKitchen.js';
 
 const BUILDING = { name: '건축 요소', subs: ['문', '창문', '기둥', '개구부'] };
-const VENT_PARTS = ['디퓨저', '팬', '환기캡'];
-// 칩 10개: 엑셀 9개(후드·환기 끝에 환기 부속 하위 셋) + 건축 요소.
+const VENT_PARTS = ['디퓨저', '팬', '환기캡', '공기질'];
+// 칩 10개: 엑셀 9개(후드·환기 끝에 환기 부속 하위 셋 + 공기질) + 건축 요소.
 export const CATEGORIES = [
   ...KITCHEN_CATEGORIES.map(c => (c.name === '후드·환기' ? { name: c.name, subs: [...c.subs, ...VENT_PARTS] } : c)),
   BUILDING,
@@ -41,6 +41,7 @@ const KEPT_PRICES = {
   'diffuser-650': 120000, 'diffuser-650-350': 95000, 'diffuser-500-350': 85000,
   'fan-exhaust-700': 2600000, 'fan-supply-filter': 3100000, 'fan-wall-500': 380000,
   'ventcap-100': 35000, 'ventcap-150': 45000,
+  'aq-enclosure': 0,   // 단가 미정(2026-10-26 — 사용자 확인 대기)
 };
 // 이름은 그대로 PRICES다 — 읽는 쪽(견적서·테스트)이 바뀌지 않는다.
 export const PRICES = { ...KEPT_PRICES, ...KITCHEN_PRICES, ...LEGACY_PRICES, ...DRAWING_PRICES };
@@ -77,6 +78,9 @@ const KEPT_BASE = [
   P('fan-wall-500', '벽부형 환기팬', 'VF-W500', V, '팬', [500, 500, 300], 'wall', 'fan', { kind: 'equipment', equip: { type: 'fan', fanId: 'F-1', flow: 'exhaust', chamber: [500, 500, 300] }, zDefault: 2000, color: '#9aa3ab', tags: '팬 벽부 환기 배기' }),
   P('ventcap-100', 'STS 환기캡 Ø100', 'VP-100', V, '환기캡', [100, 100, 100], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 100 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
   P('ventcap-150', 'STS 환기캡 Ø150', 'VP-150', V, '환기캡', [150, 150, 150], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 150 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
+  // 후드·환기 — 공기질 함체(2026-10-26 · 사용자 CAD 그림 1~10 + 외형도 DXF · 외형 510×217×310): 벽에 거는 센서 함체. 형상 enclosure(view3d/shapes/enclosure.js)
+  // · 스테인리스 몸체 + 어두운 관측창(사용자 선택 — 렌더 비교) · 아랫면 1,200(호흡선 1.2~1.5 m에 함체 가운데 1,355가 든다) · DXF 평면 블록 AQ_BOX_PLAN(equipVocab.js).
+  P('aq-enclosure', '공기질 함체', 'AQ-EN510', V, '공기질', [510, 217, 310], 'wall', 'box', { shape: 'enclosure', zDefault: 1200, tags: '공기질 함체 공기질함체 측정 센서 모니터링 미세먼지 이산화탄소 CO2 벽부' }),
 ];
 // 도면 기구(DXF 가져오기의 일반 상자)는 남기되 숨긴다 — 사람이 라이브러리에서 고를 물건이 아니다(가져온 기구가 서는 자리).
 const KEPT = [...KEPT_BASE, ...DRAWING_PRODUCTS.map(p => ({ ...p, hidden: true }))];

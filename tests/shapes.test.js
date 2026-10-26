@@ -1,9 +1,11 @@
 // 계획 17 Task 5: 스테인리스 형상 18종(src/view3d/shapes/) — 바운딩 박스 규약 · 병합 · 공유 · 크기 가드 · 공유 재질.
+// 2026-10-26: 19번째 형상 enclosure(공기질 함체 — 둥근 판 plate 부품).
 import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
 import { FAMILY, SHAPE_FAMILIES, shapeParts, buildShape, shapeSpecFor, fitSpec, GENERIC_ID } from '../src/view3d/shapes/index.js';
 import { cachedShape, shapeKey, clearShapeCache, shapeCacheSize, SHAPE_CACHE_LIMIT, mergeParts, boxProjectUv } from '../src/view3d/shapes/merge.js';
 import { shapeMaterial, tintedSteel, SHAPE_MATERIALS, STEEL_BASE, STEEL_TINT, __resetShapeMaterials } from '../src/view3d/shapes/materials.js';
+import { createParts } from '../src/view3d/shapes/parts.js';
 import { setEnvMap, envMapNow } from '../src/view3d/itemAssets.js';
 
 const SIZES = { small: [450, 400, 300], mid: [1200, 750, 850], big: [2400, 1100, 1950], thin: [1600, 15, 605], low: [900, 700, 150] };
@@ -17,9 +19,10 @@ const OPTS = {
 const bboxOf = list => { const b = new THREE.Box3(); for (const p of list) { p.geo.computeBoundingBox(); b.union(p.geo.boundingBox); } return b; };
 const item = (size, patch = {}) => ({ id: 'i1', kind: 'product', productId: 'k-1', name: '시험', size, color: '#cfd4da', ...patch });
 
-describe('형상 18종 — 바운딩 박스 규약(부품이 item.size 밖으로 나가지 않는다)', () => {
+describe('형상 19종 — 바운딩 박스 규약(부품이 item.size 밖으로 나가지 않는다)', () => {
   test('계열 목록', () => {
-    expect(SHAPE_FAMILIES).toHaveLength(18);
+    expect(SHAPE_FAMILIES).toHaveLength(19);
+    expect(SHAPE_FAMILIES.at(-1)).toBe('enclosure');
     expect(Object.keys(FAMILY).sort()).toEqual([...SHAPE_FAMILIES].sort());
   });
   const cases = [];
@@ -54,6 +57,7 @@ describe('크기 가드(fitSpec)', () => {
     expect(fitSpec({ shape: 'worktable', opts: {} }, [900, 700, 150])).toEqual({ shape: 'worktable', opts: {} });
     expect(fitSpec({ shape: 'sink', opts: { bowls: 2 } }, [1500, 750, 850])).toEqual({ shape: 'sink', opts: { bowls: 2 } });
     expect(fitSpec(null, [1, 1, 1])).toBeNull();
+    expect(fitSpec({ shape: 'enclosure', opts: {} }, [510, 217, 250])).toEqual({ shape: 'enclosure', opts: {} });   // 기본 310에서 조금 줄여도 함체 그대로
   });
 });
 
@@ -173,5 +177,60 @@ describe('공유 재질(materials.js)', () => {
       expect(lit.color.b).toBeCloseTo(want.b * STEEL_TINT[2], 6);
       expect(lit.userData.perMesh).toBe(true);
     } finally { s.map = null; }
+  });
+});
+
+describe('둥근 판(parts.plate)', () => {
+  test('삼각형 12·(seg + 1) · 바깥 면 법선이 face 쪽 · 크기 그대로', () => {
+    const P = createParts([1, 1, 1]);
+    const g = P.plate('dark', [0.4, 0.13], 0.018, 0.002, [0, 0.1, 0.3]);
+    expect(g.index.count / 3).toBe(48);
+    expect([g.attributes.normal.getX(0), g.attributes.normal.getY(0), g.attributes.normal.getZ(0)]).toEqual([0, 0, 1]);
+    g.computeBoundingBox();
+    expect(g.boundingBox.max.x - g.boundingBox.min.x).toBeCloseTo(0.4, 6);
+    expect(g.boundingBox.max.y - g.boundingBox.min.y).toBeCloseTo(0.13, 6);
+    expect(g.boundingBox.max.z).toBeCloseTo(0.301, 6);
+    for (const [face, nx] of [['+x', 1], ['-x', -1]]) {
+      const q = P.plate('paint', [0.07, 0.072], 0.012, 0.004, [0, 0, 0], { face });
+      expect(q.attributes.normal.getX(0), face).toBeCloseTo(nx, 6);
+      q.computeBoundingBox();
+      expect(q.boundingBox.max.z - q.boundingBox.min.z, face).toBeCloseTo(0.07, 6);   // 옆을 보는 판은 a가 깊이
+    }
+    const sq = P.plate('dark', [0.1, 0.1], 0, 0.01, [0, 0, 0]);   // 반경 0이면 네모 판(모서리 점 하나씩)
+    expect(sq.index.count / 3).toBe(12);
+  });
+});
+
+describe('공기질 함체(enclosure)', () => {
+  const parts = (size = [510, 217, 310]) => shapeParts('enclosure', {}, size);
+  const windowOf = list => list.find(p => p.mat === 'dark' && !p.geo.parameters);   // 앞창(둥근 판) — 어두운 재질의 첫 둥근 판
+  test('몸체 두 쪽 + 이음매 · 관측창 · 옆 덮개 8 · 경첩 2 · 잠금쇠 — 재질은 스테인리스·어두움·밝은 금속 셋(외형도 DXF 자리)', () => {
+    const list = parts();
+    expect([...new Set(list.map(p => p.mat))].sort()).toEqual(['accent', 'dark', 'steel']);
+    const bossesOn = sign => list.filter(p => p.mat === 'steel' && !p.geo.parameters && Math.sign(p.geo.attributes.normal.getX(0)) === sign);
+    expect(bossesOn(1)).toHaveLength(4);
+    expect(bossesOn(-1)).toHaveLength(4);
+    const boss = bossesOn(1)[0].geo; boss.computeBoundingBox();
+    expect((boss.boundingBox.max.z - boss.boundingBox.min.z) * 1000).toBeCloseTo(75, 3);   // 덮개 75 × 76(SIDE_R)
+    expect((boss.boundingBox.max.y - boss.boundingBox.min.y) * 1000).toBeCloseTo(76, 3);
+    const win = windowOf(list);
+    win.geo.computeBoundingBox();
+    const bb = win.geo.boundingBox;
+    expect((bb.max.x - bb.min.x) * 1000).toBeCloseTo(410, 3);
+    expect((bb.max.y - bb.min.y) * 1000).toBeCloseTo(130, 3);
+    expect(((bb.max.y + bb.min.y) / 2) * 1000).toBeCloseTo(40, 3);       // 창은 위로 40 mm(외형도 AQ_BOX_FRONT y 130…260)
+    expect(bb.max.z).toBeCloseTo(0.217 / 2, 6);                          // 앞면에 붙는다(+z)
+  });
+  test('크기를 바꾸면 자리가 비율로 늘어난다(창 폭 = 410/510 × w)', () => {
+    const win = windowOf(parts([1020, 217, 310]));
+    win.geo.computeBoundingBox();
+    expect((win.geo.boundingBox.max.x - win.geo.boundingBox.min.x) * 1000).toBeCloseTo(820, 3);
+  });
+  test('세우면 메시 셋(공유 재질) · 색을 바꾸면 스테인리스만 아이템 전용', () => {
+    const g = buildShape({ shape: 'enclosure', opts: {} }, item([510, 217, 310]), { color: '#cfd4da' });
+    expect(g.children.map(m => m.name).sort()).toEqual(['shape-accent', 'shape-dark', 'shape-steel']);
+    expect(g.children.find(m => m.name === 'shape-steel').material).toBe(shapeMaterial('steel'));
+    const own = buildShape({ shape: 'enclosure', opts: {} }, item([510, 217, 310], { color: '#ff0000' }), { color: '#cfd4da' });
+    expect(own.children.find(m => m.name === 'shape-steel').material.userData.perMesh).toBe(true);
   });
 });

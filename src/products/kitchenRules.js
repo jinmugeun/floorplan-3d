@@ -39,7 +39,7 @@ export const SUB_SHAPE = {
 const NAME_WINS = new Set(['cart', 'wallunit', 'sink']);
 // 형상 → 2D 심벌(src/products/symbols.js의 이름 — SYMBOL_NAMES 안).
 export const SHAPE_SYMBOL = { worktable: 'table', sink: 'sink', range: 'range', kettle: 'appliance', ricecooker: 'appliance', oven: 'appliance', griddle: 'appliance', dishwasher: 'appliance',
-  cabinet: 'fridge', hood: 'hood', rack: 'box', cart: 'box', counter: 'table', table: 'table', chair: 'chair', machine: 'box', wallunit: 'box', panel: 'box' };
+  cabinet: 'fridge', hood: 'hood', rack: 'box', cart: 'box', counter: 'table', table: 'table', chair: 'chair', machine: 'box', wallunit: 'box', panel: 'box', enclosure: 'box' };
 // 풍량 집계에 드는 조리기구: 세부품명 → appliance kind(src/vent/equipment.js APPLIANCE_KINDS).
 export const APPLIANCE_KIND = { 상업용오븐: 'steamer', 식품발효기: 'steamer', 국솥: 'soupkettle', 부침기: 'griddle', 취반기: 'ricecooker', 상업용가스레인지: 'range', 상업용전기레인지: 'range', 상업용식기세척기: 'dishwasher' };
 // 벽부착(wallunit)의 아랫면 높이(mm). 목록에 없는 wallunit은 바닥에 선다(살균수 제조장치처럼 작은 기계).

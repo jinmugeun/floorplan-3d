@@ -32,6 +32,9 @@ export const EQUIP_VOCAB = [
   { keys: ['상부장'], ...K('cabinet-upper'), height: 700, attach: 'wall', z: 1500 },
   { keys: ['소변기'], productId: GEN, height: 650, attach: 'wall', z: 400, maxLong: 1200 },                     // 2
   { keys: ['세면기', '세면대'], ...K('washbasin'), height: 200, attach: 'wall', z: 800, maxLong: 1200 },    // 6
+  // 공기질 센서 함체(2026-10-26 · 사용자 외형도 공기질센서함체_외형도.dxf): 평면 블록 AQ_BOX_PLAN(510×217 · 기준점 = 벽면 가운데)만 —
+  // 같은 파일의 정면·측면·배면·저면 블록(AQ_BOX_FRONT …)은 흐름도·외형도용 입면이라 맞추지 않는다. 설치도면(예술고 _센서함체)은 아직 평면에 놓인 것이 없다.
+  { keys: ['aqboxplan', '공기질센서함체', '공기질함체'], productId: 'aq-enclosure', height: 310, attach: 'wall', z: 1200 },
   // 천장 — 후드는 hood-box(환기 집계에 든다). 익명 X-상자도 이 칸으로 간다(equipment.js).
   { keys: ['후드'], ...K('hood-box'), height: 600, attach: 'ceiling' },                                     // 8 + X-상자 11
   // 바닥 — 카탈로그 제품

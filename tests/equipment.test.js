@@ -57,15 +57,16 @@ describe('설비 기본값', () => {
 // 2026-10-20 · 계획 17 Task 3: '환기 설비' 카테고리는 없어졌다 — 후드는 엑셀 '상업용주방후드'(칩 '후드·환기'), 조리기구는 엑셀 조리 칩,
 // 디퓨저·팬·환기캡은 남는 기존 제품으로 '후드·환기' 칩의 끝 하위 셋이다. 옛 후드·조리기구 9종은 숨김 단종(옛 프로젝트의 풍량 그대로).
 describe('설비 카탈로그', () => {
-  test('후드·환기 칩: 엑셀 후드 + 디퓨저 3 · 팬 3 · 환기캡 2 — 설비 id 목록은 kind equipment 전부다', () => {
+  test('후드·환기 칩: 엑셀 후드 + 디퓨저 3 · 팬 3 · 환기캡 2 · 공기질 1 — 설비 id 목록은 kind equipment 전부다', () => {
     const cat = CATEGORIES.find(c => c.name === '후드·환기');
     expect(cat.subs).toContain('상업용주방후드');
-    expect(cat.subs.slice(-3)).toEqual(['디퓨저', '팬', '환기캡']);
+    expect(cat.subs.slice(-4)).toEqual(['디퓨저', '팬', '환기캡', '공기질']);
     expect(productsIn('후드·환기', '상업용주방후드').length).toBeGreaterThanOrEqual(20);
     expect(productsIn('후드·환기', '상업용주방후드').every(p => p.equip?.type === 'hood')).toBe(true);
     expect(productsIn('후드·환기', '디퓨저')).toHaveLength(3);
     expect(productsIn('후드·환기', '팬')).toHaveLength(3);
     expect(productsIn('후드·환기', '환기캡')).toHaveLength(2);
+    expect(productsIn('후드·환기', '공기질').map(p => p.id)).toEqual(['aq-enclosure']);   // 설비(풍량)가 아닌 제품이다
     expect(new Set(EQUIP_PRODUCT_IDS)).toEqual(new Set(PRODUCTS.filter(p => p.kind === 'equipment').map(p => p.id)));
     for (const id of ['hood-box', 'hood-box-filter', 'range-gas-high', 'ricecooker-gas', 'soup-kettle', 'wok-kettle', 'griddle-electric', 'steamer-combi', 'dishwasher-conveyor']) {
       expect(EQUIP_PRODUCT_IDS, id).toContain(id);
