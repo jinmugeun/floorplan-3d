@@ -414,8 +414,12 @@
  },
  "186": {
   "inputs": {
-   "target_face_count": 8000,
-   "placement_mode": "midpoint",
+   "target_face_count": 20000,
+   "placement_mode": "qem",
+   "placement_mode.line_quadric_weight": 1,
+   "placement_mode.feature_edge_quadric_weight": 10,
+   "placement_mode.feature_edge_min_dihedral_deg": 30,
+   "placement_mode.clamp_v_to_edge": true,
    "mesh": [
     "241",
     0
@@ -619,7 +623,7 @@
  },
  "238": {
   "inputs": {
-   "crease_angle": 180,
+   "crease_angle": 40,
    "mesh": [
     "186",
     0
@@ -640,7 +644,7 @@
    "band": 1,
    "project_back": 0,
    "fix_poles": false,
-   "smooth_iters": 20,
+   "smooth_iters": 3,
    "drop_small_components": 0.01,
    "precluster_max_verts": 20000000,
    "mesh": [
@@ -765,7 +769,7 @@
  },
  "260": {
   "inputs": {
-   "crease_angle": 180,
+   "crease_angle": 40,
    "mesh": [
     "210",
     0
@@ -842,7 +846,7 @@
  },
  "288": {
   "inputs": {
-   "value": 1024
+   "value": 2048
   },
   "class_type": "PrimitiveInt",
   "_meta": {
