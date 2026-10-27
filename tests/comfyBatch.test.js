@@ -9,9 +9,9 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import sharp from 'sharp';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 import { PollTimeout, generateGlb, glbOutputs, packArgs, patchWorkflow, pollUntilDone, runBatch, submitPrompt, uploadImage, viewUrl } from '../tools/assets/comfy-lib.mjs';
 import { noticeMarkdown } from '../tools/assets/lib.mjs';
 

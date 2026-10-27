@@ -96,7 +96,7 @@
 | PrimitiveBoolean "Switch to Trellis2" | false = **Pixal3D** | 첫 시험에서 둘 다(true = TRELLIS.2) → 나은 쪽 |
 | Trellis2UpsampleStage | 1536 | **1024**(16 GB) · 24 GB면 1536도 가능 |
 | DecimateMesh.target_face_count | 700,000 | **20,000**(생성 예산 · pack의 생성 기본 `--tris 20000`과 같게 — 두 번 감량하지 않게) |
-| DecimateMesh.placement_mode | midpoint | **qem** · line_quadric_weight 1 · feature_edge_quadric_weight 10 · feature_edge_min_dihedral_deg 30 · clamp_v_to_edge 켬 — midpoint로 크게 줄이면 판이 구겨진다(§12 2026-10-27) |
+| DecimateMesh.placement_mode | midpoint | **qem** · line_quadric_weight 1 · feature_edge_quadric_weight 10 · feature_edge_min_dihedral_deg 30 · clamp_v_to_edge 켬(**sink-single만 끔** — `comfy-workflow-trellis2-sink.api.json`) — midpoint로 크게 줄이면 판이 구겨진다(§12 2026-10-27) |
 | RemeshMesh.smooth_iters | 20 | **3**(노드 설명의 권장 2~3 — 많으면 모서리가 뭉개진다) |
 | MeshSmoothNormals.crease_angle(두 개) | 180 | **40**(각진 기구 — 노드 설명 30~60) |
 | PrimitiveInt "Texture Resolution"(→ UnwrapMesh · BakeTextureFromVoxel) | 4096 | **2048**(생성 예산 · pack의 생성 기본 `--tex 2048`) |
@@ -232,12 +232,12 @@ washer-drum,dryer,aircon-stand,tv-55,bed-single,bed-super-single,bed-queen,bed-k
 - **싱크대만 예외 — `placement_mode.clamp_v_to_edge` 끔**: 워크플로 그대로(켬) 만든 싱크대는 그릇 안쪽 모서리에 삼각형 조각이 솟았다(qem 접힘 — 8천 면은 양 끝 둘 · 2만 면은 하나, 돌릴 때마다 자리가 바뀐다).
   끄면 사라졌다. 같은 설정을 가스레인지에 주면 아래 타공 선반의 구멍이 커져서, 워크플로 파일은 켬으로 두고 싱크대만 노드 186의 이 값을 false로 바꿔 만들었다.
   다른 시험 — 모서리 가중 1: 조각 그대로 · 6만 면 → pack 2만: 긁힌 줄무늬 · 다듬기 20: 작은 접힘.
-  다시 만들 때는 웹에서 이 값만 바꿔 돌리거나 같은 값을 넣은 워크플로 사본으로 `assets:comfy --products sink-single`.
+  그 값만 바꾼 사본이 `comfy-workflow-trellis2-sink.api.json`이다 — 싱크대를 다시 만들 때는 `assets:comfy --workflow tools/assets/comfy-workflow-trellis2-sink.api.json --products sink-single`(기본 워크플로로 돌리면 검사는 다 통과해도 조각이 돌아온다).
   KSampler 시드를 고정해도 GPU에서 다시 돌리면 면 수가 1 % 안쪽으로 달라진다(실험 18,460 → 다시 18,589).
 - 성능(`assets:perf --product range-gas-3 --n 20` · 인텔 UHD 730 · 3회 중앙값):
   - 궤도 간격(새 세션 / 캐시 뒤): 3.2 / 2.6 ms → 3.1 / 2.0 ms로 그대로다(조합 형상 상자는 6.3 ms).
   - 모델이 상자를 대신하는 첫 프레임: 473 / 329 ms → 539 / 424 ms. 2K WebP를 풀고 GPU에 올리는 시간이다(참고 지표 · 목표 3은 통과).
-- 검수 시트 도구 고침: 모델 도착을 `__three.scenes` 아무 곳에서나 보던 대기가 GLTFLoader 장면에 먼저 걸렸다. 그래서 1.27 MB 모델의 첫 원근 칸이 상자로 찍혔다. 이제 렌더러가 마지막에 그린 앱 장면을 본다(`snapshot.mjs`).
+- 검수 시트 도구 고침: 모델 도착을 `__three.scenes` 아무 곳의 공유 메시(`userData.shared`)로 보던 대기가 GLTFLoader 장면에 먼저 걸렸다. 그래서 1.27 MB 모델의 첫 원근 칸이 상자로 찍혔다. 공유 표시는 스테인리스 조합 형상과 셰이더 예열 장면에도 붙는다. 이제 렌더러가 마지막에 그린 앱 장면에서 모델 복제 표시(`userData.bbox`)를 찾는다(`snapshot.mjs`).
 - Pixal3D 워크플로(`comfy-workflow.api.json`)는 쓰지 않아(11절 — TRELLIS.2 채택) 그대로 두었다. 다시 쓰려면 4절 표의 값을 같이 넣는다.
 - 1.5 MB에 걸리면(`range-gas-3`은 84 %) 그 제품만 `--tex 1024`로 다시 포장한다.
 - 실험 원본은 `tools/assets/incoming/exp/` · `incoming/gen-20k/`(커밋하지 않는다).
