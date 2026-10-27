@@ -228,10 +228,16 @@ washer-drum,dryer,aircon-stand,tv-55,bed-single,bed-super-single,bed-queen,bed-k
   같은 원본을 meshoptimizer로 8천 면까지 줄이거나, 노드를 `qem`으로만 바꿔도 깨끗했다. 부원인: RemeshMesh smooth_iters 20(권장 2~3) · 노멀 crease 180 · 1K 텍스처(591조각 아틀라스) · 작은 입력 사진(800 · 567 px).
   앱 재질·조명과 int8 가중치는 원인이 아니었다(요철 텍스처를 빼도 그대로였다).
 - 고침(사용자 선택 '설정 2' · 4절 표): DecimateMesh 20,000면 · `qem` · 다듬기 3 · crease 40 · 텍스처 2048. 예산은 생성 모델만 2만 면 · 2048²(`ASSET_BUDGET.trisGenerated` · `textureGenerated`)로 올렸고, 시드는 그대로다.
-- 결과: `range-gas-3` 18,589 삼각형 · 1,266,704 B · `sink-single` 18,980 삼각형 · 693,192 B(전에는 7,901 · 624 KB / 7,807 · 388 KB).
+- 결과: `range-gas-3` 18,589 삼각형 · 1,266,704 B · `sink-single` 19,256 삼각형 · 674,344 B(전에는 7,901 · 624 KB / 7,807 · 388 KB).
+- **싱크대만 예외 — `placement_mode.clamp_v_to_edge` 끔**: 워크플로 그대로(켬) 만든 싱크대는 그릇 안쪽 모서리에 삼각형 조각이 솟았다(qem 접힘 — 8천 면은 양 끝 둘 · 2만 면은 하나, 돌릴 때마다 자리가 바뀐다).
+  끄면 사라졌다. 같은 설정을 가스레인지에 주면 아래 타공 선반의 구멍이 커져서, 워크플로 파일은 켬으로 두고 싱크대만 노드 186의 이 값을 false로 바꿔 만들었다.
+  다른 시험 — 모서리 가중 1: 조각 그대로 · 6만 면 → pack 2만: 긁힌 줄무늬 · 다듬기 20: 작은 접힘.
+  다시 만들 때는 웹에서 이 값만 바꿔 돌리거나 같은 값을 넣은 워크플로 사본으로 `assets:comfy --products sink-single`.
   KSampler 시드를 고정해도 GPU에서 다시 돌리면 면 수가 1 % 안쪽으로 달라진다(실험 18,460 → 다시 18,589).
 - 성능(`assets:perf --product range-gas-3 --n 20` · 인텔 UHD 730 · 3회 중앙값):
   - 궤도 간격(새 세션 / 캐시 뒤): 3.2 / 2.6 ms → 3.1 / 2.0 ms로 그대로다(조합 형상 상자는 6.3 ms).
   - 모델이 상자를 대신하는 첫 프레임: 473 / 329 ms → 539 / 424 ms. 2K WebP를 풀고 GPU에 올리는 시간이다(참고 지표 · 목표 3은 통과).
 - 검수 시트 도구 고침: 모델 도착을 `__three.scenes` 아무 곳에서나 보던 대기가 GLTFLoader 장면에 먼저 걸렸다. 그래서 1.27 MB 모델의 첫 원근 칸이 상자로 찍혔다. 이제 렌더러가 마지막에 그린 앱 장면을 본다(`snapshot.mjs`).
+- Pixal3D 워크플로(`comfy-workflow.api.json`)는 쓰지 않아(11절 — TRELLIS.2 채택) 그대로 두었다. 다시 쓰려면 4절 표의 값을 같이 넣는다.
+- 1.5 MB에 걸리면(`range-gas-3`은 84 %) 그 제품만 `--tex 1024`로 다시 포장한다.
 - 실험 원본은 `tools/assets/incoming/exp/` · `incoming/gen-20k/`(커밋하지 않는다).

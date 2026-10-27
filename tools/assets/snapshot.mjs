@@ -5,7 +5,7 @@
 //
 // 왜 이 방식인가:
 // - 장면은 자동 저장본 복원으로 넣고(window.__app은 개발 빌드 전용 — 사전 검토 I-4) 네 방향 카메라는 하단 바 `#viewPreset`(정면·배면·좌측·평면)이다 —
-//   앱이 실제로 그리는 그대로(모델 맞춤·정면 규약·재질)를 본다. 모델 도착은 page.waitForResponse(models/<id>.glb) + 장면에 공유 메시(userData.shared)가 생겼는지로 본다.
+//   앱이 실제로 그리는 그대로(모델 맞춤·정면 규약·재질)를 본다. 모델 도착은 page.waitForResponse(models/<id>.glb) + 렌더된 앱 장면에 모델 복제(userData.bbox)가 생겼는지로 본다.
 // - 원근 두 장(앞·뒤 비스듬히)을 더한 이유: 정투영 앞·뒤는 단면 실루엣이라 앞뒤가 같은 모양인 제품의 정면을 못 가른다 — 2026-10-13 학생 책상(SchoolDesk_01)은
 //   책 상자가 한쪽만 트였는데 정면도·배면도가 똑같았고, 원근으로 보니 트인 쪽(학생 자리)이 −Z라 sources.json front를 '-z'로 고쳐 다시 포장했다.
 //   원근 카메라는 앱의 궤도(원근) 카메라를 clone해 제품 중심을 겨누고, 같은 장면을 같은 렌더러로 그린다.
@@ -109,12 +109,13 @@ async function shots(browser, url, id, withItem) {
       const [r] = await Promise.all([page.waitForResponse(x => new RegExp(`models/${id}\\.glb$`).test(x.url()), { timeout: 30000 }), page.click('[data-mode="iso"]')]);
       glb = { status: r.status(), bytes: (await r.body()).length };
       if (glb.status !== 200) throw new Error(`models/${id}.glb HTTP ${glb.status}`);
-      // 모델 도착 = **렌더러가 마지막에 그린 장면**(r.__last[0] — 앱 장면)에 공유 메시가 있다. 예전에는 __three.scenes 아무 곳이나 봤는데, GLTFLoader의
-      // gltf.scene도 Scene이라 거기 잡히고 itemAssets.normalize가 공유 표시를 먼저 단다 — 앱 리빌드(settle → onAssetsReady) 전에 통과해 첫 원근 칸이
-      // 조합 형상(상자)으로 찍혔다(2026-10-27 · 2K 텍스처 가스레인지 1.27 MB).
+      // 모델 도착 = **렌더러가 마지막에 그린 장면**(r.__last[0] — 앱 장면)에 모델 복제가 있다. 표시는 itemAssets.fitClone이 템플릿에서 복제해 오는
+      // userData.bbox다 — 공유 메시 표시(userData.shared)는 스테인리스 조합 형상(shapes/index.js)과 셰이더 예열 장면에도 붙어 모델 전 자리표시에 걸린다.
+      // 예전에는 __three.scenes 아무 곳의 공유 메시를 봤다: GLTFLoader의 gltf.scene(itemAssets.normalize가 표시를 먼저 단다)에 걸려 앱 리빌드 전에
+      // 통과했고, 첫 원근 칸이 조합 형상(상자)으로 찍혔다(2026-10-27 · 2K 텍스처 가스레인지 1.27 MB).
       await page.waitForFunction(() => {
-        const s = window.__three.renderers.find(x => x.domElement.isConnected)?.__last?.[0]; let n = 0;
-        s?.traverse(o => { if (o.isMesh && o.userData.shared) n++; }); return n > 0;
+        const s = window.__three.renderers.find(x => x.domElement.isConnected)?.__last?.[0]; let hit = false;
+        s?.traverse(o => { if (o.userData.bbox) hit = true; }); return hit;
       }, null, { timeout: 15000 });
       await frames(page);
       const ok = await page.evaluate(() => { const r = window.__three.renderers.find(x => x.domElement.isConnected); window.__persp = r.__last?.[1]?.clone(); return !!window.__persp?.isPerspectiveCamera; });

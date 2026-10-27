@@ -9,6 +9,7 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import sharp from 'sharp';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PollTimeout, generateGlb, glbOutputs, packArgs, patchWorkflow, pollUntilDone, runBatch, submitPrompt, uploadImage, viewUrl } from '../tools/assets/comfy-lib.mjs';
@@ -255,6 +256,33 @@ describe('포장 연결(pack --source-kind · NOTICE)', () => {
       expect(bad.stderr).toMatch(/--source-kind/);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   }, 30000);
+
+  // 감량·텍스처 기본값(2026-10-27 · 생성 품질): generated는 생성 예산(2만 면 · 2048 — 워크플로와 같게), 그 밖은 8천 · 1024, 명시한 --tris·--tex가 이긴다.
+  // 격자 9,800 삼각형(8천과 2만 사이)과 2400 × 16 텍스처로 세 경우를 가른다 — 기울인 평면이라 simplify가 8천 아래로 쉽게 줄인다.
+  test('pack 기본 감량·텍스처: generated는 2만 면 · 2048, 그 밖은 8천 · 1024, 명시한 값이 이긴다', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'p15-budget-'));
+    try {
+      const doc = new Document(), buf = doc.createBuffer(), N = 70, P = [], I = [];
+      for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) P.push(i / N * 0.9, j / N * 1.8, i / N * 0.75);
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1; I.push(a, b, d, a, d, c); }
+      // 단색 텍스처는 prune이 지운다(keepSolidTextures 기본 끔) — 가로 그러데이션으로 둔다.
+      const px = Buffer.alloc(2400 * 16 * 3); for (let k = 0; k < px.length; k++) px[k] = Math.floor(k / 3) % 2400 / 2400 * 255;
+      const png = await sharp(px, { raw: { width: 2400, height: 16, channels: 3 } }).png().toBuffer();
+      const mat = doc.createMaterial('m').setBaseColorTexture(doc.createTexture('t').setImage(png).setMimeType('image/png'));
+      const prim = doc.createPrimitive().setMaterial(mat).setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(new Float32Array(P)).setBuffer(buf))
+        .setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint16Array(I)).setBuffer(buf));
+      doc.createScene('s').addChild(doc.createNode('n').setMesh(doc.createMesh('m').addPrimitive(prim)));
+      const input = join(tmp, 'in.glb'); writeFileSync(input, await new NodeIO().writeBinary(doc));
+      const PACK = fileURLToPath(new URL('../tools/assets/pack.mjs', import.meta.url));
+      const run = extra => { const r = spawnSync(process.execPath, [PACK, input, '--product', 'fridge-2door', '--out', tmp, '--manifest', join(tmp, 'manifest.json'), ...extra], { encoding: 'utf8' });
+        expect(r.status, r.stderr).toBe(0); const e = JSON.parse(r.stdout); return [e.tris, e.textures[0].w]; };
+      expect(run(['--source-kind', 'generated'])).toEqual([N * N * 2, 2048]);
+      const [tris, w] = run([]);
+      expect([tris <= 8000, w]).toEqual([true, 1024]);
+      const [t2, w2] = run(['--source-kind', 'generated', '--tris', '5000', '--tex', '512']);
+      expect([t2 <= 5000, w2]).toEqual([true, 512]);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  }, 60000);
 
   test('noticeMarkdown: 생성 항목이 있을 때만 생성 경로 문장이 붙는다(시드만이면 지금 NOTICE 그대로)', () => {
     const seed = { products: { 'chair-dining': { source: { kind: 'polyhaven', url: 'https://polyhaven.com/a/x', license: 'CC0-1.0', author: 'K' } } } };

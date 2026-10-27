@@ -6,7 +6,7 @@
 // fitMinGenerated(2026-10-15 · 계획 15b): 사진 한 장에서 만든 생성 모델(source.kind generated)은 비율 오차가 15~20 %다(TRELLIS.2 실측 — 가스레인지 [1, 0.91, 0.82] ·
 // 세정대 [1, 0.80, 0.81] · S2B 사진). 런타임이 축별로 아이템 size에 맞추므로 0.75까지는 늘어남이 눈에 띄지 않았다 — 시드(CC0 모델)는 0.85 그대로.
 // trisGenerated · textureGenerated(2026-10-27 · 생성 품질): 생성 모델은 2만 면 · 2048²까지(사용자 선택 '설정 2'). 8천 면에서는 넓은 판이 구겨지고
-// 화구 받침·손잡이가 뭉개졌다(원인은 워크플로 DecimateMesh midpoint — qem로 고친 뒤에도 2만 면 · 2K가 더 또렷했다 · README §12). 시드는 1만 · 1024² 그대로.
+// 화구 받침·손잡이가 뭉개졌다(원인은 워크플로 DecimateMesh midpoint — qem으로 고친 뒤에도 2만 면 · 2K가 더 또렷했다 · README §12). 시드는 1만 · 1024² 그대로.
 export const ASSET_BUDGET = Object.freeze({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85, fitMinGenerated: 0.75, trisGenerated: 20_000, textureGenerated: 2048 });
 // 런타임(three 0.169 GLTFLoader + MeshoptDecoder)이 읽는 확장만 — Draco·KTX2(KHR_draco_mesh_compression·KHR_texture_basisu)는 런타임 디코더를 두지 않으므로 받지 않는다(사전 검토 I-10).
 export const ALLOWED_EXTENSIONS = Object.freeze(['EXT_meshopt_compression', 'KHR_mesh_quantization', 'EXT_texture_webp', 'KHR_texture_transform',

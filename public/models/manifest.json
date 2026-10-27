@@ -318,8 +318,8 @@
     },
     "sink-single": {
       "id": "sink-single",
-      "bytes": 693192,
-      "tris": 18980,
+      "bytes": 674344,
+      "tris": 19256,
       "textures": [
         {
           "w": 2048,
@@ -344,8 +344,8 @@
       ],
       "fit": [
         1,
-        0.7985,
-        0.8145
+        0.7992,
+        0.8223
       ],
       "extensions": [
         "EXT_meshopt_compression",
@@ -358,8 +358,8 @@
         "license": "자체 생성물",
         "author": "ComfyUI TRELLIS.2 생성(S2B 23907341 사진)"
       },
-      "sha256": "351ecd9471c5c2ebc7d8b326158daeb4bfd731619844b2d913743bafb7bf9b32",
-      "packedAt": "2026-10-27T08:00:55.882Z"
+      "sha256": "f8257d9e2c31c7b2444ff43622854950aa40d334071afdedc5ecdc60c23b11de",
+      "packedAt": "2026-10-27T08:19:20.825Z"
     },
     "sofa-3": {
       "id": "sofa-3",
