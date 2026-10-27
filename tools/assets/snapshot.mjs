@@ -109,7 +109,13 @@ async function shots(browser, url, id, withItem) {
       const [r] = await Promise.all([page.waitForResponse(x => new RegExp(`models/${id}\\.glb$`).test(x.url()), { timeout: 30000 }), page.click('[data-mode="iso"]')]);
       glb = { status: r.status(), bytes: (await r.body()).length };
       if (glb.status !== 200) throw new Error(`models/${id}.glb HTTP ${glb.status}`);
-      await page.waitForFunction(() => window.__three.scenes.some(s => { let n = 0; s.traverse(o => { if (o.isMesh && o.userData.shared) n++; }); return n > 0; }), null, { timeout: 15000 });
+      // 모델 도착 = **렌더러가 마지막에 그린 장면**(r.__last[0] — 앱 장면)에 공유 메시가 있다. 예전에는 __three.scenes 아무 곳이나 봤는데, GLTFLoader의
+      // gltf.scene도 Scene이라 거기 잡히고 itemAssets.normalize가 공유 표시를 먼저 단다 — 앱 리빌드(settle → onAssetsReady) 전에 통과해 첫 원근 칸이
+      // 조합 형상(상자)으로 찍혔다(2026-10-27 · 2K 텍스처 가스레인지 1.27 MB).
+      await page.waitForFunction(() => {
+        const s = window.__three.renderers.find(x => x.domElement.isConnected)?.__last?.[0]; let n = 0;
+        s?.traverse(o => { if (o.isMesh && o.userData.shared) n++; }); return n > 0;
+      }, null, { timeout: 15000 });
       await frames(page);
       const ok = await page.evaluate(() => { const r = window.__three.renderers.find(x => x.domElement.isConnected); window.__persp = r.__last?.[1]?.clone(); return !!window.__persp?.isPerspectiveCamera; });
       if (!ok) throw new Error('3D 궤도 카메라가 원근이 아니다');

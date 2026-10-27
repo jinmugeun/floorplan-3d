@@ -1,6 +1,6 @@
 // 에셋 포장 CLI(2026-10-13 · 계획 15 Task A): glTF/GLB 하나를 앱 규약(아키텍처 §19 — m · 바닥 중심 원점 · +Y 위 · 정면 +Z · 가장 큰 축 = 카탈로그 size)으로
 // 정규화하고 감량 → 텍스처 WebP → meshopt 압축해 `<out>/<productId>.glb`로 쓰고 manifest 항목을 갱신한다. stdout은 항목 JSON 한 줄(seed.mjs·comfy-batch.mjs가 읽는다).
-//   node tools/assets/pack.mjs <in.glb|.gltf> --product <id> [--front +z] [--up y] [--tris 8000] [--tex 1024]
+//   node tools/assets/pack.mjs <in.glb|.gltf> --product <id> [--front +z] [--up y] [--tris 8000] [--tex 1024]   (생성 모델은 기본 20000 · 2048)
 //        [--source-url U --license L --author A] [--source-kind polyhaven|generated|other] [--out public/models] [--manifest <out>/manifest.json]
 // --source-kind(2026-10-13 · 계획 15 Task E): 주지 않으면 URL로 짐작한다(polyhaven.com → polyhaven, 그 밖 → other). ComfyUI 생성 모델은 URL이 없어
 // comfy-batch.mjs가 `--source-kind generated`를 넘긴다 — 종류만 줘도 source가 생긴다(NOTICE의 생성 문장이 이 값을 본다).
@@ -22,8 +22,11 @@ import { ASSET_BUDGET, FRONT_YAW, SOURCE_KINDS, checkManifestEntry, manifestEntr
 const fail = msg => { console.error(`pack: ${msg}`); process.exit(1); };
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
-const input = argv[0], id = opt('--product'), front = opt('--front', '+z'), up = opt('--up', 'y');
-const maxTris = Number(opt('--tris', 8000)), tex = Number(opt('--tex', ASSET_BUDGET.texture));
+const input = argv[0], id = opt('--product'), front = opt('--front', '+z'), up = opt('--up', 'y'), sourceKind = opt('--source-kind');
+// 감량·텍스처 기본값은 생성 모델(--source-kind generated)이면 생성 예산(2만 면 · 2048 — 워크플로 DecimateMesh · Texture Resolution과 같아 두 번 감량하지 않는다 ·
+// README §4), 그 밖은 8천 · 1024. comfy-batch.mjs --pack은 --source-kind generated만 넘기므로 이 기본값을 탄다.
+const gen = sourceKind === 'generated';
+const maxTris = Number(opt('--tris', gen ? ASSET_BUDGET.trisGenerated : 8000)), tex = Number(opt('--tex', gen ? ASSET_BUDGET.textureGenerated : ASSET_BUDGET.texture));
 // 기본 출력은 저장소의 public/models — 스크립트 자리 기준이라 어디서 불러도 같다(사용자가 준 경로는 보통처럼 cwd 기준).
 const outDir = resolve(opt('--out', fileURLToPath(new URL('../../public/models', import.meta.url))));
 const manifestPath = resolve(opt('--manifest', pjoin(outDir, 'manifest.json')));
@@ -33,7 +36,6 @@ if (!product) fail(`카탈로그에 없는 제품: ${id ?? '(--product 없음)'}
 // 오타(`--front z`)가 조용히 회전 0으로 지나가면 모델이 벽을 본다 — 표에 있는 값만 받는다.
 if (!Object.hasOwn(FRONT_YAW, front)) fail(`--front는 ${Object.keys(FRONT_YAW).join(' · ')} 중 하나: ${front}`);
 if (up !== 'y' && up !== 'z') fail(`--up은 y 또는 z: ${up}`);
-const sourceKind = opt('--source-kind');
 if (sourceKind !== undefined && !SOURCE_KINDS.includes(sourceKind)) fail(`--source-kind는 ${SOURCE_KINDS.join(' · ')} 중 하나: ${sourceKind}`);
 if (!(Number.isInteger(maxTris) && maxTris > 0 && Number.isInteger(tex) && tex > 0)) fail('--tris·--tex는 양의 정수');
 const man = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : { version: 1, products: {} };

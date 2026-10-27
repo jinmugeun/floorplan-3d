@@ -5,7 +5,9 @@
 // 예산(계획 15 Global Constraints): 한 파일 ≤ 1.5 MB · 삼각형 ≤ 10,000 · 텍스처 ≤ 1024² · 균일 맞춤 뒤 가장 작은 축 fit ≥ 0.85(시드 채택 기준 — 사전 검토 I-8).
 // fitMinGenerated(2026-10-15 · 계획 15b): 사진 한 장에서 만든 생성 모델(source.kind generated)은 비율 오차가 15~20 %다(TRELLIS.2 실측 — 가스레인지 [1, 0.91, 0.82] ·
 // 세정대 [1, 0.80, 0.81] · S2B 사진). 런타임이 축별로 아이템 size에 맞추므로 0.75까지는 늘어남이 눈에 띄지 않았다 — 시드(CC0 모델)는 0.85 그대로.
-export const ASSET_BUDGET = Object.freeze({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85, fitMinGenerated: 0.75 });
+// trisGenerated · textureGenerated(2026-10-27 · 생성 품질): 생성 모델은 2만 면 · 2048²까지(사용자 선택 '설정 2'). 8천 면에서는 넓은 판이 구겨지고
+// 화구 받침·손잡이가 뭉개졌다(원인은 워크플로 DecimateMesh midpoint — qem로 고친 뒤에도 2만 면 · 2K가 더 또렷했다 · README §12). 시드는 1만 · 1024² 그대로.
+export const ASSET_BUDGET = Object.freeze({ bytes: 1_500_000, tris: 10_000, texture: 1024, fitMin: 0.85, fitMinGenerated: 0.75, trisGenerated: 20_000, textureGenerated: 2048 });
 // 런타임(three 0.169 GLTFLoader + MeshoptDecoder)이 읽는 확장만 — Draco·KTX2(KHR_draco_mesh_compression·KHR_texture_basisu)는 런타임 디코더를 두지 않으므로 받지 않는다(사전 검토 I-10).
 export const ALLOWED_EXTENSIONS = Object.freeze(['EXT_meshopt_compression', 'KHR_mesh_quantization', 'EXT_texture_webp', 'KHR_texture_transform',
   'KHR_materials_emissive_strength', 'KHR_materials_ior', 'KHR_materials_specular', 'KHR_materials_clearcoat', 'KHR_materials_transmission', 'KHR_materials_sheen', 'KHR_materials_volume']);
@@ -40,11 +42,12 @@ export const manifestEntry = e => ({ id: e.id, bytes: e.bytes, tris: e.tris, tex
 // `!(x <= 한도)`로 쓴다: 값이 빠지거나 NaN이면 통과가 아니라 문제로 잡히게. 텍스처는 크기가 있어야 하고 WebP여야 한다(§19.1.4 — pack이 늘
 // WebP로 바꾼다) · fit은 세 축 모두 유한(2026-10-13 · 계획 15 최종 리뷰 F-3: 예전에는 fit 없음·빈 배열·NaN · w/h 없음 · WebP 아님이 통과했다).
 export function checkManifestEntry(e, budget = ASSET_BUDGET) {
-  const problems = [];
+  const problems = [], gen = e.source?.kind === 'generated';
+  const maxTris = gen ? (budget.trisGenerated ?? budget.tris) : budget.tris, maxTex = gen ? (budget.textureGenerated ?? budget.texture) : budget.texture;
   if (!(e.bytes <= budget.bytes)) problems.push('bytes');
-  if (!(e.tris <= budget.tris)) problems.push('tris');
-  if ((e.textures ?? []).some(t => !(t.w <= budget.texture && t.h <= budget.texture) || t.format !== 'image/webp')) problems.push('texture');
-  const fitMin = e.source?.kind === 'generated' ? (budget.fitMinGenerated ?? budget.fitMin) : budget.fitMin;
+  if (!(e.tris <= maxTris)) problems.push('tris');
+  if ((e.textures ?? []).some(t => !(t.w <= maxTex && t.h <= maxTex) || t.format !== 'image/webp')) problems.push('texture');
+  const fitMin = gen ? (budget.fitMinGenerated ?? budget.fitMin) : budget.fitMin;
   if (!(Array.isArray(e.fit) && e.fit.length === 3 && e.fit.every(f => f >= fitMin && f <= 1.02))) problems.push('fit');
   for (const x of e.extensions ?? []) if (!ALLOWED_EXTENSIONS.includes(x)) problems.push(`extension:${x}`);
   return { ok: problems.length === 0, problems };

@@ -22,7 +22,7 @@
 - 파일 `public/models/<제품 id>.glb` 하나(바이너리 glTF 2.0) · 단위 m · 원점 = 바닥 중심(y = 0) · +Y 위 · **정면 +Z**(등받이·헤드보드가 −Z — 2D 심벌·조합 형상과 같다).
 - 축: x = 너비 w · y = 높이 h · z = 깊이 d(카탈로그 size `[w, d, h]` mm).
 - 포장은 **균일 배율**: 가장 큰 축을 카탈로그 size에 맞추고 나머지 축의 fit(맞춘 길이 / 카탈로그 길이)이 **0.85 이상**(생성 모델은 **0.75 이상** — 2026-10-15 계획 15b: 사진 한 장 복원의 비율 오차 15~20 %)이어야 통과. 런타임은 아이템 size에 축별로 늘려 맞춘다.
-- 예산: ≤ 1.5 MB · 삼각형 ≤ 10,000 · 텍스처 ≤ 1024² · 확장은 meshopt · 양자화 · WebP 등 허용 목록만(Draco·KTX2 입력은 받지 않는다).
+- 예산: ≤ 1.5 MB · 삼각형 ≤ 10,000 · 텍스처 ≤ 1024²(생성 모델은 삼각형 ≤ 20,000 · 텍스처 ≤ 2048² — 2026-10-27 §12) · 확장은 meshopt · 양자화 · WebP 등 허용 목록만(Draco·KTX2 입력은 받지 않는다).
 
 ## 2. 생성 트랙 — 어디서 돌리나
 
@@ -95,8 +95,11 @@
 |---|---|---|
 | PrimitiveBoolean "Switch to Trellis2" | false = **Pixal3D** | 첫 시험에서 둘 다(true = TRELLIS.2) → 나은 쪽 |
 | Trellis2UpsampleStage | 1536 | **1024**(16 GB) · 24 GB면 1536도 가능 |
-| DecimateMesh.target_face_count | 700,000 | **8,000**(5,000~10,000 · pack 기본 `--tris 8000`과 같게 — 두 번 감량하지 않게) |
-| PrimitiveInt "Texture Resolution"(→ UnwrapMesh · BakeTextureFromVoxel) | 4096 | **1024** |
+| DecimateMesh.target_face_count | 700,000 | **20,000**(생성 예산 · pack의 생성 기본 `--tris 20000`과 같게 — 두 번 감량하지 않게) |
+| DecimateMesh.placement_mode | midpoint | **qem** · line_quadric_weight 1 · feature_edge_quadric_weight 10 · feature_edge_min_dihedral_deg 30 · clamp_v_to_edge 켬 — midpoint로 크게 줄이면 판이 구겨진다(§12 2026-10-27) |
+| RemeshMesh.smooth_iters | 20 | **3**(노드 설명의 권장 2~3 — 많으면 모서리가 뭉개진다) |
+| MeshSmoothNormals.crease_angle(두 개) | 180 | **40**(각진 기구 — 노드 설명 30~60) |
+| PrimitiveInt "Texture Resolution"(→ UnwrapMesh · BakeTextureFromVoxel) | 4096 | **2048**(생성 예산 · pack의 생성 기본 `--tex 2048`) |
 | BakeNormalMapFromMesh | 2048 | 1024(멀리서 보는 제품이면 빼도 된다) |
 | BakeAmbientOcclusion | 1024 · 64 | 512 · 32(또는 뺀다) |
 | LoadImage.image · Save3DAdvanced.filename_prefix | 예제 사진 · `3d/ComfyUI` | 손대지 않는다 — **스크립트가 제품마다** `<id>.png` · `3d/<id>`로 바꾼다 |
@@ -145,7 +148,7 @@ npm run assets:comfy -- --server … --workflow … --images … --products <목
 
 1. (`--pack`을 안 줬다면) 포장:
    `npm run assets:pack -- tools/assets/incoming/<id>.glb --product <id> --front +z --source-kind generated --author "ComfyUI TRELLIS.2/Pixal3D 생성" --license "자체 생성물"`
-   (사진 출처 URL을 남기려면 `--source-url <URL>`을 더한다. 정면이 틀렸을 때도 생성은 다시 하지 않고 이 명령을 `--front`만 바꿔 다시 돌린다.)
+   (`--source-kind generated`면 감량·텍스처 기본이 생성 예산 2만 면 · 2048이다. 사진 출처 URL을 남기려면 `--source-url <URL>`을 더한다. 정면이 틀렸을 때도 생성은 다시 하지 않고 이 명령을 `--front`만 바꿔 다시 돌린다.)
 2. `npm run assets:check` — 종료 0이어야 한다. fit이 걸리면(시드 0.85 · 생성 0.75 미만) 사진 비율·구도를 바꿔 다시 생성하거나 그 제품은 상자로 둔다(특히 얇은 제품: 인덕션 · TV · 매트리스 · 벽거울 · 형광등).
 3. 카탈로그에 `asset: '<id>'`를 단다(`src/products/catalog.js` · `catalogExtra.js` — 값 = 제품 id). 앱은 asset이 있는 제품만 모델을 받으므로 **검수 시트보다 먼저** 단다.
 4. `npm run build` → `npm run assets:snapshot -- --only <id,…>` → `tools/assets/snapshots/<id>.png`.
@@ -217,3 +220,18 @@ washer-drum,dryer,aircon-stand,tv-55,bed-single,bed-super-single,bed-queen,bed-k
 - 실사진(S2B) 5종: 가스레인지·세정대 좋음, 바닥 그림자가 있는 사진은 넓은 바닥판이 붙고, 합성 사진(두 대 + 열린 문)은 덩어리가 갈라진다 — 제품 하나 · 바닥 그림자 없음 · 콜라주 아님을 고른다.
 - 생성 모델은 metallic 1 + MR 텍스처라 **환경 맵이 없으면 검게** 보인다 — 앱은 에셋 재질에만 RoomEnvironment PMREM을 건다(`src/view3d/envMap.js`).
 - 첫 배포: `range-gas-3`(가스 테이블렌지 3구 · S2B 24441916) · `sink-single`(1조 세정대 · S2B 23907341). 원본 GLB·비교 렌더는 `tools/assets/incoming/s2b-trellis2/`(커밋 안 함)와 `.superpowers/sdd/scratch/p15-gen/compare/`.
+
+## 12. 2026-10-27 생성 품질 고침(설정 2)
+
+- 증상: 두 생성 모델의 넓은 판(가스레인지 상판·선반 · 싱크 앞판·테두리)이 구겨지고 화구 받침·손잡이가 뭉개졌다.
+- 원인(같은 사진·시드로 단계별 GLB를 받아 확인): TRELLIS.2가 막 만든 형상(가스레인지 1,020만 면)은 멀쩡했다. **DecimateMesh `midpoint`로 8천 면(약 1/1,300)까지 줄이는 단계**가 판을 구겼다.
+  같은 원본을 meshoptimizer로 8천 면까지 줄이거나, 노드를 `qem`으로만 바꿔도 깨끗했다. 부원인: RemeshMesh smooth_iters 20(권장 2~3) · 노멀 crease 180 · 1K 텍스처(591조각 아틀라스) · 작은 입력 사진(800 · 567 px).
+  앱 재질·조명과 int8 가중치는 원인이 아니었다(요철 텍스처를 빼도 그대로였다).
+- 고침(사용자 선택 '설정 2' · 4절 표): DecimateMesh 20,000면 · `qem` · 다듬기 3 · crease 40 · 텍스처 2048. 예산은 생성 모델만 2만 면 · 2048²(`ASSET_BUDGET.trisGenerated` · `textureGenerated`)로 올렸고, 시드는 그대로다.
+- 결과: `range-gas-3` 18,589 삼각형 · 1,266,704 B · `sink-single` 18,980 삼각형 · 693,192 B(전에는 7,901 · 624 KB / 7,807 · 388 KB).
+  KSampler 시드를 고정해도 GPU에서 다시 돌리면 면 수가 1 % 안쪽으로 달라진다(실험 18,460 → 다시 18,589).
+- 성능(`assets:perf --product range-gas-3 --n 20` · 인텔 UHD 730 · 3회 중앙값):
+  - 궤도 간격(새 세션 / 캐시 뒤): 3.2 / 2.6 ms → 3.1 / 2.0 ms로 그대로다(조합 형상 상자는 6.3 ms).
+  - 모델이 상자를 대신하는 첫 프레임: 473 / 329 ms → 539 / 424 ms. 2K WebP를 풀고 GPU에 올리는 시간이다(참고 지표 · 목표 3은 통과).
+- 검수 시트 도구 고침: 모델 도착을 `__three.scenes` 아무 곳에서나 보던 대기가 GLTFLoader 장면에 먼저 걸렸다. 그래서 1.27 MB 모델의 첫 원근 칸이 상자로 찍혔다. 이제 렌더러가 마지막에 그린 앱 장면을 본다(`snapshot.mjs`).
+- 실험 원본은 `tools/assets/incoming/exp/` · `incoming/gen-20k/`(커밋하지 않는다).
