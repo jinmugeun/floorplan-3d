@@ -51,11 +51,20 @@ function sceneFor(id, withItem) {
   return { project: makeProject({ name: `snapshot ${id}`, room, wall: { thickness: 20, height: 2 }, items }), target: [c / 1000, (z + p.size[2] / 2) / 1000, c / 1000], ext: Math.max(...p.size) / 1000 };
 }
 
-// 렌더러의 마지막 render(장면, 카메라)를 기억한다(threeHook 뒤에 거는 초기화 스크립트). 원래 render는 __render로 남긴다(원근 그리기가 __last를 덮지 않게).
+// 렌더러의 마지막 render(장면, 카메라)를 기억한다(threeHook 뒤에 거는 초기화 스크립트). 기록 없는 render는 __render로 남긴다(원근 그리기가 __last를 덮지 않게).
+// 앱은 렌더러를 만든 뒤 render를 다시 감싼다(윤곽선 installOutline — 계획 17). 감싸기 전에 바꿔 두면 윤곽선의 안쪽 패스까지 기록돼 __last가
+// 마지막 합성 사각형(정투영 카메라)이 된다(2026-10-27 원근 확인 실패). 그래서 render를 접근자로 두어 앱이 새로 넣는 함수를 맨 바깥으로 받고,
+// 맨 바깥 호출만 기록한다 — 감싸는 쪽이 미리 읽어 간 이전 render(raw)는 기록하지 않는다. __render도 맨 바깥(윤곽선 포함 — 앱 화면 그대로)이다.
 function rememberRender() {
   window.__THREE_DEVTOOLS__.addEventListener('observe', e => {
     const r = e.detail; if (!r?.isWebGLRenderer) return;
-    const render = r.render.bind(r); r.__render = render; r.render = (s, c) => { r.__last = [s, c]; return render(s, c); };
+    let top = r.render;
+    r.__render = (s, c) => top.call(r, s, c);
+    Object.defineProperty(r, 'render', {
+      configurable: true,
+      get() { const f = top; return (s, c) => { if (f === top) r.__last = [s, c]; return f.call(r, s, c); }; },
+      set(fn) { top = fn; },
+    });
   });
 }
 const png = url => { if (!url) throw new Error('렌더러가 아직 그리지 않았다'); return Buffer.from(url.split(',')[1], 'base64'); };
@@ -149,11 +158,13 @@ async function sheet(id, item, bg) {
   </svg>`;
   const flat = await sharp({ create: { width: W, height: H, channels: 3, background: '#ffffff' } })
     .composite([...tiles.map((t, i) => ({ input: t, left: at(i)[0], top: at(i)[1] })), { input: Buffer.from(svg), left: 0, top: 0 }]).png().toBuffer();
-  for (const colors of [256, 128, 64]) {
+  // 생성 모델(사진 질감 — 1조 싱크대·가스레인지, 계획 15b)은 64색에서도 200 KB를 넘어 32·16색까지 내린다(2026-10-27). 검수(정면·구멍·뒤집힌 면)에는 충분하다.
+  const LADDER = [256, 128, 64, 32, 16];
+  for (const colors of LADDER) {
     const out = await sharp(flat).png({ palette: true, colors, dither: 1, effort: 10, compressionLevel: 9 }).toBuffer();
     if (out.length <= MAX_BYTES) return { png: out, colors, side };
   }
-  throw new Error(`시트가 ${MAX_BYTES} B를 넘는다(64색에서도)`);
+  throw new Error(`시트가 ${MAX_BYTES} B를 넘는다(${LADDER.at(-1)}색에서도)`);
 }
 
 const server = await startPreview({ url: argv.find(a => /^https?:/.test(a)) ?? null, port: +arg('--port', 5196) });
