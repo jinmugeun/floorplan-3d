@@ -7,14 +7,25 @@
 // DXF 기구(계획 17 Task 8 Fix 1~4)는 kitchenFor(어휘의 기존 id, 크기, 도면 이름)로 고른다 — 이름이 있으면 정규식 대신 이름 낱말(열원·시리즈·선택 수·제품 낱말),
 // 제품 낱말 거르기가 쓰이지 않았으면 대표 제품 형상, 같은 거리면 표의 정규식에 맞는 후보(kitchenFor 주석).
 import data from './kitchenData.js';
+import purchase from './purchaseData.js';
+import kitchenAssets from './kitchenAssets.js';
 import { expandRow, KITCHEN_CHIPS } from './kitchenRules.js';
+import { purchaseProducts } from './purchaseProducts.js';
 import { LEGACY_PRODUCTS } from './catalogLegacy.js';
 
-export const KITCHEN_PRODUCTS = data.rows.map(rec => expandRow(rec, data));
-export const KITCHEN_PRICES = Object.fromEntries(KITCHEN_PRODUCTS.map(p => [p.id, p.price]));
+// 계획 20(2026-11-06): 학교 구입목록 제품(purchaseProducts — 카탈로그에 없는 것 · 덮어쓴 것)은 PURCHASE_PRODUCTS다. 엑셀 제품(KITCHEN_PRODUCTS)에서는
+// 덮어쓴 id를 빼고, 도면 기구 짝(kitchenFor · LEGACY_TO_KITCHEN)은 KITCHEN_PRODUCTS만 본다 — 구입목록을 더해도 다른 도면의 가져오기 결과가 그대로다.
+// 생성 3D 모델(kitchenAssets.js — link-picks.mjs가 만든다)은 두 목록 모두에 asset으로 붙는다(계획 17 D4 개정 · 명세 §1).
+const withAsset = p => (kitchenAssets[p.id] ? { ...p, asset: kitchenAssets[p.id] } : p);
+const OVERRIDDEN = new Set(purchase.overrides.map(k => `k-${k}`));
+export const KITCHEN_PRODUCTS = data.rows.map(rec => expandRow(rec, data)).filter(p => !OVERRIDDEN.has(p.id)).map(withAsset);
+export const PURCHASE_PRODUCTS = purchaseProducts(purchase).map(withAsset);
+const ALL = [...KITCHEN_PRODUCTS, ...PURCHASE_PRODUCTS];
+export const KITCHEN_PRICES = Object.fromEntries(ALL.map(p => [p.id, p.price]));
 
-// 칩(카테고리) 순서는 KITCHEN_CHIPS, 칩 안의 하위(세부품명)는 원자료에 처음 나온 순서.
-export const KITCHEN_CATEGORIES = KITCHEN_CHIPS.map(name => ({ name, subs: [...new Set(KITCHEN_PRODUCTS.filter(p => p.category === name).map(p => p.sub))] }));
+// 칩(카테고리) 순서는 KITCHEN_CHIPS, 칩 안의 하위(세부품명)는 처음 나온 순서(엑셀 원자료 → 구입목록 제품). 숨긴 제품(식별번호 없는 구입목록
+// 제품 — purchaseProducts.js)만 있는 하위는 뺀다(2026-11-09: 빈 하위 칩 "운반·보관 / 카트"가 생겼다).
+export const KITCHEN_CATEGORIES = KITCHEN_CHIPS.map(name => ({ name, subs: [...new Set(ALL.filter(p => p.category === name && !p.hidden).map(p => p.sub))] }));
 
 // 기존 id → [엑셀 세부품명 후보, 이름 정규식 | null]. 이름 정규식으로 거른 후보가 없으면 세부품명 후보 전부로 물러선다.
 export const LEGACY_SUBS = {

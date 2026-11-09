@@ -292,5 +292,11 @@ describe('포장 연결(pack --source-kind · NOTICE)', () => {
     expect(text).toMatch(/생성 모델.*TRELLIS\.2.*MIT/);
     expect(text).toContain('| bed-queen | — | — | ComfyUI TRELLIS.2 | 자체 생성물 |');
     expect(text.split('\n').length).toBe(noticeMarkdown(seed).split('\n').length + 2);   // 생성 문장 1줄 + 표 1행
+    // 입력 사진은 실제 출처대로(2026-11-09 사용자 결정) · TRELLIS 문장은 작가 칸에 TRELLIS가 있는 항목이 있을 때만(Idol만이면 TRELLIS로 읽히지 않게)
+    expect(text).toContain('입력 사진은 S2B(학교장터) 등록 제품 사진과 제조사 공개 제품 사진이다');
+    expect(text).not.toMatch(/쓸 권리가 있는 것|출처 칸 —\)/);
+    const idolOnly = { products: { ...seed.products, 'k-1': { source: { kind: 'generated', url: 'https://www.s2b.kr/1.jpg', license: '자체 생성물', author: 'ComfyUI Idol(TripoSplat)' } } } };
+    expect(noticeMarkdown(idolOnly)).toMatch(/생성 모델.*S2B/);
+    expect(noticeMarkdown(idolOnly)).not.toMatch(/TRELLIS/);
   });
 });

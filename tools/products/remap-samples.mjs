@@ -24,11 +24,11 @@ const isKitchen = id => String(id ?? '').startsWith('k-');
 // 기존 제품 → 엑셀 제품 id(없으면 null — 문·창·기둥·도면 기구·환기 부속은 그대로다).
 const target = (oldId, size, name = '') => (isKitchen(oldId) || !productById(oldId) ? null : kitchenFor(oldId, size, name));
 
-// 설비 씨앗: 설비가 되면 새 씨앗을 달고, 이미 설비면 기존 씨앗 값 그대로인 칸(또는 빈 칸)만 새 값으로. 설비가 아니게 되면 뗀다.
-function reseed(it, old, np) {
+// 설비 씨앗: 설비가 되면 새 씨앗을 달고, 이미 설비면 기존 씨앗 값 그대로인 칸(또는 빈 칸)만 새 값으로. 설비가 아니게 되면 뗀다. 계획 20 sinsang-remap.mjs도 쓴다(기존 제품이 없으면 — 카탈로그에서 빠진 id — 빈 칸만 채운다).
+export function reseed(it, old, np) {
   if (!np.equip) { delete it.props; return; }
   if (!it.props) { it.props = { ...np.equip }; return; }
-  for (const [k, v] of Object.entries(np.equip)) if (it.props[k] === undefined || it.props[k] === old.equip?.[k]) it.props[k] = v;
+  for (const [k, v] of Object.entries(np.equip)) if (it.props[k] === undefined || it.props[k] === old?.equip?.[k]) it.props[k] = v;
 }
 
 export function remapSinsang(spec) {

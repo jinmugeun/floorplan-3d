@@ -24,19 +24,28 @@ function rotateBox({ min, max }, rx, ry) {
   return { min: [0, 1, 2].map(i => r(Math.min(...pts.map(p => p[i])))), max: [0, 1, 2].map(i => r(Math.max(...pts.map(p => p[i])))) };
 }
 
-// bbox(원본 좌표 m) · size(카탈로그 [w, d, h] mm) → 부모 노드에 걸 회전(라디안 [rx, ry, 0]) · 균일 배율 · 이동(배율 뒤 좌표)과 축별 fit.
-// fit[i] = 맞춘 뒤 축 길이 / 카탈로그 축 길이(가장 큰 축 1) — 런타임은 아이템 size에 축별로 늘려 맞추므로(사전 검토 I-8) fit이 작을수록 모델이 많이 늘어난다.
-export function normalizeTransform({ bbox, size, front = '+z', up = 'y' }) {
+// bbox(원본 좌표 m) · size(카탈로그 [w, d, h] mm) → 회전(라디안 [rx, ry, 0]) · 배율 · 이동(배율 뒤 좌표)과 축별 fit.
+// fit 'uniform'(기본 · 비율 보존): 가장 큰 축이 카탈로그에 딱 맞는 균일 배율. fit[i] = 맞춘 뒤 축 길이 / 카탈로그 축 길이(가장 큰 축 1) —
+//   런타임은 아이템 size에 축별로 늘려 맞추므로(사전 검토 I-8) fit이 작을수록 모델이 많이 늘어난다.
+// fit 'axis'(계획 20 D3): 축마다 카탈로그에 맞춘다 — 런타임 fitClone이 어차피 축별로 늘리므로 보이는 모양은 같고, 포장 파일 비율 = 카탈로그 비율(fit [1, 1, 1]).
+//   생성 모델(정면 사진의 Idol은 깊이를 3~4.5배로 만든다)용이다. rawFit = 균일이었다면의 fit(정보 — 얼마나 늘어났는가 · 비교 그림이 < 0.5를 표시한다).
+// scale = 균일 배율(두 방식 공통) · axisScale = 실제로 거는 축별 배율 [x, y, z] — 회전 **뒤** 축(앱 좌표 x = w · y = h · z = d)이다(pack.mjs가 회전 노드의 부모에 건다).
+export function normalizeTransform({ bbox, size, front = '+z', up = 'y', fit = 'uniform' }) {
   const rx = up === 'z' ? -Math.PI / 2 : 0, ry = FRONT_YAW[front] ?? 0;
   const b = rotateBox(bbox, rx, ry), ext = [0, 1, 2].map(i => b.max[i] - b.min[i]);
   const target = [size[0] / 1000, size[2] / 1000, size[1] / 1000];           // x = w · y = h · z = d
   const k = Math.max(...ext.map((e, i) => e / target[i]));                   // 가장 큰 축이 카탈로그에 딱 맞게(균일 · 비율 보존)
-  const scale = 1 / k;
-  return { rotation: [rx, ry, 0], scale, translation: [-(b.min[0] + b.max[0]) / 2 * scale, -b.min[1] * scale, -(b.min[2] + b.max[2]) / 2 * scale], fit: ext.map((e, i) => (e * scale) / target[i]) };
+  const scale = 1 / k, rawFit = ext.map((e, i) => (e * scale) / target[i]);
+  const axisScale = fit === 'axis' ? ext.map((e, i) => target[i] / (e || 1)) : [scale, scale, scale];
+  return {
+    rotation: [rx, ry, 0], scale, axisScale,
+    translation: [-(b.min[0] + b.max[0]) / 2 * axisScale[0], -b.min[1] * axisScale[1], -(b.min[2] + b.max[2]) / 2 * axisScale[2]],
+    fit: fit === 'axis' ? [1, 1, 1] : rawFit, rawFit,
+  };
 }
 
 // manifest 항목의 모양을 한곳에서 정한다(pack.mjs가 쓰고 check.mjs·런타임 로더(Task B)·NOTICE 생성(Task C)이 읽는다).
-export const manifestEntry = e => ({ id: e.id, bytes: e.bytes, tris: e.tris, textures: e.textures ?? [], size: e.size, fit: e.fit ?? [1, 1, 1], extensions: e.extensions ?? [], source: e.source ?? null, sha256: e.sha256, packedAt: e.packedAt ?? null });
+export const manifestEntry = e => ({ id: e.id, bytes: e.bytes, tris: e.tris, textures: e.textures ?? [], size: e.size, fit: e.fit ?? [1, 1, 1], ...(e.rawFit ? { rawFit: e.rawFit } : {}), extensions: e.extensions ?? [], source: e.source ?? null, sha256: e.sha256, packedAt: e.packedAt ?? null });
 
 // 예산 판정 — 문제 이름 목록(bytes · tris · texture · fit · extension:<이름>). fit 상한 1.02는 균일 맞춤의 반올림 여유이고, 실제 뜻은 하한(fitMin) 검사다(사전 검토 I-8 · S-5).
 // `!(x <= 한도)`로 쓴다: 값이 빠지거나 NaN이면 통과가 아니라 문제로 잡히게. 텍스처는 크기가 있어야 하고 WebP여야 한다(§19.1.4 — pack이 늘
@@ -108,12 +117,22 @@ export function noticeMarkdown(man, nameOf = () => null) {
     const s = e.source ?? {}, licUrl = LICENSE_URLS[s.kind];
     return `| ${cell(id)} | ${cell(nameOf(id))} | ${cell(s.url)} | ${cell(s.author)} | ${cell(s.license && licUrl ? `${s.license} (${licUrl})` : s.license)} |`;
   });
-  // 생성 모델 문장(2026-10-13 · 계획 15 Task E)은 generated 항목이 있을 때만 — 시드만인 지금은 NOTICE.md가 바이트 그대로다(assetsCatalog.test.js).
-  // 근거: 조사 2026-10-06-research-comfyui-trellis2.md §8(가중치 MIT · 네이티브 노드라 nvdiffrast 없음) · tools/assets/README.md 입력 사진 규칙.
-  const generated = Object.values(man.products ?? {}).some(e => e.source?.kind === 'generated')
-    ? ['생성 모델(출처 종류 generated — 출처 칸 —)은 사진 한 장에서 ComfyUI 네이티브 TRELLIS.2/Pixal3D(가중치 MIT · nvdiffrast 없는 경로)로 만들어 같은 규약으로 포장한 것이다. 입력 사진은 쓸 권리가 있는 것(직접 찍은 사진 · CC0 · 허락받은 제조사 사진)만 쓴다 — `tools/assets/README.md`.'] : [];
+  // 생성 모델 문장(2026-10-13 · 계획 15 Task E)은 generated 항목이 있을 때만 — 시드만이면 NOTICE.md가 바이트 그대로다(assetsCatalog.test.js).
+  // 입력 사진은 실제 출처대로 적는다(2026-11-09 계획 20 최종 리뷰 · 사용자 결정 — 계획 15b부터 S2B 등록 사진 · 제조사 공개 사진을 쓴다 · README §5).
+  // TRELLIS.2/Pixal3D 문장은 작가 칸에 TRELLIS가 있는 항목이 있을 때만 붙인다(Idol 모델까지 TRELLIS로 읽히지 않게). 한 줄로 둔다(comfyBatch.test.js 줄 수).
+  // 근거: 조사 2026-10-06-research-comfyui-trellis2.md §8(가중치 MIT · 네이티브 노드라 nvdiffrast 없음).
+  const gens = Object.values(man.products ?? {}).filter(e => e.source?.kind === 'generated');
+  const trellis = gens.some(e => /TRELLIS/.test(e.source?.author ?? ''))
+    ? ' 작가 칸에 TRELLIS.2가 있는 항목은 ComfyUI 네이티브 TRELLIS.2/Pixal3D(가중치 MIT · nvdiffrast 없는 경로)로 만들어 같은 규약으로 포장한 것이다.' : '';
+  const generated = gens.length
+    ? [`생성 모델(출처 종류 generated)은 제품 사진 한 장에서 만든 자체 생성물이다. 입력 사진은 S2B(학교장터) 등록 제품 사진과 제조사 공개 제품 사진이다 — 출처 칸이 그 사진(또는 제품 페이지) 주소다(입력 사진 규칙 \`tools/assets/README.md\` §5).${trellis}`] : [];
+  // Idol 생성 문장(2026-11-06 · 계획 20): 작가 칸에 Idol이 있는 항목(link-picks.mjs AUTHOR)이 있을 때만 — 계획 15b까지의 NOTICE는 바이트 그대로다.
+  // 라이선스 사슬(2026-11-09 최종 리뷰): Idol · FLUX.2 VAE · SeedVR2 Apache-2.0 · 영상 특징 DINOv3 = Meta DINOv3 License(상업적 사용 허용) · 배경 지우기 BiRefNet MIT.
+  const idol = Object.values(man.products ?? {}).some(e => /Idol/.test(e.source?.author ?? ''))
+    ? ['Idol 생성 모델(작가 칸에 Idol)은 제품 사진(배경 지우기 BiRefNet · MIT · 짧은 변이 900 px보다 작으면 SeedVR2 7B로 키움 · Apache-2.0 — 작가 칸에 SeedVR2가 있는 항목)에서 ComfyUI Idol(가우시안 스플랫 · Apache-2.0 · FLUX.2 VAE Apache-2.0 · 영상 특징 DINOv3 · Meta DINOv3 License — 상업적 사용 허용)로 만들고, 우리 노드 splat_solid_mesh(tools/assets/idol/comfy-node)로 닫힌 메시와 질감을 구운 뒤 스테인리스 B 반광 재질을 입혀, 축마다 카탈로그 규격에 맞춰 포장한 것이다.']
+    : [];
   return ['# NOTICE — 제품 3D 모델 출처', '',
     '`public/models/`에 든 제품 3D 모델(GLB)의 출처·작가·라이선스다. `public/models/manifest.json`에서 `tools/assets/pack.mjs`가 만든다 — 손으로 고치지 않는다(`npm run assets:seed`·`assets:pack`이 다시 쓴다).',
     'Poly Haven 에셋은 사이트 전체가 CC0-1.0(퍼블릭 도메인 헌정)이다 — https://polyhaven.com/license . 표기 의무는 없지만 출처와 작가를 남긴다. 포장 때 크기·축·원점을 앱 규약에 맞추고, 삼각형이 많으면 줄이고, 텍스처를 WebP로 바꿨다.',
-    ...generated, '', '| 제품 | 이름 | 출처 | 작가 | 라이선스 |', '|---|---|---|---|---|', ...rows, ''].join('\n');
+    ...generated, ...idol, '', '| 제품 | 이름 | 출처 | 작가 | 라이선스 |', '|---|---|---|---|---|', ...rows, ''].join('\n');
 }

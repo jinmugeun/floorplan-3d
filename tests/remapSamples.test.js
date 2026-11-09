@@ -22,17 +22,22 @@ test('커밋된 두 샘플은 이미 재연결돼 있다 — 다시 돌려도 �
   expect(g.text).toBe(raw('gangdang.json'));
 });
 
-test('신상중: 급식 기구 115개는 엑셀 제품 · 도면 기구 52 · 개수·종류 합 그대로 · dxfProduct = productId · 코드·종류는 새 제품 값', () => {
+test('신상중: 급식 기구는 엑셀·구입목록 제품 · 도면 기구는 짝 못 찾은 것만 · 개수·종류 합 그대로 · 짝지은 기구는 dxfProduct 없음 · 코드·종류는 새 제품 값', () => {
   const f = activeFloor(buildSinsangProject());
+  // 계획 20(2026-11-09): 도면 구입 번호로 짝지은 기구(tools/products/sinsang-map.json)는 구입목록 제품이 되고 dxfProduct를 뗐다(replaceProduct 규칙 — 견적 대상).
+  const map = JSON.parse(raw('../../tools/products/sinsang-map.json')), mapped = new Set(map.pairs.map(p => p.itemId));
+  const school = id => id.startsWith('k-') || id.startsWith('ss-');
+  const fromGeneric = map.pairs.filter(p => p.from === 'equip-generic').length, fromOther = map.pairs.filter(p => !school(p.from)).length;
   expect(f.items).toHaveLength(222);
   expect(f.items.filter(i => i.productId in LEGACY_TO_KITCHEN)).toEqual([]);
-  expect(f.items.filter(i => i.productId === 'equip-generic')).toHaveLength(52);
-  expect(f.items.filter(i => i.productId.startsWith('k-'))).toHaveLength(115);
+  expect(f.items.filter(i => i.productId === 'equip-generic')).toHaveLength(52 - fromGeneric);
+  expect(f.items.filter(i => school(i.productId))).toHaveLength(115 + fromOther);   // 엑셀 제품 115 + 짝으로 들어온 엑셀 밖 제품(도면 기구 등)
   const kinds = f.items.reduce((m, i) => ({ ...m, [i.kind]: (m[i.kind] ?? 0) + 1 }), {});
   expect(kinds).toMatchObject({ door: 16, window: 16, opening: 9, column: 14 });
   expect(kinds.product + kinds.equipment).toBe(167);
-  for (const it of f.items.filter(i => i.dxfProduct)) expect(it.dxfProduct, it.id).toBe(it.productId);
-  for (const it of f.items.filter(i => i.productId.startsWith('k-'))) {
+  for (const it of f.items.filter(i => i.dxfProduct)) expect(it.dxfProduct, it.id).toBe(it.productId);   // 짝 못 찾은 가져온 기구는 그대로
+  for (const it of f.items.filter(i => mapped.has(i.id))) expect(it.dxfProduct, it.id).toBeUndefined();
+  for (const it of f.items.filter(i => school(i.productId))) {
     const p = productById(it.productId);
     expect([it.code, it.kind], it.id).toEqual([p.code, p.kind]);
   }

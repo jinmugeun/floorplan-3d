@@ -1,18 +1,19 @@
 // 엑셀 급식기구 카탈로그(계획 17 Task 3): 원자료 → 제품 펼치기 · 칩 · 기존 id → 엑셀 제품 대응.
 import { describe, test, expect } from 'vitest';
 import data from '../src/products/kitchenData.js';
-import { KITCHEN_PRODUCTS, KITCHEN_PRICES, KITCHEN_CATEGORIES, LEGACY_SUBS, LEGACY_TO_KITCHEN, kitchenFor } from '../src/products/catalogKitchen.js';
+import purchase from '../src/products/purchaseData.js';
+import { KITCHEN_PRODUCTS, PURCHASE_PRODUCTS, KITCHEN_PRICES, KITCHEN_CATEGORIES, LEGACY_SUBS, LEGACY_TO_KITCHEN, kitchenFor } from '../src/products/catalogKitchen.js';
 import { KITCHEN_CHIPS } from '../src/products/kitchenRules.js';
 import { SHAPE_FAMILIES } from '../src/products/shapeNames.js';
-import { productById, SYMBOL_NAMES } from '../src/products/catalog.js';
+import { productById, productsIn, SYMBOL_NAMES } from '../src/products/catalog.js';
 import { EQUIP_TYPES, APPLIANCE_KINDS } from '../src/vent/equipment.js';
 
 describe('엑셀 제품 펼치기', () => {
   test('원자료 한 행이 제품 하나다 — id는 k-<식별번호>, 단가는 엑셀 단가', () => {
-    expect(KITCHEN_PRODUCTS).toHaveLength(data.rows.length);
+    expect(KITCHEN_PRODUCTS).toHaveLength(data.rows.length - purchase.overrides.length);   // 계획 20: 덮어쓴 id(구입목록 값)는 PURCHASE_PRODUCTS로 간다
     expect(KITCHEN_PRODUCTS.length).toBeGreaterThanOrEqual(480);
     expect(KITCHEN_PRODUCTS.every(p => /^k-\d+$/.test(p.id))).toBe(true);
-    expect(Object.keys(KITCHEN_PRICES)).toHaveLength(KITCHEN_PRODUCTS.length);
+    expect(Object.keys(KITCHEN_PRICES)).toHaveLength(KITCHEN_PRODUCTS.length + PURCHASE_PRODUCTS.length);
     const rice = productById('k-25279008');
     expect(rice).toMatchObject({ name: '전기 인덕션 취반기', code: 'SKK-CB2100', category: '조리', sub: '취반기', size: [570, 600, 1095], shape: 'ricecooker', price: 5500000, kind: 'equipment' });
     expect(rice.equip).toEqual({ type: 'appliance', kind: 'ricecooker', heat: 'electric' });
@@ -34,12 +35,13 @@ describe('엑셀 제품 펼치기', () => {
     expect(KITCHEN_PRODUCTS.filter(p => p.equip?.type === 'hood').length).toBe(KITCHEN_PRODUCTS.filter(p => p.sub === '상업용주방후드').length);
   });
 
-  test('칩은 KITCHEN_CHIPS 순서이고 하위는 원자료에 처음 나온 순서다 — 비어 있는 칩이 없다', () => {
+  test('칩은 KITCHEN_CHIPS 순서이고 하위는 원자료에 처음 나온 순서다 — 비어 있는 칩이 없다 · 숨긴 제품만 있는 하위도 없다', () => {
     expect(KITCHEN_CATEGORIES.map(c => c.name)).toEqual(KITCHEN_CHIPS);
     for (const c of KITCHEN_CATEGORIES) {
       expect(c.subs.length, c.name).toBeGreaterThan(0);
-      const seen = [...new Set(KITCHEN_PRODUCTS.filter(p => p.category === c.name).map(p => p.sub))];
+      const seen = [...new Set([...KITCHEN_PRODUCTS, ...PURCHASE_PRODUCTS].filter(p => p.category === c.name && !p.hidden).map(p => p.sub))];
       expect(c.subs, c.name).toEqual(seen);
+      for (const s of c.subs) expect(productsIn(c.name, s).length, `${c.name} / ${s}`).toBeGreaterThan(0);   // 2026-11-09: '운반·보관 / 카트'는 숨긴 ss- 제품뿐이었다
     }
   });
 });

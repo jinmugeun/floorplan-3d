@@ -1,0 +1,202 @@
+{
+  "_설명": "신상중 구입 제품 → 생성 모델 고르기 표(계획 20 · 명세 D1). src = 앱 루트 기준 원본 GLB(git 밖) · from = up-s1(업스케일 시드 46) | up-s2(시드 1046) | orig(원본 사진) | trellis | reuse · model false = 지금 형상 유지(why). 고친 뒤 node tools/assets/link-picks.mjs.",
+  "k-202210055017379": {
+    "src": "tools/assets/incoming/exp/upi-svr-202210055017379-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2022/10/05/202210055017379_1664929939331.jpg",
+    "verdict": "나아짐",
+    "tris": 8000,
+    "note": "템플릿에 여러 대 · 작은 기구 — 궤도 성능(계획 20 Task 10)"
+  },
+  "k-202210055019220": {
+    "src": "tools/assets/incoming/exp/upi-svr-202210055019220-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2022/10/05/202210055019220_1664939728224.jpg",
+    "verdict": "나아짐"
+  },
+  "k-202211225284092": {
+    "src": "tools/assets/incoming/exp/upi-svr-202211225284092-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2022/11/22/202211225284092_1669103541278.jpg",
+    "verdict": "나아짐"
+  },
+  "k-202303095951235": {
+    "model": false,
+    "why": "사용자 확인 2026-11-06: 형상이 나음 — 모델 바탕이 하얗게 얼룩짐(옛 설정 TRELLIS.2)"
+  },
+  "k-202303095951444": {
+    "src": "tools/assets/incoming/s2b-all/strip/202303095951444.glb",
+    "from": "trellis",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2023/03/09/202303095951444_1678347541860.JPG",
+    "author": "ComfyUI TRELLIS.2(옛 설정 8천 면)",
+    "verdict": "높이 30 mm 판 — 형상과 비교"
+  },
+  "k-202303206019265": {
+    "src": "tools/assets/incoming/exp/upi-svr-202303206019265-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2023/03/20/202303206019265_1679304339602.jpg",
+    "verdict": "비슷",
+    "tris": 6000,
+    "note": "템플릿에 여러 대 · 작은 기구 — 궤도 성능(계획 20 Task 10)"
+  },
+  "k-202506092622734": {
+    "src": "tools/assets/incoming/exp/mat-b4-idol-202506092622734-s1.glb",
+    "from": "orig",
+    "author": "ComfyUI Idol(TripoSplat) · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성(원본 사진)",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2025/06/09/202506092622734_1749456410658.jpg",
+    "verdict": "나빠짐"
+  },
+  "k-202506092623836": {
+    "src": "tools/assets/incoming/exp/upi-svr-202506092623836-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2025/06/09/202506092623836_1749459802691.jpg",
+    "verdict": "나아짐"
+  },
+  "k-202506102633690": {
+    "model": false,
+    "why": "사진 문제 — 문이 열린 사진(새 사진 필요)"
+  },
+  "k-202506112657041": {
+    "model": false,
+    "why": "사진 문제 — 문이 열린 사진(새 사진 필요)"
+  },
+  "k-202602137002127": {
+    "src": "tools/assets/incoming/exp/upi-svr-202602137002127-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/02/13/202602137002127_1770966879456.jpg",
+    "verdict": "나아짐"
+  },
+  "k-202606158754353": {
+    "src": "tools/assets/incoming/exp/upi-svr-rc150t-matb.glb",
+    "from": "up-s1",
+    "url": "https://ssung.kr/portfolio-category/pro01/",
+    "verdict": "비슷"
+  },
+  "k-22795829": {
+    "model": false,
+    "why": "사진 문제 — 한 사진에 두 대(새 사진 필요)"
+  },
+  "k-22796924": {
+    "src": "tools/assets/incoming/exp/upi-svr-22796924-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/02/11/202602116956927_1770785248500.jpg",
+    "verdict": "비슷"
+  },
+  "k-22796938": {
+    "src": "tools/assets/incoming/exp/upi-svr-22796938-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/02/11/202602116957867_1770787468020.jpg",
+    "verdict": "비슷"
+  },
+  "k-23237948": {
+    "src": "tools/assets/incoming/exp/upi-svr-23237948-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/09/22/202609229500411_1790056927847.jpg",
+    "verdict": "비슷",
+    "author": "ComfyUI Idol(TripoSplat) · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성(사진 짧은 변 900 px 이상 — 업스케일 안 함)"
+  },
+  "k-23498622": {
+    "src": "tools/assets/incoming/exp/upi-svr-23498622-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/05/202608059182332_1785908748818.jpg",
+    "verdict": "비슷"
+  },
+  "k-23688167": {
+    "src": "tools/assets/incoming/exp/upi-svr-23688167-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/06/02/202606028610413_1780387399175.jpg",
+    "verdict": "나아짐",
+    "tris": 6000,
+    "note": "템플릿에 여러 대 · 작은 기구 — 궤도 성능(계획 20 Task 10)"
+  },
+  "k-23892093": {
+    "model": false,
+    "why": "사용자 확인 2026-11-06: 형상 유지 — 모델 상판이 어둡고 얼룩져 보임(식당 35대라 화면 인상 좌우)"
+  },
+  "k-23892094": {
+    "model": false,
+    "why": "사용자 확인 2026-11-06: 형상 유지 — 모델 상판이 어둡고 얼룩져 보임(식당 35대라 화면 인상 좌우)"
+  },
+  "k-23907340": {
+    "src": "tools/assets/incoming/exp/upi-svr-23907340-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/20/202608209273217_1787210833057.jpg",
+    "verdict": "비슷"
+  },
+  "k-23907341": {
+    "src": "public/models/sink-single.glb",
+    "from": "reuse",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/20/202608209273322_1787210564264.jpg",
+    "author": "ComfyUI TRELLIS.2 생성(S2B 23907341 사진)",
+    "verdict": "계획 15b 배포 모델(1조 세정대 1200 · TRELLIS.2)"
+  },
+  "k-23907349": {
+    "src": "tools/assets/incoming/exp/upi-svr-23907349-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/20/202608209273529_1787211828361.jpg",
+    "verdict": "비슷"
+  },
+  "k-24290770": {
+    "src": "tools/assets/incoming/exp/upi-svr-24290770-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2023/02/24/202302245877850_1677223878496.jpg",
+    "verdict": "나아짐"
+  },
+  "k-24397271": {
+    "src": "tools/assets/incoming/exp/upi-svr-24397271-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/10/14/202610149620953_1791963681062.jpg",
+    "verdict": "비슷",
+    "author": "ComfyUI Idol(TripoSplat) · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성(사진 짧은 변 900 px 이상 — 업스케일 안 함)"
+  },
+  "k-24430449": {
+    "src": "tools/assets/incoming/exp/upi-svr-24430449-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/13/202608139235143_1786610324865.JPG",
+    "verdict": "나아짐"
+  },
+  "k-24742924": {
+    "src": "tools/assets/incoming/exp/upi-svr-24742924-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/03/05/202603057201869_1772709728706.JPG",
+    "verdict": "비슷"
+  },
+  "k-24756275": {
+    "src": "tools/assets/incoming/exp/upi-svr-24756275-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/07/21/202607219076949_1784617384130.jpg",
+    "verdict": "나아짐"
+  },
+  "k-25100596": {
+    "model": false,
+    "why": "사진 문제 — 한 사진에 두 대(새 사진 필요)"
+  },
+  "k-25110875": {
+    "src": "tools/assets/incoming/exp/upi-svr-25110875-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2024/03/22/202403228371770_1711097095739.jpg",
+    "verdict": "나아짐"
+  },
+  "k-25125194": {
+    "src": "tools/assets/incoming/exp/upi-svr-25125194-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2024/03/26/202403268391893_1711429896880.jpg",
+    "verdict": "비슷"
+  },
+  "k-25157834": {
+    "src": "tools/assets/incoming/exp/upi-svr-25157834-matb.glb",
+    "from": "up-s1",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2024/03/12/202403128292876_1710231747769.jpg",
+    "verdict": "나아짐"
+  },
+  "k-25255110": {
+    "src": "tools/assets/incoming/exp/upi-svr-25255110-s2-matb.glb",
+    "from": "up-s2",
+    "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/21/202608219276407_1787276910372.jpg",
+    "verdict": "나아짐"
+  },
+  "k-25258484": {
+    "model": false,
+    "why": "사진 문제 — 판의 구멍이 3D에서 패널 구멍이 됨(새 사진 필요)"
+  }
+}

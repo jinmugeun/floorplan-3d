@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { PRODUCTS, productById } from '../src/products/catalog.js';
 import { checkManifestEntry, noticeMarkdown } from '../tools/assets/lib.mjs';
+import kitchenAssets from '../src/products/kitchenAssets.js';
 
 const at = rel => new URL(`../${rel}`, import.meta.url);
 const man = JSON.parse(readFileSync(at('public/models/manifest.json'), 'utf8'));
@@ -14,7 +15,9 @@ const sources = JSON.parse(readFileSync(at('tools/assets/sources.json'), 'utf8')
 const ids = Object.keys(man.products);
 const SEEDS = ['chair-dining', 'chair-office', 'desk-student', 'dining-6', 'light-pendant', 'side-table', 'sofa-3'];
 const GENERATED = ['range-gas-3', 'sink-single'];                              // S2B 사진 → ComfyUI TRELLIS.2(2026-10-15 · 계획 15b)
-const ALL = [...SEEDS, ...GENERATED].sort();
+// 신상중 구입 제품(2026-11-06 · 계획 20): link-picks.mjs가 고르기 표(tools/assets/picks/sinsang.json)대로 축별 포장한 생성 모델(Idol · 일부 TRELLIS.2 재포장).
+const SINSANG = Object.keys(kitchenAssets);
+const ALL = [...SEEDS, ...GENERATED, ...SINSANG].sort();
 
 describe('시드 에셋(계획 15 Task C)', () => {
   // 정면은 SchoolDesk_01만 −Z다(2026-10-13 · 계획 15 Task D 검수 시트): 책 상자의 트인 쪽(학생이 앉는 쪽)이 원본에서 −Z였다 — 원근으로 앞(+Z)·뒤에서
@@ -48,7 +51,11 @@ describe('시드 에셋(계획 15 Task C)', () => {
       // 카탈로그 size가 바뀌면 다시 포장해야 한다(균일 맞춤의 기준 축이 달라진다).
       expect(e.size, id).toEqual(productById(id).size);
       if (GENERATED.includes(id)) expect(e.source, id).toEqual({ kind: 'generated', url: expect.stringMatching(/^https:\/\/www\.s2b\.kr\//), license: '자체 생성물', author: expect.stringMatching(/TRELLIS/) });
-      else expect(e.source, id).toEqual({ kind: 'polyhaven', url: `https://polyhaven.com/a/${sources[id].asset}`, license: 'CC0-1.0', author: expect.stringMatching(/\S/) });
+      else if (SINSANG.includes(id)) {
+        expect(e.source, id).toEqual({ kind: 'generated', url: expect.stringMatching(/^https:\/\//), license: '자체 생성물', author: expect.stringMatching(/Idol|TRELLIS/) });
+        expect(e.fit, id).toEqual([1, 1, 1]);                                     // 축별 포장(명세 D3)
+        expect(e.rawFit.every(f => f > 0 && f <= 1.02), id).toBe(true);
+      } else expect(e.source, id).toEqual({ kind: 'polyhaven', url: `https://polyhaven.com/a/${sources[id].asset}`, license: 'CC0-1.0', author: expect.stringMatching(/\S/) });
     }
   });
 
@@ -72,4 +79,12 @@ describe('시드 에셋(계획 15 Task C)', () => {
     expect(productById('light-pendant')).toMatchObject({ attach: 'ceiling', zDefault: 0, size: [300, 300, 600], asset: 'light-pendant' });
     expect(man.products['light-pendant'].fit[1]).toBe(1);
   });
+});
+
+test('신상중 구입 제품 모델(계획 20): 고르기 표에서 모델이 있는 제품 = kitchenAssets = 카탈로그 asset · 사진 문제 5종은 모델 없음', () => {
+  const picks = JSON.parse(readFileSync(at('tools/assets/picks/sinsang.json'), 'utf8'));
+  const withModel = Object.keys(picks).filter(k => !k.startsWith('_') && picks[k].model !== false).sort();
+  expect([...SINSANG].sort()).toEqual(withModel);
+  for (const id of SINSANG) expect(productById(id)?.asset, id).toBe(id);
+  for (const id of ['k-25258484', 'k-202506112657041', 'k-202506102633690', 'k-22795829', 'k-25100596']) expect(productById(id).asset, id).toBeUndefined();
 });

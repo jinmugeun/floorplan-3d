@@ -4,6 +4,8 @@
 // 다시 뽑으려면 app/.superpowers/sdd/scratch/sinsang-sample.mjs(코퍼스 DXF 필요). 가져온 기구는 제품을 바꾸기 전까지 견적 0원이다(dxfProduct · 계획 13).
 // 계획 17 Task 9(2026-10-20): 기구 115개는 엑셀 급식기구로 재연결했고 방 바닥 칩 에폭시 · 벽 안쪽 흰 타일을 입혔다(tools/products/remap-samples.mjs) —
 // 다시 뽑으면 그 도구를 한 번 더 돌려 마감을 굽는다(기구는 이미 엑셀이라 0개).
+// 계획 20(2026-11-09): 도면 구입 번호로 짝지은 기구 145개는 구입목록 제품이고, 크기·회전을 제품에 맞췄다(평면 발자국 그대로 · 너비·깊이를 ±90°로 되돌림 ·
+// 높이 = 제품 · 정면은 가까운 벽을 등짐 — tools/products/sinsang-remap.mjs --apply).
 import spec from './sinsang.json';
 import { migrate } from '../state/schema.js';
 

@@ -267,7 +267,9 @@ export async function runDrawing(entry, { roles = null, dividers = false, equipm
     equip: eqs.placed ?? 0, equipProd: eqs.product ?? 0, equipClash: eqs.clash ?? 0, equipHit: eqScore.hit, equipAll: eqScore.rows.length,
     guessed: !!stats.guessed, ms,
   };
-  return { path, summary, project, stats, metrics, areaRows, equipRows: eqScore.rows };
+  // toApp · near(DXF 원 좌표 → 앱 좌표 · 도면 상자 안)도 돌려준다 — tools/products/sinsang-remap.mjs가 구입 번호 글자를 옮길 때 같은 식을 쓴다
+  // (2026-11-06 · 계획 20 Task 8). 점수판·e2e는 metrics·areaRows·equipRows만 본다.
+  return { path, summary, project, stats, metrics, areaRows, equipRows: eqScore.rows, toApp, near };
 }
 
 // 방향이 있는 지표: 값이 이쪽으로 가면 나빠진 것이다(벽·방 수 같은 나머지는 바뀌면 알리기만 한다).

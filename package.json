@@ -17,7 +17,8 @@
     "assets:snapshot": "node tools/assets/snapshot.mjs",
     "assets:perf": "node tools/assets/perf.mjs --vsync off",
     "assets:comfy": "node tools/assets/comfy-batch.mjs",
-    "kitchen:gen": "node tools/products/excel-to-catalog.mjs"
+    "kitchen:gen": "node tools/products/excel-to-catalog.mjs",
+    "purchase:gen": "node tools/products/purchase-to-catalog.mjs"
   },
   "dependencies": {
     "three": "0.169.0"

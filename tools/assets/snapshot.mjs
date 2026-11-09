@@ -24,6 +24,7 @@ import sharp from 'sharp';
 import { productById } from '../../src/products/catalog.js';
 import { sheetLayout } from './lib.mjs';
 import { launchChrome, startPreview, threeHook, makeProject, restoreProject, collectErrors } from './browser.mjs';
+import { roomFor, aimFor, rememberRender, png, frames, grabPersp, waitModel, capturePersp } from './shots.mjs';
 
 const argv = process.argv.slice(2), arg = (k, d) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : d);
 const OUT = fileURLToPath(new URL('./snapshots/', import.meta.url));
@@ -44,31 +45,11 @@ if (!ids.length) { console.error(`snapshot: manifest에 해당 제품이 없다 
 
 // 제품 하나 · 정사각 방(제품 큰 변 + 600 mm, 최소 2400) 가운데 · 회전 0. withItem=false면 배경(자르기 기준).
 function sceneFor(id, withItem) {
-  const p = productById(id), room = Math.max(2400, Math.ceil((Math.max(p.size[0], p.size[1]) + 600) / 100) * 100), c = room / 2;
+  const p = productById(id), room = roomFor(p), c = room / 2, { target, ext } = aimFor(p, c, CEILING);   // 방 크기·겨눔은 shots.mjs(compare-shape와 같다)
   const items = withItem ? [{ productId: id, pos: [c, c] }] : [];
   if (p.attach === 'ceiling') items.push({ productId: 'column-square', pos: [c + 300, c - 300], size: [60, 60, CEILING] });
-  const z = p.attach === 'ceiling' ? CEILING - p.size[2] : p.zDefault ?? 0;
-  return { project: makeProject({ name: `snapshot ${id}`, room, wall: { thickness: 20, height: 2 }, items }), target: [c / 1000, (z + p.size[2] / 2) / 1000, c / 1000], ext: Math.max(...p.size) / 1000 };
+  return { project: makeProject({ name: `snapshot ${id}`, room, wall: { thickness: 20, height: 2 }, items }), target, ext };
 }
-
-// 렌더러의 마지막 render(장면, 카메라)를 기억한다(threeHook 뒤에 거는 초기화 스크립트). 기록 없는 render는 __render로 남긴다(원근 그리기가 __last를 덮지 않게).
-// 앱은 렌더러를 만든 뒤 render를 다시 감싼다(윤곽선 installOutline — 계획 17). 감싸기 전에 바꿔 두면 윤곽선의 안쪽 패스까지 기록돼 __last가
-// 마지막 합성 사각형(정투영 카메라)이 된다(2026-10-27 원근 확인 실패). 그래서 render를 접근자로 두어 앱이 새로 넣는 함수를 맨 바깥으로 받고,
-// 맨 바깥 호출만 기록한다 — 감싸는 쪽이 미리 읽어 간 이전 render(raw)는 기록하지 않는다. __render도 맨 바깥(윤곽선 포함 — 앱 화면 그대로)이다.
-function rememberRender() {
-  window.__THREE_DEVTOOLS__.addEventListener('observe', e => {
-    const r = e.detail; if (!r?.isWebGLRenderer) return;
-    let top = r.render;
-    r.__render = (s, c) => top.call(r, s, c);
-    Object.defineProperty(r, 'render', {
-      configurable: true,
-      get() { const f = top; return (s, c) => { if (f === top) r.__last = [s, c]; return f.call(r, s, c); }; },
-      set(fn) { top = fn; },
-    });
-  });
-}
-const png = url => { if (!url) throw new Error('렌더러가 아직 그리지 않았다'); return Buffer.from(url.split(',')[1], 'base64'); };
-const frames = page => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 
 // 투영: 프리셋을 고르고 두 프레임 기다린 뒤 렌더러가 마지막에 쓴 장면·카메라로 다시 그려 캔버스를 읽는다.
 async function grabOrtho(page, view) {
@@ -77,22 +58,6 @@ async function grabOrtho(page, view) {
     const r = window.__three.renderers.find(x => x.domElement.isConnected);
     return r.__last ? (r.__render(...r.__last), r.domElement.toDataURL('image/png')) : null;
   }));
-}
-// 원근: 앱 궤도 카메라의 clone(window.__persp)으로 제품 중심을 겨눠 캔버스 왼쪽 아래 정사각 영역에 그리고 그 영역만 읽는다(뷰포트는 되돌린다).
-async function grabPersp(page, [az, el], target, ext) {
-  return png(await page.evaluate(({ az, el, target, ext }) => {
-    const r = window.__three.renderers.find(x => x.domElement.isConnected), cam = window.__persp.clone(), fov = 30;
-    const a = az * Math.PI / 180, e = el * Math.PI / 180, d = (ext / (2 * Math.tan(fov * Math.PI / 360))) * 1.35;
-    Object.assign(cam, { fov, aspect: 1, near: 0.05, far: 100, zoom: 1 });
-    cam.position.set(target[0] + d * Math.sin(a) * Math.cos(e), target[1] + d * Math.sin(e), target[2] + d * Math.cos(a) * Math.cos(e));
-    cam.lookAt(target[0], target[1], target[2]); cam.updateProjectionMatrix();
-    const W = r.domElement.width, H = r.domElement.height, s = Math.min(W, H), pr = r.getPixelRatio();
-    r.setViewport(0, 0, s / pr, s / pr); r.__render(r.__last[0], cam);
-    const out = document.createElement('canvas'); out.width = out.height = s;
-    out.getContext('2d').drawImage(r.domElement, 0, H - s, s, s, 0, 0, s, s);
-    r.setViewport(0, 0, W / pr, H / pr);
-    return out.toDataURL('image/png');
-  }, { az, el, target, ext }));
 }
 
 async function shots(browser, url, id, withItem) {
@@ -109,16 +74,9 @@ async function shots(browser, url, id, withItem) {
       const [r] = await Promise.all([page.waitForResponse(x => new RegExp(`models/${id}\\.glb$`).test(x.url()), { timeout: 30000 }), page.click('[data-mode="iso"]')]);
       glb = { status: r.status(), bytes: (await r.body()).length };
       if (glb.status !== 200) throw new Error(`models/${id}.glb HTTP ${glb.status}`);
-      // 모델 도착 = **렌더러가 마지막에 그린 장면**(r.__last[0] — 앱 장면)에 모델 복제가 있다. 표시는 itemAssets.fitClone이 템플릿에서 복제해 오는
-      // userData.bbox다 — 공유 메시 표시(userData.shared)는 스테인리스 조합 형상(shapes/index.js)과 셰이더 예열 장면에도 붙어 모델 전 자리표시에 걸린다.
-      // 예전에는 __three.scenes 아무 곳의 공유 메시를 봤다: GLTFLoader의 gltf.scene(itemAssets.normalize가 표시를 먼저 단다)에 걸려 앱 리빌드 전에
-      // 통과했고, 첫 원근 칸이 조합 형상(상자)으로 찍혔다(2026-10-27 · 2K 텍스처 가스레인지 1.27 MB).
-      await page.waitForFunction(() => {
-        const s = window.__three.renderers.find(x => x.domElement.isConnected)?.__last?.[0]; let hit = false;
-        s?.traverse(o => { if (o.userData.bbox) hit = true; }); return hit;
-      }, null, { timeout: 15000 });
+      await waitModel(page);   // 모델 도착 판정의 이유는 shots.mjs waitModel 주석
       await frames(page);
-      const ok = await page.evaluate(() => { const r = window.__three.renderers.find(x => x.domElement.isConnected); window.__persp = r.__last?.[1]?.clone(); return !!window.__persp?.isPerspectiveCamera; });
+      const ok = await capturePersp(page);
       if (!ok) throw new Error('3D 궤도 카메라가 원근이 아니다');
       for (const v of PERSP) persp.push(await grabPersp(page, v, target, ext));
     }

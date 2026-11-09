@@ -5,10 +5,11 @@
 //  - PRODUCTS는 숨김까지 전부다: '배치된 제품' 탭·즐겨찾기·조회(productById)가 쓴다. 라이브러리의 칩·'전체'·검색은 isListed(숨김 제외)만 본다.
 //  - 남는 기존 제품의 카테고리는 칩 이름으로 옮겼다: 문·창·기둥·개구부 → '건축 요소', 디퓨저·팬·환기캡 → '후드·환기'. 도면 기구(catalogDrawing.js)는
 //    '도면 기구' 그대로 숨김(견적표 DRAWING_CATEGORY 규칙 — estimate.js).
-// asset(계획 15): 실사 3D 모델이 있는 제품 — 지금은 숨김 단종 제품에만 있다(시드 7종 · 생성 2종 · 계획 17 D4: 새 화면은 생성 모델을 쓰지 않는다).
+// asset(계획 15): 실사 3D 모델이 있는 제품 — 숨김 단종(시드 7종 · 계획 15b 생성 2종)과 학교 구입 제품(계획 20 · kitchenAssets.js — 계획 17 D4
+// "새 화면은 생성 모델을 쓰지 않는다"를 구입목록 제품에 한해 바꿨다: 앱 화면 비교에서 형상보다 나은 생성 모델만 붙인다).
 import { DRAWING_PRODUCTS, DRAWING_PRICES } from './catalogDrawing.js';
 import { LEGACY_PRODUCTS, LEGACY_PRICES } from './catalogLegacy.js';
-import { KITCHEN_PRODUCTS, KITCHEN_PRICES, KITCHEN_CATEGORIES } from './catalogKitchen.js';
+import { KITCHEN_PRODUCTS, PURCHASE_PRODUCTS, KITCHEN_PRICES, KITCHEN_CATEGORIES } from './catalogKitchen.js';
 
 const BUILDING = { name: '건축 요소', subs: ['문', '창문', '기둥', '개구부'] };
 const VENT_PARTS = ['디퓨저', '팬', '환기캡', '공기질'];
@@ -85,7 +86,7 @@ const KEPT_BASE = [
 // 도면 기구(DXF 가져오기의 일반 상자)는 남기되 숨긴다 — 사람이 라이브러리에서 고를 물건이 아니다(가져온 기구가 서는 자리).
 const KEPT = [...KEPT_BASE, ...DRAWING_PRODUCTS.map(p => ({ ...p, hidden: true }))];
 export const KEPT_IDS = /* @__PURE__ */ KEPT.map(p => p.id);   // 테스트 전용 — 앱 번들에 남지 않게(계획 17 최종 리뷰 M-1)
-export const PRODUCTS = [...KEPT, ...KITCHEN_PRODUCTS, ...LEGACY_PRODUCTS];
+export const PRODUCTS = [...KEPT, ...KITCHEN_PRODUCTS, ...PURCHASE_PRODUCTS, ...LEGACY_PRODUCTS];
 
 export const isListed = p => !!p && !p.hidden;
 const LISTED = PRODUCTS.filter(isListed);

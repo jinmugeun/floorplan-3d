@@ -3,3 +3,7 @@
 *.glb binary
 # 바이너리 텍스처도 줄 끝 변환 금지(2026-10-21 · 계획 18): tests/floorTextures.test.js가 bytes·sha256을 고정한다.
 *.webp binary
+# 셸 스크립트·서버 ComfyUI 노드는 LF 고정(2026-11-09 · 계획 20 최종 리뷰): GPU 서버(리눅스)에서 그대로 돈다 — autocrlf 체크아웃이 CRLF로 바꾸면
+# bash가 `$'\r'` 오류로 죽고, 노드 파일 sha256이 서버에 복사한 것과 어긋난다.
+*.sh text eol=lf
+tools/assets/idol/comfy-node/** text eol=lf

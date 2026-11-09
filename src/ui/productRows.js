@@ -16,9 +16,10 @@ export function elecText(elec = []) {
 }
 export function waterText(water = []) { return water.map((on, i) => (on ? WATER_LABELS[i] : '')).filter(Boolean).join(' · '); }
 
+// 숨긴 학교 구입목록 제품(식별번호 없는 수의·재사용 — extra.school · 2026-11-09)은 단종이 아니다: 라이브러리에서만 빠진 실제 구입 기구라 안내 없이 행만 낸다.
 export function productRowsHtml(product) {
   if (!product) return '';
-  if (product.id === GENERIC_ID || product.hidden) {
+  if (product.id === GENERIC_ID || (product.hidden && !product.extra?.school)) {
     const note = product.id === GENERIC_ID ? PRODUCT_DRAWN_NOTE : PRODUCT_LEGACY_NOTE;
     return `<p class="hint product-note">${esc(note)}</p><button type="button" name="productReplace">${esc(PRODUCT_REPLACE)}</button>`;
   }

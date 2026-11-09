@@ -12,6 +12,9 @@ import { join } from 'node:path';
 import { deflateSync, crc32 } from 'node:zlib';               // zlib.crc32: Node ≥ 22.2 / 20.15 (CI Node 20 최신 20.x면 있음 · 사전 검토 S-11)
 import { fileURLToPath } from 'node:url';
 import { ASSET_BUDGET, ALLOWED_EXTENSIONS, FRONT_YAW, normalizeTransform, checkManifestEntry, manifestEntry, sheetLayout, perfVerdict } from '../tools/assets/lib.mjs';
+import { roomFor, aimFor } from '../tools/assets/shots.mjs';
+import { makeProject } from '../tools/assets/browser.mjs';
+import { productById } from '../src/products/catalog.js';
 
 test('normalizeTransform: +Y 위·정면 +Z 모델은 회전 0, 균일 배율은 가장 큰 축 기준, 원점은 바닥 중심', () => {
   // 모델 bbox(m): 가로 0.5 · 높이 1.0 · 깊이 0.4, 바닥이 y = 0.2에 떠 있고 중심이 x = 1
@@ -29,6 +32,17 @@ test('FRONT_YAW와 up: 정면 −Z 모델은 Y축 180°, 정면 +X는 Y축 −90
   expect(normalizeTransform({ bbox: { min: [0, 0, 0], max: [1, 1, 1] }, size: [1000, 1000, 1000], front: '-z', up: 'y' }).rotation).toEqual([0, Math.PI, 0]);
   expect(normalizeTransform({ bbox: { min: [0, 0, 0], max: [1, 1, 1] }, size: [1000, 1000, 1000], front: '+x', up: 'y' }).rotation).toEqual([0, -Math.PI / 2, 0]);
   expect(normalizeTransform({ bbox: { min: [0, 0, 0], max: [1, 1, 1] }, size: [1000, 1000, 1000], front: '+z', up: 'z' }).rotation).toEqual([-Math.PI / 2, 0, 0]);
+});
+
+test('normalizeTransform fit axis(계획 20 D3): 축마다 카탈로그에 맞춘다 — fit [1, 1, 1] · rawFit = 균일이었다면의 fit · 이동도 축별 배율', () => {
+  const r = normalizeTransform({ bbox: { min: [0.75, 0.2, -0.2], max: [1.25, 1.2, 0.2] }, size: [500, 400, 900], front: '+z', up: 'y', fit: 'axis' });
+  expect(r.axisScale.map(v => +v.toFixed(6))).toEqual([1, 0.9, 1]);    // x 0.5 → 0.5 · y 1.0 → 0.9 · z 0.4 → 0.4
+  expect(r.fit).toEqual([1, 1, 1]);
+  expect(r.rawFit.map(f => +f.toFixed(3))).toEqual([0.9, 1, 0.9]);
+  expect(r.translation.map(v => +v.toFixed(6))).toEqual([-1, -0.18, 0]);
+  const u = normalizeTransform({ bbox: { min: [0.75, 0.2, -0.2], max: [1.25, 1.2, 0.2] }, size: [500, 400, 900] });
+  expect(u.axisScale.map(v => +v.toFixed(6))).toEqual([0.9, 0.9, 0.9]);
+  expect(u.rawFit).toEqual(u.fit);
 });
 
 test('checkManifestEntry: 예산 안이면 ok, 넘거나 fit이 0.85 미만이면 문제 이름이 난다', () => {
@@ -61,6 +75,23 @@ test('sheetLayout: 6장은 3 × 2 · 칸 400 px, 1·4·5·16장과 너비 옵션
   expect(sheetLayout(16)).toEqual({ cols: 4, rows: 4, cell: 300 });
   expect(sheetLayout(4, { width: 601 })).toEqual({ cols: 2, rows: 2, cell: 300 });   // 정수 px로 내린다
   for (const n of [0, NaN, 2.5]) expect(() => sheetLayout(n)).toThrow(RangeError);
+});
+
+// 찍기 장면(2026-11-06 · 계획 20 Task 6 Fix 1): snapshot · compare-shape가 같이 쓰는 방 크기·원근 겨눔(shots.mjs). 겨눔 높이 z는 makeProject가 아이템을
+// 놓는 높이와 같아야 한다 — 처음 compare-shape는 벽 부착만 zDefault를 써서 바닥 zDefault 제품(빌트인 오븐 850)과 천장 제품을 바닥 쪽으로 겨눴다.
+test('roomFor · aimFor: 방 = 큰 변 + 600 올림(최소 2400) · z = makeProject 아이템 높이(바닥·벽 zDefault · 천장 층고 − 높이) · 겨눔 = 아이템 가운데', () => {
+  expect(roomFor({ size: [1200, 750, 850] })).toBe(2400);
+  expect(roomFor({ size: [2050, 900, 800] })).toBe(2700);    // 2650 → 100 mm 올림
+  expect(roomFor({ size: [900, 3000, 800] })).toBe(3600);    // 깊이가 큰 변
+  for (const [id, z] of [['oven-built', 850], ['sink-single', 0], ['cabinet-upper', 1500], ['light-pendant', 1700]]) {   // 바닥+zDefault · 바닥 · 벽 · 천장(2300 − 600)
+    const p = productById(id), room = roomFor(p), c = room / 2, aim = aimFor(p, c);
+    const item = makeProject({ room, wall: { thickness: 20, height: 2 }, items: [{ productId: id, pos: [c, c] }] }).floors[0].items[0];
+    expect([aim.z, item.z]).toEqual([z, z]);
+    expect(aim.target).toEqual([c / 1000, (z + p.size[2] / 2) / 1000, c / 1000]);
+    expect(aim.ext).toBe(Math.max(...p.size) / 1000);
+  }
+  expect(aimFor({ attach: 'ceiling', size: [500, 500, 600] }, 1200, 2700).z).toBe(2100);   // 층고 인자(snapshot은 CEILING)
+  expect(aimFor({ attach: 'ceiling', size: [500, 500, 3000] }, 1200).z).toBe(0);           // 층고보다 높으면 0 — makeProject의 Math.max(0, …)와 같다
 });
 
 // 성능 판정(2026-10-13 · 계획 15 Task D 리뷰 I-1): perf.mjs가 모델 첫 프레임 대기 타임아웃을 삼키면 modelMs가 null이 되고 `null <= 500`이 참이라
@@ -115,27 +146,43 @@ function png(w, h) {
   const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
-// 축 정렬 상자 프리미티브(24 정점 · 12 삼각형 · 법선 · uv)
-function boxPrim(doc, buf, [x0, y0, z0], [x1, y1, z1], material) {
-  const P = [], N = [], U = [], I = [];
-  const face = (a, b, c, d, n) => { const k = P.length / 3; P.push(...a, ...b, ...c, ...d); for (let i = 0; i < 4; i++) N.push(...n); U.push(0, 0, 1, 0, 1, 1, 0, 1); I.push(k, k + 1, k + 2, k, k + 2, k + 3); };
+// 축 정렬 상자 프리미티브(24 정점 · 12 삼각형 · 법선 · uv). tangent면 면마다 접선(첫 모서리 a → b 방향 · w 1)도 단다(Fix 2 — 다시 포장 검사).
+function boxPrim(doc, buf, [x0, y0, z0], [x1, y1, z1], material, tangent = false) {
+  const P = [], N = [], U = [], I = [], T = [];
+  const face = (a, b, c, d, n) => {
+    const k = P.length / 3; P.push(...a, ...b, ...c, ...d); for (let i = 0; i < 4; i++) N.push(...n); U.push(0, 0, 1, 0, 1, 1, 0, 1); I.push(k, k + 1, k + 2, k, k + 2, k + 3);
+    const e = [0, 1, 2].map(i => b[i] - a[i]), l = Math.hypot(...e); for (let i = 0; i < 4; i++) T.push(e[0] / l, e[1] / l, e[2] / l, 1);
+  };
   face([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0]); face([x0, y1, z0], [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [-1, 0, 0]);
   face([x1, y1, z0], [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [0, 1, 0]); face([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0]);
   face([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1]); face([x0, y1, z0], [x1, y1, z0], [x1, y0, z0], [x0, y0, z0], [0, 0, -1]);
   const acc = (type, arr, T) => doc.createAccessor().setType(type).setArray(new T(arr)).setBuffer(buf);
-  return doc.createPrimitive().setAttribute('POSITION', acc('VEC3', P, Float32Array)).setAttribute('NORMAL', acc('VEC3', N, Float32Array))
+  const prim = doc.createPrimitive().setAttribute('POSITION', acc('VEC3', P, Float32Array)).setAttribute('NORMAL', acc('VEC3', N, Float32Array))
     .setAttribute('TEXCOORD_0', acc('VEC2', U, Float32Array)).setIndices(acc('SCALAR', I, Uint16Array)).setMaterial(material);
+  return tangent ? prim.setAttribute('TANGENT', acc('VEC4', T, Float32Array)) : prim;
 }
 // 원본(z-up · 정면 +x): 깊이(x) 1.0 · 너비(y) 0.9 · 높이(z) 1.8 → 정규화 뒤 0.9 × 1.8 × 1.0 → chair-dining(450×500×900)에 배율 0.5로 꼭 맞는다(fit [1, 1, 1]).
 // 표식(nose): 정면(+x) 위쪽의 작은 상자 → 정규화 뒤 +Z · 위쪽에 있어야 한다(정면·위 회전을 함께 검사 — 정육면체로는 회전 오류가 안 보인다 · 사전 검토 I-9).
-async function packFixture(tmp) {
+// tilt(계획 20 Task 2 Fix 1): 같은 상자를 90° 배수가 아닌 회전 노드(Y 30° → 그 안에 X 5°) 밑에 둔다 — Idol orient 노드처럼. 표식은 메시 하나를
+//   두 노드가 나눠 쓰고(둘째는 몸통 안쪽으로 옮김), 굽기가 나눈 메시를 두 번 돌리면 둘째가 몸통 밖으로 나가 크기가 틀어진다.
+// tangents(Fix 2): 상자에 TANGENT를 달고 몸통에 법선 맵을 건다(법선 맵이 없으면 prune()이 TANGENT를 지운다) — 포장 결과(meshopt · KHR_mesh_quantization ·
+//   정규화 int NORMAL·TANGENT)를 다시 포장하는 검사용.
+async function packFixture(tmp, { only = false, tilt = false, tangents = false } = {}) {
   const doc = new Document(); const buf = doc.createBuffer();
   const tex = doc.createTexture('body').setImage(png(512, 512)).setMimeType('image/png');
   const body = doc.createMaterial('body').setBaseColorTexture(tex), noseMat = doc.createMaterial('nose').setBaseColorFactor([1, 0, 0, 1]);
-  const mesh = doc.createMesh('m').addPrimitive(boxPrim(doc, buf, [3, -0.45, 0.2], [4, 0.45, 2.0], body))   // 바닥 z = 0.2에 떠 있고 중심 x = 3.5
-    .addPrimitive(boxPrim(doc, buf, [3.98, -0.1, 1.6], [4.0, 0.1, 1.8], noseMat));
-  doc.createScene('s').addChild(doc.createNode('n').setMesh(mesh));
+  if (tangents) body.setNormalTexture(tex);
+  const bodyPrim = boxPrim(doc, buf, [3, -0.45, 0.2], [4, 0.45, 2.0], body, tangents);   // 바닥 z = 0.2에 떠 있고 중심 x = 3.5
+  const nosePrim = boxPrim(doc, buf, [3.98, -0.1, 1.6], [4.0, 0.1, 1.8], noseMat, tangents);
+  if (tilt) {
+    const half = deg => deg * Math.PI / 360, nose = doc.createMesh('nose').addPrimitive(nosePrim);
+    const inner = doc.createNode('tilt-x').setRotation([Math.sin(half(5)), 0, 0, Math.cos(half(5))])
+      .addChild(doc.createNode('n').setMesh(doc.createMesh('m').addPrimitive(bodyPrim)))
+      .addChild(doc.createNode('nose-a').setMesh(nose)).addChild(doc.createNode('nose-b').setMesh(nose).setTranslation([-0.5, 0, -0.5]));
+    doc.createScene('s').addChild(doc.createNode('tilt-y').setRotation([0, Math.sin(half(30)), 0, Math.cos(half(30))]).addChild(inner));
+  } else doc.createScene('s').addChild(doc.createNode('n').setMesh(doc.createMesh('m').addPrimitive(bodyPrim).addPrimitive(nosePrim)));
   const input = join(tmp, 'in.glb'); writeFileSync(input, await io().writeBinary(doc));
+  if (only) return { input };
   const out = execFileSync(process.execPath, [PACK, input, '--product', 'chair-dining', '--front', '+x', '--up', 'z', '--out', tmp, '--manifest', join(tmp, 'manifest.json')], { encoding: 'utf8' });
   return { out, glb: join(tmp, 'chair-dining.glb'), manifest: join(tmp, 'manifest.json') };
 }
@@ -168,6 +215,93 @@ test('pack: z-up · 정면 +X 상자(+ 앞·위 표식)를 chair-dining에 맞�
     const man = JSON.parse(readFileSync(manifest, 'utf8'));
     expect(man.version).toBe(1);
     expect(man.products['chair-dining']).toEqual(entry);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+}, 30000);
+
+test('pack --fit axis: 같은 상자를 sofa-3(2100×900×800)에 축마다 맞춘다 — 크기 = 카탈로그 · fit [1, 1, 1] · rawFit 기록 · 정면 +Z 그대로', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'p20-pack-'));
+  try {
+    const { input } = await packFixture(tmp, { only: true });
+    const out = execFileSync(process.execPath, [PACK, input, '--product', 'sofa-3', '--front', '+x', '--up', 'z', '--fit', 'axis', '--out', tmp, '--manifest', join(tmp, 'manifest.json')], { encoding: 'utf8' });
+    const entry = JSON.parse(out);
+    await MeshoptDecoder.ready;
+    const back = await io().read(join(tmp, 'sofa-3.glb'));
+    const bb = getBounds(back.getRoot().listScenes()[0]);
+    expect(bb.max[0] - bb.min[0]).toBeCloseTo(2.1, 2); expect(bb.max[1] - bb.min[1]).toBeCloseTo(0.8, 2); expect(bb.max[2] - bb.min[2]).toBeCloseTo(0.9, 2);
+    expect(bb.min[1]).toBeCloseTo(0, 3); expect((bb.min[0] + bb.max[0]) / 2).toBeCloseTo(0, 3); expect((bb.min[2] + bb.max[2]) / 2).toBeCloseTo(0, 3);
+    const node = back.getRoot().listNodes().find(n => n.getMesh());
+    const prim = node.getMesh().listPrimitives().find(p => p.getMaterial()?.getName() === 'nose');
+    const M = node.getWorldMatrix(), pos = prim.getAttribute('POSITION'), v = [0, 0, 0]; let sz = 0;
+    for (let i = 0; i < pos.getCount(); i++) { pos.getElement(i, v); sz += M[2] * v[0] + M[6] * v[1] + M[10] * v[2] + M[14]; }
+    expect(sz / pos.getCount()).toBeGreaterThan(0.4);     // 정면 = +Z(깊이 0.9의 앞쪽 끝)
+    expect(entry.size).toEqual([2100, 900, 800]);
+    expect(entry.fit).toEqual([1, 1, 1]);
+    expect(entry.rawFit).toEqual([0.1905, 1, 0.4938]);    // 균일이면 높이 1.8 → 0.8(배율 0.444): 가로 0.4/2.1 · 깊이 0.444/0.9
+    expect(checkManifestEntry(entry)).toEqual({ ok: true, problems: [] });
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+}, 30000);
+
+test('pack --fit axis + 기운 노드(Fix 1): 입력 노드 변환을 먼저 굽는다 — 크기 = 카탈로그 · 바닥 0 · 중심 0 · 메시 노드에 기운 축이 남지 않는다', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'p20-tilt-'));
+  try {
+    const { input } = await packFixture(tmp, { only: true, tilt: true });
+    execFileSync(process.execPath, [PACK, input, '--product', 'sofa-3', '--front', '+x', '--up', 'z', '--fit', 'axis', '--out', tmp, '--manifest', join(tmp, 'manifest.json')], { encoding: 'utf8' });
+    await MeshoptDecoder.ready;
+    const back = await io().read(join(tmp, 'sofa-3.glb'));
+    const bb = getBounds(back.getRoot().listScenes()[0]);
+    expect(bb.max[0] - bb.min[0]).toBeCloseTo(2.1, 2); expect(bb.max[1] - bb.min[1]).toBeCloseTo(0.8, 2); expect(bb.max[2] - bb.min[2]).toBeCloseTo(0.9, 2);
+    expect(bb.min[1]).toBeCloseTo(0, 3); expect((bb.min[0] + bb.max[0]) / 2).toBeCloseTo(0, 3); expect((bb.min[2] + bb.max[2]) / 2).toBeCloseTo(0, 3);
+    // 월드 행렬의 세 열이 모두 축 하나만 가리킨다(90° 배수 회전 × 축별 배율) — 기운 회전 × 비균일 배율(밀림을 버린 TRS)이면 열이 비스듬하다.
+    const meshNodes = back.getRoot().listNodes().filter(n => n.getMesh());
+    expect(meshNodes.length).toBeGreaterThan(0);
+    for (const n of meshNodes) {
+      const M = n.getWorldMatrix();
+      for (const c of [0, 4, 8]) { const col = [M[c], M[c + 1], M[c + 2]], len = Math.hypot(...col); expect(col.filter(v => Math.abs(v) > 1e-6 * len), `${n.getName()} 열 ${c / 4}`).toHaveLength(1); }
+    }
+    // 몸통만의 크기도 카탈로그와 같다 = 표식 둘(나눈 메시)이 몸통 안에 있다 — 나눈 메시를 두 번 구우면 표식이 몸통 밖으로 나가고, 축별 맞춤이 전체를 줄여 몸통이 작아진다.
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], v = [0, 0, 0];
+    for (const n of meshNodes) {
+      const M = n.getWorldMatrix();
+      for (const p of n.getMesh().listPrimitives().filter(q => q.getMaterial()?.getName() === 'body')) {
+        const pos = p.getAttribute('POSITION');
+        for (let i = 0; i < pos.getCount(); i++) { pos.getElement(i, v); for (let k = 0; k < 3; k++) { const w = M[k] * v[0] + M[4 + k] * v[1] + M[8 + k] * v[2] + M[12 + k]; lo[k] = Math.min(lo[k], w); hi[k] = Math.max(hi[k], w); } }
+      }
+    }
+    expect(hi[0] - lo[0]).toBeCloseTo(2.1, 2); expect(hi[1] - lo[1]).toBeCloseTo(0.8, 2); expect(hi[2] - lo[2]).toBeCloseTo(0.9, 2);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+}, 30000);
+
+test('pack 다시 포장(Fix 2): 포장한 GLB(meshopt · 양자화 · 정규화 int NORMAL·TANGENT · 노드 회전)를 --fit axis로 다시 — 법선·접선이 0이 아니고 단위 · 직교 · 바깥쪽 · 크기 = 카탈로그', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'p20-repack-'));
+  try {
+    const { glb } = await packFixture(tmp, { tangents: true });          // 1차: chair-dining(정면 +X · z-up → 메시 노드에 90° 회전 · 양자화 배율이 남는다)
+    const again = join(tmp, 'again');
+    execFileSync(process.execPath, [PACK, glb, '--product', 'sofa-3', '--fit', 'axis', '--out', again, '--manifest', join(again, 'manifest.json')], { encoding: 'utf8' });
+    await MeshoptDecoder.ready;
+    const back = await io().read(join(again, 'sofa-3.glb'));
+    const bb = getBounds(back.getRoot().listScenes()[0]);
+    expect(bb.max[0] - bb.min[0]).toBeCloseTo(2.1, 2); expect(bb.max[1] - bb.min[1]).toBeCloseTo(0.8, 2); expect(bb.max[2] - bb.min[2]).toBeCloseTo(0.9, 2);
+    // 저장 공간(노드 행렬 앞)에서 본다: 법선(M^-T)과 접선(M)의 내적, (점 − 중심)·법선의 부호는 노드 행렬을 걸어도 바뀌지 않는다.
+    // 법선은 모든 primitive(단위 · 바깥쪽), 접선은 남은 것(법선 맵이 있는 몸통)만(단위 · 법선과 직교 · w ±1).
+    const prims = back.getRoot().listMeshes().flatMap(m => m.listPrimitives()), n = [0, 0, 0], t = [0, 0, 0, 0], p = [0, 0, 0];
+    expect(prims.filter(q => q.getAttribute('TANGENT')).map(q => q.getMaterial()?.getName())).toEqual(['body']);
+    for (const q of prims) {
+      const N = q.getAttribute('NORMAL'), T = q.getAttribute('TANGENT'), P = q.getAttribute('POSITION'), name = q.getMaterial()?.getName();
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];   // getMin/getMax는 정규화 정수를 풀지 않는다 — getElement로 잰다
+      for (let i = 0; i < P.getCount(); i++) { P.getElement(i, p); for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); } }
+      const c = lo.map((v, k) => (v + hi[k]) / 2);
+      let badN = 0, badT = 0;
+      for (let i = 0; i < N.getCount(); i++) {
+        N.getElement(i, n); P.getElement(i, p);
+        const ln = Math.hypot(...n), out = (p[0] - c[0]) * n[0] + (p[1] - c[1]) * n[1] + (p[2] - c[2]) * n[2];
+        if (!(Math.abs(ln - 1) < 0.05 && out > 0)) badN++;
+        if (!T) continue;
+        T.getElement(i, t);
+        const lt = Math.hypot(t[0], t[1], t[2]), dot = (n[0] * t[0] + n[1] * t[1] + n[2] * t[2]) / (ln * lt || 1);
+        if (!(Math.abs(lt - 1) < 0.05 && Math.abs(dot) < 0.05 && Math.abs(t[3]) === 1)) badT++;
+      }
+      expect([badN, badT], `${name}: [법선 · 접선]이 틀린 정점 수 / ${N.getCount()}`).toEqual([0, 0]);
+    }
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }, 30000);
 

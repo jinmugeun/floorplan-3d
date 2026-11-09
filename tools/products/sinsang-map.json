@@ -1,0 +1,2309 @@
+{
+ "source": "급식기구배치도_경산신상중(260928).dxf",
+ "generatedAt": "2026-11-06",
+ "labels": 131,
+ "pairs": [
+  {
+   "itemId": "i_mv6f6lna5n",
+   "pos": [
+    -2954,
+    2520
+   ],
+   "name": "취반기(전기) 150인용 570x600x1460",
+   "from": "k-24717961",
+   "no": 1,
+   "productId": "k-202606158754353",
+   "dist": 100,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lna5p",
+   "pos": [
+    -2954,
+    1950
+   ],
+   "name": "취반기(전기) 150인용 570x600x1460",
+   "from": "k-24717961",
+   "no": 1,
+   "productId": "k-202606158754353",
+   "dist": 100,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lng7h",
+   "pos": [
+    -5640,
+    -2242
+   ],
+   "name": "회전국솥 300인(전기) 1520-1120-850",
+   "from": "k-25784929",
+   "no": 2,
+   "productId": "k-25784932",
+   "dist": 313,
+   "score": 0.517,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lng7f",
+   "pos": [
+    -7160,
+    -2242
+   ],
+   "name": "회전국솥 300인(전기) 1520-1120-850",
+   "from": "k-25784929",
+   "no": 3,
+   "productId": "k-26298436",
+   "dist": 313,
+   "score": 2.296,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lng7d",
+   "pos": [
+    -8680,
+    -2242
+   ],
+   "name": "회전국솥 300인(전기) 1520-1120-850",
+   "from": "k-25784929",
+   "no": 4,
+   "productId": "k-25556917",
+   "dist": 313,
+   "score": 1.885,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lnudz",
+   "pos": [
+    -4200,
+    -2241
+   ],
+   "name": "전기오븐 코스티모24단1150-1140-1500",
+   "from": "k-23080048",
+   "no": 5,
+   "productId": "k-25067245",
+   "dist": 297,
+   "score": 0.309,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnve1",
+   "pos": [
+    -2795,
+    -23
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 6,
+   "productId": "k-25110875",
+   "dist": 0,
+   "score": 1.083,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lna5t",
+   "pos": [
+    -4027,
+    457
+   ],
+   "name": "렌지 인덕션 3구 1500x750",
+   "from": "k-202212295488299",
+   "no": 7,
+   "productId": "k-202211225284092",
+   "dist": 286,
+   "score": 0.281,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lna5r",
+   "pos": [
+    -4013,
+    1962
+   ],
+   "name": "그리들 1500x750x970",
+   "from": "k-24719683",
+   "no": 8,
+   "productId": "k-24819816",
+   "dist": 300,
+   "score": 0.523,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lni7v",
+   "pos": [
+    -640,
+    3712
+   ],
+   "name": "수저식판배분대800-600",
+   "from": "k-23584541",
+   "no": 9,
+   "productId": "k-25258484",
+   "dist": 222,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnc6f",
+   "pos": [
+    -665,
+    2044
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 10,
+   "productId": "k-24800721",
+   "dist": 357,
+   "score": 0.922,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnb5v",
+   "pos": [
+    -709,
+    96
+   ],
+   "name": "운반차 국보온 600-600",
+   "from": "equip-generic",
+   "no": 12,
+   "productId": "ss-12",
+   "dist": 334,
+   "score": 0.621,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lntdt",
+   "pos": [
+    -4553,
+    -6695
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 13,
+   "productId": "k-25195069",
+   "dist": 232,
+   "score": 1.501,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lng79",
+   "pos": [
+    -775,
+    -6422
+   ],
+   "name": "수류담금세척기 TR1500S",
+   "from": "k-23907358",
+   "no": 14,
+   "productId": "k-25979532",
+   "dist": 474,
+   "score": 1.374,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnmaj",
+   "pos": [
+    -761,
+    -5145
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 15,
+   "productId": "ss-15",
+   "dist": 382,
+   "score": 0.912,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnmad",
+   "pos": [
+    -7476,
+    -7020
+   ],
+   "name": "세정대 1조 900-750",
+   "from": "k-23907340",
+   "no": 18,
+   "productId": "k-23907340",
+   "dist": 268,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnb61",
+   "pos": [
+    -4513,
+    -3528
+   ],
+   "name": "세정대 1조 1200-750",
+   "from": "k-23907341",
+   "no": 19,
+   "productId": "k-23907341",
+   "dist": 72,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnmaf",
+   "pos": [
+    -3313,
+    -3528
+   ],
+   "name": "세정대 1조 1200-750",
+   "from": "k-23907341",
+   "no": 19,
+   "productId": "k-23907341",
+   "dist": 72,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnla1",
+   "pos": [
+    -6725,
+    1963
+   ],
+   "name": "세정대 1조 1500-750",
+   "from": "k-23907342",
+   "no": 20,
+   "productId": "k-23907340",
+   "dist": 382,
+   "score": 0.475,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnb5z",
+   "pos": [
+    -10165,
+    2087
+   ],
+   "name": "세정대 2조 1500-750",
+   "from": "k-23907349",
+   "no": 21,
+   "productId": "k-23907349",
+   "dist": 352,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lne6r",
+   "pos": [
+    -13685,
+    1821
+   ],
+   "name": "세정대 2조 1500-750",
+   "from": "k-23907349",
+   "no": 21,
+   "productId": "k-23907349",
+   "dist": 62,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnl9z",
+   "pos": [
+    -5989,
+    1963
+   ],
+   "name": "세정대 2조 1500-750",
+   "from": "k-23907349",
+   "no": 21,
+   "productId": "k-23907349",
+   "dist": 95,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnd6p",
+   "pos": [
+    -13760,
+    2890
+   ],
+   "name": "세미기 가온40kg 600-600",
+   "from": "equip-generic",
+   "no": 22,
+   "productId": "ss-22",
+   "dist": 57,
+   "score": 0.46,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lne6t",
+   "pos": [
+    -13639,
+    593
+   ],
+   "name": "구근탈피기 20kg 450-700",
+   "from": "equip-generic",
+   "no": 23,
+   "productId": "k-23908003",
+   "dist": 38,
+   "score": 1.109,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnj8f",
+   "pos": [
+    -10094,
+    1015
+   ],
+   "name": "식품탈수기600-600-800",
+   "from": "equip-generic",
+   "no": 24,
+   "productId": "ss-24",
+   "dist": 356,
+   "score": 0.878,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lni85",
+   "pos": [
+    -9925,
+    318
+   ],
+   "name": "냉장고 양문형 640-850-1830",
+   "from": "k-202507293672357",
+   "no": 25,
+   "productId": "k-202506112657041",
+   "dist": 269,
+   "score": 0.12,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnh7n",
+   "pos": [
+    -10969,
+    -4227
+   ],
+   "name": "냉장고 4도어 1100L 1260-850",
+   "from": "k-202506112657677",
+   "no": 26,
+   "productId": "k-24430449",
+   "dist": 322,
+   "score": 0.442,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lni7x",
+   "pos": [
+    -11998,
+    -4289
+   ],
+   "name": "냉장고 김치 750-801-1797 402L",
+   "from": "k-202503051002950",
+   "no": 27,
+   "productId": "ss-27",
+   "dist": 294,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lni7z",
+   "pos": [
+    -10015,
+    -4445
+   ],
+   "name": "냉동고보존식(1식)605-570-954",
+   "from": "k-202201053595658",
+   "no": 28,
+   "productId": "k-202506092623836",
+   "dist": 253,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnb63",
+   "pos": [
+    -727,
+    -1885
+   ],
+   "name": "보냉고 양문640-850",
+   "from": "k-202507293672357",
+   "no": 29,
+   "productId": "k-202506092622734",
+   "dist": 283,
+   "score": 0.211,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lng71",
+   "pos": [
+    -725,
+    -2534
+   ],
+   "name": "보온고 양문640-850",
+   "from": "k-202506102633760",
+   "no": 30,
+   "productId": "k-202506102633690",
+   "dist": 288,
+   "score": 0.211,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnla7",
+   "pos": [
+    -3097,
+    3949
+   ],
+   "name": "소독기 단문 800-600 배식용",
+   "from": "k-202506102633690",
+   "no": 31,
+   "productId": "k-22795829",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnd6n",
+   "pos": [
+    -7193,
+    3969
+   ],
+   "name": "소독기 1000-600",
+   "from": "k-202506102633845",
+   "no": 32,
+   "productId": "k-24742924",
+   "dist": 126,
+   "score": 0.043,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lni87",
+   "pos": [
+    -13052,
+    3952
+   ],
+   "name": "복합소독기 단문1000-600",
+   "from": "k-202506102633845",
+   "no": 33,
+   "productId": "k-21677034",
+   "dist": 143,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lng75",
+   "pos": [
+    -5409,
+    -3675
+   ],
+   "name": "소독기 550x600x1900 복합",
+   "from": "k-202506102633690",
+   "no": 34,
+   "productId": "k-25100596",
+   "dist": 41,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnmab",
+   "pos": [
+    -8989,
+    -6626
+   ],
+   "name": "식기소독기 단문1500-750",
+   "from": "k-202506102633760",
+   "no": 35,
+   "productId": "k-25188829",
+   "dist": 130,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnmah",
+   "pos": [
+    -8989,
+    -4104
+   ],
+   "name": "식기소독기 단문1500-750",
+   "from": "k-202506102633760",
+   "no": 35,
+   "productId": "k-25188829",
+   "dist": 130,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnj8h",
+   "pos": [
+    -10193,
+    3608
+   ],
+   "name": "야채자동세척기1500x700x850 100kg",
+   "from": "equip-generic",
+   "no": 40,
+   "productId": "k-24290770",
+   "dist": 349,
+   "score": 1.36,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnc6h",
+   "pos": [
+    -9970,
+    3912
+   ],
+   "name": "살균수제조 450-255",
+   "from": "equip-generic",
+   "no": 41,
+   "productId": "ss-41",
+   "dist": 102,
+   "score": 1.605,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lng7b",
+   "pos": [
+    -13470,
+    -1745
+   ],
+   "name": "검수대1200",
+   "from": "k-25255109",
+   "no": 42,
+   "productId": "ss-42",
+   "dist": 221,
+   "score": 0.627,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnmap",
+   "pos": [
+    -11875,
+    -6183
+   ],
+   "name": "다단식선반 900-600",
+   "from": "k-25090046",
+   "no": 44,
+   "productId": "k-25090046",
+   "dist": 2,
+   "score": 2.54,
+   "weak": false,
+   "note": "컨트롤러 고침 2026-11-06: 도면 블록이 다단식선반 900-600 · 구입목록 44(2대)"
+  },
+  {
+   "itemId": "i_mv6f6lnnar",
+   "pos": [
+    -10016,
+    -6183
+   ],
+   "name": "다단식선반 900-600",
+   "from": "k-25090046",
+   "no": 44,
+   "productId": "k-25090046",
+   "dist": 307,
+   "score": 2.845,
+   "weak": false,
+   "note": "컨트롤러 고침 2026-11-06: 도면 블록이 다단식선반 900-600 · 구입목록 44(2대)"
+  },
+  {
+   "itemId": "i_mv6f6lnmal",
+   "pos": [
+    -11581,
+    -7024
+   ],
+   "name": "다단식선반 1200-750",
+   "from": "k-25238439",
+   "no": 45,
+   "productId": "k-25090049",
+   "dist": 237,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnman",
+   "pos": [
+    -10317,
+    -7024
+   ],
+   "name": "다단식선반 1200-750",
+   "from": "k-25238439",
+   "no": 45,
+   "productId": "k-25090049",
+   "dist": 237,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnnav",
+   "pos": [
+    -10461,
+    -2589
+   ],
+   "name": "다단식선반 1500-600",
+   "from": "k-25777150",
+   "no": 46,
+   "productId": "k-25090044",
+   "dist": 39,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnla5",
+   "pos": [
+    -4266,
+    4062
+   ],
+   "name": "다단식선반 1500-600",
+   "from": "k-25777150",
+   "no": 47,
+   "productId": "k-25090044",
+   "dist": 59,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lna5l",
+   "pos": [
+    -6442,
+    -3527
+   ],
+   "name": "다단식선반 1500-750",
+   "from": "k-25238440",
+   "no": 48,
+   "productId": "k-25090048",
+   "dist": 31,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnnat",
+   "pos": [
+    -13332,
+    -4335
+   ],
+   "name": "다단식선반 1500-750",
+   "from": "k-25238440",
+   "no": 48,
+   "productId": "k-25090048",
+   "dist": 240,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnob3",
+   "pos": [
+    -10475,
+    -1661
+   ],
+   "name": "다단식선반 1500-750",
+   "from": "k-25238440",
+   "no": 48,
+   "productId": "k-25090048",
+   "dist": 246,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnla3",
+   "pos": [
+    -9090,
+    3394
+   ],
+   "name": "다단식선반 1500-750",
+   "from": "k-25238440",
+   "no": 49,
+   "productId": "k-25090048",
+   "dist": 54,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnj8d",
+   "pos": [
+    -12570,
+    -1723
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 51,
+   "productId": "ss-51",
+   "dist": 221,
+   "score": 0.721,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnla9",
+   "pos": [
+    -2228,
+    4050
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 52,
+   "productId": "k-25255108",
+   "dist": 47,
+   "score": 0.547,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lng7j",
+   "pos": [
+    -9093,
+    2024
+   ],
+   "name": "고정식작업대1200-750",
+   "from": "k-25255109",
+   "no": 53,
+   "productId": "k-25255110",
+   "dist": 2020,
+   "score": 1.943,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lnrdf",
+   "pos": [
+    -5970,
+    451
+   ],
+   "name": "이동식작업대1500-750",
+   "from": "k-25255114",
+   "no": 54,
+   "productId": "k-25255114",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnsdl",
+   "pos": [
+    -11323,
+    963
+   ],
+   "name": "이동식작업대1500-750",
+   "from": "k-25255114",
+   "no": 54,
+   "productId": "k-25255114",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnrdd",
+   "pos": [
+    -7581,
+    -4620
+   ],
+   "name": "건조대이동식 1200-750",
+   "from": "k-25238439",
+   "no": 55,
+   "productId": "k-20943266",
+   "dist": 0,
+   "score": 0.511,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnh7l",
+   "pos": [
+    -12998,
+    -3380
+   ],
+   "name": "운반카 양념 800-500",
+   "from": "equip-generic",
+   "no": 56,
+   "productId": "k-25125194",
+   "dist": 0,
+   "score": 0.618,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lni81",
+   "pos": [
+    -13630,
+    -2587
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 57,
+   "productId": "k-202210055017379",
+   "dist": 22,
+   "score": 1.746,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lni83",
+   "pos": [
+    -12711,
+    -2587
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 57,
+   "productId": "k-202210055017379",
+   "dist": 22,
+   "score": 1.746,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lnqbl",
+   "pos": [
+    -7351,
+    -8331
+   ],
+   "name": "곡물받침대 900-700",
+   "from": "equip-generic",
+   "no": 58,
+   "productId": "k-202210055017379",
+   "dist": 55,
+   "score": 0.178,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnqbn",
+   "pos": [
+    -6651,
+    -8331
+   ],
+   "name": "곡물받침대 900-700",
+   "from": "equip-generic",
+   "no": 58,
+   "productId": "k-202210055017379",
+   "dist": 55,
+   "score": 0.178,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnrdb",
+   "pos": [
+    -8910,
+    864
+   ],
+   "name": "운반차 튀김 620",
+   "from": "equip-generic",
+   "no": 62,
+   "productId": "k-22898813",
+   "dist": 0,
+   "score": 0.141,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnsdh",
+   "pos": [
+    -8321,
+    1237
+   ],
+   "name": "운반차 튀김 620",
+   "from": "equip-generic",
+   "no": 62,
+   "productId": "k-22898813",
+   "dist": 0,
+   "score": 0.141,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnqbp",
+   "pos": [
+    -4526,
+    -8183
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 63,
+   "productId": "ss-63",
+   "dist": 93,
+   "score": 1.033,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnqbt",
+   "pos": [
+    -14709,
+    -1723
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 63,
+   "productId": "ss-63",
+   "dist": 348,
+   "score": 1.288,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnqbj",
+   "pos": [
+    -5287,
+    -8234
+   ],
+   "name": "청소도구보관함 700-800",
+   "from": "k-23387546",
+   "no": 64,
+   "productId": "k-21067750",
+   "dist": 91,
+   "score": 0.071,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnqbr",
+   "pos": [
+    -14760,
+    -2441
+   ],
+   "name": "청소도구보관함 700-800",
+   "from": "k-23387546",
+   "no": 64,
+   "productId": "k-21067750",
+   "dist": 359,
+   "score": 0.339,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnpbh",
+   "pos": [
+    -8628,
+    -8297
+   ],
+   "name": "음식물처리기 150KG 1350-830",
+   "from": "equip-generic",
+   "no": 65,
+   "productId": "k-26105991",
+   "dist": 43,
+   "score": 0.585,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnc6b",
+   "pos": [
+    13539,
+    -2483
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 66,
+   "productId": "ss-63",
+   "dist": 168,
+   "score": 1.103,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnc6d",
+   "pos": [
+    14072,
+    -2350
+   ],
+   "name": "밀대짤통",
+   "from": "equip-generic",
+   "no": 67,
+   "productId": "k-202602137002127",
+   "dist": 0,
+   "score": 0.993,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnc69",
+   "pos": [
+    14659,
+    -2445
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 68,
+   "productId": "k-22796938",
+   "dist": 0,
+   "score": 1.697,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lnd6j",
+   "pos": [
+    12770,
+    -5898
+   ],
+   "name": "컵자동세척기",
+   "from": "k-23550629",
+   "no": 69,
+   "productId": "k-24756275",
+   "dist": 334,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnd6l",
+   "pos": [
+    12770,
+    -3698
+   ],
+   "name": "컵자동세척기",
+   "from": "k-23550629",
+   "no": 69,
+   "productId": "k-24756275",
+   "dist": 334,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnve5",
+   "pos": [
+    12864,
+    -4798
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 70,
+   "productId": "k-25157834",
+   "dist": 334,
+   "score": 1.576,
+   "weak": true
+  },
+  {
+   "itemId": "i_mv6f6lnk9d",
+   "pos": [
+    14112,
+    3729
+   ],
+   "name": "멀티손세정대3구 1800-550-1450",
+   "from": "k-23710063",
+   "no": 71,
+   "productId": "k-23855700",
+   "dist": 92,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnqbv",
+   "pos": [
+    6305,
+    -4046
+   ],
+   "name": "식탁4인",
+   "from": "k-25165015",
+   "no": 72,
+   "productId": "k-23892093",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcv",
+   "pos": [
+    6305,
+    5194
+   ],
+   "name": "식탁4인",
+   "from": "k-25165015",
+   "no": 72,
+   "productId": "k-23892093",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcz",
+   "pos": [
+    10405,
+    1624
+   ],
+   "name": "식탁4인",
+   "from": "k-25165015",
+   "no": 72,
+   "productId": "k-23892093",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrd1",
+   "pos": [
+    8355,
+    1624
+   ],
+   "name": "식탁4인",
+   "from": "k-25165015",
+   "no": 72,
+   "productId": "k-23892093",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrd3",
+   "pos": [
+    6305,
+    1654
+   ],
+   "name": "식탁4인",
+   "from": "k-25165015",
+   "no": 72,
+   "productId": "k-23892093",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrd5",
+   "pos": [
+    4225,
+    1624
+   ],
+   "name": "식탁4인",
+   "from": "k-25165015",
+   "no": 72,
+   "productId": "k-23892093",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrd7",
+   "pos": [
+    2175,
+    1624
+   ],
+   "name": "식탁4인",
+   "from": "k-25165015",
+   "no": 72,
+   "productId": "k-23892093",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnl9f",
+   "pos": [
+    4225,
+    -5606
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9h",
+   "pos": [
+    4225,
+    -3806
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9j",
+   "pos": [
+    4225,
+    3124
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9l",
+   "pos": [
+    4225,
+    4924
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9n",
+   "pos": [
+    4225,
+    6724
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9p",
+   "pos": [
+    2175,
+    -5606
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9r",
+   "pos": [
+    2175,
+    -3806
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9t",
+   "pos": [
+    2175,
+    3124
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnl9v",
+   "pos": [
+    2175,
+    4924
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnl9x",
+   "pos": [
+    2175,
+    6724
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnqbx",
+   "pos": [
+    6305,
+    -5546
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnqbz",
+   "pos": [
+    6305,
+    3154
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnqc1",
+   "pos": [
+    4225,
+    -2006
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnqc3",
+   "pos": [
+    2175,
+    -2006
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnqc5",
+   "pos": [
+    6305,
+    -2006
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnqc7",
+   "pos": [
+    10405,
+    -5606
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrc9",
+   "pos": [
+    10405,
+    -3806
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcb",
+   "pos": [
+    8355,
+    -5606
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcd",
+   "pos": [
+    8355,
+    -3806
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcf",
+   "pos": [
+    10405,
+    -2006
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrch",
+   "pos": [
+    8355,
+    -2006
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcj",
+   "pos": [
+    10405,
+    3124
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcl",
+   "pos": [
+    10405,
+    4924
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcn",
+   "pos": [
+    10405,
+    6724
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcp",
+   "pos": [
+    8355,
+    3124
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcr",
+   "pos": [
+    8355,
+    4924
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrct",
+   "pos": [
+    8355,
+    6724
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnrcx",
+   "pos": [
+    6305,
+    6694
+   ],
+   "name": "식탁6인",
+   "from": "k-25165016",
+   "no": 73,
+   "productId": "k-23892094",
+   "dist": null,
+   "score": null,
+   "weak": false,
+   "note": "컨트롤러 늘림 2026-11-06: 식탁 무리(번호 글자는 무리마다 하나) — 같은 제품·크기"
+  },
+  {
+   "itemId": "i_mv6f6lnnb1",
+   "pos": [
+    -13830,
+    1862
+   ],
+   "name": "워터릴",
+   "from": "equip-generic",
+   "no": 74,
+   "productId": "k-202303206019265",
+   "dist": 46,
+   "score": 1.137,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnob5",
+   "pos": [
+    -12364,
+    -1806
+   ],
+   "name": "워터릴",
+   "from": "equip-generic",
+   "no": 74,
+   "productId": "k-202303206019265",
+   "dist": 17,
+   "score": 1.107,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnob7",
+   "pos": [
+    -7597,
+    -3396
+   ],
+   "name": "워터릴",
+   "from": "equip-generic",
+   "no": 74,
+   "productId": "k-202303206019265",
+   "dist": 344,
+   "score": 1.434,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnpb9",
+   "pos": [
+    -3652,
+    -3396
+   ],
+   "name": "워터릴",
+   "from": "equip-generic",
+   "no": 74,
+   "productId": "k-202303206019265",
+   "dist": 340,
+   "score": 1.43,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnpbb",
+   "pos": [
+    -3089,
+    -2656
+   ],
+   "name": "워터릴",
+   "from": "equip-generic",
+   "no": 74,
+   "productId": "k-202303206019265",
+   "dist": 226,
+   "score": 1.316,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnpbd",
+   "pos": [
+    -8009,
+    4104
+   ],
+   "name": "워터릴",
+   "from": "equip-generic",
+   "no": 74,
+   "productId": "k-202303206019265",
+   "dist": 335,
+   "score": 1.425,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnpbf",
+   "pos": [
+    -2021,
+    4104
+   ],
+   "name": "워터릴",
+   "from": "equip-generic",
+   "no": 74,
+   "productId": "k-202303206019265",
+   "dist": 0,
+   "score": 1.09,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnj8p",
+   "pos": [
+    -11450,
+    8884
+   ],
+   "name": "에어커튼 890-222",
+   "from": "equip-generic",
+   "no": 78,
+   "productId": "k-23688167",
+   "dist": 192,
+   "score": 0.243,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk95",
+   "pos": [
+    3088,
+    -7887
+   ],
+   "name": "에어커튼 890-222",
+   "from": "equip-generic",
+   "no": 78,
+   "productId": "k-23688167",
+   "dist": 0,
+   "score": 0.051,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk97",
+   "pos": [
+    2550,
+    9035
+   ],
+   "name": "에어커튼 890-222",
+   "from": "equip-generic",
+   "no": 78,
+   "productId": "k-23688167",
+   "dist": 276,
+   "score": 0.327,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk99",
+   "pos": [
+    15261,
+    79
+   ],
+   "name": "에어커튼 890-222",
+   "from": "equip-generic",
+   "no": 78,
+   "productId": "k-23688167",
+   "dist": 104,
+   "score": 0.155,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk9b",
+   "pos": [
+    15261,
+    969
+   ],
+   "name": "에어커튼 890-222",
+   "from": "equip-generic",
+   "no": 78,
+   "productId": "k-23688167",
+   "dist": 104,
+   "score": 0.155,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnnax",
+   "pos": [
+    -13989,
+    -5385
+   ],
+   "name": "에어커튼 890-222",
+   "from": "equip-generic",
+   "no": 78,
+   "productId": "k-23688167",
+   "dist": 516,
+   "score": 0.567,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnnaz",
+   "pos": [
+    -1731,
+    -7737
+   ],
+   "name": "에어커튼 890-222",
+   "from": "equip-generic",
+   "no": 78,
+   "productId": "k-23688167",
+   "dist": 8,
+   "score": 0.059,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnj8n",
+   "pos": [
+    -14411,
+    -586
+   ],
+   "name": "에어커튼 1490-222",
+   "from": "equip-generic",
+   "no": 79,
+   "productId": "k-23688170",
+   "dist": 195,
+   "score": 0.246,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnve7",
+   "pos": [
+    -12425,
+    8233
+   ],
+   "name": "신발장 외부신발소독620-450-1900",
+   "from": "k-23387561",
+   "no": 80,
+   "productId": "k-23237948",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnve9",
+   "pos": [
+    -12425,
+    7598
+   ],
+   "name": "신발장 외부신발소독620-450-1900",
+   "from": "k-23387561",
+   "no": 80,
+   "productId": "k-23237948",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnj89",
+   "pos": [
+    -12370,
+    5458
+   ],
+   "name": "소독기 위생복12벌 700-600",
+   "from": "k-202506102633690",
+   "no": 81,
+   "productId": "k-22796924",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnj8b",
+   "pos": [
+    -12402,
+    4852
+   ],
+   "name": "소독기 장화10켤레 450-600",
+   "from": "k-202506102633690",
+   "no": 82,
+   "productId": "k-21959478",
+   "dist": 8,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnsdn",
+   "pos": [
+    -3183,
+    5761
+   ],
+   "name": "냉장고 200L 555-585",
+   "from": "k-202506112657571",
+   "no": 86,
+   "productId": "k-202509094505167",
+   "dist": 0,
+   "score": 0.287,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lntdp",
+   "pos": [
+    -4874,
+    6233
+   ],
+   "name": "냉장고 200L 555-585",
+   "from": "k-202506112657571",
+   "no": 86,
+   "productId": "k-202509094505167",
+   "dist": 159,
+   "score": 0.446,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lntdr",
+   "pos": [
+    -13306,
+    4951
+   ],
+   "name": "냉장고 200L 555-585",
+   "from": "k-202506112657571",
+   "no": 86,
+   "productId": "k-202509094505167",
+   "dist": 161,
+   "score": 0.448,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6ln95j",
+   "pos": [
+    -1438,
+    7520
+   ],
+   "name": "책상L형1812",
+   "from": "k-24356434",
+   "no": 88,
+   "productId": "k-25681198",
+   "dist": 0,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk8r",
+   "pos": [
+    -3249,
+    6368
+   ],
+   "name": "낮은캐비닛",
+   "from": "k-24550670",
+   "no": 89,
+   "productId": "k-25695435",
+   "dist": 929,
+   "score": 1.481,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnb65",
+   "pos": [
+    -1438,
+    6317
+   ],
+   "name": "회의용테이블3인",
+   "from": "k-25879032",
+   "no": 91,
+   "productId": "k-26361921",
+   "dist": 0,
+   "score": 0.645,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk8t",
+   "pos": [
+    -3186,
+    7752
+   ],
+   "name": "낮은캐비닛",
+   "from": "k-24550670",
+   "no": 93,
+   "productId": "k-24550670",
+   "dist": 34,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk8v",
+   "pos": [
+    -3186,
+    7052
+   ],
+   "name": "낮은캐비닛",
+   "from": "k-24550670",
+   "no": 93,
+   "productId": "k-24550670",
+   "dist": 34,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnf6v",
+   "pos": [
+    -3218,
+    8325
+   ],
+   "name": "옷장(영양관리실)",
+   "from": "k-24587513",
+   "no": 94,
+   "productId": "k-24587513",
+   "dist": 26,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnf6x",
+   "pos": [
+    -7081,
+    6100
+   ],
+   "name": "옷장(영양관리실)",
+   "from": "k-24587513",
+   "no": 94,
+   "productId": "k-24587513",
+   "dist": 44,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnf6z",
+   "pos": [
+    -7081,
+    6513
+   ],
+   "name": "옷장(영양관리실)",
+   "from": "k-24587513",
+   "no": 94,
+   "productId": "k-24587513",
+   "dist": 44,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk8x",
+   "pos": [
+    -7081,
+    8345
+   ],
+   "name": "옷장(영양관리실)",
+   "from": "k-24587513",
+   "no": 94,
+   "productId": "k-24587513",
+   "dist": 44,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk8z",
+   "pos": [
+    -7081,
+    6928
+   ],
+   "name": "옷장(영양관리실)",
+   "from": "k-24587513",
+   "no": 94,
+   "productId": "k-24587513",
+   "dist": 44,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk93",
+   "pos": [
+    -13819,
+    4904
+   ],
+   "name": "옷장(영양관리실)",
+   "from": "k-24587513",
+   "no": 94,
+   "productId": "k-24587513",
+   "dist": 244,
+   "score": 0,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnb67",
+   "pos": [
+    -4170,
+    6384
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 95,
+   "productId": "k-24569227",
+   "dist": 0,
+   "score": 0.934,
+   "weak": false
+  },
+  {
+   "itemId": "i_mv6f6lnk91",
+   "pos": [
+    -14570,
+    5092
+   ],
+   "name": "도면 기구",
+   "from": "equip-generic",
+   "no": 95,
+   "productId": "k-24569227",
+   "dist": 0,
+   "score": 0.934,
+   "weak": false
+  }
+ ],
+ "lost": [
+  {
+   "no": 11,
+   "p": [
+    -1347,
+    682
+   ]
+  },
+  {
+   "no": 75,
+   "p": [
+    -1861,
+    -6635
+   ]
+  },
+  {
+   "no": 87,
+   "p": [
+    -2888,
+    6464
+   ]
+  },
+  {
+   "no": 90,
+   "p": [
+    -1558,
+    7920
+   ]
+  },
+  {
+   "no": 90,
+   "p": [
+    -4315,
+    6782
+   ]
+  },
+  {
+   "no": 90,
+   "p": [
+    -14720,
+    5483
+   ]
+  },
+  {
+   "no": 92,
+   "p": [
+    -1047,
+    6199
+   ]
+  }
+ ],
+ "noRow": [
+  61
+ ],
+ "counts": [
+  {
+   "no": 11,
+   "name": "보조배식대",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 16,
+   "name": "잔반처리대(1구,수저통)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 17,
+   "name": "잔반 회수통(이중잔반통)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 20,
+   "name": "1조 세정대 (STS 배수구)",
+   "qty": 2,
+   "got": 1
+  },
+  {
+   "no": 21,
+   "name": "2조 세정대 (STS 배수구)",
+   "qty": 2,
+   "got": 3
+  },
+  {
+   "no": 36,
+   "name": "다용도 커터믹서기",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 37,
+   "name": "야채 절단기",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 38,
+   "name": "야채절단기 및 믹서기테이블 겸용소독기",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 39,
+   "name": "야채절단기 및 믹서기테이블",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 43,
+   "name": "이동식 작업대",
+   "qty": 1,
+   "got": 2
+  },
+  {
+   "no": 44,
+   "name": "다단식 선반",
+   "qty": 2,
+   "got": 0
+  },
+  {
+   "no": 48,
+   "name": "다단식 선반",
+   "qty": 2,
+   "got": 3
+  },
+  {
+   "no": 53,
+   "name": "고정식 작업대",
+   "qty": 2,
+   "got": 1
+  },
+  {
+   "no": 59,
+   "name": "복합 손세정대",
+   "qty": 3,
+   "got": 0
+  },
+  {
+   "no": 60,
+   "name": "손소독기",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 72,
+   "name": "식탁(4인용)",
+   "qty": 7,
+   "got": 1
+  },
+  {
+   "no": 73,
+   "name": "식탁(6인용)",
+   "qty": 28,
+   "got": 1
+  },
+  {
+   "no": 85,
+   "name": "소형냉장고(남휴게실)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 86,
+   "name": "소형냉장고",
+   "qty": 2,
+   "got": 3
+  },
+  {
+   "no": 87,
+   "name": "싱크대(영양관리실)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 90,
+   "name": "의자(작업자용)",
+   "qty": 3,
+   "got": 0
+  },
+  {
+   "no": 92,
+   "name": "의자(상담자용)",
+   "qty": 2,
+   "got": 0
+  },
+  {
+   "no": 93,
+   "name": "낮은캐비닛",
+   "qty": 1,
+   "got": 2
+  },
+  {
+   "no": 97,
+   "name": "캐비닛(영양관리실)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 98,
+   "name": "캐비닛(여휴게실)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 99,
+   "name": "낮은캐비닛(여휴게실)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 101,
+   "name": "고정식 작업대",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 102,
+   "name": "고정식 작업대",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 103,
+   "name": "미니 소독기(전처리실)",
+   "qty": 1,
+   "got": 0
+  },
+  {
+   "no": 104,
+   "name": "식기자동투입장치",
+   "qty": 1,
+   "got": 0
+  }
+ ],
+ "edited": "2026-11-06 컨트롤러 검토: 43→44 두 대 · 틀린 짝 9 + 애매 1(50) 뺌 · 식탁 33대 늘림"
+}

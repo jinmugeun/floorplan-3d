@@ -181,6 +181,1186 @@
       "sha256": "a969066d5e3e2dac56fb36083ee8692566d8bfb0dacd6c961f7a56edb8813872",
       "packedAt": "2026-10-13T09:22:40.695Z"
     },
+    "k-202210055017379": {
+      "id": "k-202210055017379",
+      "bytes": 331144,
+      "tris": 8000,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        900,
+        700,
+        250
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.6125,
+        0.8646
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2022/10/05/202210055017379_1664929939331.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "7035178bce207bbdafcf82faadb692b8a2523a2a4e7b568def47a63cf2d0865f",
+      "packedAt": "2026-11-09T00:20:20.166Z"
+    },
+    "k-202210055019220": {
+      "id": "k-202210055019220",
+      "bytes": 640208,
+      "tris": 19926,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        470,
+        470,
+        580
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.8425,
+        0.9165
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2022/10/05/202210055019220_1664939728224.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "8e612930eba7d2ee014392734187d97f19f9ee3622c6ec08ece6f49a22279b27",
+      "packedAt": "2026-11-06T08:33:12.035Z"
+    },
+    "k-202211225284092": {
+      "id": "k-202211225284092",
+      "bytes": 415328,
+      "tris": 19936,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1200,
+        750,
+        970
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.8695,
+        0.8176
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2022/11/22/202211225284092_1669103541278.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "623e007701c7bca642273ab803ec4d5df087c6721305efa7d67c665532065ee8",
+      "packedAt": "2026-11-06T08:33:12.878Z"
+    },
+    "k-202303095951444": {
+      "id": "k-202303095951444",
+      "bytes": 228792,
+      "tris": 7926,
+      "textures": [
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1200,
+        530,
+        30
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.4417,
+        0.0748,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2023/03/09/202303095951444_1678347541860.JPG",
+        "license": "자체 생성물",
+        "author": "ComfyUI TRELLIS.2(옛 설정 8천 면)"
+      },
+      "sha256": "df0a3ea9230a157b7e972c36cff4b098ad860775838ee707300a963ac69640d2",
+      "packedAt": "2026-11-06T08:33:13.402Z"
+    },
+    "k-202303206019265": {
+      "id": "k-202303206019265",
+      "bytes": 566920,
+      "tris": 6000,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        460,
+        220,
+        480
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.7125,
+        0.6233,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2023/03/20/202303206019265_1679304339602.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "73290d3455222a571720ab53b1afc33868449bdfec03d7572cfcaf6cfd323050",
+      "packedAt": "2026-11-09T00:20:21.084Z"
+    },
+    "k-202506092622734": {
+      "id": "k-202506092622734",
+      "bytes": 453568,
+      "tris": 19682,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        640,
+        800,
+        1910
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.1519,
+        0.1485,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2025/06/09/202506092622734_1749456410658.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성(원본 사진)"
+      },
+      "sha256": "b7a43b928a354069c90143c0566dd88e69fbf494e40c6085f76f6470e045326e",
+      "packedAt": "2026-11-09T01:25:43.203Z"
+    },
+    "k-202506092623836": {
+      "id": "k-202506092623836",
+      "bytes": 250892,
+      "tris": 19740,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        605,
+        570,
+        954
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.9366,
+        0.9088
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2025/06/09/202506092623836_1749459802691.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "0880d9b1927d82708c08b9d1317ee670671dbb1f6d067c72ac6e64c7717f520e",
+      "packedAt": "2026-11-06T08:33:15.781Z"
+    },
+    "k-202602137002127": {
+      "id": "k-202602137002127",
+      "bytes": 567024,
+      "tris": 19896,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        375,
+        445,
+        720
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.5693,
+        0.7367
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/02/13/202602137002127_1770966879456.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "a10ed1222d09e54a4190b859234a49a7a9eac852fc69191f502e62332aeab4a6",
+      "packedAt": "2026-11-06T08:33:16.674Z"
+    },
+    "k-202606158754353": {
+      "id": "k-202606158754353",
+      "bytes": 278592,
+      "tris": 19732,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        572,
+        800,
+        1500
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.7666,
+        0.7385,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://ssung.kr/portfolio-category/pro01/",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "4b2cef7b0a676fcb7eb80f664727ae66d8761c803b0ef13dc19cf09c16edf954",
+      "packedAt": "2026-11-06T08:33:17.417Z"
+    },
+    "k-22796924": {
+      "id": "k-22796924",
+      "bytes": 351268,
+      "tris": 19684,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        700,
+        600,
+        1900
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.3238,
+        0.3207,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/02/11/202602116956927_1770785248500.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "006616bc526702f503a3c82723169935eb91056b9ff16c1aa361dfba033065f6",
+      "packedAt": "2026-11-06T08:33:18.188Z"
+    },
+    "k-22796938": {
+      "id": "k-22796938",
+      "bytes": 422432,
+      "tris": 19755,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        700,
+        600,
+        2000
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.3413,
+        0.3104,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/02/11/202602116957867_1770787468020.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "a0ec891b8dfba44ac3c9561c03487315ff1c53df4eacf0fd6c82818440f07ed5",
+      "packedAt": "2026-11-06T08:33:18.981Z"
+    },
+    "k-23237948": {
+      "id": "k-23237948",
+      "bytes": 279984,
+      "tris": 19684,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        620,
+        450,
+        1900
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.7594,
+        0.7854,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/09/22/202609229500411_1790056927847.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성(사진 짧은 변 900 px 이상 — 업스케일 안 함)"
+      },
+      "sha256": "b5e5341d363ae661abc8019d29e096e6dc8415c768c0fadb29fa3dad56c04695",
+      "packedAt": "2026-11-09T01:48:53.175Z"
+    },
+    "k-23498622": {
+      "id": "k-23498622",
+      "bytes": 474964,
+      "tris": 19911,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1000,
+        600,
+        700
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.6333,
+        0.5696,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/05/202608059182332_1785908748818.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "76a660751052d6429458039078bebe01247322e697840a2e16e2c413a31c4d6e",
+      "packedAt": "2026-11-06T08:33:20.553Z"
+    },
+    "k-23688167": {
+      "id": "k-23688167",
+      "bytes": 346392,
+      "tris": 6000,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        890,
+        222,
+        215
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.4578,
+        0.6751,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/06/02/202606028610413_1780387399175.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "21ff96306d0d35b237bb730ea75f33a3b42fdf2959f3aa8a457db0edadbf5d19",
+      "packedAt": "2026-11-09T00:20:21.906Z"
+    },
+    "k-23907340": {
+      "id": "k-23907340",
+      "bytes": 366060,
+      "tris": 19854,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        900,
+        750,
+        850
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.6114,
+        0.6062
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/20/202608209273217_1787210833057.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "ffcafc134a40d3f0b90fd79a26552a572585f395a353a8facb6c03735bf12ae3",
+      "packedAt": "2026-11-06T08:33:22.117Z"
+    },
+    "k-23907341": {
+      "id": "k-23907341",
+      "bytes": 636612,
+      "tris": 19256,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1200,
+        750,
+        850
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.7992,
+        0.8224
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/20/202608209273322_1787210564264.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI TRELLIS.2 생성(S2B 23907341 사진)"
+      },
+      "sha256": "f2061484b9ea0f1148a88253449d3d31c0951c3b495731f26d7bda263090f9f1",
+      "packedAt": "2026-11-06T08:33:23.030Z"
+    },
+    "k-23907349": {
+      "id": "k-23907349",
+      "bytes": 409772,
+      "tris": 19852,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1500,
+        750,
+        850
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.9849,
+        0.995,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/20/202608209273529_1787211828361.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "326a0a0359a8032ee67f08339541522b4525e27e3589ad140f951a2805ba37ff",
+      "packedAt": "2026-11-06T08:33:23.829Z"
+    },
+    "k-24290770": {
+      "id": "k-24290770",
+      "bytes": 714964,
+      "tris": 19884,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        900,
+        700,
+        850
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.7559,
+        0.8252,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2023/02/24/202302245877850_1677223878496.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "ba965efdf94e30c14b0b4bac5d393a8fdf894e2cdb92ed8c79f36b971f42996b",
+      "packedAt": "2026-11-06T08:33:24.666Z"
+    },
+    "k-24397271": {
+      "id": "k-24397271",
+      "bytes": 295536,
+      "tris": 19867,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        480,
+        500,
+        1600
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.9722,
+        0.9957,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/10/14/202610149620953_1791963681062.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성(사진 짧은 변 900 px 이상 — 업스케일 안 함)"
+      },
+      "sha256": "445eaf888f5fe63dd494d7f8435c7f9759d04037793050d11549af6aa200076d",
+      "packedAt": "2026-11-09T01:48:53.877Z"
+    },
+    "k-24430449": {
+      "id": "k-24430449",
+      "bytes": 329980,
+      "tris": 19588,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1260,
+        800,
+        1910
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.8915,
+        0.9204
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/13/202608139235143_1786610324865.JPG",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "0fe6cca20f381ec029ced66d96d069fcebab77ef60e2e38a8792ab5e12265281",
+      "packedAt": "2026-11-06T08:33:26.250Z"
+    },
+    "k-24742924": {
+      "id": "k-24742924",
+      "bytes": 271772,
+      "tris": 19654,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        800,
+        600,
+        1900
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.6195,
+        0.8029,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/03/05/202603057201869_1772709728706.JPG",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "1cb5c35e8fe17a08b411c14a80f19277ad2be5673f180c94d514df262c1ca493",
+      "packedAt": "2026-11-06T08:33:27.021Z"
+    },
+    "k-24756275": {
+      "id": "k-24756275",
+      "bytes": 392272,
+      "tris": 19828,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        600,
+        570,
+        1500
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.6282,
+        0.6038,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/07/21/202607219076949_1784617384130.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "9f3e165052504447b45a9eee86fc0a555f3f81d69e7037d9954e77892914924e",
+      "packedAt": "2026-11-06T08:33:27.805Z"
+    },
+    "k-25110875": {
+      "id": "k-25110875",
+      "bytes": 667380,
+      "tris": 19906,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        791,
+        857,
+        1260
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.5811,
+        0.8022,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2024/03/22/202403228371770_1711097095739.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "6b8d56a3c59d003bef9bbcb935d68defe42fd980350127b7e9bfa1d95cddb021",
+      "packedAt": "2026-11-06T08:33:28.698Z"
+    },
+    "k-25125194": {
+      "id": "k-25125194",
+      "bytes": 387708,
+      "tris": 19756,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        800,
+        500,
+        800
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.9524,
+        0.8647
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2024/03/26/202403268391893_1711429896880.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "8395dce84227e2b8875637755a3c040c24397f759308a825cd7f26247e103851",
+      "packedAt": "2026-11-06T08:33:29.464Z"
+    },
+    "k-25157834": {
+      "id": "k-25157834",
+      "bytes": 353888,
+      "tris": 19696,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1600,
+        630,
+        1545
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.2462,
+        0.2897,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2024/03/12/202403128292876_1710231747769.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "4d1821829a44845c64e207faf6b2dfd9d2c1076e40d324e4424072254b567422",
+      "packedAt": "2026-11-06T08:33:30.233Z"
+    },
+    "k-25255110": {
+      "id": "k-25255110",
+      "bytes": 352660,
+      "tris": 19854,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        1500,
+        750,
+        850
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        0.9093,
+        0.9391,
+        1
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": "https://www.s2b.kr/S2BNfiledata/remu_product/rema/2026/08/21/202608219276407_1787276910372.jpg",
+        "license": "자체 생성물",
+        "author": "ComfyUI Idol(TripoSplat) + SeedVR2 업스케일 · splat_solid_mesh v4 · 스테인리스 B 반광 — 3dtodomyen 생성"
+      },
+      "sha256": "2387318968a3be5b308c79ce5773bc840e17658eef222c1f1f85faafdd4890ca",
+      "packedAt": "2026-11-06T08:33:30.975Z"
+    },
     "light-pendant": {
       "id": "light-pendant",
       "bytes": 171724,

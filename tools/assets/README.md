@@ -115,7 +115,9 @@
 - **정면 = 앱의 +Z**: 사람이 다가가 쓰는 쪽(의자 앉는 쪽 · 냉장고 문 · 레인지 손잡이 · 싱크 앞 · 침대 발치 · 옷장 문)을 카메라 쪽에 두고, 정면에서 약 45° 위에서 찍은 사진(조사 §6).
   스크립트는 기본으로 `--front +z`(사진 찍은 쪽 = 모델 +Z)로 포장한다 — 첫 시험의 검수 시트에서 반대로 나오면 일괄에 `--front -z`를 준다.
 - 파일 이름은 **`<제품 id>.png`**(또는 .jpg · .jpeg · .webp) — 한 폴더에 모은다. 크기만 다른 변형(침대 4 · 옷장 2 · 싱크 2 · 식탁)은 비율이 달라 **따로 찍어 따로 생성**한다(한 모델을 늘리면 fit 하한 0.85에 걸리거나 늘어나 보인다).
-- **쓸 권리가 있는 사진만**: 직접 찍은 사진 · CC0 사진 · 허락받은 제조사 사진. 제조사 카탈로그 사진을 허락 없이 쓰지 않는다(생성 모델은 사진의 2차 저작물이 될 수 있다).
+- **입력 사진 출처**(사용자 결정 — 계획 15b 2026-10-15 · 2026-11-09 다시 확인): 직접 찍은 사진 · CC0 사진에 더해 **S2B(학교장터) 등록 제품 사진**과
+  **제조사 공개 제품 사진**(제조사 제품 페이지 — 예: ssung.kr)을 쓴다. 그 밖의 사진은 허락받은 것만 쓴다(생성 모델은 사진의 2차 저작물이 될 수 있다).
+  사진(또는 제품 페이지) 주소를 포장 때 `--source-url`로 남긴다 — manifest `source.url` → NOTICE 출처 칸에 그대로 나온다.
 - 제조사 사진이 여러 방향으로 있으면 "Pixal3D: Multi Views to 3D" 템플릿이 낫다(스크립트는 LoadImage 하나인 워크플로만 받는다 — 그때는 웹에서).
 
 ## 6. 실행
@@ -168,8 +170,8 @@ npm run assets:comfy -- --server … --workflow … --images … --products <목
 | 네이티브 후처리 노드(리메시 · 굽기) | ComfyUI 코어(PyTorch · SciPy 재구현) | 가능 — **nvdiffrast 없음** |
 | BiRefNet | MIT | 가능 |
 | MoGe | 재포장 저장소 메타데이터 MIT(원본 microsoft/moge — 확인 권장) | 전처리(화각 추정) 전용 |
-| DINOv3(dino_v3_L_naf_fp32) | Meta DINOv3 라이선스 — **확인 필요**(재포장 저장소 메타데이터는 MIT지만 원본 라이선스가 우선) | 특징 추출 전용 · 결과물에 가중치가 들지 않는다 |
-| 입력 사진 | 사진마다 | 5절 — 쓸 권리가 있는 것만 |
+| DINOv3(dino_v3_L_naf_fp32 · Idol은 dino_v3_vit_h_bf16) | Meta DINOv3 License — 상업적 사용 허용(재포장 저장소 메타데이터는 MIT지만 원본 라이선스를 따른다 · 2026-11-09) | 특징 추출 전용 · 결과물에 가중치가 들지 않는다 |
+| 입력 사진 | 사진마다 | 5절 — 직접 찍은 사진 · CC0 · S2B 등록 제품 사진 · 제조사 공개 제품 사진(사용자 결정) |
 
 쓰지 않는 것: 원본 TRELLIS.2 저장소 경로(nvdiffrast · nvdiffrec 비상업) · **Tencent Hunyuan3D 계열**(라이선스가 한국을 지역에서 뺀다).
 
@@ -241,3 +243,66 @@ washer-drum,dryer,aircon-stand,tv-55,bed-single,bed-super-single,bed-queen,bed-k
 - Pixal3D 워크플로(`comfy-workflow.api.json`)는 쓰지 않아(11절 — TRELLIS.2 채택) 그대로 두었다. 다시 쓰려면 4절 표의 값을 같이 넣는다.
 - 1.5 MB에 걸리면(`range-gas-3`은 84 %) 그 제품만 `--tex 1024`로 다시 포장한다.
 - 실험 원본은 `tools/assets/incoming/exp/` · `incoming/gen-20k/`(커밋하지 않는다).
+
+## 13. Idol 생성 절차(계획 20 · 2026-11-06)
+
+신상중 구입 제품 모델은 TRELLIS.2가 아니라 **Idol 가우시안 스플랫 → 우리 노드로 닫힌 메시**로 만든다. 사진이 작으면 먼저 SeedVR2로 키운다.
+
+- **서버 모델 파일**(GPU 서버 `~/ComfyUI/models/`):
+  - `diffusion_models/idol_fp16.safetensors`
+  - `vae/idol_decoder_fp16.safetensors`
+  - `vae/flux2-vae.safetensors`
+  - `clip_vision/dino_v3_vit_h_bf16.safetensors`
+  - `background_removal/birefnet.safetensors`
+  - SeedVR2: `diffusion_models/seedvr2_7b_int8_convrot.safetensors` · `vae/seedvr2_ema_vae_fp16.safetensors`
+- **우리 노드:** `tools/assets/idol/comfy-node/splat_solid_mesh/`를 서버 `~/ComfyUI/custom_nodes/splat_solid_mesh/`에 복사하고 ComfyUI를 다시 띄운다(`bash ~/start-comfy.sh 1`).
+  - 노드는 SplatToSolidMesh · BakeSplatTexture 두 개다.
+  - v4는 평판 넓히기 2칸이다.
+  - 노드가 쓰는 기존 헬퍼는 ComfyUI 0.40의 `comfy_extras`다.
+- **한 건:**
+  - `node tools/assets/idol/upscale.mjs <사진> up-svr-<tag>` → `<tag>-up.png`
+  - `node tools/assets/idol/run.mjs <사진> <tag> --seed 46` → `<tag>-meshx.glb`
+  - `node tools/assets/idol/orient.mjs <meshx> <orient> -90`
+  - `node tools/assets/idol/steel.mjs <orient> <matb>`(B 반광)
+- **일괄:** `bash tools/assets/idol/batch.sh <목록.txt>`
+  - 목록 줄은 `<tag> <사진>`이다.
+  - 시드 46·1046 두 개를 만들고, 나은 쪽을 고르기 표(`tools/assets/picks/sinsang.json`)에 적는다(§14).
+- **라이선스 사슬:** Idol Apache-2.0 · FLUX.2 VAE Apache-2.0 · DINOv3 = Meta DINOv3 License(상업적 사용 허용 · TRELLIS.2도 쓰는 것) · SeedVR2 Apache-2.0 · BiRefNet MIT(배경 지우기). NOTICE의 Idol 문장(`lib.noticeMarkdown`)이 같은 사슬을 적는다.
+- **작가 칸:** 기본은 `link-picks.mjs` AUTHOR(SeedVR2 업스케일 포함)다. 업스케일을 거치지 않은 항목 — 원본 사진에서 만든 것(`from: orig` · k-202506092622734)과 사진 짧은 변이 900 px 이상이라 batch.sh가 업스케일을 건너뛴 것(k-23237948 · k-24397271) — 은 고르기 표에 SeedVR2 없는 `author`를 적는다.
+- **제외한 것:**
+  - SUPIR · 4x-UltraSharp: 비상업 라이선스
+  - Hunyuan3D: 라이선스가 대한민국 제외
+- **아는 한계:**
+  - 정면 사진은 깊이를 3~4.5배로 만든다. 앱이 축마다 규격에 맞추고, 포장도 `--fit axis`라 보이지 않는다.
+  - 문 열린 사진이나 두 대가 함께 찍힌 사진은 그대로 형상이 된다. 사진을 바꾼다.
+  - 시드에 따라 결과 차이가 크다.
+
+## 14. 학교 구입 제품 연결(계획 20 · 2026-11-06)
+
+1. **구입목록 → 제품:** `npm run purchase:gen`
+   - 학교 구입목록 엑셀(`../신상중/…xlsx`)에서 `src/products/purchaseData.js`를 만든다.
+   - 카탈로그에 없는 제품은 `k-<식별번호>`, 식별번호가 없으면 `ss-<번호>`로 등록된다.
+   - 다르면 구입목록을 따를 식별번호는 `tools/products/purchase-lib.mjs`의 `OVERRIDES`에 적는다(차이 표를 보고 사람이 정한다).
+   - 수의·재사용은 0원이다.
+2. **모델 만들기:** §13(`tools/assets/idol/batch.sh`) → 시드 두 개 결과를 본다.
+3. **고르기 표:** `tools/assets/picks/sinsang.json`
+   - 제품 id마다 `{ src, from, url, verdict }` 또는 `{ model: false, why }`를 적는다.
+   - 템플릿에 여러 대 놓이는 작은 기구는 `tris`(20000 이하의 양의 정수, 예: 6000)로 삼각형 예산을 낮춘다. 없으면 생성 모델 기본 20000이다. 8에서 궤도 판정이 넘칠 때 쓰고, 5·6의 그림으로 형상이 남는지 본다.
+4. **포장·연결:** `node tools/assets/link-picks.mjs`
+   - 축별 포장(`pack --fit axis`)을 하고 `src/products/kitchenAssets.js`를 쓴다.
+   - `model: false`는 정리한다.
+5. **외관 확인:** `npm run build && node tools/assets/compare-shape.mjs <접두사>`
+   - 지금 형상과 모델을 비교하는 그림이 나온다. 사람이 고른다.
+   - 표를 고쳐 4를 다시 돌린다.
+6. **검수:**
+   - `npm run build && node tools/assets/snapshot.mjs --only <id들>`(`dist`를 그대로 쓰므로 다시 포장한 뒤에는 빌드부터)
+   - `npm run assets:check`
+   - `npm test`
+7. **템플릿:**
+   - `node tools/products/sinsang-remap.mjs --map`(도면 구입 번호 → 짝 표 · 확인 그림) → 사람 확인 → `--apply`
+   - 템플릿을 다시 뽑으면 `remap-samples.mjs` 뒤에 `--apply`를 다시 돌린다.
+8. **성능:** `npm run build && node tools/assets/template-load.mjs`
+   - `dist`를 그대로 쓰므로 다시 포장하거나 `--apply`를 돌린 뒤에는 빌드부터 한다.
+   - 판정은 세 가지다: 모델 합계 ≤ 12 MB, 궤도 간격 비(실행 쌍마다 모델 ÷ 형상의 중앙값) ≤ 1.25, 페이지 오류 0.
+   - 궤도 기준 1.25는 사용자가 정했다(2026-11-09). 면을 더 줄이기보다 외관을 고른 것이다.
+   - 모델 실행이 GLB를 받았는지, 형상 실행이 하나도 받지 않았는지도 본다.

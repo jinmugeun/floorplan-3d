@@ -55,6 +55,11 @@ test('숨김 단종 제품과 도면 기구는 안내 한 줄과 [제품 교체]
   expect(drawn).toContain('name="productReplace"');
   expect(productRowsHtml(productById('door-swing-900'))).toBe('');
   expect(productRowsHtml(null)).toBe('');
+  // 숨긴 학교 구입목록 제품(ss- · 수의·재사용 — 2026-11-09 라이브러리에서만 뺐다)은 단종 안내를 내지 않는다
+  const ss = productById('ss-63');
+  expect(ss.hidden).toBe(true);
+  expect(productRowsHtml(ss)).not.toContain(PRODUCT_LEGACY_NOTE);
+  expect(productRowsHtml(ss)).not.toContain('name="productReplace"');
 });
 
 test('속성 패널: 엑셀 제품을 고르면 행이 보이고, 단종 제품의 [제품 교체]는 itemActions.replace를 부른다', () => {
