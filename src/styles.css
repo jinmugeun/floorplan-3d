@@ -140,7 +140,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tile-thumb { display: block; width: 100%; border-radius: 4px; overflow: hidden; }
 .tile-thumb svg { display: block; width: 100%; height: auto; }
 .tile canvas.swatch { width: 100%; height: auto; border-radius: 4px; }
-.tile-name { font-size: 11px; line-height: 1.2; } .tile-code, .tile-size { font-size: 10px; } .tile .fav { position: absolute; top: 2px; right: 4px; color: #d0d5db; } .tile .fav.on { color: #e8b100; }
+.tile-name { font-size: 11px; line-height: 1.2; } .tile-code, .tile-vendor, .tile-size { font-size: 10px; }
+.tile-3d { position: absolute; top: 3px; left: 4px; padding: 0 3px; border-radius: 3px; background: #2563eb; color: #fff; font-size: 9px; font-weight: 700; line-height: 14px; } .tile .fav { position: absolute; top: 2px; right: 4px; color: #d0d5db; } .tile .fav.on { color: #e8b100; }
 .layer-tree, .layer-tree ul { list-style: none; margin: 0; padding: 0; } .layer-tree > li { margin-bottom: 4px; } .layer-room-name { font-size: 11px; color: var(--muted); }
 /* 방 노드는 접힌다(§16.3 · 감사 §22): 제품 0개인 방이 헤더 줄만 차지하지 않게 기본이 접힘이다. */
 .layer-tree details > summary { display: flex; justify-content: space-between; gap: 6px; cursor: pointer; padding: 2px 0; }

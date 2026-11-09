@@ -47,6 +47,19 @@ describe('라이브러리 패널', () => {
     expect(el.querySelectorAll('[data-sub]').length).toBeGreaterThan(0);
   });
 
+  // 2026-11-09 · 사용자 요청: 이름·크기가 같은 제품이 여럿이라(식별번호 엑셀) 어느 것에 실사 3D 모델이 있는지 타일에서 보이게 — '3D' 표시와 업체.
+  test('실사 3D 모델이 있는 제품 타일에만 3D 표시가 붙고, 업체 이름이 보인다', () => {
+    const { el } = setup();
+    click(el, chipSel); click(el, subSel);
+    const withModel = SINKS.find(p => p.asset), without = SINKS.find(p => !p.asset);
+    expect(withModel && without).toBeTruthy();
+    const a = el.querySelector(`.tile[data-id="${withModel.id}"]`), b = el.querySelector(`.tile[data-id="${without.id}"]`);
+    expect(a.querySelector('.tile-3d')?.textContent).toBe('3D');
+    expect(a.getAttribute('title')).toContain('실사 3D 모델');
+    expect(b.querySelector('.tile-3d')).toBeNull();
+    expect(a.querySelector('.tile-vendor')?.textContent).toBe(withModel.extra.vendor);
+  });
+
   test('타일 클릭이 onPick을 부르고 크기 표기가 붙는다', () => {
     const { el, picked } = setup();
     click(el, chipSel); click(el, subSel);

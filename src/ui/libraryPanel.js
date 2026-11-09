@@ -42,12 +42,16 @@ export function createLibraryPanel(container, { store, ui, onPick = () => {}, on
     // 칩이 없는 '전체'(§15.8)는 여기 오지 않는다 — renderList가 groupedHtml()로 먼저 그린다(계획 17 Task 4).
     return sortProducts(productsIn(st.category, st.sub), st.sort);
   }
+  // 3D 표시 · 업체(2026-11-09 · 사용자 요청): 식별번호 엑셀은 이름·크기가 같아도 업체·옵션마다 식별번호가 따로라 같은 이름 타일이 여럿이다 —
+  // 실사 3D 모델(asset)은 식별번호 하나에만 붙으므로 어느 타일인지 보이게 한다.
   function tileHtml(p, count) {
-    const tint = CATEGORY_COLORS[p.category] ?? '#f4f6f8';
-    return `<button type="button" class="tile" draggable="true" data-id="${p.id}" title="${esc(`${p.name} · ${ATTACH_LABELS[p.attach]}`)}">
+    const tint = CATEGORY_COLORS[p.category] ?? '#f4f6f8', vendor = p.extra?.vendor ?? '';
+    return `<button type="button" class="tile" draggable="true" data-id="${p.id}" title="${esc(`${p.name} · ${ATTACH_LABELS[p.attach]}${vendor ? ` · ${vendor}` : ''}${p.asset ? ' · 실사 3D 모델' : ''}`)}">
+      ${p.asset ? '<span class="tile-3d" aria-label="실사 3D 모델">3D</span>' : ''}
       <span class="tile-thumb" style="background:${esc(tint)}">${symbolSvg(p.symbol, p.size[0], p.size[1], { box: 96, solid: p.color })}</span>
       <span class="tile-name">${esc(p.name)}</span>
       <span class="tile-code muted">${esc(p.code)}${count ? ` · ${count}개` : ''}</span>
+      ${vendor ? `<span class="tile-vendor muted">${esc(vendor)}</span>` : ''}
       <span class="tile-size muted">${fmtSize(p.size)}</span>
       <span class="fav ${isFav(p.id) ? 'on' : ''}" data-fav="${p.id}" role="button" tabindex="0" aria-label="즐겨찾기">★</span>
     </button>`;
