@@ -17,7 +17,9 @@ const SEEDS = ['chair-dining', 'chair-office', 'desk-student', 'dining-6', 'ligh
 const GENERATED = ['range-gas-3', 'sink-single'];                              // S2B 사진 → ComfyUI TRELLIS.2(2026-10-15 · 계획 15b)
 // 신상중 구입 제품(2026-11-06 · 계획 20): link-picks.mjs가 고르기 표(tools/assets/picks/sinsang.json)대로 축별 포장한 생성 모델(Idol · 일부 TRELLIS.2 재포장).
 const SINSANG = Object.keys(kitchenAssets);
-const ALL = [...SEEDS, ...GENERATED, ...SINSANG].sort();
+// 실물 사진으로 만든 모델(2026-11-13 · 공기질 함체): 사용자가 찍은 사진 6장 → Pixal3D 멀티뷰 형상 + 사진 질감. 사진이 우리 것이라 출처 URL이 없다.
+const OWN_PHOTO = ['aq-enclosure'];
+const ALL = [...SEEDS, ...GENERATED, ...SINSANG, ...OWN_PHOTO].sort();
 
 describe('시드 에셋(계획 15 Task C)', () => {
   // 정면은 SchoolDesk_01만 −Z다(2026-10-13 · 계획 15 Task D 검수 시트): 책 상자의 트인 쪽(학생이 앉는 쪽)이 원본에서 −Z였다 — 원근으로 앞(+Z)·뒤에서
@@ -55,6 +57,9 @@ describe('시드 에셋(계획 15 Task C)', () => {
         expect(e.source, id).toEqual({ kind: 'generated', url: expect.stringMatching(/^https:\/\//), license: '자체 생성물', author: expect.stringMatching(/Idol|TRELLIS/) });
         expect(e.fit, id).toEqual([1, 1, 1]);                                     // 축별 포장(명세 D3)
         expect(e.rawFit.every(f => f > 0 && f <= 1.02), id).toBe(true);
+      } else if (OWN_PHOTO.includes(id)) {
+        expect(e.source, id).toEqual({ kind: 'generated', url: null, license: '자체 생성물', author: expect.stringMatching(/실물 사진/) });
+        expect(e.fit, id).toEqual([1, 1, 1]);
       } else expect(e.source, id).toEqual({ kind: 'polyhaven', url: `https://polyhaven.com/a/${sources[id].asset}`, license: 'CC0-1.0', author: expect.stringMatching(/\S/) });
     }
   });
@@ -65,7 +70,7 @@ describe('시드 에셋(계획 15 Task C)', () => {
     expect(notice).toBe(noticeMarkdown(man, id => productById(id)?.name));
     for (const id of ids) {
       const { url, author } = man.products[id].source;
-      expect(notice, id).toContain(url);
+      if (url !== null) expect(notice, id).toContain(url);                     // 실물 사진 모델(OWN_PHOTO)은 URL이 없다
       expect(notice, id).toContain(author);
     }
     expect(notice).toContain('CC0-1.0');

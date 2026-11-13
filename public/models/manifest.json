@@ -1,6 +1,56 @@
 {
   "version": 1,
   "products": {
+    "aq-enclosure": {
+      "id": "aq-enclosure",
+      "bytes": 1366092,
+      "tris": 19650,
+      "textures": [
+        {
+          "w": 2048,
+          "h": 2048,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        },
+        {
+          "w": 1024,
+          "h": 1024,
+          "format": "image/webp"
+        }
+      ],
+      "size": [
+        510,
+        217,
+        310
+      ],
+      "fit": [
+        1,
+        1,
+        1
+      ],
+      "rawFit": [
+        1,
+        0.8806,
+        0.9552
+      ],
+      "extensions": [
+        "EXT_meshopt_compression",
+        "EXT_texture_webp",
+        "KHR_mesh_quantization"
+      ],
+      "source": {
+        "kind": "generated",
+        "url": null,
+        "license": "자체 생성물",
+        "author": "Pixal3D 멀티뷰(ComfyUI) 형상 + 실물 사진 6장 질감 — 3dtodomyen 생성"
+      },
+      "sha256": "1da916ef06ef8a163e4aecd535e2a3c6805319dd49d0f3e95e3f3e85954afd34",
+      "packedAt": "2026-11-13T09:02:09.076Z"
+    },
     "chair-dining": {
       "id": "chair-dining",
       "bytes": 203480,

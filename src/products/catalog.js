@@ -80,8 +80,9 @@ const KEPT_BASE = [
   P('ventcap-100', 'STS 환기캡 Ø100', 'VP-100', V, '환기캡', [100, 100, 100], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 100 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
   P('ventcap-150', 'STS 환기캡 Ø150', 'VP-150', V, '환기캡', [150, 150, 150], 'wall', 'ventcap', { kind: 'equipment', equip: { type: 'ventcap', dia: 150 }, zDefault: 2200, color: '#c6ccd2', tags: '환기캡 캡 벽 배기' }),
   // 후드·환기 — 공기질 함체(2026-10-26 · 사용자 CAD 그림 1~10 + 외형도 DXF · 외형 510×217×310): 벽에 거는 센서 함체. 형상 enclosure(view3d/shapes/enclosure.js)
+  // · asset(2026-11-13 · 사용자 요청 — 웹에서 보기): 실물 사진 6장 → Pixal3D 멀티뷰 형상 + 사진 질감 모델(public/models/aq-enclosure.glb), 못 읽으면 형상 enclosure
   // · 스테인리스 몸체 + 어두운 관측창(사용자 선택 — 렌더 비교) · 아랫면 1,200(호흡선 1.2~1.5 m에 함체 가운데 1,355가 든다) · DXF 평면 블록 AQ_BOX_PLAN(equipVocab.js).
-  P('aq-enclosure', '공기질 함체', 'AQ-EN510', V, '공기질', [510, 217, 310], 'wall', 'box', { shape: 'enclosure', zDefault: 1200, tags: '공기질 함체 공기질함체 측정 센서 모니터링 미세먼지 이산화탄소 CO2 벽부' }),
+  P('aq-enclosure', '공기질 함체', 'AQ-EN510', V, '공기질', [510, 217, 310], 'wall', 'box', { shape: 'enclosure', asset: 'aq-enclosure', zDefault: 1200, tags: '공기질 함체 공기질함체 측정 센서 모니터링 미세먼지 이산화탄소 CO2 벽부' }),
 ];
 // 도면 기구(DXF 가져오기의 일반 상자)는 남기되 숨긴다 — 사람이 라이브러리에서 고를 물건이 아니다(가져온 기구가 서는 자리).
 const KEPT = [...KEPT_BASE, ...DRAWING_PRODUCTS.map(p => ({ ...p, hidden: true }))];

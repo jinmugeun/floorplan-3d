@@ -7,6 +7,7 @@ Idol 생성 모델(작가 칸에 Idol)은 제품 사진(배경 지우기 BiRefNe
 
 | 제품 | 이름 | 출처 | 작가 | 라이선스 |
 |---|---|---|---|---|
+| aq-enclosure | 공기질 함체 | — | Pixal3D 멀티뷰(ComfyUI) 형상 + 실물 사진 6장 질감 — 3dtodomyen 생성 | 자체 생성물 |
 | chair-dining | 식탁 의자 | https://polyhaven.com/a/painted_wooden_chair_01 | Kuutti Siitonen | CC0-1.0 (https://polyhaven.com/license) |
 | chair-office | 사무용 의자 | https://polyhaven.com/a/GreenChair_01 | Kirill Sannikov | CC0-1.0 (https://polyhaven.com/license) |
 | desk-student | 학생 책상 | https://polyhaven.com/a/SchoolDesk_01 | Ethan Place | CC0-1.0 (https://polyhaven.com/license) |
