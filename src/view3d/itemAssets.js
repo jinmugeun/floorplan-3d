@@ -73,13 +73,16 @@ export function requestAsset(p) {
   cache.set(p.id, null);
   // 실패 경고는 기본 로더일 때만(최종 리뷰 B-m8 — 정적 배포 404가 진단 불가였다). 요청 시점의 로더로 판정해 __reset 뒤 늦게 끝나는 대역은 조용하다(B-m9).
   const load = loader ?? defaultLoader;
-  load(url).then(obj => { cache.set(p.id, normalize(obj)); }).catch(e => { if (load === defaultLoader) console.warn(`실사 모델 실패 ${url}: ${e?.message ?? e}`); }).finally(settle);
+  load(url).then(obj => { const t = normalize(obj); if (p.assetOverhang) t.userData.overhang = p.assetOverhang; cache.set(p.id, t); }).catch(e => { if (load === defaultLoader) console.warn(`실사 모델 실패 ${url}: ${e?.message ?? e}`); }).finally(settle);
 }
 
 // 템플릿을 복제해(지오메트리·재질 공유) 아이템 size에 축별로 맞춘다. items3d가 아이템 중심(z + h/2)에 세우므로 바닥을 −h/2로 내린다.
 // 메시의 userData.shared는 clone이 그대로 옮긴다(Object3D.copy가 userData를 JSON으로 깊은 복사) — paintItem·disposeGroup이 이 표시를 본다.
 export function fitClone(t, item) {
-  const { min, max } = t.userData.bbox, [w, d, h] = item.size;
+  // 돌출(assetOverhang [가로, 깊이, 높이] mm · 한쪽 기준 — 2026-11-13 공기질 함체): 제품 size는 몸체인데 모델에 그 밖으로 나온 부품(통풍구 덮개)이
+  // 있으면 모델 전체를 size + 양쪽 돌출에 맞춘다 — 몸체가 size에 맞고 돌출은 아이템 상자 밖으로 나간다(선택 상자·충돌은 size 그대로).
+  const { min, max } = t.userData.bbox, o = t.userData.overhang ?? [0, 0, 0];
+  const [w, d, h] = [item.size[0] + 2 * o[0], item.size[1] + 2 * o[1], item.size[2] + 2 * o[2]];
   const ext = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
   const c = t.clone();
   c.scale.set(w / 1000 / (ext[0] || 1), h / 1000 / (ext[1] || 1), d / 1000 / (ext[2] || 1));

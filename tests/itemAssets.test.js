@@ -68,6 +68,21 @@ test('템플릿은 바닥 중심·bbox·shared 표시를 갖고, fitClone은 아
   expect((bb.max.y + bb.min.y) / 2).toBeCloseTo(0, 3);
 });
 
+// 돌출(2026-11-13 · 공기질 함체): 제품 size는 몸체(510)인데 모델에는 양옆 통풍구 덮개가 28 mm씩 더 나와 있다 — 모델 전체를 size에 맞추면 몸체가 좁아진다.
+test('assetOverhang이 있는 제품은 모델을 size + 양쪽 돌출에 맞춘다(몸체 = size · 돌출은 상자 밖) — 없으면 그대로', async () => {
+  __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(0.51, 0.31, 0.217, 0)));
+  requestAsset({ id: 'aq', asset: 'aq', assetOverhang: [28, 0, 0] }); await flush(); await flush(); await flush();
+  const c = fitClone(templateOf('aq'), { id: 'i1', productId: 'aq', size: [510, 217, 310], z: 0 });
+  const bb = new THREE.Box3().setFromObject(c);
+  expect(bb.max.x - bb.min.x).toBeCloseTo(0.566, 4); expect(bb.max.z - bb.min.z).toBeCloseTo(0.217, 4); expect(bb.max.y - bb.min.y).toBeCloseTo(0.31, 4);
+  expect((bb.max.y + bb.min.y) / 2).toBeCloseTo(0, 4);
+  // 높이 돌출은 아래위로 고르게 — 가운데는 그대로
+  __reset(); enableAssets(); __setLoader(() => Promise.resolve(box(0.5, 0.5, 0.5, 0)));
+  requestAsset({ id: 'b', asset: 'b', assetOverhang: [0, 10, 20] }); await flush(); await flush(); await flush();
+  const b2 = new THREE.Box3().setFromObject(fitClone(templateOf('b'), { id: 'i2', productId: 'b', size: [500, 500, 500], z: 0 }));
+  expect(b2.max.z - b2.min.z).toBeCloseTo(0.52, 4); expect(b2.max.y - b2.min.y).toBeCloseTo(0.54, 4); expect((b2.max.y + b2.min.y) / 2).toBeCloseTo(0, 4);
+});
+
 // 사전 검토 S-4: normalize가 position.set(-c)로 덮어쓰면 루트에 원래 위치가 있는 장면(x = 5)이 중심 −5로 어긋났다 — position.sub(c)여야 0.
 test('normalize는 루트의 원래 위치를 빼서 맞춘다(덮어쓰지 않는다) — 중심 0 · 바닥 0', async () => {
   __reset(); enableAssets();
